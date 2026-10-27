@@ -7,6 +7,7 @@ DEV_HOME := $(CURDIR)/.dev
 all: web build
 
 web:
+	find web/dist -mindepth 1 ! -name .keep -delete 2>/dev/null || true
 	cd web && npm ci && npm run build
 
 # web/dist must exist for go:embed even when the UI has not been built.

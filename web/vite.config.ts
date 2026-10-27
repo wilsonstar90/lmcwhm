@@ -15,7 +15,8 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    emptyOutDir: true,
+    // Keep web/dist/.keep (tracked so go:embed compiles before the UI is built).
+    emptyOutDir: false,
     chunkSizeWarningLimit: 1500,
   },
 })
