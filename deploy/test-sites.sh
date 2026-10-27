@@ -107,7 +107,7 @@ cat > /tmp/pebble.json <<'EOF'
  "httpPort":80,"tlsPort":443,"ocspResponderURL":"","externalAccountBindingRequired":false}}
 EOF
 docker run -d --name challtestsrv --network host ghcr.io/letsencrypt/pebble-challtestsrv:latest \
-  -defaultIPv4 127.0.0.1 -defaultIPv6 "" -dns01 :8053 -http01 "" -https01 "" -tlsalpn01 "" -doh "" >/dev/null
+  -defaultIPv4 127.0.0.1 -defaultIPv6 "" >/dev/null
 docker run -d --name pebble --network host -e PEBBLE_VA_NOSLEEP=1 -e PEBBLE_WFE_NONCEREJECT=0 \
   -v /tmp/pebble.json:/config.json:ro ghcr.io/letsencrypt/pebble:latest -config /config.json -dnsserver 127.0.0.1:8053 >/dev/null
 curl -fsSL https://raw.githubusercontent.com/letsencrypt/pebble/main/test/certs/pebble.minica.pem -o /opt/lmcwhm/pebble.pem
@@ -116,6 +116,8 @@ printf '[Service]\nEnvironment=LEGO_CA_CERTIFICATES=/opt/lmcwhm/pebble.pem\n' > 
 systemctl daemon-reload && systemctl restart lmcwhm
 for _ in $(seq 1 30); do curl -sk -o /dev/null "$P/" && break; sleep 1; done
 for _ in $(seq 1 30); do curl -sk -o /dev/null https://localhost:14000/dir && break; sleep 1; done
+for _ in $(seq 1 30); do dig +short @127.0.0.1 -p 8053 acme.test 2>/dev/null | grep -q 127.0.0.1 && break; sleep 1; done
+dig +short @127.0.0.1 -p 8053 acme.test | grep -q 127.0.0.1 || { docker logs challtestsrv; fail "challtestsrv DNS not answering"; }
 curl -sk -c "$JAR" -o /dev/null "$P/console"
 CSRF="$(curl -sk -b "$JAR" -c "$JAR" -X POST "$P/api/v1/auth/login" -d '{"username":"admin","password":"Passw0rd1"}' | jget "['csrf']")"
 
