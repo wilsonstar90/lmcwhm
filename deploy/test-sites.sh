@@ -47,6 +47,7 @@ CSRF="$(curl -sk -b "$JAR" -c "$JAR" -X POST "$P/api/v1/auth/login" -d '{"userna
 
 # ---------- install web stack ----------
 wait_task "$(api POST /web/install | jget "['task_id']")"
+docker exec lmcwhm-haproxy haproxy -c -f /opt/lmcwhm/edge/haproxy.cfg 2>&1 | grep -i "warning\|alert" && fail "haproxy config has warnings"
 [[ "$(docker inspect -f '{{.State.Status}}' lmcwhm-haproxy)" == running ]] || fail "haproxy not running"
 [[ "$(docker inspect -f '{{.State.Status}}' lmcwhm-nginx)" == running ]] || fail "nginx not running"
 pass "web stack installed"
