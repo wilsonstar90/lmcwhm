@@ -1,0 +1,6 @@
+/bin/
+/.dev/
+/.dev-serve.log
+/web/node_modules/
+/web/dist/*
+!/web/dist/.keep

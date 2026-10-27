@@ -1,0 +1,16 @@
+[Unit]
+Description=lmcwhm server control panel
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=LMCWHM_HOME=/opt/lmcwhm
+ExecStart=/opt/lmcwhm/bin/lmcwhm serve
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=3
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target
