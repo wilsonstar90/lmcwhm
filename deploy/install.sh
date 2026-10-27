@@ -63,11 +63,17 @@ done
 export LMCWHM_HOME=$HOME_DIR
 
 # ---- OS / arch ----
-. /etc/os-release
-case "${ID}-${VERSION_ID}" in
+# Read os-release in a subshell: sourcing it directly would overwrite our
+# VERSION (it defines VERSION="24.04.4 LTS (Noble Numbat)").
+os_field() { (. /etc/os-release; eval "printf '%s' \"\${$1:-}\"") ; }
+OS_ID="$(os_field ID)"
+OS_VERSION_ID="$(os_field VERSION_ID)"
+OS_CODENAME="$(os_field VERSION_CODENAME)"
+OS_PRETTY="$(os_field PRETTY_NAME)"
+case "${OS_ID}-${OS_VERSION_ID}" in
   ubuntu-20.04) yellow "Note: Ubuntu 20.04 standard support ended in 2025-05 (ESM only). 22.04 / 24.04 is recommended." ;;
   ubuntu-22.04|ubuntu-24.04) ;;
-  *) [[ $FORCE -eq 1 ]] || die "unsupported OS ${PRETTY_NAME}; use --force to continue anyway" ;;
+  *) [[ $FORCE -eq 1 ]] || die "unsupported OS ${OS_PRETTY}; use --force to continue anyway" ;;
 esac
 case "$(uname -m)" in
   x86_64)  ARCH=amd64 ;;
@@ -111,7 +117,7 @@ install_docker() {
   install -m 0755 -d /etc/apt/keyrings
   curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
   chmod a+r /etc/apt/keyrings/docker.asc
-  echo "deb [arch=${ARCH} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${VERSION_CODENAME} stable" \
+  echo "deb [arch=${ARCH} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${OS_CODENAME} stable" \
     > /etc/apt/sources.list.d/docker.list
   apt-get update -qq
   apt-get install -y -qq "$@" docker-ce docker-ce-cli containerd.io docker-compose-plugin >/dev/null

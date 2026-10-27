@@ -68,3 +68,13 @@ pass "rollback"
 lmcwhm update --help | grep -q -- --version || fail "update command"
 lmcwhm repair --help | grep -q -- --reset-panel || fail "repair command"
 pass "cli commands"
+
+# ---------- 6. real downloads from GitHub Releases ----------
+# Regression: /etc/os-release used to overwrite VERSION and break the URL.
+bash "$INSTALL" --skip-docker --version v0.1.1
+lmcwhm version | grep -q 'v0.1.1' || fail "pinned release not installed"
+login /rescue1 admin NewPass123 || fail "settings lost on pinned download"
+bash "$INSTALL" --skip-docker
+lmcwhm version | grep -q ' v' || fail "latest release not installed"
+login /rescue1 admin NewPass123 || fail "settings lost on latest download"
+pass "release downloads (pinned + latest)"
