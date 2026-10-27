@@ -3,17 +3,25 @@
 自研伺服器控制面板（aaPanel / 寶塔式），Go 單一 Binary + Vue 3 / Naive UI。
 完整架構與路線圖：[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
-## 目前進度：M0（骨架 + 面板系統設定）
+## 目前進度：M1（SNI 邊緣分流 + 網站）
 
-- 面板端口（改完即時熱重啟監聽，免停機）、IPv4/IPv6 雙棧監聽
-- 安全入口（如 `/console`；未經入口一律回 nginx 風格 404）
-- 面板 SSL：自簽 / 自訂證書 / 關閉
-- 授權 IP（IP / CIDR，127.0.0.1 永遠放行方便救援）、綁定域名、BasicAuth
+**M1 — 網站管理**
+- HAProxy 3.0 邊緣：80 / 443（IPv4 + IPv6 分開監聽，客戶真實 IP 正確傳遞），按 TLS SNI 分流：
+  需要直通嘅域名原封轉發（passthrough，M3 Docker 應用會用），其餘喺本機終止 TLS，每個域名自動揀返自己張證書
+- Nginx + PHP-FPM 7.4 / 8.0 / 8.1 / 8.2 / 8.3 / 8.4（Docker 容器，每版本一個，內置 mysqli / pdo_mysql / opcache / bcmath / exif），亦支援靜態網站
+- 網站：新增、別名、切換 PHP 版本、停止 / 啟動、刪除（可選刪檔案 + DNS）、強制 HTTPS、HSTS、睇 Nginx 設定
+- Cloudflare：API Token 加密儲存，自動建立 / 更新 / 清理 A（IPv4）+ AAAA（IPv6）記錄，可選橙雲代理
+- SSL：Let's Encrypt、LiteSSL 或任何 ACME CA（支援 EAB）；HTTP-01 經 port 80，或 DNS-01 經 Cloudflare（支援萬用字元）；每日自動續期（到期前 30 日）；可上傳自訂證書
+- 所有設定由資料庫生成，改動先驗證（`nginx -t`、`haproxy -c`）再熱重載，失敗自動還原；面板重啟 / 修復會重新生成
+- 網站檔案：`/www/wwwroot/<域名>`，日誌：`/www/wwwlogs/`
+
+**M0 — 面板核心**
+- 面板端口（改完即時熱重啟監聽）、安全入口（如 `/console`，未經入口一律 404）、面板 SSL、授權 IP、綁定域名、BasicAuth
 - 登入：bcrypt、TOTP 兩步驗證、按 IP 失敗鎖定、HttpOnly session + CSRF
-- 日誌：面板登入日誌、面板操作（審計）日誌
-- 首頁儀表板：CPU / 記憶體 / 負載 / 網絡 / 磁碟
-- 多語言：zh-HK、zh-TW、zh-CN、en、ja（前端 + CLI）
-- `lmcwhm` CLI（似 `bt`）
+- 面板登入 / 操作日誌、首頁儀表板、5 種語言、`lmcwhm` CLI（似 `bt`）
+
+> 使用網站功能前：Web 環境會佔用 80 / 443 端口（VPS 上唔可以有其他 Nginx / Apache 監聽）；
+> 喺「網站 → Web 環境」設定 ACME 電郵（同埋 Cloudflare Token 如需自動 DNS / DNS-01）。
 
 ## 開發
 

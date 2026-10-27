@@ -251,6 +251,13 @@ whm/
 
 ---
 
+## 4A. M1 實作備註（與原設計嘅差異）
+- **HAProxy 動態更新**：用「由資料庫重新生成整份設定 → `haproxy -c` 驗證 → master-worker 熱重載（USR2）」取代 Runtime API 逐條改 map。效果同樣唔斷線，但更簡單、可自動還原；Runtime API 留待需要極高頻改動時先加。
+- **Docker**：M1 經 `docker` CLI 操作（安裝腳本必定提供）；M3 Docker 管理中心需要即時統計 / 日誌串流時再加 Engine API。
+- **IPv4 / IPv6**：Edge 分開 `bind 0.0.0.0` 同 `bind ::: v6only`，避免 IPv4 客戶 IP 變成 `::ffff:` 格式（影響日誌、IP 歸屬地、CrowdSec）。
+- **PHP**：每版本一個 PHP-FPM 容器（host network，監聽 `127.0.0.1:90xx`），官方 image 加 mysqli / pdo_mysql / opcache / bcmath / exif；其他擴展喺 M2 軟件設定入面逐個裝。
+- **CI**：`deploy/test-sites.sh` 喺 Ubuntu runner 用真 Docker 測試建站、SNI、IPv6、PHP 切換、強制 HTTPS，並用 Pebble（Let's Encrypt 官方測試 CA）測試 ACME HTTP-01。DNS-01 / Cloudflare 只有單元測試（需要真 Cloudflare 帳戶）。
+
 ## 5. 路線圖
 | 階段 | 內容 | 完成標準 |
 |---|---|---|
