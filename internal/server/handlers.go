@@ -84,6 +84,9 @@ func (s *Server) handler() http.Handler {
 			r.Get("/settings/ssl", s.handleGetSSL)
 			r.Post("/settings/ssl", s.handlePutSSL)
 
+			if s.Sites != nil {
+				s.siteRoutes(r)
+			}
 			r.Get("/logs/login", s.handleLoginLogs)
 			r.Get("/logs/operation", s.handleOperationLogs)
 		})

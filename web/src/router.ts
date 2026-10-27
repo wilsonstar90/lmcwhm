@@ -15,7 +15,7 @@ export const router = createRouter({
       component: () => import('./views/Layout.vue'),
       children: [
         { path: '', name: 'home', component: () => import('./views/Dashboard.vue') },
-        { path: 'website', name: 'website', ...soon('M1') },
+        { path: 'website', name: 'website', component: () => import('./views/Website.vue') },
         { path: 'database', name: 'database', ...soon('M2') },
         { path: 'docker', name: 'docker', ...soon('M3') },
         { path: 'appstore', name: 'appstore', ...soon('M2') },

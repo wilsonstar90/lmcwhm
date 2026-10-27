@@ -13,13 +13,19 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/wilsonstar90/lmcwhm/internal/acme"
 	"github.com/wilsonstar90/lmcwhm/internal/audit"
 	"github.com/wilsonstar90/lmcwhm/internal/auth"
 	"github.com/wilsonstar90/lmcwhm/internal/config"
 	"github.com/wilsonstar90/lmcwhm/internal/i18n"
+	"github.com/wilsonstar90/lmcwhm/internal/secrets"
 	"github.com/wilsonstar90/lmcwhm/internal/server"
 	"github.com/wilsonstar90/lmcwhm/internal/settings"
+	"github.com/wilsonstar90/lmcwhm/internal/site"
 	"github.com/wilsonstar90/lmcwhm/internal/store"
+	"github.com/wilsonstar90/lmcwhm/internal/tasks"
+	"github.com/wilsonstar90/lmcwhm/internal/webcfg"
+	"github.com/wilsonstar90/lmcwhm/internal/webenv"
 	"github.com/wilsonstar90/lmcwhm/web"
 )
 
@@ -109,9 +115,31 @@ func serveCmd() *cobra.Command {
 				return fmt.Errorf("%s", a.tr.T("err.not_init"))
 			}
 
+			box, err := secrets.Open(a.paths.DataDir)
+			if err != nil {
+				return err
+			}
+			webCfg := webcfg.New(a.st, box)
+			env := webenv.New(a.paths.Home)
+			env.Timezone = a.settings.Get().Timezone
+			responder := acme.NewHTTPResponder()
+			go func() {
+				if err := responder.Listen(ctx, webenv.ACMEPort); err != nil {
+					log.Error("acme http-01 responder", "err", err)
+				}
+			}()
+			tm := tasks.NewManager()
+			sites := site.NewService(a.st, env, webCfg, &acme.Issuer{Cfg: webCfg, HTTP: responder}, tm)
+			go func() {
+				if err := sites.Boot(ctx); err != nil {
+					log.Error("web stack boot", "err", err)
+				}
+			}()
+			go sites.RenewLoop(ctx, log.Info)
+
 			srv, err := server.New(server.Deps{
 				Paths: a.paths, Settings: a.settings, Auth: a.auth, Audit: a.audit,
-				WebFS: web.FS(), Log: log,
+				WebFS: web.FS(), Log: log, Sites: sites, Web: webCfg, Tasks: tm,
 			})
 			if err != nil {
 				return err

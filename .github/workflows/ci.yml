@@ -40,3 +40,21 @@ jobs:
       - run: make web linux
       - name: Installer end-to-end (fresh, upgrade, reset-panel, rollback)
         run: sudo bash deploy/test-installer.sh bin/lmcwhm-linux-amd64
+
+  sites:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: make web linux
+      - name: Install panel
+        run: sudo bash deploy/install.sh --binary bin/lmcwhm-linux-amd64 --skip-docker --port 18888 --entry /console --username admin --password Passw0rd1
+      - name: Websites end-to-end (HAProxy SNI, PHP, SSL, ACME)
+        run: sudo bash deploy/test-sites.sh

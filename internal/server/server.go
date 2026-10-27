@@ -18,7 +18,10 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/auth"
 	"github.com/wilsonstar90/lmcwhm/internal/config"
 	"github.com/wilsonstar90/lmcwhm/internal/settings"
+	"github.com/wilsonstar90/lmcwhm/internal/site"
+	"github.com/wilsonstar90/lmcwhm/internal/tasks"
 	"github.com/wilsonstar90/lmcwhm/internal/tlsutil"
+	"github.com/wilsonstar90/lmcwhm/internal/webcfg"
 )
 
 type Deps struct {
@@ -28,6 +31,9 @@ type Deps struct {
 	Audit    *audit.Logger
 	WebFS    fs.FS // built Vue SPA (may be empty in dev)
 	Log      *slog.Logger
+	Sites    *site.Service
+	Web      *webcfg.Store
+	Tasks    *tasks.Manager
 }
 
 type Server struct {

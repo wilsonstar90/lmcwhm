@@ -15,7 +15,8 @@
     "detail": "詳細",
     "refresh": "更新",
     "language": "言語",
-    "coming": "このモジュールは {m} で提供予定"
+    "coming": "このモジュールは {m} で提供予定",
+    "close": "閉じる"
   },
   "login": {
     "title": "ログイン",
@@ -85,7 +86,7 @@
     "ssl_off": "無効 (HTTP)",
     "ssl_selfsigned": "自己署名",
     "ssl_custom": "カスタム証明書",
-    "ssl_acme_note": "Let's Encrypt / LiteSSL 自動発行は M1 で提供",
+    "ssl_acme_note": "サイトの SSL は「サイト → 管理 → SSL」へ。パネル自体の自動発行は今後対応",
     "ssl_cert": "証明書 (PEM)",
     "ssl_key": "秘密鍵 (PEM)",
     "ssl_current": "現在の証明書",
@@ -136,6 +137,102 @@
       "not_found": "見つかりません",
       "internal": "内部エラー",
       "network": "ネットワークエラー"
+    },
+    "site": {
+      "invalid_domain": "ドメイン形式が不正",
+      "domain_taken": "{domain} は既に使用中です",
+      "invalid_type": "サイト種類が不正",
+      "invalid_php": "PHP バージョンが不正",
+      "not_found": "サイトが見つかりません",
+      "wildcard_needs_dns": "ワイルドカードには DNS-01 が必要です"
+    },
+    "cf": {
+      "no_token": "Cloudflare トークンを設定してください"
+    },
+    "web": {
+      "invalid_email": "メール形式が不正",
+      "invalid_directory": "ACME Directory URL は https:// で始めてください",
+      "invalid_ip": "IP 形式が不正"
+    },
+    "docker": {
+      "not_available": "Docker を利用できません"
     }
+  },
+  "task": {
+    "running": "実行中",
+    "success": "完了",
+    "failed": "失敗"
+  },
+  "web": {
+    "tab": "Web 環境",
+    "stack": "Web スタック",
+    "stack_hint": "HAProxy が 80/443（IPv4/IPv6）で SNI 振り分け。Nginx と各 PHP-FPM は Docker コンテナで動作します。",
+    "install": "Web 環境をインストール",
+    "repair": "修復 / 再適用",
+    "missing": "未インストール",
+    "no_docker": "Docker が見つかりません。インストールコマンドを再実行してください。",
+    "not_installed": "Web 環境は未インストールです。最初のサイト作成時に自動インストールされます（80/443 使用）。",
+    "cf_token": "Cloudflare API トークン",
+    "cf_token_hint": "権限: Zone → DNS → Edit、Zone → Zone → Read。暗号化保存され再表示されません。",
+    "secret_set": "設定済み（空欄で変更なし）",
+    "verify": "検証",
+    "clear": "削除",
+    "cf_ok": "トークンは有効です",
+    "server_ip": "サーバー公開 IP（DNS 用）",
+    "auto": "空欄で自動検出: {ip}",
+    "acme": "SSL 認証局 (ACME)",
+    "acme_email": "連絡先メール",
+    "acme_ca": "CA",
+    "acme_directory": "ACME Directory URL",
+    "acme_directory_hint": "LiteSSL / CA の管理画面で EAB と一緒に取得します。",
+    "tos": "証明書の申請により選択した CA の利用規約に同意したことになります。"
+  },
+  "site": {
+    "list": "サイト一覧",
+    "create": "サイト追加",
+    "search": "検索",
+    "domain": "ドメイン",
+    "aliases": "追加ドメイン",
+    "aliases_hint": "1行に1つ（例 www.example.com）",
+    "type": "種類",
+    "static": "静的",
+    "php_version": "PHP バージョン",
+    "php_switch_hint": "即時反映。初回利用のバージョンはビルドに数分かかります。",
+    "dns": "Cloudflare DNS",
+    "dns_hint": "A / AAAA レコードを自動作成",
+    "need_cf": "先に Web 環境で Cloudflare トークンを設定してください",
+    "cf_proxied": "Cloudflare プロキシ経由",
+    "ssl_none": "なし",
+    "ssl_http_hint": "ドメインが本サーバーを指している必要があります",
+    "ssl_dns_hint": "Cloudflare TXT で検証。ワイルドカード対応",
+    "force_https": "HTTPS を強制",
+    "wildcard": "ワイルドカード *.domain を含める",
+    "remark": "メモ",
+    "manage": "管理",
+    "running": "稼働中",
+    "stopped": "停止中",
+    "start": "サイト開始",
+    "stop": "サイト停止",
+    "tab_domains": "ドメイン",
+    "tab_config": "Nginx 設定",
+    "tab_danger": "状態 / 削除",
+    "config_hint": "lmcwhm が自動生成（読み取り専用）。",
+    "root": "ドキュメントルート",
+    "created": "作成日時",
+    "ssl_failed": "証明書の発行に失敗",
+    "ssl_source": "発行元",
+    "ssl_custom": "カスタム",
+    "ssl_issuer": "発行者",
+    "ssl_expires": "有効期限",
+    "days_left": "残り {n} 日",
+    "ssl_issue": "証明書を申請",
+    "ssl_renew": "今すぐ更新",
+    "ssl_upload": "証明書をアップロード",
+    "ssl_disable": "SSL を無効化",
+    "ssl_disable_confirm": "証明書を削除し HTTPS 強制を解除しますか？",
+    "delete": "サイト削除",
+    "delete_files": "{root} のファイルも削除",
+    "delete_dns": "Cloudflare DNS レコードも削除",
+    "delete_confirm": "{domain} を削除しますか？"
   }
 }

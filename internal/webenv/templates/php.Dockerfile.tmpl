@@ -1,0 +1,3 @@
+FROM php:{{.Version}}-fpm
+RUN docker-php-ext-install -j"$(nproc)" mysqli pdo_mysql opcache bcmath exif
+LABEL lmcwhm.managed="true"

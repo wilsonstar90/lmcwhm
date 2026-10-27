@@ -15,7 +15,8 @@
     "detail": "詳情",
     "refresh": "刷新",
     "language": "語言",
-    "coming": "此模組將於 {m} 推出"
+    "coming": "此模組將於 {m} 推出",
+    "close": "關閉"
   },
   "login": {
     "title": "登入面板",
@@ -85,7 +86,7 @@
     "ssl_off": "關閉 (HTTP)",
     "ssl_selfsigned": "自簽證書",
     "ssl_custom": "自訂證書",
-    "ssl_acme_note": "Let's Encrypt / LiteSSL 自動申請將於 M1 推出",
+    "ssl_acme_note": "網站 SSL 請到「網站 → 管理 → SSL」；面板自身嘅 Let's Encrypt 自動申請將於之後版本推出",
     "ssl_cert": "證書 (PEM)",
     "ssl_key": "私鑰 (PEM)",
     "ssl_current": "當前證書",
@@ -136,6 +137,102 @@
       "not_found": "找不到資源",
       "internal": "伺服器內部錯誤",
       "network": "網絡錯誤"
+    },
+    "site": {
+      "invalid_domain": "域名格式錯誤",
+      "domain_taken": "域名 {domain} 已被其他網站使用",
+      "invalid_type": "網站類型錯誤",
+      "invalid_php": "PHP 版本無效",
+      "not_found": "網站不存在",
+      "wildcard_needs_dns": "萬用字元證書需要 DNS-01（Cloudflare）驗證"
+    },
+    "cf": {
+      "no_token": "請先設定 Cloudflare API Token"
+    },
+    "web": {
+      "invalid_email": "電郵格式錯誤",
+      "invalid_directory": "ACME Directory URL 必須係 https://",
+      "invalid_ip": "IP 格式錯誤"
+    },
+    "docker": {
+      "not_available": "Docker 不可用"
     }
+  },
+  "task": {
+    "running": "執行中",
+    "success": "完成",
+    "failed": "失敗"
+  },
+  "web": {
+    "tab": "Web 環境",
+    "stack": "Web 服務堆疊",
+    "stack_hint": "HAProxy 喺 80/443（IPv4 + IPv6）按 SNI 分流，Nginx 同各版本 PHP-FPM 以 Docker 容器運行。設定會由資料庫自動生成。",
+    "install": "安裝 Web 環境",
+    "repair": "修復 / 重新套用",
+    "missing": "未安裝",
+    "no_docker": "偵測唔到 Docker。請重新執行安裝命令（會自動安裝 Docker）。",
+    "not_installed": "Web 環境未安裝，建立第一個網站時會自動安裝（佔用 80 / 443 端口）。",
+    "cf_token": "Cloudflare API Token",
+    "cf_token_hint": "需要權限：Zone → DNS → Edit、Zone → Zone → Read。只會加密儲存，唔會再顯示。",
+    "secret_set": "已設定（留空 = 不變）",
+    "verify": "驗證",
+    "clear": "清除",
+    "cf_ok": "Token 有效",
+    "server_ip": "伺服器公網 IP（DNS 記錄用）",
+    "auto": "留空自動偵測：{ip}",
+    "acme": "SSL 證書頒發機構 (ACME)",
+    "acme_email": "聯絡電郵",
+    "acme_ca": "CA",
+    "acme_directory": "ACME Directory URL",
+    "acme_directory_hint": "喺 LiteSSL / CA 後台取得，連同 EAB Key ID 同 HMAC Key。",
+    "tos": "申請證書即表示同意所選 CA 嘅服務條款。"
+  },
+  "site": {
+    "list": "網站列表",
+    "create": "新增網站",
+    "search": "搜尋域名 / 備註",
+    "domain": "域名",
+    "aliases": "其他域名（別名）",
+    "aliases_hint": "每行一個，例如 www.example.com",
+    "type": "類型",
+    "static": "靜態",
+    "php_version": "PHP 版本",
+    "php_switch_hint": "切換版本會即時生效；新版本第一次使用需要幾分鐘建置。",
+    "dns": "Cloudflare DNS",
+    "dns_hint": "自動建立 A（IPv4）同 AAAA（IPv6）記錄指向本伺服器",
+    "need_cf": "請先喺「Web 環境」設定 Cloudflare API Token",
+    "cf_proxied": "經 Cloudflare 代理（橙雲）",
+    "ssl_none": "唔申請",
+    "ssl_http_hint": "域名要先指向本伺服器（port 80 可訪問）",
+    "ssl_dns_hint": "經 Cloudflare TXT 記錄驗證，支援萬用字元證書",
+    "force_https": "強制 HTTPS",
+    "wildcard": "包含萬用字元 *.域名",
+    "remark": "備註",
+    "manage": "管理",
+    "running": "運行中",
+    "stopped": "已停止",
+    "start": "啟動網站",
+    "stop": "停止網站",
+    "tab_domains": "域名",
+    "tab_config": "Nginx 設定",
+    "tab_danger": "狀態 / 刪除",
+    "config_hint": "由 lmcwhm 自動生成（唯讀）。",
+    "root": "網站目錄",
+    "created": "建立時間",
+    "ssl_failed": "SSL 申請失敗",
+    "ssl_source": "來源",
+    "ssl_custom": "自訂證書",
+    "ssl_issuer": "簽發者",
+    "ssl_expires": "到期",
+    "days_left": "剩 {n} 日",
+    "ssl_issue": "申請證書",
+    "ssl_renew": "重新申請",
+    "ssl_upload": "上傳自訂證書",
+    "ssl_disable": "關閉 SSL",
+    "ssl_disable_confirm": "刪除此網站嘅證書並關閉強制 HTTPS？",
+    "delete": "刪除網站",
+    "delete_files": "同時刪除網站檔案 {root}",
+    "delete_dns": "同時刪除 Cloudflare DNS 記錄",
+    "delete_confirm": "確定刪除 {domain}？"
   }
 }
