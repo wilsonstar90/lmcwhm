@@ -46,5 +46,6 @@
   "info.warn_selfsigned": "The panel uses a self-signed certificate; the browser warning is expected",
   "err.need_root": "Please run as root",
   "err.not_init": "Panel not initialised; run `lmcwhm init` first",
-  "warn.reload_failed": "Saved, but could not signal the running panel: %v (run `lmcwhm restart`)"
+  "warn.reload_failed": "Saved, but could not signal the running panel: %v (run `lmcwhm restart`)",
+  "ok.reset_panel": "Panel access has been reset (websites, databases, firewall and other settings are unchanged)"
 }

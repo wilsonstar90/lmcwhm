@@ -66,6 +66,7 @@ func main() {
 	}
 	root.AddCommand(serveCmd(), versionCmd())
 	root.AddCommand(cliCommands()...)
+	root.AddCommand(maintenanceCommands()...)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()

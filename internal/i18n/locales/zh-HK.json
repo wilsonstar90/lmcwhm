@@ -46,5 +46,6 @@
   "info.warn_selfsigned": "面板使用自簽證書，瀏覽器提示不安全屬正常",
   "err.need_root": "請以 root 執行",
   "err.not_init": "面板未初始化，請先執行 lmcwhm init",
-  "warn.reload_failed": "設定已保存，但通知運行中面板失敗：%v（請執行 lmcwhm restart）"
+  "warn.reload_failed": "設定已保存，但通知運行中面板失敗：%v（請執行 lmcwhm restart）",
+  "ok.reset_panel": "面板訪問設定已重置（網站、資料庫、防火牆同其他設定保持不變）"
 }

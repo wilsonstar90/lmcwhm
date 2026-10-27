@@ -46,5 +46,6 @@
   "info.warn_selfsigned": "面板使用自签证书，浏览器提示不安全属正常",
   "err.need_root": "请以 root 执行",
   "err.not_init": "面板未初始化，请先执行 lmcwhm init",
-  "warn.reload_failed": "设置已保存，但通知运行中面板失败：%v（请执行 lmcwhm restart）"
+  "warn.reload_failed": "设置已保存，但通知运行中面板失败：%v（请执行 lmcwhm restart）",
+  "ok.reset_panel": "面板访问设置已重置（网站、数据库、防火墙和其他设置保持不变）"
 }
