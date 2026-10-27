@@ -29,7 +29,7 @@ func TestRender(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := string(edge["haproxy.cfg"])
-	for _, want := range []string{"bind :::443 v4v6", "bind :::80 v4v6", "req.ssl_sni,lower,map_dom(", "abns@lmcwhm_https", "server s1 127.0.0.1:9443 send-proxy-v2", "127.0.0.1:8899", "127.0.0.1:8080"} {
+	for _, want := range []string{"bind 0.0.0.0:443", "bind 0.0.0.0:80", "req.ssl_sni,lower,map_dom(", "abns@lmcwhm_https", "server s1 127.0.0.1:9443 send-proxy-v2", "127.0.0.1:8899", "127.0.0.1:8080"} {
 		if !strings.Contains(cfg, want) {
 			t.Errorf("haproxy.cfg missing %q", want)
 		}

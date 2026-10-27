@@ -173,6 +173,16 @@ func portFree(port int) bool {
 	return true
 }
 
+// hasIPv6 reports whether the host can bind IPv6 sockets.
+func hasIPv6() bool {
+	ln, err := net.Listen("tcp6", "[::1]:0")
+	if err != nil {
+		return false
+	}
+	ln.Close()
+	return true
+}
+
 // Ensure installs/starts the edge and nginx, writing base configs. Safe to repeat.
 func (e *Env) Ensure(ctx context.Context, sites []Site, pass []Passthrough, log func(string, ...any)) error {
 	if !dockerx.Available(ctx) {
@@ -358,6 +368,7 @@ func mapLines(sites []Site, pick func(Site) bool) []byte {
 
 type edgeData struct {
 	Dir         string
+	IPv6        bool
 	ACMEPort    int
 	NginxPort   int
 	Passthrough []passBackend
@@ -384,7 +395,7 @@ func (e *Env) edgeFiles(sites []Site, pass []Passthrough) (map[string][]byte, er
 	files["maps/force_https.map"] = mapLines(sites, func(s Site) bool { return s.ForceHTTPS && s.HasCert })
 	files["maps/hsts.map"] = mapLines(sites, func(s Site) bool { return s.HSTS && s.HasCert })
 
-	data := edgeData{Dir: dir, ACMEPort: ACMEPort, NginxPort: NginxPort}
+	data := edgeData{Dir: dir, IPv6: hasIPv6(), ACMEPort: ACMEPort, NginxPort: NginxPort}
 	var pm []string
 	for i, p := range pass {
 		be := fmt.Sprintf("be_pass_%d", i)

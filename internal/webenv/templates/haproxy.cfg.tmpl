@@ -21,7 +21,10 @@ defaults
 # everything else is terminated below with the certificates in crt-list.txt.
 frontend fe_sni
     mode tcp
-    bind :::443 v4v6
+    bind 0.0.0.0:443
+{{- if .IPv6}}
+    bind :::443 v6only
+{{- end}}
     tcp-request inspect-delay 5s
     tcp-request content accept if { req.ssl_hello_type 1 }
     use_backend %[req.ssl_sni,lower,map_dom({{.Dir}}/maps/passthrough.map)] if { req.ssl_sni,lower,map_dom({{.Dir}}/maps/passthrough.map) -m found }
@@ -48,7 +51,10 @@ frontend fe_https
 # ---- :80 — ACME HTTP-01, HTTPS redirects, plain HTTP sites ----
 frontend fe_http
     mode http
-    bind :::80 v4v6
+    bind 0.0.0.0:80
+{{- if .IPv6}}
+    bind :::80 v6only
+{{- end}}
     option forwardfor
     http-request set-header X-Forwarded-Proto http
     http-request set-header X-Forwarded-Port 80
