@@ -79,3 +79,9 @@ func Build(ctx context.Context, tag, dockerfile string) error {
 	_, err := RunInput(ctx, []byte(dockerfile), "build", "-t", tag, "-")
 	return err
 }
+
+// Logs returns the last n lines of a container's stdout and stderr.
+func Logs(ctx context.Context, name string, n int) string {
+	out, _ := exec.CommandContext(ctx, "docker", "logs", "--tail", fmt.Sprint(n), name).CombinedOutput()
+	return strings.TrimSpace(string(out))
+}

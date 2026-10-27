@@ -6,6 +6,8 @@ package webenv
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"embed"
 	"errors"
 	"fmt"
@@ -220,9 +222,20 @@ func (e *Env) Ensure(ctx context.Context, sites []Site, pass []Passthrough, log 
 	}, []int{80, 443})
 }
 
-// ensureContainer starts an existing container or creates it.
+// ensureContainer makes sure container name runs with exactly args. A hash of
+// the arguments is stored as a label, so changed settings recreate it.
 func (e *Env) ensureContainer(ctx context.Context, log func(string, ...any), name string, args []string, ports []int) error {
-	switch dockerx.State(ctx, name) {
+	sum := sha256.Sum256([]byte(strings.Join(args, "\x00")))
+	spec := hex.EncodeToString(sum[:8])
+	state := dockerx.State(ctx, name)
+	if state != "" && dockerx.Label(ctx, name, "lmcwhm.spec") != spec {
+		log("recreating container %s (configuration changed)", name)
+		if err := dockerx.Remove(ctx, name); err != nil {
+			return err
+		}
+		state = ""
+	}
+	switch state {
 	case "running":
 		return nil
 	case "":
@@ -232,14 +245,39 @@ func (e *Env) ensureContainer(ctx context.Context, log func(string, ...any), nam
 			}
 		}
 		log("creating container %s", name)
-		run := append([]string{"run", "-d", "--name", name, "--restart", "always", "--label", "lmcwhm.managed=true"}, args...)
-		_, err := dockerx.Run(ctx, run...)
-		return err
+		run := append([]string{"run", "-d", "--name", name, "--restart", "always",
+			"--ulimit", "nofile=1048576:1048576",
+			"--label", "lmcwhm.managed=true", "--label", "lmcwhm.spec=" + spec}, args...)
+		if _, err := dockerx.Run(ctx, run...); err != nil {
+			return err
+		}
 	default:
 		log("starting container %s", name)
-		_, err := dockerx.Run(ctx, "start", name)
-		return err
+		if _, err := dockerx.Run(ctx, "start", name); err != nil {
+			return err
+		}
 	}
+	return waitRunning(ctx, name)
+}
+
+// waitRunning waits until the container stays up; a crash loop is reported with its logs.
+func waitRunning(ctx context.Context, name string) error {
+	ok := 0
+	for i := 0; i < 40; i++ {
+		if dockerx.State(ctx, name) == "running" {
+			if ok++; ok >= 3 {
+				return nil
+			}
+		} else {
+			ok = 0
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(250 * time.Millisecond):
+		}
+	}
+	return fmt.Errorf("container %s is not running: %s", name, dockerx.Logs(ctx, name, 20))
 }
 
 // EnsurePHP builds the PHP image (first time only) and starts its FPM container.
