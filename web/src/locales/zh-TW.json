@@ -233,6 +233,9 @@
     "delete": "刪除網站",
     "delete_files": "同時刪除網站檔案 {root}",
     "delete_dns": "同時刪除 Cloudflare DNS 記錄",
-    "delete_confirm": "確定刪除 {domain}？"
+    "delete_confirm": "確定刪除 {domain}？",
+    "cf_hint_title": "網域經 Cloudflare 代理（橙雲）",
+    "cf_hint_dns": "請改用 DNS-01（Cloudflare）申請，不受代理影響；或在 Cloudflare 暫時將 SSL/TLS 模式改為 Full（非 strict），簽發後再改回 Full (strict)。",
+    "cf_hint_token": "Cloudflare 在憑證簽發前會拒絕連線（Full (strict) 模式回 526）。最簡單：於「Web 環境」填 Cloudflare API Token，再用 DNS-01 申請；或暫時將 SSL/TLS 模式改為 Full（非 strict）。"
   }
 }

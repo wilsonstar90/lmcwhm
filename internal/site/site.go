@@ -450,6 +450,17 @@ func (sv *Service) issue(ctx context.Context, s *Site, ch acme.Challenge, wildca
 		domains = append(domains, "*."+s.Domain)
 	}
 	res, err := sv.issuer.Obtain(ctx, acme.Request{Domains: dedupe(domains), Challenge: ch}, log)
+	if err != nil && ch == acme.HTTP01 {
+		// HTTP-01 cannot pass when a proxy in front (e.g. Cloudflare with
+		// Full (strict)) rejects the origin before it has a valid certificate.
+		// DNS-01 does not depend on the HTTP path, so retry with it when possible.
+		if cfg, cerr := sv.cfg.Get(ctx); cerr == nil && cfg.CFToken != "" {
+			log("HTTP-01 failed: %v", err)
+			log("retrying with DNS-01 via Cloudflare")
+			ch = acme.DNS01
+			res, err = sv.issuer.Obtain(ctx, acme.Request{Domains: dedupe(domains), Challenge: ch}, log)
+		}
+	}
 	if err != nil {
 		s.CertError = err.Error()
 		sv.save(ctx, s)

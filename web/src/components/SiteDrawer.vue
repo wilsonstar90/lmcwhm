@@ -86,6 +86,9 @@ async function remove() {
   }
 }
 
+// The error came back through Cloudflare (its IPv6 range, 52x origin errors).
+const behindCloudflare = computed(() => /2606:4700:|\b52[0-9]\b|cloudflare/i.test(props.site?.cert_error ?? ''))
+
 const phpOptions = computed(() => props.phpVersions.map((v) => ({ label: `PHP ${v}`, value: v })))
 const days = computed(() =>
   props.site?.cert_not_after ? Math.floor((props.site.cert_not_after * 1000 - Date.now()) / 86400000) : 0,
@@ -125,6 +128,9 @@ const days = computed(() =>
         <n-tab-pane name="ssl" tab="SSL">
           <n-alert v-if="site.cert_error" type="error" :title="t('site.ssl_failed')" style="margin-bottom: 16px">
             {{ site.cert_error }}
+          </n-alert>
+          <n-alert v-if="behindCloudflare" type="warning" :title="t('site.cf_hint_title')" style="margin-bottom: 16px">
+            {{ hasCF ? t('site.cf_hint_dns') : t('site.cf_hint_token') }}
           </n-alert>
           <n-descriptions v-if="site.ssl_mode !== 'none'" :column="1" label-placement="left" size="small" style="margin-bottom: 16px">
             <n-descriptions-item :label="t('site.ssl_source')">{{ site.ssl_mode === 'acme' ? 'ACME' : t('site.ssl_custom') }}</n-descriptions-item>

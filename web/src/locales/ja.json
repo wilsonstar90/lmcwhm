@@ -233,6 +233,9 @@
     "delete": "サイト削除",
     "delete_files": "{root} のファイルも削除",
     "delete_dns": "Cloudflare DNS レコードも削除",
-    "delete_confirm": "{domain} を削除しますか？"
+    "delete_confirm": "{domain} を削除しますか？",
+    "cf_hint_title": "Cloudflare プロキシ経由のドメインです",
+    "cf_hint_dns": "DNS-01（Cloudflare）を使うか、一時的に SSL/TLS を Full（strict ではない）にしてください。",
+    "cf_hint_token": "Full (strict) では証明書発行前に 526 になります。Web 環境で Cloudflare トークンを設定し DNS-01 を使ってください。"
   }
 }

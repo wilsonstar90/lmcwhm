@@ -84,6 +84,11 @@ loc="$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' --resolve static.t
 [[ "$loc" == "301 https://static.test/x" ]] || fail "force https: $loc"
 pass "force HTTPS redirect"
 
+# The ACME challenge path must reach the panel's responder over HTTPS too
+# (validators follow Cloudflare's HTTP->HTTPS redirect).
+[[ "$(get443 static.test /.well-known/acme-challenge/nope)" == "404 page not found" ]] || fail "acme path over https not routed to responder"
+pass "ACME challenge path routed on HTTPS"
+
 # ---------- switch PHP version, stop, delete ----------
 PID="$(site_id php.test)"
 wait_task "$(api PATCH "/sites/$PID" '{"php_version":"8.2"}' | jget "['task_id']")"

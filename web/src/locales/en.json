@@ -233,6 +233,9 @@
     "delete": "Delete site",
     "delete_files": "Also delete files in {root}",
     "delete_dns": "Also delete Cloudflare DNS records",
-    "delete_confirm": "Delete {domain}?"
+    "delete_confirm": "Delete {domain}?",
+    "cf_hint_title": "The domain is proxied by Cloudflare (orange cloud)",
+    "cf_hint_dns": "Use DNS-01 (Cloudflare) instead, which is not affected by the proxy; or temporarily set Cloudflare SSL/TLS mode to Full (not strict) and switch back to Full (strict) once issued.",
+    "cf_hint_token": "Cloudflare rejects the origin until it has a valid certificate (526 in Full (strict) mode). Easiest: add a Cloudflare API token under Web stack and request with DNS-01; or temporarily set SSL/TLS mode to Full (not strict)."
   }
 }

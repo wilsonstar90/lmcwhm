@@ -233,6 +233,9 @@
     "delete": "删除网站",
     "delete_files": "同时删除网站文件 {root}",
     "delete_dns": "同时删除 Cloudflare DNS 记录",
-    "delete_confirm": "确定删除 {domain}？"
+    "delete_confirm": "确定删除 {domain}？",
+    "cf_hint_title": "域名经 Cloudflare 代理（橙云）",
+    "cf_hint_dns": "请改用 DNS-01（Cloudflare）申请，不受代理影响；或在 Cloudflare 暂时将 SSL/TLS 模式改为 Full（非 strict），签发后再改回 Full (strict)。",
+    "cf_hint_token": "Cloudflare 在证书签发前会拒绝连接（Full (strict) 模式回 526）。最简单：在「Web 环境」填写 Cloudflare API Token，再用 DNS-01 申请；或暂时将 SSL/TLS 模式改为 Full（非 strict）。"
   }
 }
