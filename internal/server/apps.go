@@ -192,7 +192,9 @@ func (s *Server) handleDatabases(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": list, "adminer": s.Apps.AdminerPort(r.Context()) > 0})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items": list, "adminer": s.Apps.AdminerPort(r.Context()) > 0, "phpmyadmin": s.Apps.PMAServers(r.Context()),
+	})
 }
 
 func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
@@ -271,12 +273,13 @@ func (s *Server) handleRestartProject(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-// ---- Adminer ----
+// ---- Adminer / phpMyAdmin ----
 
-// handleAdminer reverse-proxies /adminer/ to the installed Adminer for
-// signed-in panel users. Adminer keeps its own login (and CSRF tokens), so
-// the panel's CSRF header is not required here.
-func (s *Server) handleAdminer(w http.ResponseWriter, r *http.Request) {
+// toolProxy reverse-proxies a database tool on loopback for signed-in panel
+// users. The tools keep their own CSRF tokens, so the panel's CSRF header is
+// not required here; only the tool's own cookies go upstream, never the
+// panel session. With strip, prefix is removed from the upstream path.
+func (s *Server) toolProxy(w http.ResponseWriter, r *http.Request, port int, prefix string, strip bool, cookie func(string) bool) {
 	c, err := r.Cookie(sessionCookie)
 	if err != nil {
 		notFound(w)
@@ -286,31 +289,46 @@ func (s *Server) handleAdminer(w http.ResponseWriter, r *http.Request) {
 		notFound(w)
 		return
 	}
-	port := s.Apps.AdminerPort(r.Context())
 	if port == 0 {
 		notFound(w)
 		return
 	}
-	if r.URL.Path == "/adminer" {
-		http.Redirect(w, r, "/adminer/", http.StatusFound)
+	if r.URL.Path == prefix {
+		http.Redirect(w, r, prefix+"/", http.StatusFound)
 		return
 	}
 	target, _ := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", port))
 	rp := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(target)
-			pr.Out.URL.Path = strings.TrimPrefix(pr.In.URL.Path, "/adminer")
-			pr.Out.URL.RawPath = ""
+			pr.SetXForwarded()
+			pr.Out.Host = pr.In.Host // absolute URLs the tool builds point back at the panel
+			if strip {
+				pr.Out.URL.Path = strings.TrimPrefix(pr.In.URL.Path, prefix)
+				pr.Out.URL.RawPath = ""
+			}
 			pr.Out.Header.Del("Cookie")
-			// Only Adminer's own cookies go upstream, never the panel session.
 			for _, ck := range pr.In.Cookies() {
-				if strings.HasPrefix(ck.Name, "adminer") {
+				if cookie(ck.Name) {
 					pr.Out.AddCookie(ck)
 				}
 			}
 		},
 	}
-	// Adminer shows its own pages in frames for some dialogs.
+	// The tools show some of their own pages in frames.
 	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 	rp.ServeHTTP(w, r)
+}
+
+func (s *Server) handleAdminer(w http.ResponseWriter, r *http.Request) {
+	s.toolProxy(w, r, s.Apps.AdminerPort(r.Context()), "/adminer", true, func(n string) bool {
+		return strings.HasPrefix(n, "adminer")
+	})
+}
+
+// handlePMA serves phpMyAdmin, which Apache already serves under the same prefix.
+func (s *Server) handlePMA(w http.ResponseWriter, r *http.Request) {
+	s.toolProxy(w, r, s.Apps.PMAPort(r.Context()), appstore.PMAPrefix, false, func(n string) bool {
+		return strings.HasPrefix(n, "phpMyAdmin") || strings.HasPrefix(strings.ToLower(n), "pma")
+	})
 }

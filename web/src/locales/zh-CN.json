@@ -355,7 +355,8 @@
       "sqlserver": "Microsoft SQL Server（须遵守其许可条款）",
       "redis": "Redis 键值数据库，已设置密码及 AOF 持久化",
       "memcached": "Memcached 对象缓存（64 MB）",
-      "adminer": "网页数据库管理工具，在面板内 /adminer/ 打开"
+      "adminer": "网页数据库管理工具，在面板内 /adminer/ 打开",
+      "phpmyadmin": "面板内的 MySQL / MariaDB 网页管理工具，自动登录"
     }
   },
   "db": {
@@ -375,7 +376,8 @@
     "name_hint": "字母、数字和 _，以字母开头（最多 32 个字符）",
     "same_as_name": "与数据库名相同",
     "password_hint": "8-64 个字符：字母、数字和 _ % + = . , : - #",
-    "generate": "留空 = 自动生成强密码"
+    "generate": "留空 = 自动生成强密码",
+    "pma_hint": "从软件商店安装 phpMyAdmin，即可在浏览器管理 MySQL / MariaDB 数据库。"
   },
   "docker": {
     "containers": "容器",

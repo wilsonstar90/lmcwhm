@@ -24,6 +24,7 @@ const logs = ref<{ url: string; title: string } | null>(null)
 const cfg = ref<{ app: InstalledApp; body: string } | null>(null)
 const cred = ref<{ app: InstalledApp; host: string; port: number; username: string; password: string } | null>(null)
 const removeData = ref(false)
+const hasPMA = computed(() => installed.value.some((i) => i.app === 'phpmyadmin'))
 
 async function load() {
   loading.value = true
@@ -129,6 +130,10 @@ const columns: DataTableColumns<InstalledApp> = [
         i.has_config ? h(NButton, { size: 'tiny', onClick: () => openConfig(i) }, () => t('app.config')) : null,
         i.kind === 'database' ? h(NButton, { size: 'tiny', onClick: () => openCred(i) }, () => t('app.credentials')) : null,
         i.app === 'adminer' ? h(NButton, { size: 'tiny', tag: 'a', href: '/adminer/', target: '_blank' }, () => t('app.open')) : null,
+        i.app === 'phpmyadmin' ? h(NButton, { size: 'tiny', tag: 'a', href: '/phpmyadmin/', target: '_blank' }, () => t('app.open')) : null,
+        (i.app === 'mysql' || i.app === 'mariadb') && hasPMA.value
+          ? h(NButton, { size: 'tiny', tag: 'a', href: '/phpmyadmin/', target: '_blank' }, () => 'phpMyAdmin')
+          : null,
         h(
           NPopconfirm,
           { onPositiveClick: () => uninstall(i), onAfterLeave: () => (removeData.value = false) },

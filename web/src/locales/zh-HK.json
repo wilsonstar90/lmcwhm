@@ -355,7 +355,8 @@
       "sqlserver": "Microsoft SQL Server（須遵守其授權條款）",
       "redis": "Redis 鍵值資料庫，已設密碼及 AOF 持久化",
       "memcached": "Memcached 物件快取（64 MB）",
-      "adminer": "網頁資料庫管理工具，喺面板內 /adminer/ 打開"
+      "adminer": "網頁資料庫管理工具，喺面板內 /adminer/ 打開",
+      "phpmyadmin": "面板內嘅 MySQL / MariaDB 網頁管理工具，自動登入"
     }
   },
   "db": {
@@ -375,7 +376,8 @@
     "name_hint": "英文字母、數字同 _，以字母開頭（最多 32 字）",
     "same_as_name": "同資料庫名",
     "password_hint": "8-64 字：英文字母、數字同 _ % + = . , : - #",
-    "generate": "留空 = 自動生成強密碼"
+    "generate": "留空 = 自動生成強密碼",
+    "pma_hint": "喺軟件商店安裝 phpMyAdmin，就可以喺瀏覽器管理 MySQL / MariaDB 資料庫。"
   },
   "docker": {
     "containers": "容器",

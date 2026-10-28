@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/wilsonstar90/lmcwhm/internal/appstore"
 	"github.com/wilsonstar90/lmcwhm/internal/auth"
 	"github.com/wilsonstar90/lmcwhm/internal/config"
 	"github.com/wilsonstar90/lmcwhm/internal/settings"
@@ -107,6 +108,8 @@ func (s *Server) handler() http.Handler {
 	if s.Apps != nil {
 		r.HandleFunc("/adminer", s.handleAdminer)
 		r.HandleFunc("/adminer/*", s.handleAdminer)
+		r.HandleFunc(appstore.PMAPrefix, s.handlePMA)
+		r.HandleFunc(appstore.PMAPrefix+"/*", s.handlePMA)
 	}
 	r.NotFound(s.spa)
 	return r

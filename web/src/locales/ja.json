@@ -355,7 +355,8 @@
       "sqlserver": "Microsoft SQL Server（ライセンス条項に従ってください）",
       "redis": "パスワードと AOF 永続化付きの Redis",
       "memcached": "Memcached オブジェクトキャッシュ（64 MB）",
-      "adminer": "Web 版 DB クライアント。パネル内の /adminer/ で開きます"
+      "adminer": "Web 版 DB クライアント。パネル内の /adminer/ で開きます",
+      "phpmyadmin": "パネル内で使う MySQL / MariaDB の Web 管理ツール（自動ログイン）"
     }
   },
   "db": {
@@ -375,7 +376,8 @@
     "name_hint": "英字・数字・_、英字で始まる（最大 32 文字）",
     "same_as_name": "データベース名と同じ",
     "password_hint": "8-64 文字：英字・数字と _ % + = . , : - #",
-    "generate": "空欄 = 強力なパスワードを自動生成"
+    "generate": "空欄 = 強力なパスワードを自動生成",
+    "pma_hint": "App Store から phpMyAdmin をインストールすると、MySQL / MariaDB をブラウザで管理できます。"
   },
   "docker": {
     "containers": "コンテナ",

@@ -68,6 +68,9 @@ var Catalog = []App{
 	{Key: "memcached", Name: "Memcached", Kind: KindTool, Port: 11211, Versions: []Version{
 		{"1.6", "memcached:1.6", false},
 	}},
+	{Key: "phpmyadmin", Name: "phpMyAdmin", Kind: KindTool, Port: 8091, Versions: []Version{
+		{"5.2", "phpmyadmin:5.2", false},
+	}},
 	{Key: "adminer", Name: "Adminer", Kind: KindTool, Port: 8090, Versions: []Version{
 		{"4", "adminer:4", false},
 	}},

@@ -243,7 +243,7 @@ func (sv *Service) Install(ctx context.Context, key, version string, avoid map[i
 				}
 				log("previous data moved to %s", old)
 			}
-			if err := sv.prepare(inst, dir); err != nil {
+			if err := sv.prepare(ctx, inst, dir); err != nil {
 				return err
 			}
 			log("starting %s on 127.0.0.1:%d", inst.Container, inst.Port)
@@ -257,6 +257,11 @@ func (sv *Service) Install(ctx context.Context, key, version string, avoid map[i
 			key, version, inst.Port, sv.box.Seal(inst.secret), time.Now().Unix())
 		if err != nil {
 			return err
+		}
+		if pmaEngine(key) {
+			if err := sv.RefreshPMA(ctx); err != nil {
+				log("phpMyAdmin: %v", err)
+			}
 		}
 		log("%s %s installed", a.Name, version)
 		return nil
@@ -279,6 +284,9 @@ func (sv *Service) Boot(ctx context.Context) error {
 	}
 	all, err := sv.list(ctx, "")
 	if err != nil {
+		return err
+	}
+	if err := sv.RefreshPMA(ctx); err != nil {
 		return err
 	}
 	return sv.tasks.RunSync(ctx, func(ctx context.Context) error {
@@ -317,6 +325,11 @@ func (sv *Service) Uninstall(ctx context.Context, id int64, removeData bool) (st
 		}
 		if _, err := sv.st.DB.ExecContext(ctx, `DELETE FROM apps WHERE id = ?`, id); err != nil {
 			return err
+		}
+		if pmaEngine(i.App) {
+			if err := sv.RefreshPMA(ctx); err != nil {
+				log("phpMyAdmin: %v", err)
+			}
 		}
 		if removeData {
 			log("removing %s", sv.dir(i.App, i.Version))
@@ -431,7 +444,7 @@ func (sv *Service) SaveConfig(ctx context.Context, id int64, body string) (strin
 
 // ---- container specifications ----
 
-func (sv *Service) prepare(i Installed, dir string) error {
+func (sv *Service) prepare(ctx context.Context, i Installed, dir string) error {
 	for _, d := range []string{"data", "conf"} {
 		if err := os.MkdirAll(filepath.Join(dir, d), 0o755); err != nil {
 			return err
@@ -446,6 +459,8 @@ func (sv *Service) prepare(i Installed, dir string) error {
 		return os.WriteFile(filepath.Join(dir, "conf", "redis.conf"), []byte(conf), 0o644)
 	case "sqlserver":
 		return os.Chown(filepath.Join(dir, "data"), 10001, 0) // the image runs as mssql (10001)
+	case "phpmyadmin":
+		return sv.preparePMA(ctx, i, dir)
 	}
 	return nil
 }
@@ -476,6 +491,8 @@ func (sv *Service) args(i Installed) []string {
 	case "adminer":
 		// Host network so it reaches every database on 127.0.0.1; the panel proxies /adminer/ to it.
 		a = []string{"--network", "host", i.Image, "php", "-S", fmt.Sprintf("127.0.0.1:%d", i.Port), "-t", "/var/www/html"}
+	case "phpmyadmin":
+		a = sv.pmaArgs(i)
 	}
 	return a
 }
@@ -523,7 +540,7 @@ func (sv *Service) ping(ctx context.Context, i Installed) error {
 			err = errors.New(out)
 		}
 		return err
-	case "adminer":
+	case "adminer", "phpmyadmin":
 		c, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", i.Port), time.Second)
 		if err == nil {
 			c.Close()

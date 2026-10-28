@@ -101,6 +101,23 @@ docker exec -e PGPASSWORD="$NEWPW" lmcwhm-postgres17 psql -h 127.0.0.1 -U blog -
 code="$(api POST /databases "{\"app_id\":$MID,\"name\":\"x'; DROP\"}" | jget "['code']")"
 [[ "$code" == db.invalid_name ]] || fail "unsafe name accepted: $code"
 
+# phpMyAdmin: one server per MySQL / MariaDB, signed in through the panel session.
+task POST /apps/install '{"app":"mysql","version":"8.4"}'
+MYID="$(app_id mysql 8.4)"
+task POST /databases "{\"app_id\":$MYID,\"name\":\"pmtest\"}"
+task POST /apps/install '{"app":"phpmyadmin","version":"5.2"}'
+ss -ltnH | awk '{print $4}' | grep -E ':8091$' | grep -qv '^127\.0\.0\.1:' && fail "phpMyAdmin listens beyond loopback: $(ss -ltn | grep 8091)"
+pma_server() { api GET /databases | python3 -c "import sys,json; print(json.load(sys.stdin)['phpmyadmin'][sys.argv[1]])" "$1"; }
+pma() { curl -sk -b "$JAR" "$P/phpmyadmin/index.php?route=/server/databases&server=$1"; }
+out="$(pma "$(pma_server "$MID")")"
+[[ "$out" == *shop* ]] || { echo "$out" | tail -40; fail "phpMyAdmin cannot open MariaDB"; }
+out="$(pma "$(pma_server "$MYID")")"
+[[ "$out" == *pmtest* ]] || { echo "$out" | tail -40; fail "phpMyAdmin cannot open MySQL 8.4"; }
+J2="$(mktemp)"; curl -sk -c "$J2" -o /dev/null "$P/console" # security entry passed, not signed in
+[[ "$(curl -sk -b "$J2" -o /dev/null -w '%{http_code}' "$P/phpmyadmin/")" == 404 ]] || fail "phpMyAdmin reachable without a panel session"
+[[ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8091/phpmyadmin/)" == 200 ]] || fail "phpMyAdmin not on loopback 8091"
+pass "phpMyAdmin opens MariaDB and MySQL 8.4 from the panel session only"
+
 # A PHP site reaches MariaDB over the loopback port.
 task POST /sites '{"domain":"db.test","type":"php","php_version":"8.3","ssl":"none"}'
 cat > /www/wwwroot/db.test/index.php <<'EOF'

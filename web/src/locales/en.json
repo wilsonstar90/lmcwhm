@@ -355,7 +355,8 @@
       "sqlserver": "Microsoft SQL Server (Developer/Express licence terms apply)",
       "redis": "Redis key-value store with password and AOF persistence",
       "memcached": "Memcached object cache (64 MB)",
-      "adminer": "Web database client, opened at /adminer/ inside the panel"
+      "adminer": "Web database client, opened at /adminer/ inside the panel",
+      "phpmyadmin": "Web MySQL / MariaDB manager inside the panel, signed in automatically"
     }
   },
   "db": {
@@ -375,7 +376,8 @@
     "name_hint": "Letters, digits and _, starting with a letter (max 32)",
     "same_as_name": "Same as the database name",
     "password_hint": "8-64 characters: letters, digits and _ % + = . , : - #",
-    "generate": "Empty = generate a strong password"
+    "generate": "Empty = generate a strong password",
+    "pma_hint": "Install phpMyAdmin from the App Store to manage MySQL / MariaDB databases in the browser."
   },
   "docker": {
     "containers": "Containers",
