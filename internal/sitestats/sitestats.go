@@ -376,7 +376,16 @@ func (sv *Service) Report(ctx context.Context, domain string, days int, country 
 			for c, h := range agg {
 				rep.Countries = append(rep.Countries, Top{Key: c, Hits: h})
 			}
-			sort.Slice(rep.Countries, func(i, j int) bool { return rep.Countries[i].Hits > rep.Countries[j].Hits })
+			sort.Slice(rep.Countries, func(i, j int) bool {
+				a, b := rep.Countries[i], rep.Countries[j]
+				if a.Hits != b.Hits {
+					return a.Hits > b.Hits
+				}
+				if (a.Key == "??") != (b.Key == "??") {
+					return b.Key == "??" // unknown last among equals
+				}
+				return a.Key < b.Key
+			})
 			if len(rep.Countries) > 30 {
 				rep.Countries = rep.Countries[:30]
 			}

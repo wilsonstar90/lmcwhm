@@ -4,11 +4,24 @@ daemonize = no
 
 [www]
 listen = 127.0.0.1:{{.Port}}
-pm = dynamic
-pm.max_children = 20
-pm.start_servers = 2
-pm.min_spare_servers = 1
-pm.max_spare_servers = 4
+pm = {{.P.PM}}
+pm.max_children = {{.P.MaxChildren}}
+{{- if eq .P.PM "dynamic"}}
+pm.start_servers = {{.P.StartServers}}
+pm.min_spare_servers = {{.P.MinSpare}}
+pm.max_spare_servers = {{.P.MaxSpare}}
+{{- end}}
+{{- if eq .P.PM "ondemand"}}
+pm.process_idle_timeout = 10s
+{{- end}}
+pm.max_requests = {{.P.MaxRequests}}
+{{- if .P.RequestTimeout}}
+request_terminate_timeout = {{.P.RequestTimeout}}s
+{{- end}}
+{{- if .SlowLog}}
+request_slowlog_timeout = {{.P.SlowlogTimeout}}s
+slowlog = /var/log/lmcwhm-php/slow.log
+{{- end}}
 pm.status_path = /fpm-status
 catch_workers_output = yes
 decorate_workers_output = no

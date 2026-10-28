@@ -26,20 +26,25 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/database"
 	"github.com/wilsonstar90/lmcwhm/internal/dockermgr"
 	"github.com/wilsonstar90/lmcwhm/internal/files"
+	"github.com/wilsonstar90/lmcwhm/internal/fileshare"
 	"github.com/wilsonstar90/lmcwhm/internal/firewall"
 	"github.com/wilsonstar90/lmcwhm/internal/ftp"
 	"github.com/wilsonstar90/lmcwhm/internal/geoip"
+	"github.com/wilsonstar90/lmcwhm/internal/malware"
 	"github.com/wilsonstar90/lmcwhm/internal/mcp"
 	"github.com/wilsonstar90/lmcwhm/internal/monitor"
 	"github.com/wilsonstar90/lmcwhm/internal/probe"
+	"github.com/wilsonstar90/lmcwhm/internal/secscan"
 	"github.com/wilsonstar90/lmcwhm/internal/security"
 	"github.com/wilsonstar90/lmcwhm/internal/settings"
 	"github.com/wilsonstar90/lmcwhm/internal/site"
 	"github.com/wilsonstar90/lmcwhm/internal/sitestats"
 	"github.com/wilsonstar90/lmcwhm/internal/supervisor"
+	"github.com/wilsonstar90/lmcwhm/internal/tamper"
 	"github.com/wilsonstar90/lmcwhm/internal/tasks"
 	"github.com/wilsonstar90/lmcwhm/internal/terminal"
 	"github.com/wilsonstar90/lmcwhm/internal/tlsutil"
+	"github.com/wilsonstar90/lmcwhm/internal/toolbox"
 	"github.com/wilsonstar90/lmcwhm/internal/webcfg"
 	"github.com/wilsonstar90/lmcwhm/internal/wordpress"
 )
@@ -74,6 +79,11 @@ type Deps struct {
 	Procs    *supervisor.Service
 	WP       *wordpress.Service
 	FTP      *ftp.Service
+	Toolbox  *toolbox.Service
+	SecScan  *secscan.Service
+	Malware  *malware.Service
+	Tamper   *tamper.Service
+	Shares   *fileshare.Service
 }
 
 type Server struct {

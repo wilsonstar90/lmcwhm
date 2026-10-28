@@ -2,7 +2,7 @@
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { NButton, NCheckbox, NDivider, NDynamicInput, NDynamicTags, NForm, NFormItem, NInput, NInputNumber, NSelect, NSpace, useMessage } from 'naive-ui'
-import { patch, ApiError } from '../api/client'
+import { patch, post, ApiError } from '../api/client'
 import type { Site, SiteAdvanced } from '../api/types'
 
 const props = defineProps<{ site: Site }>()
@@ -12,7 +12,7 @@ const msg = useMessage()
 
 const blank = (): SiteAdvanced => ({
   autoindex: false, allow_ips: [], deny_ips: [], deny_ua: [], rate_limit: 0, rate_burst: 0, conn_limit: 0, error_pages: false,
-  block_xmlrpc: false, open_basedir: false, hotlink: [], max_body_mb: 0, redirects: [],
+  block_xmlrpc: false, open_basedir: false, hotlink: [], max_body_mb: 0, redirects: [], varnish: false, varnish_ttl: 120, varnish_exclude: [],
 })
 const a = ref<SiteAdvanced>(blank())
 watch(
@@ -24,6 +24,14 @@ async function save() {
   try {
     const r = await patch<{ task_id: string }>(`/sites/${props.site.id}`, { advanced: a.value })
     emit('task', r.task_id, `${t('adv.title')} · ${props.site.domain}`)
+  } catch (e) {
+    msg.error(e instanceof ApiError ? e.text : String(e))
+  }
+}
+async function purge() {
+  try {
+    await post('/varnish/purge', { site_id: props.site.id })
+    msg.success(t('common.done'))
   } catch (e) {
     msg.error(e instanceof ApiError ? e.text : String(e))
   }
@@ -55,6 +63,18 @@ async function save() {
       <n-checkbox v-if="site.type === 'php'" v-model:checked="a.open_basedir">{{ t('adv.open_basedir') }}</n-checkbox>
       <n-checkbox v-model:checked="a.block_xmlrpc">{{ t('adv.block_xmlrpc') }}</n-checkbox>
     </n-space>
+
+    <template v-if="!site.passthrough">
+      <n-divider title-placement="left">{{ t('adv.varnish') }}</n-divider>
+      <n-space vertical>
+        <n-checkbox v-model:checked="a.varnish">{{ t('adv.varnish_on') }}</n-checkbox>
+        <n-form-item v-if="a.varnish" :label="t('adv.varnish_ttl')" :feedback="t('adv.varnish_ttl_hint')">
+          <n-input-number v-model:value="a.varnish_ttl" :min="0" :max="2592000" style="width: 150px"><template #suffix>s</template></n-input-number>
+        </n-form-item>
+        <n-form-item v-if="a.varnish" :label="t('adv.varnish_exclude')" :feedback="t('adv.varnish_exclude_hint')"><n-dynamic-tags v-model:value="a.varnish_exclude" /></n-form-item>
+        <n-button v-if="site.advanced?.varnish" size="small" @click="purge">{{ t('adv.varnish_purge') }}</n-button>
+      </n-space>
+    </template>
 
     <n-divider title-placement="left">{{ t('adv.redirects') }}</n-divider>
     <n-dynamic-input v-model:value="a.redirects" :on-create="() => ({ from: '/', to: 'https://', code: 301 })">

@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -55,9 +54,10 @@ func (s *Server) gate(next http.Handler) http.Handler {
 			return
 		}
 
-		// MCP clients authenticate with a bearer token instead of the browser
-		// gates (bound domain, BasicAuth, security entry).
-		if r.URL.Path == "/mcp" {
+		// MCP clients authenticate with a bearer token, and share links (/s/)
+		// carry their own token, instead of the browser gates (bound domain,
+		// BasicAuth, security entry).
+		if r.URL.Path == "/mcp" || strings.HasPrefix(r.URL.Path, "/s/") {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -128,6 +128,15 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := r.Cookie(sessionCookie)
 		if err != nil {
+			// Scripts use API tokens instead of a session (no CSRF: not a browser).
+			if u, ok := s.tokenUser(r); ok {
+				if !allowed(u, r) {
+					writeErr(w, http.StatusForbidden, errForbidden)
+					return
+				}
+				next.ServeHTTP(w, s.withUser(r, auth.Session{User: u}))
+				return
+			}
 			writeErr(w, http.StatusUnauthorized, auth.ErrNoSession)
 			return
 		}
@@ -142,7 +151,11 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 				return
 			}
 		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), sessionKey, sess)))
+		if !allowed(sess.User, r) {
+			writeErr(w, http.StatusForbidden, errForbidden)
+			return
+		}
+		next.ServeHTTP(w, s.withUser(r, sess))
 	})
 }
 

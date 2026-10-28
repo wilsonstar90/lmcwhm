@@ -7,6 +7,7 @@ import {
 import { get, post, put, ApiError } from '../api/client'
 import type { WebConfig, WebStatus } from '../api/types'
 import TaskModal from './TaskModal.vue'
+import VarnishCard from './VarnishCard.vue'
 
 const emit = defineEmits<{ changed: [] }>()
 const { t } = useI18n()
@@ -85,6 +86,8 @@ const stateType = (s: string) => (s === 'running' ? 'success' : s ? 'warning' : 
       </n-space>
       <p class="hint">{{ t('web.stack_hint') }}</p>
     </n-card>
+
+    <VarnishCard v-if="status?.status.installed" />
 
     <n-grid v-if="cfg" cols="1 l:2" responsive="screen" :x-gap="16" :y-gap="16">
       <n-gi>

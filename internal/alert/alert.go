@@ -21,19 +21,22 @@ import (
 // Rule kinds. Metric kinds are checked every minute; event kinds are fired
 // by other services through Emit.
 const (
-	KindCPU          = "cpu"          // threshold %, minutes
-	KindMem          = "mem"          // threshold %, minutes
-	KindLoad         = "load"         // threshold (1-minute load), minutes
-	KindDisk         = "disk"         // threshold %
-	KindServiceDown  = "service_down" // panel containers not running
-	KindSSLExpiry    = "ssl_expiry"   // days
-	KindProbeDown    = "probe_down"   // event
-	KindCronFailed   = "cron_failed"  // event (includes backup jobs)
-	KindLoginFailed  = "login_failed" // count, minutes
-	KindPanelLogin   = "panel_login"  // every successful panel login
-	KindSSHLogin     = "ssh_login"    // every accepted SSH login
-	KindFirewallDrop = "firewall_ban" // event: an IP was banned automatically
-	defaultCooldown  = 60             // minutes between repeats of an active alert
+	KindCPU          = "cpu"           // threshold %, minutes
+	KindMem          = "mem"           // threshold %, minutes
+	KindLoad         = "load"          // threshold (1-minute load), minutes
+	KindDisk         = "disk"          // threshold %
+	KindServiceDown  = "service_down"  // panel containers not running
+	KindSSLExpiry    = "ssl_expiry"    // days
+	KindProbeDown    = "probe_down"    // event
+	KindCronFailed   = "cron_failed"   // event (includes backup jobs)
+	KindLoginFailed  = "login_failed"  // count, minutes
+	KindPanelLogin   = "panel_login"   // every successful panel login
+	KindSSHLogin     = "ssh_login"     // every accepted SSH login
+	KindFirewallDrop = "firewall_ban"  // event: an IP was banned automatically
+	KindTamper       = "tamper"        // event: a protected website file changed
+	KindMalware      = "malware"       // event: the webshell scan found files
+	KindSecurityScan = "security_scan" // event: the scheduled security scan found critical risks
+	defaultCooldown  = 60              // minutes between repeats of an active alert
 	keepEvents       = 2000
 )
 
@@ -41,7 +44,8 @@ var (
 	ErrNotFound = errors.New("alert.not_found")
 	ErrRule     = errors.New("alert.invalid_rule")
 	kinds       = map[string]bool{KindCPU: true, KindMem: true, KindLoad: true, KindDisk: true, KindServiceDown: true, KindSSLExpiry: true,
-		KindProbeDown: true, KindCronFailed: true, KindLoginFailed: true, KindPanelLogin: true, KindSSHLogin: true}
+		KindProbeDown: true, KindCronFailed: true, KindLoginFailed: true, KindPanelLogin: true, KindSSHLogin: true,
+		KindTamper: true, KindMalware: true, KindSecurityScan: true}
 )
 
 type Channel struct {
@@ -424,7 +428,7 @@ func (sv *Service) Emit(ctx context.Context, kind, key, severity, title, body st
 	for _, r := range rules {
 		if resolved {
 			sv.clear(ctx, r, key, title, body)
-		} else if kind == KindCronFailed || kind == KindFirewallDrop {
+		} else if kind == KindCronFailed || kind == KindFirewallDrop || kind == KindTamper || kind == KindMalware || kind == KindSecurityScan {
 			sv.deliver(ctx, r, key, severity, title, body) // one-off events: no repeat state
 		} else {
 			sv.raise(ctx, r, key, severity, title, body)

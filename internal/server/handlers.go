@@ -105,6 +105,8 @@ func (s *Server) handler() http.Handler {
 			s.m6Routes(r)
 			s.m7Routes(r)
 			s.m8Routes(r)
+			s.phpRoutes(r)
+			s.m9Routes(r)
 			r.Get("/logs/login", s.handleLoginLogs)
 			r.Get("/logs/operation", s.handleOperationLogs)
 		})
@@ -114,6 +116,8 @@ func (s *Server) handler() http.Handler {
 	})
 
 	r.HandleFunc("/mcp", s.mcpAuth)
+	r.Get("/s/{token}", s.handlePublicShare)
+	r.Post("/s/{token}", s.handlePublicShare)
 	if s.Apps != nil {
 		r.HandleFunc("/adminer", s.handleAdminer)
 		r.HandleFunc("/adminer/*", s.handleAdminer)

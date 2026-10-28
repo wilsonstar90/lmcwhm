@@ -178,7 +178,14 @@ func (s *Server) handleSites(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": list})
+	u := sessionFrom(r).User
+	out := list[:0]
+	for _, st := range list {
+		if u.CanSite(st.ID) {
+			out = append(out, st)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": out})
 }
 
 func (s *Server) handleSite(w http.ResponseWriter, r *http.Request) {
@@ -227,6 +234,13 @@ func (s *Server) handleDeleteSite(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeSiteErr(w, err)
 		return
+	}
+	if s.Tamper != nil {
+		// Locked files cannot be deleted (or a later site at this path edited).
+		if err := s.Tamper.UnlockPath(r.Context(), st.Root); err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
 	}
 	id, err := s.Sites.Delete(r.Context(), st.ID, in)
 	if err != nil {

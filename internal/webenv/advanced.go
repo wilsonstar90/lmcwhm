@@ -22,6 +22,11 @@ type Advanced struct {
 	Hotlink     []string   `json:"hotlink"`      // referer domains allowed to embed media (empty = off)
 	MaxBodyMB   int        `json:"max_body_mb"`  // upload limit (0 = default 128)
 	Redirects   []Redirect `json:"redirects"`
+	// Varnish page cache: TTL (seconds) for responses without their own
+	// Cache-Control, and path prefixes never cached.
+	Varnish        bool     `json:"varnish"`
+	VarnishTTL     int      `json:"varnish_ttl"`
+	VarnishExclude []string `json:"varnish_exclude"`
 }
 
 type Redirect struct {
@@ -89,6 +94,20 @@ func (a *Advanced) Normalize() error {
 		ref = append(ref, h)
 	}
 	a.Hotlink = ref
+	if a.VarnishTTL < 0 || a.VarnishTTL > 30*86400 || len(a.VarnishExclude) > 100 {
+		return ErrAdvanced
+	}
+	ex := []string{}
+	for _, p := range a.VarnishExclude {
+		if p = strings.TrimSpace(p); p == "" {
+			continue
+		}
+		if !vclPathRe.MatchString(p) {
+			return ErrAdvanced
+		}
+		ex = append(ex, p)
+	}
+	a.VarnishExclude = ex
 	if a.RateLimit < 0 || a.RateLimit > 10000 || a.RateBurst < 0 || a.RateBurst > 100000 || a.ConnLimit < 0 || a.ConnLimit > 100000 ||
 		a.MaxBodyMB < 0 || a.MaxBodyMB > 10240 || len(a.Redirects) > 200 || len(a.AllowIPs)+len(a.DenyIPs) > 1000 {
 		return ErrAdvanced

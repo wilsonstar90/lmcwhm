@@ -9,6 +9,7 @@ import { get, post, put, ApiError } from '../api/client'
 import type { CatalogApp, InstalledApp } from '../api/types'
 import TaskModal from '../components/TaskModal.vue'
 import LogsModal from '../components/LogsModal.vue'
+import PhpVersions from '../components/PhpVersions.vue'
 
 const { t } = useI18n()
 const msg = useMessage()
@@ -169,6 +170,7 @@ const versionOptions = (a: CatalogApp) =>
       </n-space>
       <n-data-table size="small" :columns="columns" :data="installed" :loading="loading" :row-key="(r: InstalledApp) => r.id" :scroll-x="980" />
     </n-tab-pane>
+    <n-tab-pane name="php" tab="PHP" display-directive="show:lazy"><PhpVersions /></n-tab-pane>
     <n-tab-pane v-for="k in kinds" :key="k" :name="k" :tab="t(`app.kinds.${k}`)">
       <n-grid cols="1 s:2 m:3" responsive="screen" :x-gap="12" :y-gap="12">
         <n-gi v-for="a in byKind[k]" :key="a.key">

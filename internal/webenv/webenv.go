@@ -27,7 +27,7 @@ import (
 //go:embed templates/*.tmpl
 var tmplFS embed.FS
 
-var tmpl = template.Must(template.ParseFS(tmplFS, "templates/*.tmpl"))
+var tmpl = template.Must(template.New("").Funcs(template.FuncMap{"hostcond": vclHostCond}).ParseFS(tmplFS, "templates/*.tmpl"))
 
 const (
 	HAProxyImage = "haproxy:3.0"
@@ -218,6 +218,9 @@ func (e *Env) Status(ctx context.Context) Status {
 		{Name: NginxName, Image: NginxImage, State: dockerx.State(ctx, NginxName)},
 	}
 	st.Installed = st.Services[0].State != "" && st.Services[1].State != ""
+	if vs := dockerx.State(ctx, VarnishName); vs != "" {
+		st.Services = append(st.Services, ServiceStatus{Name: VarnishName, Image: VarnishImage, State: vs})
+	}
 	for _, v := range PHPVersions {
 		if s := dockerx.State(ctx, PHPName(v)); s != "" {
 			st.PHP = append(st.PHP, ServiceStatus{Name: v, Image: PHPImage(v), State: s})
@@ -370,48 +373,6 @@ func waitRunning(ctx context.Context, name string) error {
 	return fmt.Errorf("container %s is not running: %s", name, dockerx.Logs(ctx, name, 20))
 }
 
-// EnsurePHP builds the PHP image (first time only) and starts its FPM container.
-func (e *Env) EnsurePHP(ctx context.Context, v string, log func(string, ...any)) error {
-	if !ValidPHP(v) {
-		return fmt.Errorf("unsupported PHP version %q", v)
-	}
-	dir := e.PHPDir(v)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	fpm, err := render("php-fpm.conf.tmpl", map[string]any{"Port": PHPPort(v)})
-	if err != nil {
-		return err
-	}
-	ini, err := render("php.ini.tmpl", map[string]any{"Timezone": e.Timezone})
-	if err != nil {
-		return err
-	}
-	if err := writeIfChanged(filepath.Join(dir, "zz-docker.conf"), fpm); err != nil {
-		return err
-	}
-	if err := writeIfChanged(filepath.Join(dir, "zz-lmcwhm.ini"), ini); err != nil {
-		return err
-	}
-	if !dockerx.ImageExists(ctx, PHPImage(v)) {
-		log("building PHP %s image (first time, a few minutes)", v)
-		df, err := render("php.Dockerfile.tmpl", map[string]any{"Version": v})
-		if err != nil {
-			return err
-		}
-		if err := dockerx.Build(ctx, PHPImage(v), string(df)); err != nil {
-			return err
-		}
-	}
-	return EnsureContainer(ctx, log, PHPName(v), []string{
-		"--network", "host",
-		"-v", e.WWWRoot + ":" + e.WWWRoot,
-		"-v", filepath.Join(dir, "zz-docker.conf") + ":/usr/local/etc/php-fpm.d/zz-docker.conf:ro",
-		"-v", filepath.Join(dir, "zz-lmcwhm.ini") + ":/usr/local/etc/php/conf.d/zz-lmcwhm.ini:ro",
-		PHPImage(v),
-	}, []int{PHPPort(v)}, true)
-}
-
 // ---- config rendering ----
 
 // PortFree reports whether nothing listens on port (IPv4 and IPv6).
@@ -490,6 +451,7 @@ type edgeData struct {
 	IPv6        bool
 	ACMEPort    int
 	NginxPort   int
+	VarnishPort int
 	Passthrough []passBackend
 }
 
@@ -514,11 +476,12 @@ func (e *Env) edgeFiles(sites []Site, pass []Passthrough) (map[string][]byte, er
 
 	// Every hostname gets an entry in each map (also "0" / be_terminate), so an
 	// exact hostname is never captured by another site's wildcard.
-	sni, fh, hsts := map[string]string{}, map[string]string{}, map[string]string{}
+	sni, fh, hsts, cache := map[string]string{}, map[string]string{}, map[string]string{}, map[string]string{}
 	for _, s := range sites {
 		for _, h := range s.Hosts() {
 			h = strings.ToLower(h)
 			sni[h] = "be_terminate"
+			cache[h] = flag(s.cached())
 			// Passthrough hosts terminate TLS at their backend, so plain HTTP always redirects.
 			fh[h] = flag(!s.Stopped && (s.Passthrough || (s.ForceHTTPS && s.HasCert)))
 			hsts[h] = flag(!s.Stopped && s.HSTS && s.HasCert)
@@ -544,6 +507,8 @@ func (e *Env) edgeFiles(sites []Site, pass []Passthrough) (map[string][]byte, er
 	hostMaps("sni", sni, files)
 	hostMaps("force_https", fh, files)
 	hostMaps("hsts", hsts, files)
+	hostMaps("cache", cache, files)
+	data.VarnishPort = VarnishPort
 	cfg, err := render("haproxy.cfg.tmpl", data)
 	if err != nil {
 		return nil, err
@@ -667,6 +632,11 @@ func (e *Env) Apply(ctx context.Context, sites []Site, pass []Passthrough) error
 		return fmt.Errorf("nginx config test failed: %v %s", err, out)
 	}
 	if _, err := dockerx.Run(ctx, append([]string{"exec", NginxName, "nginx", "-s", "reload"}, nginxConf...)...); err != nil {
+		return err
+	}
+
+	// ---- varnish (before the edge routes to it) ----
+	if err := e.applyVarnish(ctx, sites, func(string, ...any) {}); err != nil {
 		return err
 	}
 

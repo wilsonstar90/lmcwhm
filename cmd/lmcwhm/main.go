@@ -27,14 +27,17 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/database"
 	"github.com/wilsonstar90/lmcwhm/internal/dockermgr"
 	"github.com/wilsonstar90/lmcwhm/internal/files"
+	"github.com/wilsonstar90/lmcwhm/internal/fileshare"
 	"github.com/wilsonstar90/lmcwhm/internal/firewall"
 	"github.com/wilsonstar90/lmcwhm/internal/ftp"
 	"github.com/wilsonstar90/lmcwhm/internal/geoip"
 	"github.com/wilsonstar90/lmcwhm/internal/i18n"
+	"github.com/wilsonstar90/lmcwhm/internal/malware"
 	"github.com/wilsonstar90/lmcwhm/internal/monitor"
 	"github.com/wilsonstar90/lmcwhm/internal/netinfo"
 	"github.com/wilsonstar90/lmcwhm/internal/probe"
 	"github.com/wilsonstar90/lmcwhm/internal/secrets"
+	"github.com/wilsonstar90/lmcwhm/internal/secscan"
 	"github.com/wilsonstar90/lmcwhm/internal/security"
 	"github.com/wilsonstar90/lmcwhm/internal/server"
 	"github.com/wilsonstar90/lmcwhm/internal/settings"
@@ -42,8 +45,10 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/sitestats"
 	"github.com/wilsonstar90/lmcwhm/internal/store"
 	"github.com/wilsonstar90/lmcwhm/internal/supervisor"
+	"github.com/wilsonstar90/lmcwhm/internal/tamper"
 	"github.com/wilsonstar90/lmcwhm/internal/tasks"
 	"github.com/wilsonstar90/lmcwhm/internal/terminal"
+	"github.com/wilsonstar90/lmcwhm/internal/toolbox"
 	"github.com/wilsonstar90/lmcwhm/internal/webcfg"
 	"github.com/wilsonstar90/lmcwhm/internal/webenv"
 	"github.com/wilsonstar90/lmcwhm/internal/wordpress"
@@ -227,6 +232,18 @@ func serveCmd() *cobra.Command {
 			}
 			geo := geoip.New(filepath.Join(a.paths.Home, "geoip"))
 			go geo.RefreshLoop(ctx, log.Error)
+			tb := toolbox.New()
+			tb.SSHChanged = func(ctx context.Context) error {
+				// Open the new SSH port before sshd moves to it.
+				if c, err := fw.Config(ctx); err == nil && c.Enabled {
+					if _, err := fw.Apply(ctx); err != nil {
+						return err
+					}
+				}
+				return nil
+			}
+			tp := tamper.New(a.st, env.WWWRoot, a.paths.Home)
+			defer tp.Stop()
 			srv, err := server.New(server.Deps{
 				Paths: a.paths, Settings: a.settings, Auth: a.auth, Audit: a.audit,
 				WebFS: web.FS(), Log: log, Sites: sites, Web: webCfg, Tasks: tm,
@@ -235,11 +252,16 @@ func serveCmd() *cobra.Command {
 				Monitor: mon, Cron: jobs, GeoIP: geo, Firewall: fw, WAF: waf, CrowdSec: crowdsec, Backup: bk,
 				Tokens: apitoken.New(a.st), AI: ai.New(a.st, box, nil),
 				Alerts: alerts, Probes: probes, Stats: stats, Procs: procs, WP: wordpress.New(sites, dbs, env, tm), FTP: ftpSvc,
+				Toolbox: tb, SecScan: secscan.New(a.st), Malware: malware.New(a.st, env.WWWRoot, a.paths.Home), Tamper: tp,
+				Shares: fileshare.New(a.st),
 			})
 			if err != nil {
 				return err
 			}
 			fw.OnBlocksChanged = srv.SyncFirewall
+			tp.OnEvent = srv.TamperAlerts()
+			go tp.Boot(ctx)
+			go srv.SecScanLoop(ctx)
 			alerts.Src = srv.AlertSources()
 			go alerts.Run(ctx)
 			go func() {

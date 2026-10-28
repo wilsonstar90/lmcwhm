@@ -53,8 +53,11 @@ frontend fe_https
     http-request set-var(txn.hsts) var(txn.host),map_str({{.Dir}}/maps/hsts_exact.map)
     http-request set-var(txn.hsts) var(txn.host),map_end({{.Dir}}/maps/hsts_wild.map) if !{ var(txn.hsts) -m found }
     http-response set-header Strict-Transport-Security "max-age=31536000" if { var(txn.hsts) -m str 1 }
+    http-request set-var(txn.cache) var(txn.host),map_str({{.Dir}}/maps/cache_exact.map)
+    http-request set-var(txn.cache) var(txn.host),map_end({{.Dir}}/maps/cache_wild.map) if !{ var(txn.cache) -m found }
     # HTTP-01 validators follow redirects to HTTPS (e.g. Cloudflare "Always Use HTTPS").
     use_backend be_acme if { path_beg /.well-known/acme-challenge/ }
+    use_backend be_varnish if { var(txn.cache) -m str 1 }
     default_backend be_web
 
 # ---- :80 — ACME HTTP-01, HTTPS redirects, plain HTTP sites ----
@@ -72,7 +75,10 @@ frontend fe_http
     http-request set-var(txn.fh) var(txn.host),map_str({{.Dir}}/maps/force_https_exact.map)
     http-request set-var(txn.fh) var(txn.host),map_end({{.Dir}}/maps/force_https_wild.map) if !{ var(txn.fh) -m found }
     http-request redirect scheme https code 301 if !acme { var(txn.fh) -m str 1 }
+    http-request set-var(txn.cache) var(txn.host),map_str({{.Dir}}/maps/cache_exact.map)
+    http-request set-var(txn.cache) var(txn.host),map_end({{.Dir}}/maps/cache_wild.map) if !{ var(txn.cache) -m found }
     use_backend be_acme if acme
+    use_backend be_varnish if { var(txn.cache) -m str 1 }
     default_backend be_web
 
 backend be_acme
@@ -82,3 +88,8 @@ backend be_acme
 backend be_web
     mode http
     server nginx 127.0.0.1:{{.NginxPort}}
+
+# Page cache (sites with Varnish on); Varnish fetches misses from nginx.
+backend be_varnish
+    mode http
+    server varnish 127.0.0.1:{{.VarnishPort}}

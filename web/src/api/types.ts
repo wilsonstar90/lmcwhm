@@ -99,6 +99,9 @@ export interface SiteAdvanced {
   hotlink: string[]
   max_body_mb: number
   redirects: { from: string; to: string; code: number }[]
+  varnish?: boolean
+  varnish_ttl?: number
+  varnish_exclude?: string[]
 }
 
 export interface ServiceStatus {

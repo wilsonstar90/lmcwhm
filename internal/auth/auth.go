@@ -6,9 +6,9 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -26,14 +26,58 @@ var (
 	ErrWeakPassword   = errors.New("auth.weak_password")
 	ErrBadUsername    = errors.New("auth.bad_username")
 	ErrNoSession      = errors.New("auth.no_session")
+	ErrDisabled       = errors.New("auth.disabled")
+	ErrLastAdmin      = errors.New("auth.last_admin")
+	ErrUserExists     = errors.New("auth.user_exists")
+	ErrUserNotFound   = errors.New("auth.user_not_found")
+	ErrBadPerm        = errors.New("auth.invalid_permission")
 )
+
+// Modules a sub-user can be granted (menu keys).
+var Modules = []string{"website", "domains", "database", "docker", "appstore", "files", "terminal", "ftp", "cron", "processes",
+	"monitor", "logs", "uptime", "alerts", "security", "backup", "toolbox", "mail", "ai"}
+
+const userCols = `id, username, totp_enabled, is_admin, totp_secret, perms, sites, enabled, remark, created_at`
 
 type User struct {
 	ID          int64  `json:"id"`
 	Username    string `json:"username"`
 	TOTPEnabled bool   `json:"totp_enabled"`
 	IsAdmin     bool   `json:"is_admin"`
-	totpSecret  string
+	// Sub-users (面板子用戶, not tenants): the modules they may use and,
+	// optionally, the only websites they may manage.
+	Perms      []string `json:"perms"`
+	Sites      []int64  `json:"sites"`
+	Enabled    bool     `json:"enabled"`
+	Remark     string   `json:"remark"`
+	CreatedAt  int64    `json:"created_at"`
+	totpSecret string
+}
+
+// Can reports whether the user may use a panel module.
+func (u User) Can(module string) bool {
+	if u.IsAdmin {
+		return true
+	}
+	for _, p := range u.Perms {
+		if p == module {
+			return true
+		}
+	}
+	return false
+}
+
+// CanSite reports whether the user may manage website id.
+func (u User) CanSite(id int64) bool {
+	if u.IsAdmin || len(u.Sites) == 0 {
+		return true
+	}
+	for _, s := range u.Sites {
+		if s == id {
+			return true
+		}
+	}
+	return false
 }
 
 type Session struct {
@@ -95,19 +139,163 @@ func (s *Service) CreateUser(ctx context.Context, username, password string, adm
 
 // PrimaryAdmin returns the first admin; the CLI's rescue commands act on it.
 func (s *Service) PrimaryAdmin(ctx context.Context) (User, error) {
-	return s.scanUser(s.st.DB.QueryRowContext(ctx,
-		`SELECT id, username, totp_enabled, is_admin, totp_secret FROM users WHERE is_admin = 1 ORDER BY id LIMIT 1`))
+	return s.scanUser(s.st.DB.QueryRowContext(ctx, `SELECT `+userCols+` FROM users WHERE is_admin = 1 ORDER BY id LIMIT 1`))
 }
 
 func (s *Service) UserByID(ctx context.Context, id int64) (User, error) {
-	return s.scanUser(s.st.DB.QueryRowContext(ctx,
-		`SELECT id, username, totp_enabled, is_admin, totp_secret FROM users WHERE id = ?`, id))
+	return s.scanUser(s.st.DB.QueryRowContext(ctx, `SELECT `+userCols+` FROM users WHERE id = ?`, id))
 }
 
-func (s *Service) scanUser(row *sql.Row) (User, error) {
+func (s *Service) scanUser(row interface{ Scan(...any) error }) (User, error) {
 	var u User
-	err := row.Scan(&u.ID, &u.Username, &u.TOTPEnabled, &u.IsAdmin, &u.totpSecret)
+	var perms, sites string
+	err := row.Scan(&u.ID, &u.Username, &u.TOTPEnabled, &u.IsAdmin, &u.totpSecret, &perms, &sites, &u.Enabled, &u.Remark, &u.CreatedAt)
+	json.Unmarshal([]byte(perms), &u.Perms)
+	json.Unmarshal([]byte(sites), &u.Sites)
+	if u.Perms == nil {
+		u.Perms = []string{}
+	}
+	if u.Sites == nil {
+		u.Sites = []int64{}
+	}
 	return u, err
+}
+
+// Users lists every panel account.
+func (s *Service) Users(ctx context.Context) ([]User, error) {
+	rows, err := s.st.DB.QueryContext(ctx, `SELECT `+userCols+` FROM users ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []User{}
+	for rows.Next() {
+		u, err := s.scanUser(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
+// UserInput creates or edits a panel account.
+type UserInput struct {
+	Username string   `json:"username"`
+	Password string   `json:"password"` // required on create; empty = keep
+	IsAdmin  bool     `json:"is_admin"`
+	Perms    []string `json:"perms"`
+	Sites    []int64  `json:"sites"`
+	Enabled  bool     `json:"enabled"`
+	Remark   string   `json:"remark"`
+}
+
+func (in *UserInput) check() error {
+	if !validUsername(in.Username) {
+		return ErrBadUsername
+	}
+	perms := []string{}
+	for _, p := range in.Perms {
+		ok := false
+		for _, m := range Modules {
+			ok = ok || m == p
+		}
+		if !ok {
+			return ErrBadPerm
+		}
+		perms = append(perms, p)
+	}
+	if in.IsAdmin {
+		perms, in.Sites = []string{}, nil
+	}
+	in.Perms = perms
+	if in.Sites == nil {
+		in.Sites = []int64{}
+	}
+	if len(in.Remark) > 200 {
+		in.Remark = in.Remark[:200]
+	}
+	return nil
+}
+
+func (s *Service) AddUser(ctx context.Context, in UserInput) (User, error) {
+	if err := in.check(); err != nil {
+		return User{}, err
+	}
+	h, err := HashPassword(in.Password)
+	if err != nil {
+		return User{}, err
+	}
+	var n int
+	s.st.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE username = ?`, in.Username).Scan(&n)
+	if n > 0 {
+		return User{}, ErrUserExists
+	}
+	perms, _ := json.Marshal(in.Perms)
+	sites, _ := json.Marshal(in.Sites)
+	now := time.Now().Unix()
+	res, err := s.st.DB.ExecContext(ctx,
+		`INSERT INTO users(username, password_hash, is_admin, perms, sites, enabled, remark, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?)`,
+		in.Username, h, in.IsAdmin, string(perms), string(sites), in.Enabled, in.Remark, now, now)
+	if err != nil {
+		return User{}, err
+	}
+	id, _ := res.LastInsertId()
+	return s.UserByID(ctx, id)
+}
+
+func (s *Service) adminCount(ctx context.Context, except int64) int {
+	var n int
+	s.st.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE is_admin = 1 AND enabled = 1 AND id != ?`, except).Scan(&n)
+	return n
+}
+
+// UpdateUser edits an account; the last enabled admin cannot be demoted or disabled.
+func (s *Service) UpdateUser(ctx context.Context, id int64, in UserInput) (User, error) {
+	old, err := s.UserByID(ctx, id)
+	if err != nil {
+		return User{}, ErrUserNotFound
+	}
+	if err := in.check(); err != nil {
+		return User{}, err
+	}
+	if old.IsAdmin && old.Enabled && (!in.IsAdmin || !in.Enabled) && s.adminCount(ctx, id) == 0 {
+		return User{}, ErrLastAdmin
+	}
+	if in.Username != old.Username {
+		var n int
+		s.st.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE username = ? AND id != ?`, in.Username, id).Scan(&n)
+		if n > 0 {
+			return User{}, ErrUserExists
+		}
+	}
+	perms, _ := json.Marshal(in.Perms)
+	sites, _ := json.Marshal(in.Sites)
+	if _, err := s.st.DB.ExecContext(ctx, `UPDATE users SET username=?, is_admin=?, perms=?, sites=?, enabled=?, remark=?, updated_at=? WHERE id=?`,
+		in.Username, in.IsAdmin, string(perms), string(sites), in.Enabled, in.Remark, time.Now().Unix(), id); err != nil {
+		return User{}, err
+	}
+	if in.Password != "" {
+		if err := s.SetPassword(ctx, id, in.Password); err != nil {
+			return User{}, err
+		}
+	} else if !in.Enabled || in.IsAdmin != old.IsAdmin {
+		s.RevokeUserSessions(ctx, id)
+	}
+	return s.UserByID(ctx, id)
+}
+
+func (s *Service) DeleteUser(ctx context.Context, id int64) error {
+	u, err := s.UserByID(ctx, id)
+	if err != nil {
+		return ErrUserNotFound
+	}
+	if u.IsAdmin && s.adminCount(ctx, id) == 0 {
+		return ErrLastAdmin
+	}
+	s.RevokeUserSessions(ctx, id)
+	_, err = s.st.DB.ExecContext(ctx, `DELETE FROM users WHERE id = ?`, id)
+	return err
 }
 
 func (s *Service) SetPassword(ctx context.Context, userID int64, password string) error {
@@ -201,8 +389,8 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (token string, sess 
 		hash string
 	)
 	row := s.st.DB.QueryRowContext(ctx,
-		`SELECT id, username, totp_enabled, is_admin, totp_secret, password_hash FROM users WHERE username = ?`, in.Username)
-	if err := row.Scan(&u.ID, &u.Username, &u.TOTPEnabled, &u.IsAdmin, &u.totpSecret, &hash); err != nil {
+		`SELECT id, username, totp_enabled, is_admin, totp_secret, password_hash, enabled FROM users WHERE username = ?`, in.Username)
+	if err := row.Scan(&u.ID, &u.Username, &u.TOTPEnabled, &u.IsAdmin, &u.totpSecret, &hash, &u.Enabled); err != nil {
 		// Burn comparable time so usernames cannot be probed by latency.
 		bcrypt.CompareHashAndPassword(dummyHash, []byte(in.Password))
 		s.logLogin(ctx, in, false, "bad_credentials")
@@ -211,6 +399,13 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (token string, sess 
 	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(in.Password)) != nil {
 		s.logLogin(ctx, in, false, "bad_credentials")
 		return "", Session{}, ErrBadCredentials
+	}
+	if !u.Enabled {
+		s.logLogin(ctx, in, false, "disabled")
+		return "", Session{}, ErrDisabled
+	}
+	if u, err = s.UserByID(ctx, u.ID); err != nil {
+		return "", Session{}, err
 	}
 	if u.TOTPEnabled {
 		if in.TOTP == "" {
@@ -258,7 +453,7 @@ func (s *Service) Resolve(ctx context.Context, token string) (Session, error) {
 	}
 	sess.ExpiresAt = time.Unix(exp, 0)
 	sess.User, err = s.UserByID(ctx, userID)
-	if err != nil {
+	if err != nil || !sess.User.Enabled {
 		return Session{}, ErrNoSession
 	}
 	return sess, nil
