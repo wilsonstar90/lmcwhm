@@ -52,6 +52,16 @@ func TestInstanceByIP(t *testing.T) {
 	if err != nil || in.ID != 2 {
 		t.Fatalf("%+v %v", in, err)
 	}
+	// Equivalent spellings match; a miss says what was tried.
+	if in, err := New("tok").InstanceByIP(context.Background(), "2001:0db8:0000::0002"); err != nil || in.ID != 2 {
+		t.Fatalf("non-canonical IPv6: %+v %v", in, err)
+	}
+	if in, err := New("tok").InstanceByIP(context.Background(), "::ffff:192.0.2.1"); err != nil || in.ID != 1 {
+		t.Fatalf("v4-mapped: %+v %v", in, err)
+	}
+	if _, err := New("tok").InstanceByIP(context.Background(), "198.51.100.9", "bogus"); err == nil || !strings.Contains(err.Error(), "198.51.100.9") {
+		t.Fatalf("miss: %v", err)
+	}
 	if _, err := New("bad").Firewalls(context.Background()); err == nil {
 		t.Fatal("bad token accepted")
 	}

@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"net/netip"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/cfdns"
 	"github.com/wilsonstar90/lmcwhm/internal/firewall"
 	"github.com/wilsonstar90/lmcwhm/internal/linode"
+	"github.com/wilsonstar90/lmcwhm/internal/netinfo"
 	"github.com/wilsonstar90/lmcwhm/internal/webenv"
 )
 
@@ -269,8 +271,7 @@ func (s *Server) handleLinodeVerify(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
-	wc, _ := s.Web.Get(r.Context())
-	inst, ierr := cl.InstanceByIP(r.Context(), wc.ServerIPv4, wc.ServerIPv6)
+	inst, ierr := cl.InstanceByIP(r.Context(), s.serverAddrs(r.Context())...)
 	out := map[string]any{"ok": true, "firewalls": fws}
 	if ierr == nil {
 		out["linode"] = inst
@@ -457,4 +458,22 @@ func (s *Server) handleCSDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	s.auditCat(r, "security", "crowdsec.unban", in.IP)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// serverAddrs are the addresses this server may be known by: the ones set in
+// the web settings, the detected public IPs and every global interface address.
+func (s *Server) serverAddrs(ctx context.Context) []string {
+	var out []string
+	if wc, err := s.Web.Get(ctx); err == nil {
+		out = append(out, wc.ServerIPv4, wc.ServerIPv6)
+	}
+	out = append(out, netinfo.PublicIPv4(ctx), netinfo.PublicIPv6(ctx))
+	if addrs, err := net.InterfaceAddrs(); err == nil {
+		for _, a := range addrs {
+			if n, ok := a.(*net.IPNet); ok && n.IP.IsGlobalUnicast() {
+				out = append(out, n.IP.String())
+			}
+		}
+	}
+	return out
 }

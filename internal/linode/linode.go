@@ -178,28 +178,32 @@ type Instance struct {
 	IPv6  string   `json:"ipv6"` // SLAAC address with prefix length
 }
 
-// InstanceByIP finds this server's Linode by one of its public addresses.
+// InstanceByIP finds this server's Linode by one of its addresses.
 func (c *Client) InstanceByIP(ctx context.Context, ips ...string) (Instance, error) {
 	all, err := list[Instance](ctx, c, "/linode/instances")
 	if err != nil {
 		return Instance{}, err
 	}
+	want := map[netip.Addr]bool{}
+	var tried []string
+	for _, ip := range ips {
+		if a, err := netip.ParseAddr(strings.TrimSpace(ip)); err == nil && !want[a.Unmap()] {
+			want[a.Unmap()] = true
+			tried = append(tried, a.Unmap().String())
+		}
+	}
 	for _, in := range all {
-		for _, ip := range ips {
-			if ip == "" {
-				continue
-			}
-			for _, v4 := range in.IPv4 {
-				if v4 == ip {
-					return in, nil
-				}
-			}
-			if a, _, _ := strings.Cut(in.IPv6, "/"); a == ip {
+		addrs := append([]string{}, in.IPv4...)
+		if v6, _, _ := strings.Cut(in.IPv6, "/"); v6 != "" {
+			addrs = append(addrs, v6)
+		}
+		for _, s := range addrs {
+			if a, err := netip.ParseAddr(s); err == nil && want[a.Unmap()] {
 				return in, nil
 			}
 		}
 	}
-	return Instance{}, errors.New("linode: this server's Linode was not found by its public IP")
+	return Instance{}, fmt.Errorf("this server's Linode was not found by its IP (tried %s among %d Linodes on this account)", strings.Join(tried, ", "), len(all))
 }
 
 func (c *Client) Attach(ctx context.Context, firewallID, linodeID int) error {
