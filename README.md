@@ -3,7 +3,31 @@
 自研伺服器控制面板（aaPanel / 寶塔式），Go 單一 Binary + Vue 3 / Naive UI。
 完整架構與路線圖：[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
-## 目前進度：M5（防火牆、WAF、CrowdSec）
+## 目前進度：M8（備份、MCP / AI、網站運維工具）
+
+**M8 — 網站運維**
+- 首頁：網站、資料庫、容器、計劃任務、守護進程、撥測、備份、今日流量、封鎖 IP、告警數字；安全檢查評分（安全入口、預設端口、面板 SSL、兩步驗證、防火牆、WAF、CrowdSec、備份、告警渠道、證書到期…）連「處理」捷徑
+- 告警中心：Email（SMTP / STARTTLS / TLS）、Telegram、Webhook、企業微信、釘釘（加簽）、Slack、Discord；規則：CPU / 記憶體 / 負載 / 磁碟閾值、服務停止、SSL 到期、撥測失敗、計劃任務 / 備份失敗、面板登入失敗次數、面板 / SSH 登入通知；問題持續會按間隔重發，回復正常會通知
+- 網站撥測：HTTP(S)（狀態碼、關鍵字、證書剩餘日數）、TCP、Ping；24 小時 / 7 日可用率、響應時間圖、失敗記錄
+- 網站報表：由 Nginx 日誌每 5 分鐘統計 PV、UV、流量、4xx / 5xx、爬蟲、熱門頁面 / IP / 來源 / 國家（保留 30 日）
+- 進程守護：常駐命令以 systemd 服務運行（崩潰自動重啟、開機啟動），網頁啟停、睇日誌
+- 網站進階設定：只允許 / 封鎖 IP、封鎖 User-Agent、每 IP 速率同並發限制、上載上限、目錄列表、自訂錯誤頁、防跨站 open_basedir、防盜鏈、重定向、封鎖 xmlrpc.php
+- WordPress 工具箱：一鍵安裝（自動建 MySQL / MariaDB 資料庫、wp-config、管理員），核心 / 外掛 / 主題更新、完整性檢查、停用後台檔案編輯、重設管理員密碼（WP-CLI，經 SHA-512 校驗）
+- Composer（PHP 映像內置，另加 gd / zip / intl）；Tomcat 9 / 10.1 / 11 項目（部署目錄或 *.war）
+- FTP（Pure-FTPd 容器，開啟時自動加防火牆規則）同 SFTP（sshd chroot，只可以 SFTP，唔可以登入 shell）帳戶，綁定網站目錄
+
+**M7 — MCP / AI**
+- MCP 伺服器：`/mcp`（Streamable HTTP + API Token，權限分唯讀 / 操作 / 管理員，可限 IP、到期）或者經 SSH：`claude mcp add lmcwhm -- ssh root@伺服器 lmcwhm mcp --stdio`
+- 約 35 個工具（網站、日誌分析、容器、資料庫、防火牆、WAF、CrowdSec、SSH、計劃任務、備份、撥測、報表…），每次調用記入操作日誌；5 個 Skills（MCP prompts），亦可以下載成 Claude Code `SKILL.md`
+- 面板內 AI 助手同「AI 分析」按鈕（日誌、SSH、WAF、網站報表、首頁安全檢查）：用 Claude（預設 `claude-opus-5-5`，可改模型同思考深度），只可以用唯讀工具；API key 加密儲存
+
+**M6 — 備份**
+- 網站、資料庫（MySQL / MariaDB / PostgreSQL / MongoDB / SQL Server）、Docker 卷、任意目錄、面板設定
+- 儲存到本地、Google Drive、OneDrive（OAuth 裝置碼授權，唔使回調網址；分塊上載、斷線續傳），按對象保留最新幾份
+- 排程（計劃任務入面嘅「備份」類型）、立即備份、下載、還原（網站 / 目錄先完整解壓再替換）、匯入其他伺服器嘅備份檔
+- 面板設定還原：`systemctl stop lmcwhm && lmcwhm backup restore-panel <檔案>`
+
+**M5 — 安全（防火牆、WAF、CrowdSec）**
 
 **M5 — 安全**
 - 伺服器防火牆（nftables，獨立表 `inet lmcwhm`，唔會改 ufw / Docker 規則）：IP 黑名單 / 白名單（CIDR、IPv4 / IPv6、永久或限時）、端口規則（TCP / UDP、範圍、來源）、Ping 開關、受保護端口（SSH、面板、80、443）；「預設拒絕」要 60 秒內確認仲連得到面板，否則自動還原；救援：`lmcwhm firewall-off`
@@ -134,5 +158,8 @@ git push origin v0.1.0
 | `lmcwhm log` | 面板日誌最後 100 行 |
 | `lmcwhm update` / `repair` / `reset-panel` | 見上面「修復 / 強制更新」 |
 | `lmcwhm firewall-off` | 關閉面板防火牆（鎖死自己時用；ufw / Docker 規則唔受影響） |
+| `lmcwhm backup list` / `backup panel` | 列出備份 / 立即備份面板設定 |
+| `lmcwhm backup restore-panel <檔案>` | 還原面板設定（先停止面板） |
+| `lmcwhm mcp --stdio` | MCP（經 SSH 俾 AI 客戶端用） |
 
 CLI 直接讀寫 `/opt/lmcwhm/data/panel.db`，面板無運行都可以救援。

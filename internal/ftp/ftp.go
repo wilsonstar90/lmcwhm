@@ -458,7 +458,9 @@ func (sv *Service) applySFTP(ctx context.Context, a Account) error {
 func (sv *Service) removeSFTP(ctx context.Context, a Account) error {
 	sv.unmount(ctx, a)
 	if u, err := user.Lookup(a.Username); err == nil && strings.Contains(sv.gecos(ctx, a.Username), "lmcwhm sftp") && u.Uid == "33" {
-		if _, err := sv.run(ctx, "", "userdel", a.Username); err != nil {
+		// --force: the uid is shared with www-data, whose PHP-FPM processes
+		// would otherwise make userdel refuse ("currently used by process").
+		if _, err := sv.run(ctx, "", "userdel", "--force", a.Username); err != nil {
 			return err
 		}
 	}

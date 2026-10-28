@@ -297,6 +297,19 @@ SNI 頁亦會檢查證書係咪涵蓋該域名、DNS 係咪指向本機、亦有
 - **CrowdSec**：容器以 host network 運行，LAPI 喺 `127.0.0.1:8085`（8080 已經俾 nginx 用咗），讀網站日誌同 auth.log；面板就係 bouncer，每 10 秒拉 decision stream，用一個 transaction 寫入防火牆 ban set，社群黑名單幾萬個 IP 都只會重載一次。
 - **CI**：`deploy/test-apps.sh` 用 bridge 網絡上嘅 busybox 容器扮外部客戶，實測黑名單、端口規則、受保護端口、drop 確認 / 自動還原、CRS 攔 SQL 注入同站點豁免、CrowdSec decision 寫入 nftables，同埋 `firewall-off`。Linode / Cloudflare 只有用假 API 嘅單元測試。
 
+## 4E. M6 / M7 / M8 實作備註
+- **備份**：計劃唔另開排程器，係計劃任務嘅「backup」類型（命令係 JSON 計劃），共用執行記錄、逾時同略過重疊。每份備份一行記錄（類型、對象、儲存位置），保留份數按「對象 + 儲存位置」計。資料庫用引擎自己嘅工具喺容器入面 dump（mysqldump / mariadb-dump、pg_dump、mongodump、SQL Server `BACKUP DATABASE`），經 gzip 串流，唔落中間檔。面板備份用 `VACUUM INTO` 拍 SQLite 快照，加 data / edge / web 目錄；唔包 App 數據、日誌同備份本身。
+- **Google Drive / OneDrive**：冇用 rclone，直接寫 OAuth 2.0 裝置碼流程同可續傳上載（Drive 8 MiB、OneDrive 10 MiB 分塊，失敗會問伺服器收到幾多再續）。Drive 用 `drive.file` 權限（只見自己建立嘅檔案），OneDrive 用 App Folder；用戶要自己註冊 OAuth 應用。
+- **MCP**：自己實作 JSON-RPC（tools、prompts，支援 2024-11-05 至 2025-06-18），HTTP 回應用 JSON（唔開 SSE）。`/mcp` 唔受安全入口 / 綁定域名 / BasicAuth 限制，但仍受授權 IP 限制；冇 token 一律 404。`--stdio` 係一個橋接，經 root 專用 unix socket（`data/mcp.sock`）連返運行中嘅面板，權限等同管理員（SSH 帳號就係憑證）。
+- **AI 助手**：用官方 Anthropic Go SDK，工具同 MCP 共用；只會提供唯讀工具，最多 12 步；開咗 server-side fallback。對話只保留文字，每次提問重新查資料。
+- **告警**：指標規則每分鐘檢查（用監察嘅平均值），事件規則（撥測、計劃任務 / 備份失敗）由其他服務觸發；狀態（告警中 / 已回復）放記憶體，面板重啟後如果問題仍然存在會再通知一次。
+- **網站報表**：每 5 分鐘讀新增嘅日誌（按 inode + offset，識別切割），寫每小時同每日聚合；UV = 當日不同 IP（爬蟲除外）；每個網站每日最多 5000 個 URL / 來源（IP 20000），超出歸入「(other)」，防掃描器塞爆資料庫。
+- **進程守護**：每個進程一個 systemd 單元 + 腳本檔（命令唔使經 systemd 轉義），所以面板更新 / 重啟都唔會停。
+- **網站進階設定**：全部欄位先驗證再寫入 vhost（IP 用 netip 正規化，UA 轉成 regex 前 QuoteMeta，重定向只接受安全字元）；open_basedir 寫入 root 擁有嘅 `.user.ini`，PHP 改唔到。國家訪問限制未做（nginx 冇 GeoIP 模組）。
+- **FTP / SFTP**：SFTP 帳戶係 uid 33（同 www-data）嘅系統用戶，sshd `Match Group lmcwhm-sftp` chroot 去 `/www/sftp/<用戶>`，網站目錄 bind mount 到 `/site`（開機由面板重新掛載）；Match 區塊加喺 `sshd_config` 最尾並先 `sshd -t`。FTP 用 Pure-FTPd 容器（host network，被動端口 39000–39100）。
+- **WordPress**：WP-CLI 放喺 `/www/wwwroot/.lmcwhm/`（PHP 容器睇到但冇網站會公開），下載後核對官方 SHA-512，以 www-data 喺網站嘅 PHP 容器執行。Clone / Staging 未做。
+- **未驗證**：真實 Google Drive / OneDrive 帳戶（只有假 API 測試）、真實 Claude API 調用（只有假伺服器測試）、Email / Telegram 等實際送達（CI 只測 Webhook）。
+
 ## 5. 路線圖
 | 階段 | 內容 | 完成標準 |
 |---|---|---|
@@ -306,9 +319,9 @@ SNI 頁亦會檢查證書係咪涵蓋該域名、DNS 係咪指向本機、亦有
 | **M3** | Docker 管理、檔案管理器、Terminal | 容器綁域名可用；穿越測試通過 |
 | **M4** | 日誌中心分類 + IP 歸屬地、Cron、監察 | 全部分類可查、IP 顯示地區 |
 | **M5** | 防火牆（nftables + Linode + CF）、WAF、CrowdSec | SQLi 被攔、IP 同步封鎖到 Linode |
-| **M6** | 備份（本地/Google Drive/OneDrive） | 排程備份上傳 + 還原成功 |
-| **M7** | MCP + AI 一鍵分析 + Skills | Claude Code 經 MCP 操作 |
-| **M8** | 儀表板完善、WP Toolkit、Supervisor、FTP/SFTP、Composer/Tomcat、網站進階、網站報表、撥測、告警中心 | 3A #1–8、#15 |
+| **M6** ✅ | 備份（本地/Google Drive/OneDrive） | 排程備份上傳 + 還原成功 |
+| **M7** ✅ | MCP + AI 一鍵分析 + Skills | Claude Code 經 MCP 操作 |
+| **M8** ✅ | 儀表板完善、WP Toolkit、Supervisor、FTP/SFTP、Composer/Tomcat、網站進階、網站報表、撥測、告警中心 | 3A #1–8、#15 |
 | **M9** | 防篡改、木馬掃描、安全風險掃描報告、工具箱、面板子用戶、API Token/OpenAPI | 3A #9–13、#16、#23 |
 | **M10** | 面板快照遷移、升級/回滾/離線安裝、PWA、郵件插件、Zone Editor 模板 | 3A #14、#17、#18、#22、#24 |
 | **後期** | 多 Web Server、多機 Agent、寶塔遷移工具 | 3A #20、#21 |

@@ -335,7 +335,7 @@ DBBK="$(bk_id database shop)"
 docker exec -e MYSQL_PWD=Shop-pass-123 lmcwhm-mariadb114 mariadb -ushop -h127.0.0.1 shop -e "DELETE FROM t"
 task POST "/backups/$DBBK/restore" '{}'
 [[ "$(get80 db.test /index.php)" == "db-ok-42" ]] || fail "database restore: $(get80 db.test /index.php)"
-[[ "$(curl -s -b "$JAR" "$P/api/v1/backups/$DBBK/download" | head -c 2 | od -An -tx1 | tr -d ' ')" == 1f8b ]] || fail "download is not gzip"
+[[ "$(curl -sk -b "$JAR" "$P/api/v1/backups/$DBBK/download" | head -c 2 | od -An -tx1 | tr -d ' ')" == 1f8b ]] || fail "download is not gzip"
 docker volume create lmcwhm-e2e-vol >/dev/null
 docker run --rm -v lmcwhm-e2e-vol:/v busybox sh -c 'echo vol-data > /v/f.txt'
 task POST /backups/run '{"kind":"volume","target":"lmcwhm-e2e-vol","dests":["local"]}'
@@ -442,7 +442,7 @@ out="$(printf 'ls /site\n' | sshpass -p Sftp-pass-123 sftp -oStrictHostKeyChecki
 task POST /ftp/enabled '{"on":true}'
 api POST /ftp/accounts '{"kind":"ftp","username":"e2eftp","password":"Ftp-pass-1234","site_id":'"$DBSITE"'}' | grep -q '"id"' || fail "ftp account"
 curl -s --user e2eftp:Ftp-pass-1234 ftp://127.0.0.1/ | grep -q index.php || fail "ftp listing"
-api GET /firewall/rules | grep -q 'FTP (lmcwhm)' || fail "ftp firewall rule"
+api GET /firewall | grep -q 'FTP (lmcwhm)' || fail "ftp firewall rule"
 task POST /ftp/enabled '{"on":false}'
 for a in $(api GET /ftp | python3 -c "import sys,json; print(' '.join(str(x['id']) for x in json.load(sys.stdin)['items']))"); do api POST "/ftp/accounts/$a/delete" >/dev/null; done
 ! id e2esftp >/dev/null 2>&1 || fail "sftp system user not removed"
