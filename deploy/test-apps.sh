@@ -513,7 +513,7 @@ curl -sk -b "$J2" -c "$J2" -o /dev/null -X POST "$P/api/v1/auth/login" -d '{"use
 [[ "$(curl -sk -b "$J2" -o /dev/null -w '%{http_code}' "$P/api/v1/files/list?path=/www")" == 200 ]] || fail "sub-user files"
 RT="$(api POST /tokens '{"name":"rest","scope":"read","ips":[],"ttl_days":1}' | jget "['secret']")"
 grep -q db.test <<<"$(curl -sk -H "Authorization: Bearer $RT" "$P/api/v1/sites")" || fail "REST token GET"
-[[ "$(curl -sk -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer $RT" "$P/api/v1/sites")" == 401 ]] || fail "read token wrote"
+[[ "$(curl -sk -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer $RT" "$P/api/v1/sites")" == 404 ]] || fail "read token wrote"
 grep -q '"openapi"' <<<"$(curl -sk -H "Authorization: Bearer $RT" "$P/api/v1/openapi.json")" || fail "openapi"
 pass "sub-user permissions, REST API token scopes, OpenAPI description"
 

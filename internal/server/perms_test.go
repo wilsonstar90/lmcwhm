@@ -7,6 +7,7 @@ import (
 
 	"github.com/wilsonstar90/lmcwhm/internal/apitoken"
 	"github.com/wilsonstar90/lmcwhm/internal/auth"
+	"github.com/wilsonstar90/lmcwhm/internal/settings"
 )
 
 func TestAllowed(t *testing.T) {
@@ -43,20 +44,21 @@ func TestAllowed(t *testing.T) {
 }
 
 func TestRESTTokensAndOpenAPI(t *testing.T) {
-	e := newEnv(t, nil)
+	// Scripts never pass the security entry: tokens bypass the browser gates.
+	e := newEnv(t, func(s *settings.Settings) { s.SecurityEntry = "/console" })
 	ctx := context.Background()
 	_, readTok, _ := e.srv.Tokens.Create(ctx, apitoken.Input{Name: "ro", Scope: "read"})
 	_, opTok, _ := e.srv.Tokens.Create(ctx, apitoken.Input{Name: "op", Scope: "operate"})
 	_, adminTok, _ := e.srv.Tokens.Create(ctx, apitoken.Input{Name: "root", Scope: "admin"})
 	bearer := func(tok string) map[string]string { return map[string]string{"Authorization": "Bearer " + tok} }
 
-	if r, _ := e.do("GET", "/api/v1/auth/me", nil, bearer("lmc_wrong")); r.StatusCode != 401 {
+	if r, _ := e.do("GET", "/api/v1/auth/me", nil, bearer("lmc_wrong")); r.StatusCode != 404 {
 		t.Fatalf("bad token: %d", r.StatusCode)
 	}
 	if r, b := e.do("GET", "/api/v1/auth/me", nil, bearer(readTok)); r.StatusCode != 200 || b["user"].(map[string]any)["username"] != "token:ro" {
 		t.Fatalf("read token GET: %d %v", r.StatusCode, b)
 	}
-	if r, _ := e.do("PUT", "/api/v1/settings", map[string]any{"panel_alias": "x"}, bearer(readTok)); r.StatusCode != 401 {
+	if r, _ := e.do("PUT", "/api/v1/settings", map[string]any{"panel_alias": "x"}, bearer(readTok)); r.StatusCode != 404 {
 		t.Fatalf("read token PUT: %d", r.StatusCode)
 	}
 	if r, _ := e.do("GET", "/api/v1/settings", nil, bearer(opTok)); r.StatusCode != 403 {

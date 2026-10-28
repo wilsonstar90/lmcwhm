@@ -57,7 +57,9 @@ func (s *Server) gate(next http.Handler) http.Handler {
 		// MCP clients authenticate with a bearer token, and share links (/s/)
 		// carry their own token, instead of the browser gates (bound domain,
 		// BasicAuth, security entry).
-		if r.URL.Path == "/mcp" || strings.HasPrefix(r.URL.Path, "/s/") {
+		// REST calls with an API token are authenticated in requireAuth.
+		apiToken := strings.HasPrefix(r.URL.Path, "/api/v1/") && strings.HasPrefix(r.Header.Get("Authorization"), "Bearer lmc_")
+		if r.URL.Path == "/mcp" || strings.HasPrefix(r.URL.Path, "/s/") || apiToken {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -135,6 +137,10 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 					return
 				}
 				next.ServeHTTP(w, s.withUser(r, auth.Session{User: u}))
+				return
+			}
+			if strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
+				notFound(w) // a wrong token learns nothing (it skipped the entry gate)
 				return
 			}
 			writeErr(w, http.StatusUnauthorized, auth.ErrNoSession)
