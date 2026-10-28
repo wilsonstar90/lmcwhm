@@ -209,7 +209,7 @@ func (e *Env) VarnishStatus(ctx context.Context) VarnishStats {
 	if st.State != "running" {
 		return st
 	}
-	out, err := dockerx.Run(ctx, "exec", VarnishName, "varnishstat", "-1", "-j",
+	out, err := dockerx.Run(ctx, "exec", VarnishName, "varnishstat", "-j",
 		"-f", "MAIN.cache_hit", "-f", "MAIN.cache_miss", "-f", "MAIN.n_object", "-f", "MAIN.uptime", "-f", "SMA.s0.g_bytes")
 	if err != nil {
 		return st

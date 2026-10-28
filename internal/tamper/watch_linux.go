@@ -16,11 +16,13 @@ const watchMask = unix.IN_CLOSE_WRITE | unix.IN_CREATE | unix.IN_DELETE | unix.I
 
 // watcher is one inotify instance covering a rule's directory tree.
 type watcher struct {
-	fd    int
-	mu    sync.Mutex
-	dirs  map[int]string // watch descriptor -> directory
-	files int
-	done  chan struct{}
+	fd     int
+	f      *os.File // fd in Go's poller: Close unblocks a pending Read
+	mu     sync.Mutex
+	dirs   map[int]string // watch descriptor -> directory
+	files  int
+	done   chan struct{}
+	exited chan struct{} // closed when loop returns
 }
 
 func (w *watcher) count() int {
@@ -29,13 +31,16 @@ func (w *watcher) count() int {
 	return w.files
 }
 
+// close stops the watcher and waits until no handler is running, so no
+// restore races with whoever stopped it.
 func (w *watcher) close() {
 	select {
 	case <-w.done:
 	default:
 		close(w.done)
-		unix.Close(w.fd)
+		w.f.Close()
 	}
+	<-w.exited
 }
 
 func (w *watcher) add(dir string) {
@@ -52,11 +57,11 @@ func (sv *Service) startWatch(r Rule) error {
 	if err != nil {
 		return err
 	}
-	fd, err := unix.InotifyInit1(unix.IN_CLOEXEC)
+	fd, err := unix.InotifyInit1(unix.IN_CLOEXEC | unix.IN_NONBLOCK)
 	if err != nil {
 		return err
 	}
-	w := &watcher{fd: fd, dirs: map[int]string{}, files: n, done: make(chan struct{})}
+	w := &watcher{fd: fd, f: os.NewFile(uintptr(fd), "inotify"), dirs: map[int]string{}, files: n, done: make(chan struct{}), exited: make(chan struct{})}
 	r.targets(func(p string, dir bool) {
 		if dir {
 			w.add(p)
@@ -73,17 +78,20 @@ func (sv *Service) startWatch(r Rule) error {
 }
 
 func (sv *Service) loop(r Rule, w *watcher) {
+	defer close(w.exited)
 	buf := make([]byte, 64<<10)
 	for {
-		n, err := unix.Read(w.fd, buf)
+		n, err := w.f.Read(buf)
+		select {
+		case <-w.done:
+			return
+		default:
+		}
 		if err != nil || n <= 0 {
 			select {
 			case <-w.done:
 				return
 			default:
-			}
-			if err == unix.EINTR {
-				continue
 			}
 			sv.setStatus(r.ID, err)
 			return

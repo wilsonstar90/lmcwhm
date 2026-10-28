@@ -344,6 +344,7 @@ func (e *Env) testPHP(ctx context.Context, img string, fpm, ini []byte) error {
 	out, err := dockerx.Run(ctx, "run", "--rm",
 		"-v", filepath.Join(dir, "fpm.conf")+":/usr/local/etc/php-fpm.d/zz-docker.conf:ro",
 		"-v", filepath.Join(dir, "php.ini")+":/usr/local/etc/php/conf.d/zz-lmcwhm.ini:ro",
+		"-v", dir+":/var/log/lmcwhm-php", // the slow log must be openable
 		"--entrypoint", "sh", img, "-c", "php-fpm -t 2>&1; php -r 'echo \"ok\";' 2>&1")
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrPHPTest, err)
