@@ -57,10 +57,14 @@ type Site struct {
 	// WAF (when enabled globally): off for this site, or CRS rules removed by ID.
 	WAFOff     bool     `json:"waf_off"`
 	WAFExclude []string `json:"waf_exclude"`
+	// Advanced nginx settings (directory listing, IP / UA rules, rate limits, ...).
+	Advanced webenv.Advanced `json:"advanced"`
 }
 
 // IsProject reports a runtime project type.
-func IsProject(typ string) bool { return typ == "node" || typ == "python" || typ == "java" }
+func IsProject(typ string) bool {
+	return typ == "node" || typ == "python" || typ == "java" || typ == "tomcat"
+}
 
 // ProjectContainer is the container that runs a runtime project.
 func ProjectContainer(domain string) string { return "lmcwhm-proj-" + domain }
@@ -97,6 +101,9 @@ var DefaultCommands = map[string]string{
 	"node":   "[ -f package.json ] && npm install --omit=dev --no-audit --no-fund; exec npm start",
 	"python": "[ -d .venv ] || python -m venv .venv; . .venv/bin/activate; [ -f requirements.txt ] && pip install -q -r requirements.txt; exec python app.py",
 	"java":   "exec java -jar app.jar --server.port=$PORT",
+	// Tomcat serves the site root as ROOT, or the first *.war in it. The
+	// shutdown port is disabled so several Tomcats can share the host network.
+	"tomcat": `R=$PWD; cd /usr/local/tomcat && sed -i -e "s/port=\"8080\"/port=\"$PORT\" address=\"$HOST\"/" -e 's/port="8005"/port="-1"/' conf/server.xml && rm -rf webapps/ROOT webapps/ROOT.war && W=$(ls "$R"/*.war 2>/dev/null | head -1); if [ -n "$W" ]; then cp "$W" webapps/ROOT.war; else ln -s "$R" webapps/ROOT; fi; exec catalina.sh run`,
 }
 
 // Runtimes is the App Store as seen by websites.
@@ -129,18 +136,20 @@ func NewService(st *store.Store, env *webenv.Env, cfg *webcfg.Store, issuer *acm
 
 const cols = `id, domain, aliases, type, php_version, root, stopped, force_https, hsts, ssl_mode, ssl_challenge,
 	ssl_wildcard, cert_issuer, cert_not_after, cert_error, dns_managed, dns_proxied, remark, created_at, updated_at,
-	runtime_version, command, app_port, proxy_target, passthrough, waf_off, waf_exclude`
+	runtime_version, command, app_port, proxy_target, passthrough, waf_off, waf_exclude, advanced`
 
 func scan(row interface{ Scan(...any) error }) (Site, error) {
 	var s Site
-	var aliases, wafEx string
+	var aliases, wafEx, adv string
 	err := row.Scan(&s.ID, &s.Domain, &aliases, &s.Type, &s.PHPVersion, &s.Root, &s.Stopped, &s.ForceHTTPS, &s.HSTS,
 		&s.SSLMode, &s.SSLChallenge, &s.SSLWildcard, &s.CertIssuer, &s.CertNotAfter, &s.CertError,
 		&s.DNSManaged, &s.DNSProxied, &s.Remark, &s.CreatedAt, &s.UpdatedAt,
-		&s.RuntimeVersion, &s.Command, &s.AppPort, &s.ProxyTarget, &s.Passthrough, &s.WAFOff, &wafEx)
+		&s.RuntimeVersion, &s.Command, &s.AppPort, &s.ProxyTarget, &s.Passthrough, &s.WAFOff, &wafEx, &adv)
 	if err != nil {
 		return s, err
 	}
+	json.Unmarshal([]byte(adv), &s.Advanced)
+	s.Advanced.Normalize()
 	s.WAFExclude = strings.Fields(wafEx)
 	json.Unmarshal([]byte(aliases), &s.Aliases)
 	if s.Aliases == nil {
@@ -182,11 +191,11 @@ func (sv *Service) save(ctx context.Context, s *Site) error {
 		s.CreatedAt = now
 		res, err := sv.st.DB.ExecContext(ctx, `INSERT INTO sites(domain, aliases, type, php_version, root, stopped, force_https, hsts,
 			ssl_mode, ssl_challenge, ssl_wildcard, cert_issuer, cert_not_after, cert_error, dns_managed, dns_proxied, remark, created_at, updated_at,
-			runtime_version, command, app_port, proxy_target, passthrough, waf_off, waf_exclude)
-			VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			runtime_version, command, app_port, proxy_target, passthrough, waf_off, waf_exclude, advanced)
+			VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			s.Domain, string(aliases), s.Type, s.PHPVersion, s.Root, s.Stopped, s.ForceHTTPS, s.HSTS, s.SSLMode, s.SSLChallenge,
 			s.SSLWildcard, s.CertIssuer, s.CertNotAfter, s.CertError, s.DNSManaged, s.DNSProxied, s.Remark, s.CreatedAt, s.UpdatedAt,
-			s.RuntimeVersion, s.Command, s.AppPort, s.ProxyTarget, s.Passthrough, s.WAFOff, strings.Join(s.WAFExclude, " "))
+			s.RuntimeVersion, s.Command, s.AppPort, s.ProxyTarget, s.Passthrough, s.WAFOff, strings.Join(s.WAFExclude, " "), advJSON(s.Advanced))
 		if err != nil {
 			return err
 		}
@@ -195,11 +204,16 @@ func (sv *Service) save(ctx context.Context, s *Site) error {
 	}
 	_, err := sv.st.DB.ExecContext(ctx, `UPDATE sites SET aliases=?, type=?, php_version=?, root=?, stopped=?, force_https=?, hsts=?,
 		ssl_mode=?, ssl_challenge=?, ssl_wildcard=?, cert_issuer=?, cert_not_after=?, cert_error=?, dns_managed=?, dns_proxied=?,
-		remark=?, updated_at=?, runtime_version=?, command=?, app_port=?, proxy_target=?, passthrough=?, waf_off=?, waf_exclude=? WHERE id=?`,
+		remark=?, updated_at=?, runtime_version=?, command=?, app_port=?, proxy_target=?, passthrough=?, waf_off=?, waf_exclude=?, advanced=? WHERE id=?`,
 		string(aliases), s.Type, s.PHPVersion, s.Root, s.Stopped, s.ForceHTTPS, s.HSTS, s.SSLMode, s.SSLChallenge, s.SSLWildcard,
 		s.CertIssuer, s.CertNotAfter, s.CertError, s.DNSManaged, s.DNSProxied, s.Remark, s.UpdatedAt,
-		s.RuntimeVersion, s.Command, s.AppPort, s.ProxyTarget, s.Passthrough, s.WAFOff, strings.Join(s.WAFExclude, " "), s.ID)
+		s.RuntimeVersion, s.Command, s.AppPort, s.ProxyTarget, s.Passthrough, s.WAFOff, strings.Join(s.WAFExclude, " "), advJSON(s.Advanced), s.ID)
 	return err
+}
+
+func advJSON(a webenv.Advanced) string {
+	b, _ := json.Marshal(a)
+	return string(b)
 }
 
 // ---- validation ----
@@ -311,6 +325,7 @@ func (sv *Service) spec(s Site) webenv.Site {
 	ws := webenv.Site{
 		Domain: s.Domain, Aliases: s.Aliases, Type: s.Type, PHPVersion: s.PHPVersion, Root: s.Root,
 		Stopped: s.Stopped, ForceHTTPS: s.ForceHTTPS, HSTS: s.HSTS, HasCert: has, WAFOff: s.WAFOff, WAFExclude: s.WAFExclude,
+		Advanced: s.Advanced,
 	}
 	switch {
 	case IsProject(s.Type):
@@ -502,7 +517,7 @@ func (sv *Service) Create(ctx context.Context, in CreateInput) (string, error) {
 		}
 	case "static":
 		s.PHPVersion = ""
-	case "node", "python", "java":
+	case "node", "python", "java", "tomcat":
 		s.PHPVersion, s.RuntimeVersion = "", in.RuntimeVersion
 		if sv.Runtimes == nil {
 			return "", ErrNoRuntime
@@ -620,9 +635,32 @@ HTTPServer((os.environ["HOST"], int(os.environ["PORT"])), Handler).serve_forever
 		}
 	case "java":
 		return map[string]string{"README.txt": "Upload app.jar (e.g. a Spring Boot fat jar) here, then restart the project.\n"}
+	case "tomcat":
+		return map[string]string{"index.jsp": "<%@ page contentType=\"text/html; charset=UTF-8\" %><h1>" + domain + "</h1><p>Tomcat <%= application.getServerInfo() %></p>\n",
+			"README.txt": "Upload a .war (deployed as ROOT) or the web app's files here, then restart the project.\n"}
 	}
 	page := fmt.Sprintf("<!doctype html><meta charset=utf-8><title>%s</title><h1>%s</h1><p>Site created by lmcwhm.</p>\n", domain, domain)
 	return map[string]string{"index.html": page}
+}
+
+// writeUserINI keeps the PHP open_basedir restriction in the site's
+// .user.ini (read by PHP-FPM per directory; dot-files are not served).
+func writeUserINI(s Site) error {
+	if s.Type != "php" {
+		return nil
+	}
+	p := filepath.Join(s.Root, ".user.ini")
+	if !s.Advanced.OpenBasedir {
+		if b, err := os.ReadFile(p); err == nil && strings.HasPrefix(string(b), "; lmcwhm") {
+			return os.Remove(p)
+		}
+		return nil
+	}
+	body := fmt.Sprintf("; lmcwhm: open_basedir (Website → Advanced)\nopen_basedir=%s/:/tmp/\n", s.Root)
+	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+		return err
+	}
+	return os.Lchown(p, 0, 0) // root-owned: PHP (www-data) cannot lift it
 }
 
 func createRoot(root, domain, typ string) error {
@@ -865,6 +903,8 @@ type UpdateInput struct {
 	// WAF.
 	WAFOff     *bool     `json:"waf_off"`
 	WAFExclude *[]string `json:"waf_exclude"`
+	// Advanced nginx settings (replaced as a whole).
+	Advanced *webenv.Advanced `json:"advanced"`
 }
 
 // Update changes settings; it returns a task id because a new PHP version may
@@ -918,6 +958,16 @@ func (sv *Service) Update(ctx context.Context, id int64, in UpdateInput) (string
 			return "", err
 		}
 		s.AppPort = *in.AppPort
+	}
+	if in.Advanced != nil {
+		a := *in.Advanced
+		if err := a.Normalize(); err != nil {
+			return "", err
+		}
+		s.Advanced = a
+		if err := writeUserINI(s); err != nil {
+			return "", err
+		}
 	}
 	if in.WAFOff != nil {
 		s.WAFOff = *in.WAFOff

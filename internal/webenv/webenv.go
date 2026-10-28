@@ -60,8 +60,10 @@ func PHPPort(v string) int {
 	return 9000 + int(v[0]-'0')*10 + int(v[2]-'0')
 }
 
-func PHPName(v string) string  { return "lmcwhm-php" + strings.ReplaceAll(v, ".", "") }
-func PHPImage(v string) string { return "lmcwhm/php:" + v }
+func PHPName(v string) string { return "lmcwhm-php" + strings.ReplaceAll(v, ".", "") }
+
+// The tag suffix is bumped when the Dockerfile changes, so upgrades rebuild.
+func PHPImage(v string) string { return "lmcwhm/php:" + v + "-2" }
 
 // Site is what the stack needs to know about a website.
 type Site struct {
@@ -82,6 +84,7 @@ type Site struct {
 	// Passthrough sends the raw TLS stream for every host to Upstream
 	// (host:port) instead of terminating it; nginx is not involved.
 	Passthrough bool
+	Advanced    Advanced
 }
 
 func (s Site) Hosts() []string { return append([]string{s.Domain}, s.Aliases...) }
@@ -585,6 +588,7 @@ func (e *Env) nginxFiles(sites []Site) (map[string][]byte, error) {
 			"Domain": s.Domain, "ServerNames": strings.Join(s.Hosts(), " "), "Root": s.Root,
 			"LogDir": e.WWWLogs, "NginxPort": NginxPort, "PHPPort": port, "Stopped": s.Stopped,
 			"Upstream": s.Upstream, "WAFOff": w.Enabled && s.WAFOff, "WAFExclude": wafExclusions(w.Enabled, s.WAFExclude),
+			"Adv": s.Advanced, "ReqZone": zone("req", s.Domain), "ConnZone": zone("conn", s.Domain), "DenyUA": uaRegex(s.Advanced.DenyUA),
 		})
 		if err != nil {
 			return nil, err

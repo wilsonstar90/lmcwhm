@@ -46,6 +46,9 @@ var Catalog = []App{
 		{"21", "eclipse-temurin:21-jdk", false}, {"17", "eclipse-temurin:17-jdk", false},
 		{"11", "eclipse-temurin:11-jdk", false}, {"8", "eclipse-temurin:8-jdk", false},
 	}},
+	{Key: "tomcat", Name: "Apache Tomcat", Kind: KindRuntime, Versions: []Version{
+		{"11", "tomcat:11-jdk21", false}, {"10.1", "tomcat:10.1-jdk17", false}, {"9", "tomcat:9-jdk11", false},
+	}},
 	{Key: "mysql", Name: "MySQL", Kind: KindDatabase, Port: 3306, Databases: true, Versions: []Version{
 		{"8.4", "mysql:8.4", false}, {"8.0", "mysql:8.0", false}, {"5.7", "mysql:5.7", true},
 	}},

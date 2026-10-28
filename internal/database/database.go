@@ -125,9 +125,30 @@ func (sv *Service) engine(ctx context.Context, appID int64) (appstore.Installed,
 
 // Create makes the database and a user owning it (task).
 func (sv *Service) Create(ctx context.Context, in CreateInput) (string, error) {
-	eng, err := sv.engine(ctx, in.AppID)
+	eng, err := sv.prepare(ctx, &in)
 	if err != nil {
 		return "", err
+	}
+	return sv.tasks.Start("db.create:"+in.Name, func(ctx context.Context, log tasks.Logf) error {
+		_, err := sv.create(ctx, eng, in, log)
+		return err
+	}), nil
+}
+
+// CreateNow creates a database inside the caller's task and returns it
+// (with its password), e.g. for an application installer.
+func (sv *Service) CreateNow(ctx context.Context, in CreateInput, log tasks.Logf) (Database, error) {
+	eng, err := sv.prepare(ctx, &in)
+	if err != nil {
+		return Database{}, err
+	}
+	return sv.create(ctx, eng, in, log)
+}
+
+func (sv *Service) prepare(ctx context.Context, in *CreateInput) (appstore.Installed, error) {
+	eng, err := sv.engine(ctx, in.AppID)
+	if err != nil {
+		return eng, err
 	}
 	if in.Username == "" {
 		in.Username = in.Name
@@ -136,29 +157,32 @@ func (sv *Service) Create(ctx context.Context, in CreateInput) (string, error) {
 		in.Password = settings.RandomString(20, settings.Alnum)
 	}
 	if !ValidName(in.Name) || !ValidName(in.Username) {
-		return "", ErrBadName
+		return eng, ErrBadName
 	}
 	if !passRe.MatchString(in.Password) {
-		return "", ErrBadPassword
+		return eng, ErrBadPassword
 	}
 	var n int
 	sv.st.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM databases WHERE app_id = ? AND (name = ? OR username = ?)`, in.AppID, in.Name, in.Username).Scan(&n)
 	if n > 0 {
-		return "", ErrExists
+		return eng, ErrExists
 	}
-	return sv.tasks.Start("db.create:"+in.Name, func(ctx context.Context, log tasks.Logf) error {
-		log("creating database %s and user %s on %s %s", in.Name, in.Username, eng.Name, eng.Version)
-		if err := sv.exec(ctx, eng, createScript(eng.App, in.Name, in.Username, in.Password)); err != nil {
-			return err
-		}
-		_, err := sv.st.DB.ExecContext(ctx, `INSERT INTO databases(app_id, name, username, password, remark, created_at) VALUES(?,?,?,?,?,?)`,
-			in.AppID, in.Name, in.Username, sv.box.Seal(in.Password), in.Remark, time.Now().Unix())
-		if err != nil {
-			return err
-		}
-		log("done: %s@127.0.0.1:%d/%s", in.Username, eng.Port, in.Name)
-		return nil
-	}), nil
+	return eng, nil
+}
+
+func (sv *Service) create(ctx context.Context, eng appstore.Installed, in CreateInput, log tasks.Logf) (Database, error) {
+	log("creating database %s and user %s on %s %s", in.Name, in.Username, eng.Name, eng.Version)
+	if err := sv.exec(ctx, eng, createScript(eng.App, in.Name, in.Username, in.Password)); err != nil {
+		return Database{}, err
+	}
+	res, err := sv.st.DB.ExecContext(ctx, `INSERT INTO databases(app_id, name, username, password, remark, created_at) VALUES(?,?,?,?,?,?)`,
+		in.AppID, in.Name, in.Username, sv.box.Seal(in.Password), in.Remark, time.Now().Unix())
+	if err != nil {
+		return Database{}, err
+	}
+	log("done: %s@127.0.0.1:%d/%s", in.Username, eng.Port, in.Name)
+	id, _ := res.LastInsertId()
+	return sv.Get(ctx, id)
 }
 
 // Delete drops the database and its user (task).

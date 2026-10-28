@@ -493,7 +493,9 @@ func top(m map[string]int, n int) []kv {
 	for k, v := range m {
 		out = append(out, kv{k, v})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Count > out[j].Count || out[i].Count == out[j].Count && out[i].Key < out[j].Key })
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Count > out[j].Count || out[i].Count == out[j].Count && out[i].Key < out[j].Key
+	})
 	if len(out) > n {
 		out = out[:n]
 	}

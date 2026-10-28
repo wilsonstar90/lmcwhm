@@ -255,4 +255,3 @@ func resultText(v any) string {
 	}
 	return s
 }
-

@@ -58,7 +58,7 @@ func newEnv(t *testing.T, mut func(*settings.Settings)) *env {
 	}
 	srv, err := New(Deps{
 		Paths: config.Paths{CertDir: filepath.Join(dir, "ssl")}, Settings: sm, Auth: a, Audit: audit.New(st),
-		WebFS: fstest.MapFS{"index.html": {Data: []byte("<html>spa</html>")}},
+		WebFS:  fstest.MapFS{"index.html": {Data: []byte("<html>spa</html>")}},
 		Log:    slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Tokens: apitoken.New(st),
 	})
