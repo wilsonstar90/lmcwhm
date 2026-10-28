@@ -53,7 +53,7 @@ export interface CertInfo {
   not_after: string
 }
 
-export type SiteType = 'php' | 'static' | 'node' | 'python' | 'java' | 'proxy'
+export type SiteType = 'php' | 'static' | 'node' | 'python' | 'java' | 'tomcat' | 'proxy'
 
 export interface Site {
   id: number
@@ -80,6 +80,25 @@ export interface Site {
   app_port: number
   proxy_target: string
   passthrough: boolean
+  waf_off?: boolean
+  waf_exclude?: string[] | null
+  advanced?: SiteAdvanced
+}
+
+export interface SiteAdvanced {
+  autoindex: boolean
+  allow_ips: string[]
+  deny_ips: string[]
+  deny_ua: string[]
+  rate_limit: number
+  rate_burst: number
+  conn_limit: number
+  error_pages: boolean
+  block_xmlrpc: boolean
+  open_basedir: boolean
+  hotlink: string[]
+  max_body_mb: number
+  redirects: { from: string; to: string; code: number }[]
 }
 
 export interface ServiceStatus {

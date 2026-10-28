@@ -51,7 +51,7 @@ watch(
   { immediate: true },
 )
 
-const isProject = computed(() => ['node', 'python', 'java'].includes(f.value.type))
+const isProject = computed(() => ['node', 'python', 'java', 'tomcat'].includes(f.value.type))
 const runtimeOptions = computed(() =>
   runtimes.value.filter((r) => r.app === f.value.type).map((r) => ({ label: `${r.name} ${r.version}`, value: r.version })),
 )
@@ -73,6 +73,7 @@ const defaultCommand: Record<string, string> = {
   node: '[ -f package.json ] && npm install --omit=dev --no-audit --no-fund; exec npm start',
   python: '[ -d .venv ] || python -m venv .venv; . .venv/bin/activate; [ -f requirements.txt ] && pip install -q -r requirements.txt; exec python app.py',
   java: 'exec java -jar app.jar --server.port=$PORT',
+  tomcat: '(Tomcat: serves the site root, or the first *.war as ROOT)',
 }
 const phpOptions = computed(() =>
   props.phpVersions.map((v) => ({ label: `PHP ${v}${['7.4', '8.0', '8.1'].includes(v) ? ' (EOL)' : ''}`, value: v })),
@@ -115,6 +116,7 @@ async function submit() {
               <n-radio-button value="node">Node.js</n-radio-button>
               <n-radio-button value="python">Python</n-radio-button>
               <n-radio-button value="java">Java</n-radio-button>
+              <n-radio-button value="tomcat">Tomcat</n-radio-button>
               <n-radio-button value="proxy">{{ t('site.proxy') }}</n-radio-button>
             </n-radio-group>
           </n-form-item>

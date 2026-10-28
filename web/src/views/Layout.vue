@@ -12,7 +12,7 @@ const router = useRouter()
 const session = useSession()
 const collapsed = ref(window.innerWidth < 768)
 
-const items = ['home', 'website', 'domains', 'database', 'docker', 'appstore', 'files', 'terminal', 'cron', 'security', 'monitor', 'logs', 'settings']
+const items = ['home', 'website', 'domains', 'database', 'docker', 'appstore', 'files', 'ftp', 'terminal', 'cron', 'processes', 'backup', 'security', 'monitor', 'uptime', 'alerts', 'logs', 'ai', 'settings']
 const menu = computed<MenuOption[]>(() =>
   items.map((key) => ({
     key,

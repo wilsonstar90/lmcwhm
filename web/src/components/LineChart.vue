@@ -26,7 +26,7 @@ const plotH = computed(() => H.value - pad.t - pad.b)
 const n = computed(() => props.times.length)
 const top = computed(() => {
   if (props.max) return props.max
-  const m = Math.max(0, ...props.series.flatMap((s) => s.values))
+  const m = Math.max(0, ...props.series.flatMap((s) => s.values.filter(Number.isFinite)))
   if (m <= 0) return 1
   // round up to a readable 1/2/5 × 10^k step
   const p = 10 ** Math.floor(Math.log10(m))
@@ -36,7 +36,10 @@ const x = (i: number) => pad.l + (n.value <= 1 ? plotW : (i / (n.value - 1)) * p
 const y = (v: number) => pad.t + plotH.value - (Math.min(v, top.value) / top.value) * plotH.value
 
 const paths = computed(() =>
-  props.series.map((s) => s.values.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('')),
+  // A non-finite value (e.g. a failed check) breaks the line into segments.
+  props.series.map((s) =>
+    s.values.map((v, i) => (Number.isFinite(v) ? `${i && Number.isFinite(s.values[i - 1]) ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}` : '')).join(''),
+  ),
 )
 const ticks = computed(() => [0, 0.5, 1].map((f) => ({ v: top.value * f, y: y(top.value * f) })))
 const timeLabel = (t: number) => {
@@ -79,10 +82,10 @@ const tipLeft = computed(() => (hover.value === null ? 0 : (x(hover.value) / W) 
         <!-- Text and markers are HTML so preserveAspectRatio="none" does not stretch them. -->
         <span v-for="(tk, j) in xTicks" :key="'x' + tk.i" class="xlab" :style="{ left: (tk.x / W) * 100 + '%', top: H - 16 + 'px', transform: j === 0 ? 'none' : j === 2 ? 'translateX(-100%)' : 'translateX(-50%)' }">{{ tk.label }}</span>
         <template v-if="hover !== null">
-          <i v-for="(s, k) in series" :key="'d' + k" :class="`dot s${k + 1}`" :style="{ left: tipLeft + '%', top: y(s.values[hover] ?? 0) + 'px' }" />
+          <i v-for="(s, k) in series.filter((x) => Number.isFinite(x.values[hover!]))" :key="'d' + k" :class="`dot s${series.indexOf(s) + 1}`" :style="{ left: tipLeft + '%', top: y(s.values[hover] ?? 0) + 'px' }" />
           <div class="tip" :style="{ left: tipLeft + '%', transform: tipLeft > 60 ? 'translateX(calc(-100% - 12px))' : 'translateX(12px)' }">
             <div class="t">{{ new Date(times[hover] * 1000).toLocaleString() }}</div>
-            <div v-for="(s, k) in series" :key="'v' + k" class="row"><i :class="`s${k + 1}`" />{{ s.name }} <b>{{ format(s.values[hover] ?? 0) }}</b></div>
+            <div v-for="(s, k) in series" :key="'v' + k" class="row"><i :class="`s${k + 1}`" />{{ s.name }} <b>{{ Number.isFinite(s.values[hover]) ? format(s.values[hover]) : '—' }}</b></div>
           </div>
         </template>
         <div v-if="!n" class="empty">—</div>

@@ -22,7 +22,11 @@
     "copied": "已複製",
     "copy": "複製",
     "delete": "刪除",
-    "edit": "編輯"
+    "edit": "編輯",
+    "actions": "操作",
+    "confirm_delete": "確定刪除？",
+    "create": "建立",
+    "created": "建立時間"
   },
   "login": {
     "title": "登入面板",
@@ -46,7 +50,13 @@
     "logs": "日誌",
     "settings": "面板設定",
     "logout": "登出",
-    "domains": "網域 / SNI"
+    "domains": "網域 / SNI",
+    "backup": "備份",
+    "ftp": "FTP / SFTP",
+    "processes": "程序守護",
+    "uptime": "網站監測",
+    "alerts": "告警中心",
+    "ai": "AI 助理"
   },
   "home": {
     "system": "系統資訊",
@@ -185,7 +195,8 @@
       "invalid_command": "啟動指令無效",
       "passthrough_no_ssl": "TLS 直通網站的憑證由後端提供",
       "not_project": "不是 Runtime 專案",
-      "invalid_waf_rule": "規則 ID 必須是數字"
+      "invalid_waf_rule": "規則 ID 必須是數字",
+      "invalid_advanced": "進階設定無效（IP、User-Agent、網域或重新導向）"
     },
     "cf": {
       "no_token": "請先設定 Cloudflare API Token"
@@ -278,6 +289,67 @@
     "crowdsec": {
       "not_installed": "CrowdSec 未執行",
       "invalid_ip": "IP 或 CIDR 無效"
+    },
+    "backup": {
+      "not_found": "找不到備份",
+      "invalid_plan": "備份設定無效",
+      "invalid_target": "備份對象無效",
+      "invalid_dest": "儲存位置無效",
+      "restore_unsupported": "此類備份無法在此還原（面板備份請用 lmcwhm backup restore-panel）",
+      "invalid_archive": "備份檔損壞或類型不符",
+      "invalid_name": "檔名無效（需為 .gz 壓縮檔）",
+      "invalid_remote": "雲端儲存設定無效",
+      "remote_unauthorized": "雲端儲存拒絕授權：{value}",
+      "auth_expired": "授權代碼已過期",
+      "remote_not_found": "雲端上已無此檔案"
+    },
+    "ai": {
+      "no_key": "未設定 Anthropic API key",
+      "refused": "模型拒絕了此請求",
+      "invalid_config": "AI 設定無效",
+      "failed": "AI 請求失敗：{value}"
+    },
+    "token": {
+      "not_found": "找不到 Token",
+      "invalid": "Token 設定無效",
+      "invalid_name": "請輸入名稱（最多 64 字）",
+      "invalid_scope": "權限無效",
+      "invalid_ip": "IP 或 CIDR 無效"
+    },
+    "alert": {
+      "not_found": "找不到",
+      "invalid_rule": "規則無效：請檢查數值並選擇通知管道",
+      "invalid_channel": "通知管道設定無效"
+    },
+    "probe": {
+      "not_found": "找不到監測",
+      "invalid": "監測設定無效"
+    },
+    "proc": {
+      "not_found": "找不到程序",
+      "invalid_name": "名稱無效",
+      "exists": "已有同名程序",
+      "invalid_command": "指令無效",
+      "invalid_user": "沒有此使用者",
+      "invalid_dir": "目錄不存在",
+      "invalid_env": "環境變數須為 KEY=value"
+    },
+    "ftp": {
+      "not_found": "找不到帳戶",
+      "invalid_username": "使用者名稱無效",
+      "exists": "使用者名稱已被使用（或為系統帳戶）",
+      "invalid_password": "密碼：8–64 個可見字元，不可有空格",
+      "invalid_dir": "目錄必須在網站根目錄內",
+      "invalid_kind": "協定無效",
+      "not_enabled": "FTP 未開啟"
+    },
+    "wp": {
+      "not_php": "WordPress 需要 PHP 網站",
+      "not_wordpress": "此網站沒有 WordPress",
+      "root_not_empty": "網站目錄不是空的",
+      "invalid_input": "請檢查標題、管理員、密碼（至少 8 位）與電子郵件",
+      "no_mysql": "WordPress 需要 MySQL 或 MariaDB",
+      "invalid_action": "未知操作"
     }
   },
   "task": {
@@ -373,7 +445,8 @@
     "passthrough_hint": "TLS 後端的 主機:連接埠；HTTP 會導向 HTTPS",
     "passthrough_short": "TLS 直通",
     "tab_project": "專案",
-    "project_logs": "輸出（最後 200 行）"
+    "project_logs": "輸出（最後 200 行）",
+    "composer_hint": "以 www-data 身分在網站目錄、網站的 PHP 容器中執行 Composer。"
   },
   "app": {
     "installed": "已安裝",
@@ -689,7 +762,8 @@
     "types": {
       "shell": "Shell 指令碼",
       "url": "存取 URL",
-      "logrotate": "日誌切割"
+      "logrotate": "日誌切割",
+      "backup": "備份"
     },
     "status": {
       "running": "執行中",
@@ -722,7 +796,8 @@
       "logrotate": "切割網站日誌",
       "docker_prune": "清理 Docker 映像",
       "apt": "系統更新"
-    }
+    },
+    "run": "執行"
   },
   "sec": {
     "firewall": "防火牆",
@@ -870,5 +945,421 @@
     "alerts": "警報",
     "events": "事件數",
     "decision": "決定"
+  },
+  "bk": {
+    "tab_list": "備份檔",
+    "tab_plans": "備份排程",
+    "tab_remotes": "雲端儲存",
+    "run_now": "立即備份",
+    "import": "匯入",
+    "all_kinds": "全部類型",
+    "local_usage": "本機儲存：{dir} · {size}",
+    "kind": "類型",
+    "kinds": {
+      "site": "網站",
+      "database": "資料庫",
+      "panel": "面板設定",
+      "volume": "Docker 磁碟區",
+      "path": "目錄"
+    },
+    "target": "對象",
+    "all": "全部",
+    "path": "目錄路徑",
+    "file": "檔案",
+    "size": "大小",
+    "dest": "儲存位置",
+    "local": "本機",
+    "download": "下載",
+    "restore": "還原",
+    "delete_confirm": "刪除這份備份（雲端的也會刪除）？",
+    "new_plan": "新增備份排程",
+    "what": "備份內容",
+    "keep": "保留份數",
+    "keep_hint": "每個對象與位置保留最新幾份；0 = 全部保留。",
+    "exclude": "排除",
+    "exclude_hint": "檔案或目錄名稱模式，例如 node_modules、*.log、cache",
+    "plan_name_hint": "可留空，預設以類型與對象命名",
+    "presets": {
+      "daily": "每日 03:00",
+      "twice": "每日兩次（03:00、15:00）",
+      "hourly6": "每 6 小時",
+      "weekly": "每週日 03:00",
+      "custom": "自訂（cron 表達式）"
+    },
+    "start": "開始",
+    "started": "備份已開始",
+    "cron_hint": "JSON 格式的備份計劃；在「備份」頁面修改較方便。",
+    "restore_into": "還原到",
+    "restore_original": "原本的資料庫",
+    "restore_warn": {
+      "site": "{target} 的檔案將被此備份取代。完整解壓後才會替換現有檔案。",
+      "database": "資料庫將被備份內容覆蓋，備份之後寫入的資料會遺失。",
+      "volume": "磁碟區 {target} 內所有內容將被刪除後還原。請先停止使用它的容器。",
+      "path": "目錄 {target} 將被此備份取代。"
+    },
+    "import_hint": "先用檔案管理上傳備份檔（例如從另一台伺服器搬來），再在此登記，之後即可還原。",
+    "file_path": "伺服器上的檔案路徑",
+    "remote_intro": "備份可上傳到 Google Drive 或 OneDrive。你需自行註冊 OAuth 應用，再用一次性代碼授權面板，不需設定回呼網址。",
+    "howto": {
+      "gdrive": "Google Cloud Console → API 和服務：啟用 Google Drive API，再到「憑證」→「建立 OAuth 用戶端 ID」→ 類型選「電視和受限輸入裝置」。將 Client ID 與密鑰貼上。面板只能看到自己建立的檔案（drive.file 權限）。",
+      "onedrive": "Azure 入口網站 →「應用程式註冊」→「新增註冊」（個人及／或公司帳戶）。在「驗證」開啟「允許公用用戶端流程」。將「應用程式 (用戶端) 識別碼」貼上。檔案會放在 Apps/<應用名稱> 資料夾。"
+    },
+    "remote_name": "名稱",
+    "tenant": "租用戶 (Tenant)",
+    "connect": "連接",
+    "provider": "服務商",
+    "account": "帳戶",
+    "connected": "已連接",
+    "not_connected": "未授權",
+    "reauthorize": "重新授權",
+    "remote_delete_confirm": "移除這個雲端儲存？雲端上的備份不會刪除，但會從列表消失。",
+    "authorize_title": "授權面板",
+    "authorize_step1": "1. 開啟此網頁並登入：",
+    "authorize_step2": "2. 輸入此代碼：",
+    "authorize_wait": "授權完成後此視窗會自動關閉。",
+    "authorized": "已連接：{account}",
+    "auth_expired": "代碼已過期或被拒絕，請重試。"
+  },
+  "alert": {
+    "tab_rules": "告警規則",
+    "tab_channels": "通知管道",
+    "tab_history": "告警記錄",
+    "need_channel": "請先新增通知管道。",
+    "new_rule": "新增規則",
+    "name": "名稱",
+    "kind": "類型",
+    "enabled": "啟用",
+    "test": "傳送測試",
+    "test_sent": "測試訊息已傳送",
+    "condition": "條件",
+    "channels": "通知管道",
+    "firing": "{n} 個告警中",
+    "ok": "正常",
+    "severity": "等級",
+    "message": "內容",
+    "delivery": "傳送結果",
+    "smtp_host": "SMTP 伺服器",
+    "port": "連接埠",
+    "security": "加密",
+    "username": "使用者名稱",
+    "password": "密碼",
+    "from": "寄件人",
+    "to": "收件人",
+    "tg_hint": "用 BotFather 建立機器人，先傳一則訊息給它，再填入你的 chat ID。",
+    "webhook_url": "Webhook 網址",
+    "webhook_hint": "會收到 JSON POST：title、body、severity、kind、host、time。",
+    "sign_secret": "加簽密鑰（選填）",
+    "cooldown": "重複通知間隔（分鐘）",
+    "cooldown_hint": "問題未解決期間，每隔這麼久再通知一次；恢復正常時也會通知。",
+    "channel_kinds": {
+      "email": "電子郵件",
+      "telegram": "Telegram",
+      "webhook": "Webhook",
+      "wecom": "企業微信",
+      "dingtalk": "釘釘",
+      "slack": "Slack",
+      "discord": "Discord"
+    },
+    "rule_kinds": {
+      "cpu": "CPU 過高",
+      "mem": "記憶體過高",
+      "load": "負載過高",
+      "disk": "磁碟將滿",
+      "service_down": "服務停止",
+      "ssl_expiry": "SSL 即將到期",
+      "probe_down": "監測失敗",
+      "cron_failed": "排程／備份失敗",
+      "login_failed": "面板登入失敗",
+      "panel_login": "面板登入通知",
+      "ssh_login": "SSH 登入通知"
+    },
+    "rule_desc": {
+      "cpu": "CPU {minutes} 分鐘平均 ≥ {threshold}%",
+      "mem": "記憶體 {minutes} 分鐘平均 ≥ {threshold}%",
+      "load": "1 分鐘負載在 {minutes} 分鐘內平均 ≥ {threshold}",
+      "disk": "根目錄磁碟使用 ≥ {threshold}%",
+      "service_down": "面板管理的容器（網站服務、資料庫、專案）未在執行",
+      "ssl_expiry": "網站憑證 {days} 天內到期",
+      "probe_down": "監測變為故障（及恢復）",
+      "cron_failed": "排程或備份失敗／逾時",
+      "login_failed": "{minutes} 分鐘內面板登入失敗 ≥ {count} 次",
+      "panel_login": "每次面板成功登入",
+      "ssh_login": "每次 SSH 成功登入"
+    },
+    "params": {
+      "threshold": "閾值",
+      "minutes": "分鐘",
+      "days": "天數",
+      "count": "次數"
+    },
+    "sev": {
+      "info": "資訊",
+      "warning": "警告",
+      "critical": "嚴重",
+      "resolved": "已恢復"
+    }
+  },
+  "probe": {
+    "new": "新增監測",
+    "alert_hint": "在告警中心加入「監測失敗」規則即可收到通知。",
+    "name": "名稱",
+    "type": "類型",
+    "target": "目標",
+    "target_hint": {
+      "http": "完整網址，例如 https://example.com/health",
+      "tcp": "主機:連接埠，例如 db.example.com:5432",
+      "ping": "主機名稱或 IP"
+    },
+    "keyword": "頁面必須包含",
+    "keyword_hint": "選填，回應中必須出現的文字",
+    "expect": "預期狀態碼",
+    "expect_hint": "0 = 任何 2xx／3xx",
+    "interval": "間隔",
+    "timeout": "逾時",
+    "fails": "連續失敗幾次才算故障",
+    "latency": "回應時間",
+    "last_error": "最近錯誤",
+    "check": "立即檢查",
+    "history": "歷史",
+    "days": "{n} 天",
+    "paused": "已暫停",
+    "state": {
+      "up": "正常",
+      "down": "故障",
+      "unknown": "等待中"
+    },
+    "availability": "可用性",
+    "failures": "失敗記錄",
+    "no_failures": "這段時間沒有失敗。"
+  },
+  "proc": {
+    "new": "新增守護程序",
+    "intro": "以 systemd 服務執行：結束時自動重啟、開機自動啟動，輸出記錄在 journal。",
+    "name": "名稱",
+    "name_hint": "小寫英文、數字、- 與 _；服務名稱為 lmcwhm-proc-<名稱>。",
+    "command": "啟動指令",
+    "command_hint": "bash 腳本；主程式要在前景執行（建議用 exec）。",
+    "dir": "執行目錄",
+    "user": "執行使用者",
+    "env": "環境變數",
+    "env_hint": "KEY=value，每個標籤一個",
+    "logs": "日誌",
+    "restarts": "重啟次數",
+    "since": "執行自",
+    "save_start": "儲存並啟動"
+  },
+  "ftp": {
+    "new": "新增帳戶",
+    "kind": "協定",
+    "recommended": "建議",
+    "username": "使用者名稱",
+    "username_hint": "3–32 位小寫英文、數字、- 或 _；SFTP 會建立同名系統帳戶。",
+    "password": "密碼",
+    "change_password": "變更密碼",
+    "dir": "目錄",
+    "connect": "連線方式",
+    "created": "帳戶已建立",
+    "host": "主機",
+    "port_21": "連接埠 21，被動模式",
+    "port_ssh": "你的 SSH 連接埠",
+    "ftp_hint": "連接埠 {ports} · 被動位址 {ip}",
+    "sftp_hint": "SFTP 透過 sshd：使用者被限制在自己的目錄，無法登入 shell。",
+    "ftp_off": "FTP 未開啟：請在上方開啟，否則帳戶只會被儲存。"
+  },
+  "ai": {
+    "analyze": "AI 分析",
+    "tab_chat": "AI 助理",
+    "tab_settings": "設定",
+    "no_key": "加入 Anthropic API key 才能使用 AI 助理。",
+    "intro": "詢問任何關於這台伺服器的問題。AI 會用唯讀工具查看日誌、監控與設定，再告訴你該怎麼做；它不會變更任何東西。",
+    "placeholder": "例如：為什麼 example.com 出現 502？（Enter 傳送，Shift+Enter 換行）",
+    "send": "傳送",
+    "clear": "新對話",
+    "thinking": "調查中…",
+    "steps": "查閱了 {n} 項資料",
+    "usage": "{model} · 輸入 {input} / 輸出 {output} tokens",
+    "quick": {
+      "security": {
+        "label": "安全排查",
+        "prompt": "幫我做一次安全排查：防火牆、SSH 與面板登入、WAF 與 CrowdSec 事件、可疑請求。列出風險等級與修復方式。"
+      },
+      "load": {
+        "label": "為什麼這麼慢？",
+        "prompt": "查看過去 24 小時的 CPU、記憶體、磁碟與網路用量，告訴我負載是什麼造成的。"
+      },
+      "backups": {
+        "label": "檢查備份",
+        "prompt": "檢查備份覆蓋：哪些網站與資料庫沒有近期或異地備份，哪些備份任務失敗？"
+      },
+      "errors": {
+        "label": "找網站錯誤",
+        "prompt": "檢查所有網站的 5xx 錯誤、錯誤日誌與停止的容器，並說明原因。"
+      }
+    },
+    "prompt_ssh": "分析最近的 SSH 登入：暴力破解來源、異常的成功登入，以及是否需要封鎖。",
+    "prompt_site_access": "分析 {domain} 的存取日誌：流量、錯誤、主要訪客與可疑請求。",
+    "prompt_site_error": "查看 {domain} 的錯誤日誌，逐一說明問題與修復方式。",
+    "prompt_site_traffic": "總結 {domain} 的流量，指出異常情況（爬蟲、攻擊、錯誤激增）。",
+    "prompt_waf": "檢查最近的 WAF 事件：哪些是真攻擊、哪些像誤判？建議每個網站要排除哪些規則。",
+    "connect_title": "連接 AI 用戶端（MCP）",
+    "connect_ssh": "透過 SSH（不需 token，使用你的 SSH 登入；建議）：",
+    "connect_http": "透過 HTTPS 與 API Token（面板連接埠須可連線；自簽憑證須受用戶端信任）：",
+    "new_token": "新增 API Token",
+    "download_skill": "下載 Claude Code Skill",
+    "tokens": "API Token",
+    "tools": "工具（{n}）",
+    "prompts": "Skills（MCP prompts）",
+    "tool": "工具",
+    "description": "說明",
+    "scope": "權限",
+    "scopes": {
+      "read": "唯讀",
+      "operate": "操作",
+      "admin": "管理員"
+    },
+    "scope_hint": {
+      "read": "只能讀取日誌、監控與設定。",
+      "operate": "另可重啟容器、封鎖 IP、執行排程與備份、簽發憑證。",
+      "admin": "另可用 root 執行任何 shell 指令。只給完全信任的用戶端。"
+    },
+    "ips": "允許 IP",
+    "ips_hint": "留空 = 任何 IP（面板本身的授權 IP 仍生效）",
+    "any_ip": "任何",
+    "ttl": "有效天數（0 = 永久）",
+    "expires": "到期",
+    "never": "永不",
+    "last_used": "最後使用",
+    "revoke": "撤銷",
+    "revoke_confirm": "撤銷這個 token？使用它的用戶端將立即失效。",
+    "token_created": "Token 已建立",
+    "token_once": "請立即複製：只會顯示一次。",
+    "api_key": "Anthropic API key",
+    "api_key_hint": "從 console.anthropic.com 取得；加密儲存。費用由你的帳戶支付。",
+    "model": "模型",
+    "model_hint": "預設 {model}；Sonnet 或 Haiku 較便宜。",
+    "effort": "思考深度",
+    "effort_hint": "越高越詳細，但越慢也越貴。",
+    "base_url": "API 網址（選填）",
+    "base_url_hint": "僅在 Anthropic API 前面有閘道時才需填寫。"
+  },
+  "dash": {
+    "running": "執行中",
+    "stopped": "{n} 個已停止",
+    "failed": "{n} 個失敗",
+    "down": "{n} 個故障",
+    "never": "從未",
+    "today": "今日流量",
+    "blocked": "已封鎖 IP",
+    "alerts": "告警",
+    "last24h": "過去 24 小時",
+    "security": "安全檢查",
+    "no_risks": "未發現風險。",
+    "fix": "處理",
+    "level": {
+      "critical": "高",
+      "warning": "中",
+      "info": "低"
+    },
+    "risks": {
+      "no_entry": "未設定安全入口：任何找到連接埠的人都能看到登入頁。",
+      "default_port": "面板使用預設連接埠 8888。",
+      "panel_http": "面板 SSL 已關閉：登入資料未加密。",
+      "panel_open": "面板未設定授權 IP 或 BasicAuth。",
+      "no_2fa": "管理員未開啟雙重驗證。",
+      "firewall_off": "防火牆未開啟。",
+      "waf_off": "WAF 未開啟。",
+      "crowdsec_off": "未安裝 CrowdSec。",
+      "no_recent_backup": "過去 7 天沒有備份。",
+      "no_alert_channel": "未設定告警管道：發生問題不會通知你。",
+      "ssl_expiring": "{n} 張憑證 14 天內到期。",
+      "probes_down": "{n} 個監測故障中。",
+      "cron_failed": "{n} 個排程上次執行失敗。",
+      "procs_down": "{n} 個守護程序未執行。"
+    }
+  },
+  "adv": {
+    "title": "進階設定",
+    "access": "存取限制",
+    "allow_ips": "只允許 IP",
+    "allow_ips_hint": "設定後其他 IP 一律 403。可填 IP 或 CIDR。",
+    "deny_ips": "封鎖 IP",
+    "deny_ua": "封鎖 User-Agent",
+    "deny_ua_hint": "User-Agent 中的字串（不分大小寫），例如 MJ12bot、python-requests",
+    "hotlink": "防盜連",
+    "hotlink_hint": "允許引用圖片與媒體的網域；留空 = 關閉。自己的網域一律允許。",
+    "limits": "流量限制",
+    "rate": "每個 IP 請求速率",
+    "rate_hint": "0 = 不限；超出會回傳 429。",
+    "burst": "突發",
+    "conn": "每個 IP 並行連線",
+    "max_body": "上傳上限",
+    "behaviour": "功能",
+    "autoindex": "目錄列表 (Indexes)",
+    "error_pages": "自訂錯誤頁（網站目錄的 /404.html、/50x.html）",
+    "open_basedir": "防跨站 (open_basedir)",
+    "block_xmlrpc": "封鎖 xmlrpc.php（WordPress）",
+    "redirects": "重新導向"
+  },
+  "stats": {
+    "title": "訪問報表",
+    "today": "今日",
+    "days": "{n} 天",
+    "traffic": "流量",
+    "errors": "4xx / 5xx",
+    "errors_5xx": "5xx 錯誤",
+    "spiders_excluded": "{n} 個爬蟲請求計入 PV，但不計入 UV 與排行榜。",
+    "per_hour": "每小時",
+    "per_day": "每日",
+    "top_urls": "熱門頁面",
+    "top_ips": "訪客 IP",
+    "countries": "地區",
+    "referrers": "來源",
+    "spiders": "爬蟲",
+    "status": "狀態碼",
+    "url": "路徑",
+    "referrer": "網站",
+    "spider": "爬蟲",
+    "country": "國家／地區",
+    "hits": "請求",
+    "unknown": "未知"
+  },
+  "wp": {
+    "install_intro": "將 WordPress 安裝到此網站：自動建立 MySQL／MariaDB 資料庫、寫入 wp-config.php，再用 WP-CLI 建立管理員。",
+    "need_mysql": "請先在軟體商店安裝 MySQL 或 MariaDB。",
+    "site_title": "網站標題",
+    "admin_user": "管理員帳號",
+    "admin_pass": "管理員密碼",
+    "admin_email": "管理員電子郵件",
+    "language": "語言",
+    "db_engine": "資料庫引擎",
+    "install": "安裝 WordPress",
+    "version": "版本",
+    "admins": "管理員",
+    "updates": "外掛／佈景主題更新",
+    "actions": {
+      "core_update": "更新 WordPress",
+      "plugins_update": "更新全部外掛",
+      "themes_update": "更新全部佈景主題",
+      "verify": "檢查核心完整性",
+      "cache_flush": "清除快取",
+      "plugin_activate": "啟用外掛",
+      "plugin_deactivate": "停用外掛",
+      "plugin_update": "更新外掛",
+      "plugin_delete": "刪除外掛",
+      "theme_activate": "啟用佈景主題",
+      "theme_update": "更新佈景主題",
+      "file_edit": "後台檔案編輯器",
+      "debug": "除錯模式",
+      "admin_password": "重設管理員密碼"
+    },
+    "no_file_edit": "停用後台外掛／佈景主題編輯器（DISALLOW_FILE_EDIT）",
+    "xmlrpc_hint": "已封鎖 xmlrpc.php（在「進階設定」修改）",
+    "reset_password": "重設密碼：",
+    "new_password": "新密碼（至少 8 位）",
+    "plugin": "外掛",
+    "theme": "佈景主題",
+    "update": "更新",
+    "activate": "啟用",
+    "deactivate": "停用"
   }
 }

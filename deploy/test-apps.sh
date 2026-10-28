@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# End-to-end test of M2 (App Store, runtime projects, databases) and M3
-# (Docker manager, domain binding, TLS passthrough, files) on a disposable
-# Ubuntu host with Docker.
+# End-to-end test of M2 (App Store, runtime projects, databases), M3
+# (Docker manager, domain binding, TLS passthrough, files) and M4–M8 on a
+# disposable Ubuntu host with Docker.
 # Expects lmcwhm installed with: --port 18888 --entry /console --username admin --password Passw0rd1
 # Usage: sudo bash deploy/test-apps.sh
 set -euo pipefail
@@ -320,6 +320,137 @@ lmcwhm firewall-off >/dev/null
 ! nft list table inet lmcwhm >/dev/null 2>&1 || fail "firewall-off left the table"
 api GET /firewall | grep -q '"enabled":false' || fail "firewall-off not saved"
 pass "lmcwhm firewall-off"
+
+# ---------- M6: backups ----------
+bk_id() { api GET "/backups?kind=$1" | python3 -c "import sys,json; print([b['id'] for b in json.load(sys.stdin)['items'] if b['target']==sys.argv[1]][0])" "$2"; }
+task POST /backups/run '{"kind":"site","target":"db.test","dests":["local"],"keep":2}'
+SITEBK="$(bk_id site db.test)"
+echo broken > /www/wwwroot/db.test/index.php
+task POST "/backups/$SITEBK/restore" '{}'
+[[ "$(get80 db.test /index.php)" == "db-ok-42" ]] || fail "site restore: $(get80 db.test /index.php)"
+[[ "$(stat -c %u /www/wwwroot/db.test/index.php)" == 33 ]] || fail "restored files not owned by www-data"
+SHOPID="$(api GET /databases | python3 -c "import sys,json; print([d['id'] for d in json.load(sys.stdin)['items'] if d['name']=='shop'][0])")"
+task POST /backups/run "{\"kind\":\"database\",\"target\":\"$SHOPID\",\"dests\":[\"local\"],\"keep\":2}"
+DBBK="$(bk_id database shop)"
+docker exec -e MYSQL_PWD=Shop-pass-123 lmcwhm-mariadb114 mariadb -ushop -h127.0.0.1 shop -e "DELETE FROM t"
+task POST "/backups/$DBBK/restore" '{}'
+[[ "$(get80 db.test /index.php)" == "db-ok-42" ]] || fail "database restore: $(get80 db.test /index.php)"
+[[ "$(curl -s -b "$JAR" "$P/api/v1/backups/$DBBK/download" | head -c 2 | od -An -tx1 | tr -d ' ')" == 1f8b ]] || fail "download is not gzip"
+docker volume create lmcwhm-e2e-vol >/dev/null
+docker run --rm -v lmcwhm-e2e-vol:/v busybox sh -c 'echo vol-data > /v/f.txt'
+task POST /backups/run '{"kind":"volume","target":"lmcwhm-e2e-vol","dests":["local"]}'
+docker run --rm -v lmcwhm-e2e-vol:/v busybox rm /v/f.txt
+task POST "/backups/$(bk_id volume lmcwhm-e2e-vol)/restore" '{}'
+[[ "$(docker run --rm -v lmcwhm-e2e-vol:/v busybox cat /v/f.txt)" == vol-data ]] || fail "volume restore"
+# A scheduled backup is a cron job of type "backup".
+CJ="$(api POST /cron '{"name":"bk","type":"backup","schedule":"0 3 * * *","command":"{\"kind\":\"site\",\"target\":\"*\",\"dests\":[\"local\"],\"keep\":1}","enabled":true,"timeout":3600}' | jget "['id']")"
+api POST "/cron/$CJ/run" >/dev/null
+for _ in $(seq 1 60); do api GET "/cron/$CJ/runs" | grep -q '"status":"success"' && break; sleep 2; done
+api GET "/cron/$CJ/runs" | grep -q '"status":"success"' || { api GET "/cron/$CJ/runs"; fail "backup cron job"; }
+[[ "$(api GET '/backups?kind=site' | python3 -c "import sys,json; print(len([b for b in json.load(sys.stdin)['items'] if b['target']=='db.test']))")" == 1 ]] || fail "keep=1 did not prune"
+lmcwhm backup panel | grep -q "panel_" || fail "lmcwhm backup panel"
+lmcwhm backup list | grep -q panel || fail "lmcwhm backup list"
+pass "backups: site, MariaDB, Docker volume and panel; restore; download; scheduled job with pruning"
+
+# ---------- M7: MCP ----------
+TOK="$(api POST /tokens '{"name":"ci","scope":"read","ips":[],"ttl_days":1}' | jget "['secret']")"
+mcp() { curl -sk -X POST "$P/mcp" -H "Authorization: Bearer $1" -H 'Content-Type: application/json' -d "$2"; }
+mcp "$TOK" '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' | grep -q '"protocolVersion":"2025-06-18"' || fail "mcp initialize"
+mcp "$TOK" '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | grep -q '"analyze_access_log"' || fail "mcp tools/list"
+for _ in 1 2 3; do get80 db.test /index.php >/dev/null; done
+mcp "$TOK" '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"analyze_access_log","arguments":{"domain":"db.test"}}}' | python3 -c "import sys,json; r=json.load(sys.stdin)['result']; assert not r.get('isError') and r['structuredContent']['requests']>0, r" || fail "mcp analyze_access_log"
+mcp "$TOK" '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"run_shell","arguments":{"command":"id"}}}' | grep -q '"isError":true' || fail "read token ran an admin tool"
+[[ "$(curl -sk -o /dev/null -w '%{http_code}' -X POST "$P/mcp" -d '{}')" == 404 ]] || fail "/mcp without a token is not hidden"
+out="$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run_shell","arguments":{"command":"echo e2e-$((6*7))"}}}' | lmcwhm mcp --stdio)"
+[[ "$out" == *e2e-42* ]] || fail "mcp --stdio: $out"
+curl -sk -b "$JAR" "$P/api/v1/mcp/skill" | grep -q "name: lmcwhm-ops" || fail "skill download"
+pass "MCP: tokens, scopes, tools over HTTPS and stdio, skill"
+
+# ---------- M8 ----------
+# Webhook receiver for alerts.
+cat > /tmp/hook.py <<'EOF'
+import http.server
+class H(http.server.BaseHTTPRequestHandler):
+    def do_POST(self):
+        b = self.rfile.read(int(self.headers.get('Content-Length', 0)))
+        open('/tmp/hook.log', 'ab').write(b + b'\n')
+        self.send_response(200); self.end_headers()
+    def log_message(self, *a): pass
+http.server.HTTPServer(('127.0.0.1', 18192), H).serve_forever()
+EOF
+: > /tmp/hook.log
+python3 /tmp/hook.py & HOOK=$!
+CH="$(api POST /alerts/channels '{"name":"hook","kind":"webhook","enabled":true,"config":{"url":"http://127.0.0.1:18192/"}}' | jget "['id']")"
+[[ "$(api POST "/alerts/channels/$CH/test" | jget "['ok']")" == True ]] || fail "alert channel test"
+grep -q "test notification" /tmp/hook.log || fail "test notification not delivered"
+api POST /alerts/rules "{\"name\":\"probes\",\"kind\":\"probe_down\",\"channels\":[$CH],\"enabled\":true}" | grep -q '"id"' || fail "alert rule"
+grep -q "db.test" /etc/hosts || echo "127.0.0.1 db.test" >> /etc/hosts
+PR="$(api POST /probes '{"name":"db","type":"http","target":"http://db.test/index.php","keyword":"db-ok","interval":30,"fails":1,"enabled":true}' | jget "['id']")"
+[[ "$(api POST "/probes/$PR/check" | jget "['ok']")" == True ]] || fail "http probe"
+PD="$(api POST /probes '{"name":"closed","type":"tcp","target":"127.0.0.1:1","interval":30,"timeout":2,"fails":1,"enabled":true}' | jget "['id']")"
+api POST "/probes/$PD/check" >/dev/null
+for _ in $(seq 1 10); do grep -q "DOWN: closed" /tmp/hook.log && break; sleep 1; done
+grep -q "DOWN: closed" /tmp/hook.log || fail "probe_down alert not delivered"
+api POST "/probes/$PD/delete" >/dev/null
+pass "alerts: webhook channel; uptime probes (HTTP keyword, TCP) raise probe_down"
+
+# Process guardian: a systemd service that is restarted when it dies.
+api POST /processes '{"name":"e2e-worker","command":"exec python3 -m http.server 18191 --bind 127.0.0.1","dir":"/tmp","user":"root","env":["A=1"]}' | grep -q '"state":"active"' || fail "process not active"
+for _ in $(seq 1 20); do curl -s -o /dev/null http://127.0.0.1:18191/ && break; sleep 0.5; done
+curl -s -o /dev/null http://127.0.0.1:18191/ || fail "guarded process not serving"
+systemctl kill -s KILL lmcwhm-proc-e2e-worker.service
+sleep 6
+curl -s -o /dev/null http://127.0.0.1:18191/ || fail "guarded process not restarted"
+PID="$(api GET /processes | python3 -c "import sys,json; print([p['id'] for p in json.load(sys.stdin)['items'] if p['name']=='e2e-worker'][0])")"
+api POST "/processes/$PID/delete" >/dev/null
+[[ ! -e /etc/systemd/system/lmcwhm-proc-e2e-worker.service ]] || fail "unit not removed"
+pass "process guardian: systemd service restarted after a crash, removed on delete"
+
+# Website advanced settings render into nginx.
+task PATCH "/sites/$DBSITE" '{"advanced":{"deny_ua":["BadBot"],"redirects":[{"from":"/old","to":"/index.php","code":301}],"block_xmlrpc":true,"rate_limit":50,"rate_burst":100}}'
+[[ "$(curl -s -o /dev/null -w '%{http_code}' -A 'BadBot/1.0' --resolve db.test:80:127.0.0.1 http://db.test/index.php)" == 403 ]] || fail "user agent not blocked"
+[[ "$(curl -s -o /dev/null -w '%{http_code}' --resolve db.test:80:127.0.0.1 http://db.test/old)" == 301 ]] || fail "redirect"
+[[ "$(curl -s -o /dev/null -w '%{http_code}' --resolve db.test:80:127.0.0.1 http://db.test/xmlrpc.php)" == 403 ]] || fail "xmlrpc not blocked"
+[[ "$(get80 db.test /index.php)" == "db-ok-42" ]] || fail "site broken by advanced settings"
+task PATCH "/sites/$DBSITE" '{"advanced":{}}'
+api GET "/sitestats?domain=db.test&days=7" | grep -q '"total"' || fail "site report"
+pass "website advanced settings: UA block, redirect, xmlrpc, rate limit"
+
+# Composer in the PHP image.
+echo '{"require":{}}' > /www/wwwroot/db.test/composer.json
+chown 33:33 /www/wwwroot/db.test/composer.json
+task POST "/sites/$DBSITE/composer" '{"action":"install"}'
+[[ -f /www/wwwroot/db.test/vendor/autoload.php ]] || fail "composer install"
+pass "Composer"
+
+# WordPress toolkit.
+task POST /sites '{"domain":"wp.test","type":"php","php_version":"8.3","ssl":"none"}'
+WPSITE="$(site_id wp.test)"
+task POST "/wordpress/install/$WPSITE" "{\"title\":\"CI Blog\",\"admin_user\":\"wpadmin\",\"admin_pass\":\"Wp-pass-12345\",\"admin_email\":\"ci@example.com\",\"locale\":\"en_US\",\"db_app_id\":$MID}"
+get80_retry wp.test / "CI Blog" || fail "WordPress front page"
+api GET "/wordpress/$WPSITE" | python3 -c "import sys,json; i=json.load(sys.stdin); assert i['version'] and 'wpadmin' in i['admins'], i" || fail "WordPress info"
+task POST "/wordpress/$WPSITE/action" '{"action":"verify"}'
+pass "WordPress: install with database and admin, WP-CLI info and checksum verification"
+
+# SFTP (chrooted) and FTP accounts.
+command -v sshpass >/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq openssh-server sshpass >/dev/null
+systemctl start ssh 2>/dev/null || systemctl start sshd
+api POST /ftp/accounts '{"kind":"sftp","username":"e2esftp","password":"Sftp-pass-123","site_id":'"$DBSITE"'}' | grep -q '"id"' || fail "sftp account"
+out="$(printf 'ls /site\n' | sshpass -p Sftp-pass-123 sftp -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oBatchMode=no e2esftp@127.0.0.1 2>&1)"
+[[ "$out" == *index.php* ]] || fail "sftp listing: $out"
+! sshpass -p Sftp-pass-123 ssh -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null e2esftp@127.0.0.1 id 2>/dev/null | grep -q uid || fail "sftp user got a shell"
+task POST /ftp/enabled '{"on":true}'
+api POST /ftp/accounts '{"kind":"ftp","username":"e2eftp","password":"Ftp-pass-1234","site_id":'"$DBSITE"'}' | grep -q '"id"' || fail "ftp account"
+curl -s --user e2eftp:Ftp-pass-1234 ftp://127.0.0.1/ | grep -q index.php || fail "ftp listing"
+api GET /firewall/rules | grep -q 'FTP (lmcwhm)' || fail "ftp firewall rule"
+task POST /ftp/enabled '{"on":false}'
+for a in $(api GET /ftp | python3 -c "import sys,json; print(' '.join(str(x['id']) for x in json.load(sys.stdin)['items']))"); do api POST "/ftp/accounts/$a/delete" >/dev/null; done
+! id e2esftp >/dev/null 2>&1 || fail "sftp system user not removed"
+pass "SFTP chroot and Pure-FTPd accounts"
+
+api GET /system/summary | python3 -c "import sys,json; s=json.load(sys.stdin); assert 0 <= s['score'] <= 100 and s['backups'] > 0 and s['probes'] >= 1, s" || fail "dashboard summary"
+kill $HOOK
+pass "dashboard summary"
 
 # ---------- panel restart keeps projects and services ----------
 systemctl restart lmcwhm

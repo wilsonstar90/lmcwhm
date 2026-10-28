@@ -22,7 +22,11 @@
     "copied": "コピーしました",
     "copy": "コピー",
     "delete": "削除",
-    "edit": "編集"
+    "edit": "編集",
+    "actions": "操作",
+    "confirm_delete": "削除しますか？",
+    "create": "作成",
+    "created": "作成日時"
   },
   "login": {
     "title": "ログイン",
@@ -46,7 +50,13 @@
     "logs": "ログ",
     "settings": "設定",
     "logout": "ログアウト",
-    "domains": "ドメイン / SNI"
+    "domains": "ドメイン / SNI",
+    "backup": "バックアップ",
+    "ftp": "FTP / SFTP",
+    "processes": "プロセス常駐",
+    "uptime": "死活監視",
+    "alerts": "アラート",
+    "ai": "AI / MCP"
   },
   "home": {
     "system": "システム",
@@ -185,7 +195,8 @@
       "invalid_command": "起動コマンドが無効です",
       "passthrough_no_ssl": "TLS パススルーのサイトはバックエンドが証明書を持ちます",
       "not_project": "ランタイムプロジェクトではありません",
-      "invalid_waf_rule": "ルール ID は数字です"
+      "invalid_waf_rule": "ルール ID は数字です",
+      "invalid_advanced": "詳細設定が無効です（IP・UA・ドメイン・リダイレクト）"
     },
     "cf": {
       "no_token": "Cloudflare トークンを設定してください"
@@ -278,6 +289,67 @@
     "crowdsec": {
       "not_installed": "CrowdSec が動作していません",
       "invalid_ip": "IP または CIDR が無効です"
+    },
+    "backup": {
+      "not_found": "バックアップが見つかりません",
+      "invalid_plan": "バックアップ設定が無効です",
+      "invalid_target": "バックアップ対象が無効です",
+      "invalid_dest": "保存先が無効です",
+      "restore_unsupported": "ここでは復元できません（パネルは lmcwhm backup restore-panel）",
+      "invalid_archive": "アーカイブが壊れているか種類が違います",
+      "invalid_name": "ファイル名が無効です（.gz が必要）",
+      "invalid_remote": "クラウド設定が無効です",
+      "remote_unauthorized": "クラウドが承認を拒否しました：{value}",
+      "auth_expired": "承認コードの期限切れ",
+      "remote_not_found": "クラウド上にファイルがありません"
+    },
+    "ai": {
+      "no_key": "Anthropic API キーが未設定です",
+      "refused": "モデルがこの依頼を断りました",
+      "invalid_config": "AI 設定が無効です",
+      "failed": "AI リクエストに失敗：{value}"
+    },
+    "token": {
+      "not_found": "トークンが見つかりません",
+      "invalid": "トークン設定が無効です",
+      "invalid_name": "名前を入力してください（64 文字まで）",
+      "invalid_scope": "権限が無効です",
+      "invalid_ip": "IP / CIDR が無効です"
+    },
+    "alert": {
+      "not_found": "見つかりません",
+      "invalid_rule": "ルールが無効です。値と通知先を確認してください",
+      "invalid_channel": "通知先の設定が無効です"
+    },
+    "probe": {
+      "not_found": "監視が見つかりません",
+      "invalid": "監視設定が無効です"
+    },
+    "proc": {
+      "not_found": "プロセスが見つかりません",
+      "invalid_name": "名前が無効です",
+      "exists": "同名のプロセスがあります",
+      "invalid_command": "コマンドが無効です",
+      "invalid_user": "ユーザーが存在しません",
+      "invalid_dir": "ディレクトリが存在しません",
+      "invalid_env": "環境変数は KEY=value 形式です"
+    },
+    "ftp": {
+      "not_found": "アカウントが見つかりません",
+      "invalid_username": "ユーザー名が無効です",
+      "exists": "ユーザー名は使用済み（またはシステムアカウント）です",
+      "invalid_password": "パスワード：空白なしの 8〜64 文字",
+      "invalid_dir": "ディレクトリは Web ルート内である必要があります",
+      "invalid_kind": "プロトコルが無効です",
+      "not_enabled": "FTP が無効です"
+    },
+    "wp": {
+      "not_php": "WordPress には PHP サイトが必要です",
+      "not_wordpress": "このサイトに WordPress がありません",
+      "root_not_empty": "サイトのディレクトリが空ではありません",
+      "invalid_input": "タイトル・管理者・パスワード（8 文字以上）・メールを確認してください",
+      "no_mysql": "WordPress には MySQL か MariaDB が必要です",
+      "invalid_action": "不明な操作"
     }
   },
   "task": {
@@ -373,7 +445,8 @@
     "passthrough_hint": "TLS バックエンドの ホスト:ポート。HTTP は HTTPS へリダイレクト",
     "passthrough_short": "TLS パススルー",
     "tab_project": "プロジェクト",
-    "project_logs": "出力（直近 200 行）"
+    "project_logs": "出力（直近 200 行）",
+    "composer_hint": "サイトの PHP コンテナ内で www-data としてサイトルートで Composer を実行します。"
   },
   "app": {
     "installed": "インストール済み",
@@ -689,7 +762,8 @@
     "types": {
       "shell": "シェルスクリプト",
       "url": "URL アクセス",
-      "logrotate": "ログローテーション"
+      "logrotate": "ログローテーション",
+      "backup": "バックアップ"
     },
     "status": {
       "running": "実行中",
@@ -722,7 +796,8 @@
       "logrotate": "サイトログのローテーション",
       "docker_prune": "Docker イメージの整理",
       "apt": "システム更新"
-    }
+    },
+    "run": "実行"
   },
   "sec": {
     "firewall": "ファイアウォール",
@@ -870,5 +945,421 @@
     "alerts": "アラート",
     "events": "イベント数",
     "decision": "判定"
+  },
+  "bk": {
+    "tab_list": "バックアップ",
+    "tab_plans": "スケジュール",
+    "tab_remotes": "クラウド",
+    "run_now": "今すぐバックアップ",
+    "import": "インポート",
+    "all_kinds": "すべての種類",
+    "local_usage": "ローカル保存先：{dir} · {size}",
+    "kind": "種類",
+    "kinds": {
+      "site": "サイト",
+      "database": "データベース",
+      "panel": "パネル設定",
+      "volume": "Docker ボリューム",
+      "path": "ディレクトリ"
+    },
+    "target": "対象",
+    "all": "すべて",
+    "path": "ディレクトリのパス",
+    "file": "ファイル",
+    "size": "サイズ",
+    "dest": "保存先",
+    "local": "ローカル",
+    "download": "ダウンロード",
+    "restore": "復元",
+    "delete_confirm": "このバックアップを削除しますか（クラウド上も削除）？",
+    "new_plan": "スケジュール追加",
+    "what": "内容",
+    "keep": "保持数",
+    "keep_hint": "対象と保存先ごとに残す最新の数。0 はすべて保持。",
+    "exclude": "除外",
+    "exclude_hint": "ファイル・フォルダ名のパターン（例：node_modules、*.log、cache）",
+    "plan_name_hint": "省略時は種類と対象から付けます",
+    "presets": {
+      "daily": "毎日 03:00",
+      "twice": "1 日 2 回（03:00・15:00）",
+      "hourly6": "6 時間ごと",
+      "weekly": "毎週日曜 03:00",
+      "custom": "カスタム（cron 式）"
+    },
+    "start": "開始",
+    "started": "バックアップを開始しました",
+    "cron_hint": "JSON 形式のバックアップ計画。バックアップ画面で編集する方が簡単です。",
+    "restore_into": "復元先",
+    "restore_original": "元のデータベース",
+    "restore_warn": {
+      "site": "{target} のファイルはこのバックアップで置き換えられます。展開が完了してから入れ替えます。",
+      "database": "データベースはダンプで上書きされ、バックアップ後の書き込みは失われます。",
+      "volume": "ボリューム {target} の内容はすべて削除されて置き換えられます。先に使用中のコンテナを停止してください。",
+      "path": "ディレクトリ {target} はこのバックアップで置き換えられます。"
+    },
+    "import_hint": "まずファイル管理でアーカイブをアップロードし（別サーバーからの移行など）、ここで登録すると復元できます。",
+    "file_path": "サーバー上のファイル",
+    "remote_intro": "バックアップを Google Drive / OneDrive にアップロードできます。自分の OAuth アプリを登録し、ワンタイムコードでパネルを承認します（コールバック URL は不要）。",
+    "howto": {
+      "gdrive": "Google Cloud Console → API とサービスで Google Drive API を有効にし、認証情報 → OAuth クライアント ID を作成（種類：テレビと入力機能が限られたデバイス）。クライアント ID とシークレットを貼り付けます。パネルは自分で作成したファイルのみ扱います（drive.file）。",
+      "onedrive": "Azure ポータル → アプリの登録 → 新規登録（個人・職場アカウント）。認証で「パブリック クライアント フローを許可する」を有効にし、アプリケーション (クライアント) ID を貼り付けます。ファイルは Apps/<アプリ名> フォルダに保存されます。"
+    },
+    "remote_name": "名前",
+    "tenant": "テナント",
+    "connect": "接続",
+    "provider": "サービス",
+    "account": "アカウント",
+    "connected": "接続済み",
+    "not_connected": "未承認",
+    "reauthorize": "再承認",
+    "remote_delete_confirm": "このストレージを削除しますか？クラウド上のバックアップは残りますが一覧から消えます。",
+    "authorize_title": "パネルを承認",
+    "authorize_step1": "1. このページを開いてサインイン：",
+    "authorize_step2": "2. 次のコードを入力：",
+    "authorize_wait": "承認するとこの画面は自動で閉じます。",
+    "authorized": "接続しました：{account}",
+    "auth_expired": "コードの期限切れ、または拒否されました。もう一度お試しください。"
+  },
+  "alert": {
+    "tab_rules": "ルール",
+    "tab_channels": "通知先",
+    "tab_history": "履歴",
+    "need_channel": "まず通知先を追加してください。",
+    "new_rule": "ルール追加",
+    "name": "名前",
+    "kind": "種類",
+    "enabled": "有効",
+    "test": "テスト送信",
+    "test_sent": "テストを送信しました",
+    "condition": "条件",
+    "channels": "通知先",
+    "firing": "{n} 件発生中",
+    "ok": "正常",
+    "severity": "レベル",
+    "message": "内容",
+    "delivery": "送信結果",
+    "smtp_host": "SMTP サーバー",
+    "port": "ポート",
+    "security": "暗号化",
+    "username": "ユーザー名",
+    "password": "パスワード",
+    "from": "送信元",
+    "to": "宛先",
+    "tg_hint": "BotFather でボットを作り、一度メッセージを送ってから chat ID を入力します。",
+    "webhook_url": "Webhook URL",
+    "webhook_hint": "title・body・severity・kind・host・time を含む JSON を POST します。",
+    "sign_secret": "署名シークレット（任意）",
+    "cooldown": "再通知間隔（分）",
+    "cooldown_hint": "問題が続く間はこの間隔で再通知し、解消時にも通知します。",
+    "channel_kinds": {
+      "email": "メール",
+      "telegram": "Telegram",
+      "webhook": "Webhook",
+      "wecom": "WeCom",
+      "dingtalk": "DingTalk",
+      "slack": "Slack",
+      "discord": "Discord"
+    },
+    "rule_kinds": {
+      "cpu": "CPU 高負荷",
+      "mem": "メモリ高使用率",
+      "load": "高ロードアベレージ",
+      "disk": "ディスク容量不足",
+      "service_down": "サービス停止",
+      "ssl_expiry": "SSL 期限切れ間近",
+      "probe_down": "死活監視の失敗",
+      "cron_failed": "Cron・バックアップ失敗",
+      "login_failed": "パネルログイン失敗",
+      "panel_login": "パネルログイン通知",
+      "ssh_login": "SSH ログイン通知"
+    },
+    "rule_desc": {
+      "cpu": "CPU の {minutes} 分平均が {threshold}% 以上",
+      "mem": "メモリの {minutes} 分平均が {threshold}% 以上",
+      "load": "1 分ロードの {minutes} 分平均が {threshold} 以上",
+      "disk": "ルートディスク使用率 {threshold}% 以上",
+      "service_down": "パネル管理のコンテナ（Web・DB・プロジェクト）が停止",
+      "ssl_expiry": "サイト証明書が {days} 日以内に失効",
+      "probe_down": "死活監視がダウン（と復旧）",
+      "cron_failed": "Cron・バックアップの失敗またはタイムアウト",
+      "login_failed": "{minutes} 分以内にパネルログイン失敗 {count} 回以上",
+      "panel_login": "パネルへのログイン成功ごと",
+      "ssh_login": "SSH ログイン成功ごと"
+    },
+    "params": {
+      "threshold": "しきい値",
+      "minutes": "分",
+      "days": "日数",
+      "count": "回数"
+    },
+    "sev": {
+      "info": "情報",
+      "warning": "警告",
+      "critical": "重大",
+      "resolved": "復旧"
+    }
+  },
+  "probe": {
+    "new": "監視を追加",
+    "alert_hint": "通知するにはアラートに「死活監視の失敗」ルールを追加します。",
+    "name": "名前",
+    "type": "種類",
+    "target": "対象",
+    "target_hint": {
+      "http": "完全な URL（例：https://example.com/health）",
+      "tcp": "ホスト:ポート（例：db.example.com:5432）",
+      "ping": "ホスト名または IP"
+    },
+    "keyword": "含むべき文字列",
+    "keyword_hint": "任意。応答に含まれるべき文字列",
+    "expect": "期待ステータス",
+    "expect_hint": "0 = 任意の 2xx / 3xx",
+    "interval": "間隔",
+    "timeout": "タイムアウト",
+    "fails": "ダウン判定までの失敗回数",
+    "latency": "応答時間",
+    "last_error": "最新エラー",
+    "check": "今すぐ確認",
+    "history": "履歴",
+    "days": "{n} 日",
+    "paused": "停止中",
+    "state": {
+      "up": "稼働",
+      "down": "ダウン",
+      "unknown": "確認待ち"
+    },
+    "availability": "可用性",
+    "failures": "失敗履歴",
+    "no_failures": "この期間に失敗はありません。"
+  },
+  "proc": {
+    "new": "プロセス追加",
+    "intro": "systemd サービスとして実行し、終了時に再起動・起動時に開始します。出力は journal に記録されます。",
+    "name": "名前",
+    "name_hint": "英小文字・数字・- と _。サービス名は lmcwhm-proc-<名前>。",
+    "command": "コマンド",
+    "command_hint": "bash スクリプト。メインのプログラムはフォアグラウンドで（exec 推奨）。",
+    "dir": "作業ディレクトリ",
+    "user": "実行ユーザー",
+    "env": "環境変数",
+    "env_hint": "KEY=value をタグごとに 1 つ",
+    "logs": "ログ",
+    "restarts": "再起動回数",
+    "since": "起動時刻",
+    "save_start": "保存して起動"
+  },
+  "ftp": {
+    "new": "アカウント追加",
+    "kind": "プロトコル",
+    "recommended": "推奨",
+    "username": "ユーザー名",
+    "username_hint": "3〜32 文字の英小文字・数字・- _。SFTP では同名のシステムアカウントになります。",
+    "password": "パスワード",
+    "change_password": "パスワード変更",
+    "dir": "ディレクトリ",
+    "connect": "接続先",
+    "created": "アカウントを作成しました",
+    "host": "ホスト",
+    "port_21": "ポート 21・パッシブモード",
+    "port_ssh": "SSH ポート",
+    "ftp_hint": "ポート {ports} · パッシブアドレス {ip}",
+    "sftp_hint": "SFTP は sshd を使用し、ユーザーは自分のディレクトリに閉じ込められシェルには入れません。",
+    "ftp_off": "FTP がオフです。上で有効にしないとアカウントは保存されるだけです。"
+  },
+  "ai": {
+    "analyze": "AI 分析",
+    "tab_chat": "アシスタント",
+    "tab_settings": "設定",
+    "no_key": "アシスタントを使うには Anthropic API キーを設定してください。",
+    "intro": "このサーバーについて質問できます。読み取り専用ツールでログ・メトリクス・設定を調べて対処法を提案し、変更は行いません。",
+    "placeholder": "例：example.com が 502 になる理由は？（Enter で送信、Shift+Enter で改行）",
+    "send": "送信",
+    "clear": "新しい会話",
+    "thinking": "調査中…",
+    "steps": "{n} 件の情報を確認",
+    "usage": "{model} · 入力 {input} / 出力 {output} トークン",
+    "quick": {
+      "security": {
+        "label": "セキュリティ診断",
+        "prompt": "このサーバーのセキュリティ診断をしてください：ファイアウォール、SSH・パネルのログイン、WAF・CrowdSec のイベント、不審なリクエスト。リスクを順位付けし対処法を教えてください。"
+      },
+      "load": {
+        "label": "なぜ遅い？",
+        "prompt": "過去 24 時間の CPU・メモリ・ディスク・ネットワークを調べ、負荷の原因を教えてください。"
+      },
+      "backups": {
+        "label": "バックアップ確認",
+        "prompt": "バックアップの網羅状況を確認：最近・オフサイトのバックアップがないサイトや DB、失敗しているジョブは？"
+      },
+      "errors": {
+        "label": "サイトのエラー",
+        "prompt": "すべてのサイトの 5xx・エラーログ・停止中のコンテナを調べ、原因を説明してください。"
+      }
+    },
+    "prompt_ssh": "最近の SSH ログインを分析：総当たりの送信元、不審な成功ログイン、ブロックすべきか。",
+    "prompt_site_access": "{domain} のアクセスログを分析：トラフィック、エラー、主なクライアント、不審なリクエスト。",
+    "prompt_site_error": "{domain} のエラーログを読み、問題と対処法を説明してください。",
+    "prompt_site_traffic": "{domain} のトラフィックを要約し、異常（ボット・攻撃・エラー急増）を指摘してください。",
+    "prompt_waf": "最近の WAF イベントを確認：本当の攻撃と誤検知を見分け、サイトごとの除外ルールを提案してください。",
+    "connect_title": "AI クライアントを接続（MCP）",
+    "connect_ssh": "SSH 経由（トークン不要・SSH ログインを使用。推奨）：",
+    "connect_http": "HTTPS と API トークン（パネルのポートに到達でき、自己署名証明書をクライアントが信頼する必要あり）：",
+    "new_token": "API トークン作成",
+    "download_skill": "Claude Code スキルをダウンロード",
+    "tokens": "API トークン",
+    "tools": "ツール（{n}）",
+    "prompts": "スキル（MCP プロンプト）",
+    "tool": "ツール",
+    "description": "説明",
+    "scope": "権限",
+    "scopes": {
+      "read": "読み取り",
+      "operate": "操作",
+      "admin": "管理者"
+    },
+    "scope_hint": {
+      "read": "ログ・メトリクス・設定の読み取りのみ。",
+      "operate": "さらにコンテナ再起動・IP ブロック・Cron やバックアップ実行・証明書発行が可能。",
+      "admin": "さらに root で任意のシェルコマンドを実行可能。完全に信頼できるクライアントのみに。"
+    },
+    "ips": "許可 IP",
+    "ips_hint": "空欄 = すべての IP（パネル自体の IP 制限は有効）",
+    "any_ip": "すべて",
+    "ttl": "有効日数（0 = 無期限）",
+    "expires": "有効期限",
+    "never": "なし",
+    "last_used": "最終使用",
+    "revoke": "失効",
+    "revoke_confirm": "このトークンを失効させますか？使用中のクライアントは使えなくなります。",
+    "token_created": "トークンを作成しました",
+    "token_once": "今コピーしてください。表示は一度だけです。",
+    "api_key": "Anthropic API キー",
+    "api_key_hint": "console.anthropic.com で取得。暗号化して保存し、利用料はあなたのアカウントに請求されます。",
+    "model": "モデル",
+    "model_hint": "既定は {model}。Sonnet や Haiku は安価です。",
+    "effort": "推論の深さ",
+    "effort_hint": "高いほど丁寧ですが、遅く高価になります。",
+    "base_url": "API ベース URL（任意）",
+    "base_url_hint": "Anthropic API の前段にゲートウェイがある場合のみ。"
+  },
+  "dash": {
+    "running": "稼働中",
+    "stopped": "{n} 件停止",
+    "failed": "{n} 件失敗",
+    "down": "{n} 件ダウン",
+    "never": "未実施",
+    "today": "本日のアクセス",
+    "blocked": "ブロック中の IP",
+    "alerts": "アラート",
+    "last24h": "過去 24 時間",
+    "security": "セキュリティチェック",
+    "no_risks": "リスクは見つかりませんでした。",
+    "fix": "対処",
+    "level": {
+      "critical": "高",
+      "warning": "中",
+      "info": "低"
+    },
+    "risks": {
+      "no_entry": "セキュリティ入口が未設定。ポートを見つければ誰でもログイン画面を開けます。",
+      "default_port": "パネルが既定のポート 8888 を使用しています。",
+      "panel_http": "パネルの SSL がオフで、ログイン情報が暗号化されません。",
+      "panel_open": "パネルに許可 IP も BasicAuth もありません。",
+      "no_2fa": "管理者の二要素認証がオフです。",
+      "firewall_off": "ファイアウォールがオフです。",
+      "waf_off": "WAF がオフです。",
+      "crowdsec_off": "CrowdSec が未インストールです。",
+      "no_recent_backup": "過去 7 日間バックアップがありません。",
+      "no_alert_channel": "通知先が未設定のため、問題が起きても通知されません。",
+      "ssl_expiring": "{n} 件の証明書が 14 日以内に失効します。",
+      "probes_down": "{n} 件の死活監視がダウンしています。",
+      "cron_failed": "{n} 件の Cron が前回失敗しました。",
+      "procs_down": "{n} 件の常駐プロセスが停止しています。"
+    }
+  },
+  "adv": {
+    "title": "詳細設定",
+    "access": "アクセス制限",
+    "allow_ips": "許可 IP のみ",
+    "allow_ips_hint": "設定すると他の IP は 403。IP または CIDR。",
+    "deny_ips": "拒否 IP",
+    "deny_ua": "拒否 User-Agent",
+    "deny_ua_hint": "User-Agent に含まれる文字列（大小区別なし）例：MJ12bot、python-requests",
+    "hotlink": "直リンク防止",
+    "hotlink_hint": "画像・メディアの埋め込みを許可するドメイン（空欄でオフ）。自サイトは常に許可。",
+    "limits": "制限",
+    "rate": "IP ごとのリクエスト数",
+    "rate_hint": "0 = 無制限。超過すると 429。",
+    "burst": "バースト",
+    "conn": "IP ごとの同時接続",
+    "max_body": "アップロード上限",
+    "behaviour": "動作",
+    "autoindex": "ディレクトリ一覧",
+    "error_pages": "カスタムエラーページ（サイトルートの /404.html・/50x.html）",
+    "open_basedir": "サイト間アクセス防止（open_basedir）",
+    "block_xmlrpc": "xmlrpc.php をブロック（WordPress）",
+    "redirects": "リダイレクト"
+  },
+  "stats": {
+    "title": "アクセス解析",
+    "today": "今日",
+    "days": "{n} 日間",
+    "traffic": "転送量",
+    "errors": "4xx / 5xx",
+    "errors_5xx": "5xx エラー",
+    "spiders_excluded": "クローラーの {n} リクエストは PV に含め、UV とランキングからは除外しています。",
+    "per_hour": "1 時間ごと",
+    "per_day": "1 日ごと",
+    "top_urls": "ページ",
+    "top_ips": "訪問者 IP",
+    "countries": "国・地域",
+    "referrers": "参照元",
+    "spiders": "クローラー",
+    "status": "ステータス",
+    "url": "パス",
+    "referrer": "サイト",
+    "spider": "クローラー",
+    "country": "国・地域",
+    "hits": "リクエスト",
+    "unknown": "不明"
+  },
+  "wp": {
+    "install_intro": "このサイトに WordPress をインストールします：MySQL / MariaDB データベースを作成し、wp-config.php を書き込み、WP-CLI で管理者を作成します。",
+    "need_mysql": "まず App Store で MySQL か MariaDB をインストールしてください。",
+    "site_title": "サイトのタイトル",
+    "admin_user": "管理者ユーザー",
+    "admin_pass": "管理者パスワード",
+    "admin_email": "管理者メール",
+    "language": "言語",
+    "db_engine": "DB エンジン",
+    "install": "WordPress をインストール",
+    "version": "バージョン",
+    "admins": "管理者",
+    "updates": "プラグイン・テーマ更新",
+    "actions": {
+      "core_update": "WordPress を更新",
+      "plugins_update": "全プラグイン更新",
+      "themes_update": "全テーマ更新",
+      "verify": "コアファイル検証",
+      "cache_flush": "キャッシュ削除",
+      "plugin_activate": "プラグイン有効化",
+      "plugin_deactivate": "プラグイン無効化",
+      "plugin_update": "プラグイン更新",
+      "plugin_delete": "プラグイン削除",
+      "theme_activate": "テーマ有効化",
+      "theme_update": "テーマ更新",
+      "file_edit": "管理画面のファイル編集",
+      "debug": "デバッグモード",
+      "admin_password": "管理者パスワード再設定"
+    },
+    "no_file_edit": "管理画面のプラグイン・テーマ編集を無効化（DISALLOW_FILE_EDIT）",
+    "xmlrpc_hint": "xmlrpc.php をブロック（「詳細設定」で変更）",
+    "reset_password": "パスワード再設定：",
+    "new_password": "新しいパスワード（8 文字以上）",
+    "plugin": "プラグイン",
+    "theme": "テーマ",
+    "update": "更新",
+    "activate": "有効化",
+    "deactivate": "無効化"
   }
 }

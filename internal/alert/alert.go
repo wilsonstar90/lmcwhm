@@ -181,8 +181,9 @@ func (sv *Service) SaveChannel(ctx context.Context, c Channel) (Channel, error) 
 	b, _ := json.Marshal(c.Config)
 	sealed := sv.box.Seal(string(b))
 	if c.ID == 0 {
+		c.CreatedAt = sv.now().Unix()
 		res, err := sv.st.DB.ExecContext(ctx, `INSERT INTO alert_channels(name, kind, config, enabled, created_at) VALUES(?,?,?,?,?)`,
-			c.Name, c.Kind, sealed, c.Enabled, sv.now().Unix())
+			c.Name, c.Kind, sealed, c.Enabled, c.CreatedAt)
 		if err != nil {
 			return c, err
 		}

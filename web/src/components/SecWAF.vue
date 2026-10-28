@@ -9,6 +9,7 @@ import { get, patch, put, ApiError } from '../api/client'
 import { datetime } from '../format'
 import IpGeo from './IpGeo.vue'
 import TaskModal from './TaskModal.vue'
+import AiButton from './AiButton.vue'
 
 interface Settings { enabled: boolean; engine: 'On' | 'DetectionOnly'; paranoia: number; anomaly: number }
 interface SiteWAF { id: number; domain: string; waf_off: boolean; waf_exclude: string[] | null }
@@ -140,6 +141,7 @@ const evCols: DataTableColumns<Event> = [
       <n-space>
         <n-input v-model:value="q" size="small" clearable :placeholder="t('logs.filter_kw')" style="width: 200px" @keyup.enter="loadEvents" />
         <n-button size="small" @click="loadEvents">{{ t('common.refresh') }}</n-button>
+        <AiButton :prompt="t('ai.prompt_waf')" />
       </n-space>
     </template>
     <n-data-table size="small" :columns="evCols" :data="events" :loading="loading" :pagination="{ pageSize: 20 }" :scroll-x="1200" />

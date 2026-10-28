@@ -96,5 +96,3 @@ func panelRunning(p config.Paths) bool {
 	pid, _ := strconv.Atoi(strings.TrimSpace(string(raw)))
 	return pid > 0 && syscall.Kill(pid, 0) == nil
 }
-
-

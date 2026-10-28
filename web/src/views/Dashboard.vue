@@ -6,6 +6,7 @@ import { get } from '../api/client'
 import type { Overview } from '../api/types'
 import { bytes } from '../format'
 import MaintenanceBar from '../components/MaintenanceBar.vue'
+import DashSummary from '../components/DashSummary.vue'
 
 const { t } = useI18n()
 const o = ref<Overview | null>(null)
@@ -40,6 +41,7 @@ const uptime = (s: number) => t('home.days', { d: Math.floor(s / 86400), h: Math
 
 <template>
   <MaintenanceBar />
+  <DashSummary />
   <div v-if="o">
     <n-grid cols="1 s:2 m:4" responsive="screen" :x-gap="16" :y-gap="16">
       <n-gi>

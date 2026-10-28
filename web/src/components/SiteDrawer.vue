@@ -8,6 +8,9 @@ import {
 import { get, patch, post, ApiError } from '../api/client'
 import type { InstalledApp, Site } from '../api/types'
 import { datetime } from '../format'
+import SiteAdvanced from './SiteAdvanced.vue'
+import SiteStats from './SiteStats.vue'
+import SiteWordPress from './SiteWordPress.vue'
 
 const props = defineProps<{ site: Site | null; phpVersions: string[]; hasCF: boolean }>()
 const emit = defineEmits<{ close: []; task: [id: string, title: string]; changed: [] }>()
@@ -31,7 +34,7 @@ const appPort = ref<number | null>(null)
 const proxyTarget = ref('')
 const runtimes = ref<InstalledApp[]>([])
 const project = ref<{ state: string; logs: string } | null>(null)
-const isProject = computed(() => !!props.site && ['node', 'python', 'java'].includes(props.site.type))
+const isProject = computed(() => !!props.site && ['node', 'python', 'java', 'tomcat'].includes(props.site.type))
 
 async function loadProject() {
   if (!isProject.value) return
@@ -39,6 +42,14 @@ async function loadProject() {
     project.value = await get<{ state: string; logs: string }>(`/sites/${props.site!.id}/project?tail=200`)
   } catch {
     project.value = null
+  }
+}
+async function composer(action: string) {
+  try {
+    const r = await post<{ task_id: string }>(`/sites/${props.site!.id}/composer`, { action })
+    emit('task', r.task_id, `composer ${action}`)
+  } catch (e) {
+    fail(e)
   }
 }
 async function restartProject() {
@@ -268,6 +279,23 @@ const days = computed(() =>
               {{ t('common.save') }}
             </n-button>
           </n-form>
+          <h4 style="margin: 20px 0 8px">Composer</h4>
+          <p class="hint">{{ t('site.composer_hint') }}</p>
+          <n-space>
+            <n-button v-for="a in ['install', 'update', 'dump-autoload', 'validate', 'outdated']" :key="a" size="small" @click="composer(a)">composer {{ a }}</n-button>
+          </n-space>
+        </n-tab-pane>
+
+        <n-tab-pane v-if="site.type === 'php'" name="wordpress" tab="WordPress" display-directive="if">
+          <SiteWordPress :site="site" @task="(id: string, title: string) => emit('task', id, title)" />
+        </n-tab-pane>
+
+        <n-tab-pane v-if="!site.passthrough" name="advanced" :tab="t('adv.title')" display-directive="if">
+          <SiteAdvanced :site="site" @task="(id: string, title: string) => emit('task', id, title)" />
+        </n-tab-pane>
+
+        <n-tab-pane v-if="!site.passthrough" name="stats" :tab="t('stats.title')" display-directive="if">
+          <SiteStats :domain="site.domain" />
         </n-tab-pane>
 
         <n-tab-pane name="config" :tab="t('site.tab_config')">

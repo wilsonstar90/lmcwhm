@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AiButton from '../components/AiButton.vue'
 import { computed, h, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
@@ -266,6 +267,7 @@ function refresh() {
       <n-space style="margin-bottom: 12px">
         <n-input v-model:value="sshQ" clearable :placeholder="t('logs.filter_user_ip')" style="width: 260px" @keyup.enter="loadSSH" />
         <n-button @click="loadSSH">{{ t('logs.search') }}</n-button>
+        <AiButton :prompt="t('ai.prompt_ssh')" />
       </n-space>
       <n-grid cols="1 l:3" responsive="screen" :x-gap="16" :y-gap="16">
         <n-gi span="1 l:2">
@@ -295,6 +297,7 @@ function refresh() {
         <n-input v-model:value="siteQ" clearable :placeholder="t('logs.filter_kw')" style="width: 220px" @keyup.enter="loadSite" />
         <n-input-number v-model:value="siteLines" :min="50" :max="5000" :step="100" style="width: 120px" />
         <n-button @click="loadSite">{{ t('logs.search') }}</n-button>
+        <AiButton v-if="site" :prompt="t(kind === 'error' ? 'ai.prompt_site_error' : 'ai.prompt_site_access', { domain: site })" />
         <n-button tag="a" :href="site ? `/api/v1/logs/site/download?domain=${encodeURIComponent(site)}&kind=${kind}` : undefined" :disabled="!site">{{ t('logs.download') }}</n-button>
         <n-popconfirm @positive-click="clearSite">
           <template #trigger><n-button type="error" ghost :disabled="!site">{{ t('logs.clear') }}</n-button></template>

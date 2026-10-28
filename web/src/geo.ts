@@ -68,3 +68,21 @@ export function geoLabel(info: GeoInfo | undefined, locale: string, lan: string)
   const parts = [dn?.of(info.country) ?? info.country, pick(info.region, locale), pick(info.city, locale)].filter(Boolean)
   return [...new Set(parts)].join(' · ')
 }
+
+// countryName localises an ISO country code.
+export function countryName(code: string, locale: string): string {
+  let dn = regionNames.get(locale)
+  if (!dn) {
+    try {
+      dn = new Intl.DisplayNames([locale], { type: 'region' })
+      regionNames.set(locale, dn)
+    } catch {
+      return code
+    }
+  }
+  try {
+    return dn.of(code) ?? code
+  } catch {
+    return code
+  }
+}

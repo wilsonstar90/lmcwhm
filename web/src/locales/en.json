@@ -22,7 +22,11 @@
     "copied": "Copied",
     "copy": "Copy",
     "delete": "Delete",
-    "edit": "Edit"
+    "edit": "Edit",
+    "actions": "Actions",
+    "confirm_delete": "Delete this?",
+    "create": "Create",
+    "created": "Created"
   },
   "login": {
     "title": "Sign in",
@@ -46,7 +50,13 @@
     "logs": "Logs",
     "settings": "Settings",
     "logout": "Sign out",
-    "domains": "Domains / SNI"
+    "domains": "Domains / SNI",
+    "backup": "Backups",
+    "ftp": "FTP / SFTP",
+    "processes": "Processes",
+    "uptime": "Uptime",
+    "alerts": "Alerts",
+    "ai": "AI / MCP"
   },
   "home": {
     "system": "System",
@@ -185,7 +195,8 @@
       "invalid_command": "Invalid start command",
       "passthrough_no_ssl": "TLS passthrough sites get their certificate from the backend",
       "not_project": "Not a runtime project",
-      "invalid_waf_rule": "Rule IDs are numbers"
+      "invalid_waf_rule": "Rule IDs are numbers",
+      "invalid_advanced": "Invalid advanced setting (IPs, user agents, domains or redirects)"
     },
     "cf": {
       "no_token": "Set a Cloudflare API token first"
@@ -278,6 +289,67 @@
     "crowdsec": {
       "not_installed": "CrowdSec is not running",
       "invalid_ip": "Invalid IP or CIDR"
+    },
+    "backup": {
+      "not_found": "Backup not found",
+      "invalid_plan": "Invalid backup settings",
+      "invalid_target": "Invalid backup target",
+      "invalid_dest": "Invalid storage location",
+      "restore_unsupported": "This backup cannot be restored here (panel backups: lmcwhm backup restore-panel)",
+      "invalid_archive": "The archive is damaged or of the wrong type",
+      "invalid_name": "Invalid file name (a .gz archive is expected)",
+      "invalid_remote": "Invalid cloud storage settings",
+      "remote_unauthorized": "Cloud storage refused the authorisation: {value}",
+      "auth_expired": "The authorisation code expired",
+      "remote_not_found": "The file no longer exists on the cloud storage"
+    },
+    "ai": {
+      "no_key": "No Anthropic API key configured",
+      "refused": "The model declined this request",
+      "invalid_config": "Invalid AI settings",
+      "failed": "The AI request failed: {value}"
+    },
+    "token": {
+      "not_found": "Token not found",
+      "invalid": "Invalid token settings",
+      "invalid_name": "Enter a name (up to 64 characters)",
+      "invalid_scope": "Invalid scope",
+      "invalid_ip": "Invalid IP or CIDR"
+    },
+    "alert": {
+      "not_found": "Not found",
+      "invalid_rule": "Invalid rule: check the values and choose a channel",
+      "invalid_channel": "Invalid channel settings"
+    },
+    "probe": {
+      "not_found": "Check not found",
+      "invalid": "Invalid check settings"
+    },
+    "proc": {
+      "not_found": "Process not found",
+      "invalid_name": "Invalid name",
+      "exists": "A process with this name exists",
+      "invalid_command": "Invalid command",
+      "invalid_user": "No such user",
+      "invalid_dir": "The directory does not exist",
+      "invalid_env": "Environment entries must be KEY=value"
+    },
+    "ftp": {
+      "not_found": "Account not found",
+      "invalid_username": "Invalid username",
+      "exists": "The username is taken (or is a system account)",
+      "invalid_password": "Password: 8–64 printable characters, no spaces",
+      "invalid_dir": "The directory must be inside the web root",
+      "invalid_kind": "Invalid protocol",
+      "not_enabled": "FTP is not enabled"
+    },
+    "wp": {
+      "not_php": "WordPress needs a PHP website",
+      "not_wordpress": "No WordPress in this site",
+      "root_not_empty": "The site directory is not empty",
+      "invalid_input": "Check the title, admin user, password (8+) and email",
+      "no_mysql": "WordPress needs MySQL or MariaDB",
+      "invalid_action": "Unknown action"
     }
   },
   "task": {
@@ -373,7 +445,8 @@
     "passthrough_hint": "host:port of a TLS backend; HTTP redirects to HTTPS",
     "passthrough_short": "TLS passthrough",
     "tab_project": "Project",
-    "project_logs": "Output (last 200 lines)"
+    "project_logs": "Output (last 200 lines)",
+    "composer_hint": "Runs Composer in the site's PHP container as www-data, in the site root."
   },
   "app": {
     "installed": "Installed",
@@ -689,7 +762,8 @@
     "types": {
       "shell": "Shell script",
       "url": "URL request",
-      "logrotate": "Log rotation"
+      "logrotate": "Log rotation",
+      "backup": "Backup"
     },
     "status": {
       "running": "Running",
@@ -722,7 +796,8 @@
       "logrotate": "Rotate website logs",
       "docker_prune": "Prune Docker images",
       "apt": "System updates"
-    }
+    },
+    "run": "Run"
   },
   "sec": {
     "firewall": "Firewall",
@@ -870,5 +945,421 @@
     "alerts": "Alerts",
     "events": "Events",
     "decision": "Decision"
+  },
+  "bk": {
+    "tab_list": "Backups",
+    "tab_plans": "Schedules",
+    "tab_remotes": "Cloud storage",
+    "run_now": "Back up now",
+    "import": "Import",
+    "all_kinds": "All kinds",
+    "local_usage": "Local storage: {dir} · {size}",
+    "kind": "Type",
+    "kinds": {
+      "site": "Website",
+      "database": "Database",
+      "panel": "Panel",
+      "volume": "Docker volume",
+      "path": "Directory"
+    },
+    "target": "Target",
+    "all": "All",
+    "path": "Directory path",
+    "file": "File",
+    "size": "Size",
+    "dest": "Stored at",
+    "local": "Local",
+    "download": "Download",
+    "restore": "Restore",
+    "delete_confirm": "Delete this backup (also on the cloud storage)?",
+    "new_plan": "New schedule",
+    "what": "What",
+    "keep": "Keep",
+    "keep_hint": "Newest copies kept per target and location; 0 keeps all.",
+    "exclude": "Exclude",
+    "exclude_hint": "File or folder name patterns, e.g. node_modules, *.log, cache",
+    "plan_name_hint": "Optional; defaults to the type and target",
+    "presets": {
+      "daily": "Daily 03:00",
+      "twice": "Twice a day (03:00, 15:00)",
+      "hourly6": "Every 6 hours",
+      "weekly": "Weekly, Sunday 03:00",
+      "custom": "Custom (cron expression)"
+    },
+    "start": "Start",
+    "started": "Backup started",
+    "cron_hint": "Backup plan as JSON; easier to edit on the Backups page.",
+    "restore_into": "Restore into",
+    "restore_original": "The original database",
+    "restore_warn": {
+      "site": "The files of {target} will be replaced by this backup. The current files are swapped out only after the archive unpacked completely.",
+      "database": "The database will be overwritten with the dump. Writes made since the backup are lost.",
+      "volume": "Everything in volume {target} is deleted and replaced. Stop the containers that use it first.",
+      "path": "Directory {target} will be replaced by this backup."
+    },
+    "import_hint": "Upload the archive with the file manager first (e.g. from another server), then register it here so it can be restored.",
+    "file_path": "File on the server",
+    "remote_intro": "Backups can be uploaded to Google Drive or OneDrive. You register your own OAuth app, then approve the panel with a one-time code; no callback URL to the panel is needed.",
+    "howto": {
+      "gdrive": "Google Cloud Console → APIs and Services: enable the Google Drive API, then Credentials → Create OAuth client ID → type “TVs and Limited Input devices”. Paste its client ID and secret here. The panel only sees files it created (drive.file scope).",
+      "onedrive": "Azure portal → App registrations → New registration (personal and/or work accounts). Under Authentication enable “Allow public client flows”. Paste the Application (client) ID here. Files go to the app folder Apps/<app name>."
+    },
+    "remote_name": "Name",
+    "tenant": "Tenant",
+    "connect": "Connect",
+    "provider": "Provider",
+    "account": "Account",
+    "connected": "Connected",
+    "not_connected": "Not authorised",
+    "reauthorize": "Re-authorise",
+    "remote_delete_confirm": "Remove this storage? Its backups stay in the cloud but disappear from the list.",
+    "authorize_title": "Authorise the panel",
+    "authorize_step1": "1. Open this page and sign in:",
+    "authorize_step2": "2. Enter this code:",
+    "authorize_wait": "This window closes by itself once you approve.",
+    "authorized": "Connected: {account}",
+    "auth_expired": "The code expired or was declined; try again."
+  },
+  "alert": {
+    "tab_rules": "Rules",
+    "tab_channels": "Channels",
+    "tab_history": "History",
+    "need_channel": "Add a notification channel first.",
+    "new_rule": "New rule",
+    "name": "Name",
+    "kind": "Type",
+    "enabled": "Enabled",
+    "test": "Send test",
+    "test_sent": "Test message sent",
+    "condition": "Condition",
+    "channels": "Notify via",
+    "firing": "{n} firing",
+    "ok": "OK",
+    "severity": "Level",
+    "message": "Message",
+    "delivery": "Delivery",
+    "smtp_host": "SMTP server",
+    "port": "Port",
+    "security": "Encryption",
+    "username": "Username",
+    "password": "Password",
+    "from": "From",
+    "to": "Recipients",
+    "tg_hint": "Create a bot with BotFather; send it a message, then use your chat ID.",
+    "webhook_url": "Webhook URL",
+    "webhook_hint": "Receives a JSON POST with title, body, severity, kind, host and time.",
+    "sign_secret": "Signing secret (optional)",
+    "cooldown": "Repeat every (minutes)",
+    "cooldown_hint": "While the problem lasts, notify again after this long. A notice is also sent when it is resolved.",
+    "channel_kinds": {
+      "email": "Email",
+      "telegram": "Telegram",
+      "webhook": "Webhook",
+      "wecom": "WeCom",
+      "dingtalk": "DingTalk",
+      "slack": "Slack",
+      "discord": "Discord"
+    },
+    "rule_kinds": {
+      "cpu": "High CPU",
+      "mem": "High memory",
+      "load": "High load",
+      "disk": "Disk almost full",
+      "service_down": "Service down",
+      "ssl_expiry": "SSL expiring",
+      "probe_down": "Uptime check failed",
+      "cron_failed": "Cron / backup failed",
+      "login_failed": "Failed panel logins",
+      "panel_login": "Panel login",
+      "ssh_login": "SSH login"
+    },
+    "rule_desc": {
+      "cpu": "CPU ≥ {threshold}% averaged over {minutes} min",
+      "mem": "Memory ≥ {threshold}% averaged over {minutes} min",
+      "load": "1-minute load ≥ {threshold} averaged over {minutes} min",
+      "disk": "Root disk ≥ {threshold}% used",
+      "service_down": "A panel container (web stack, database, project) is not running",
+      "ssl_expiry": "A site certificate expires within {days} days",
+      "probe_down": "An uptime check goes down (and back up)",
+      "cron_failed": "A cron or backup job fails or times out",
+      "login_failed": "{count} or more failed panel logins within {minutes} min",
+      "panel_login": "Every successful panel login",
+      "ssh_login": "Every accepted SSH login"
+    },
+    "params": {
+      "threshold": "Threshold",
+      "minutes": "Minutes",
+      "days": "Days",
+      "count": "Count"
+    },
+    "sev": {
+      "info": "Info",
+      "warning": "Warning",
+      "critical": "Critical",
+      "resolved": "Resolved"
+    }
+  },
+  "probe": {
+    "new": "New check",
+    "alert_hint": "Add an “Uptime check failed” alert rule to be notified.",
+    "name": "Name",
+    "type": "Type",
+    "target": "Target",
+    "target_hint": {
+      "http": "Full URL, e.g. https://example.com/health",
+      "tcp": "host:port, e.g. db.example.com:5432",
+      "ping": "Hostname or IP"
+    },
+    "keyword": "Must contain",
+    "keyword_hint": "Optional text that must appear in the response",
+    "expect": "Expected status",
+    "expect_hint": "0 = any 2xx / 3xx",
+    "interval": "Every",
+    "timeout": "Timeout",
+    "fails": "Failures before down",
+    "latency": "Response time",
+    "last_error": "Last error",
+    "check": "Check now",
+    "history": "History",
+    "days": "{n} days",
+    "paused": "Paused",
+    "state": {
+      "up": "Up",
+      "down": "Down",
+      "unknown": "Pending"
+    },
+    "availability": "Availability",
+    "failures": "Failures",
+    "no_failures": "No failures in this period."
+  },
+  "proc": {
+    "new": "New process",
+    "intro": "Runs as a systemd service: restarted when it exits, started at boot; output goes to the journal.",
+    "name": "Name",
+    "name_hint": "Lowercase letters, digits, - and _; the service is lmcwhm-proc-<name>.",
+    "command": "Command",
+    "command_hint": "A bash script; keep the main program in the foreground (use exec).",
+    "dir": "Working directory",
+    "user": "Run as",
+    "env": "Environment",
+    "env_hint": "KEY=value, one per tag",
+    "logs": "Logs",
+    "restarts": "Restarts",
+    "since": "Running since",
+    "save_start": "Save and start"
+  },
+  "ftp": {
+    "new": "New account",
+    "kind": "Protocol",
+    "recommended": "recommended",
+    "username": "Username",
+    "username_hint": "3–32 lowercase letters, digits, - or _; for SFTP this becomes a system account.",
+    "password": "Password",
+    "change_password": "Change password",
+    "dir": "Directory",
+    "connect": "Connect with",
+    "created": "Account created",
+    "host": "Host",
+    "port_21": "port 21, passive mode",
+    "port_ssh": "your SSH port",
+    "ftp_hint": "Ports {ports} · passive address {ip}",
+    "sftp_hint": "SFTP uses sshd: users are chrooted to their directory and cannot log in to a shell.",
+    "ftp_off": "FTP is off: turn it on above, or the account is only saved."
+  },
+  "ai": {
+    "analyze": "AI analysis",
+    "tab_chat": "Assistant",
+    "tab_settings": "Settings",
+    "no_key": "Add an Anthropic API key to use the assistant.",
+    "intro": "Ask about this server. The assistant reads logs, metrics and settings through read-only tools and tells you what to do; it does not change anything.",
+    "placeholder": "e.g. Why is example.com returning 502? (Enter to send, Shift+Enter for a new line)",
+    "send": "Send",
+    "clear": "New chat",
+    "thinking": "Investigating…",
+    "steps": "Looked at {n} sources",
+    "usage": "{model} · {input} input / {output} output tokens",
+    "quick": {
+      "security": {
+        "label": "Security triage",
+        "prompt": "Do a security triage of this server: firewall, SSH and panel logins, WAF and CrowdSec events, suspicious requests. Rank the risks and tell me what to fix."
+      },
+      "load": {
+        "label": "Why is it slow?",
+        "prompt": "Investigate CPU, memory, disk and network usage over the last 24 hours and tell me what is causing load."
+      },
+      "backups": {
+        "label": "Check backups",
+        "prompt": "Review backup coverage: which sites and databases have no recent or off-site backup, and which backup jobs fail?"
+      },
+      "errors": {
+        "label": "Find website errors",
+        "prompt": "Check every website for 5xx errors, error log entries and stopped containers, and explain the causes."
+      }
+    },
+    "prompt_ssh": "Analyse the recent SSH logins: brute-force sources, unusual successful logins, and whether I should block anything.",
+    "prompt_site_access": "Analyse the access log of {domain}: traffic, errors, top clients and suspicious requests.",
+    "prompt_site_error": "Read the error log of {domain} and explain each problem and its fix.",
+    "prompt_site_traffic": "Summarise the traffic of {domain} and point out anything unusual (bots, attacks, error spikes).",
+    "prompt_waf": "Review the recent WAF events: which are real attacks and which look like false positives? Propose rule exclusions per site.",
+    "connect_title": "Connect an AI client (MCP)",
+    "connect_ssh": "Over SSH (no token, uses your SSH login; recommended):",
+    "connect_http": "Over HTTPS with an API token (the panel port must be reachable; a self-signed certificate must be trusted by the client):",
+    "new_token": "New API token",
+    "download_skill": "Download Claude Code skill",
+    "tokens": "API tokens",
+    "tools": "Tools ({n})",
+    "prompts": "Skills (MCP prompts)",
+    "tool": "Tool",
+    "description": "Description",
+    "scope": "Scope",
+    "scopes": {
+      "read": "Read",
+      "operate": "Operate",
+      "admin": "Admin"
+    },
+    "scope_hint": {
+      "read": "Read logs, metrics and settings only.",
+      "operate": "Also restart containers, block IPs, run cron jobs and backups, issue certificates.",
+      "admin": "Also run any shell command as root. Give it only to clients you fully trust."
+    },
+    "ips": "Allowed IPs",
+    "ips_hint": "Empty = any IP (the panel's own IP restriction still applies)",
+    "any_ip": "Any",
+    "ttl": "Valid for (days, 0 = forever)",
+    "expires": "Expires",
+    "never": "Never",
+    "last_used": "Last used",
+    "revoke": "Revoke",
+    "revoke_confirm": "Revoke this token? Clients using it stop working.",
+    "token_created": "Token created",
+    "token_once": "Copy it now: it is shown only once.",
+    "api_key": "Anthropic API key",
+    "api_key_hint": "From console.anthropic.com; stored encrypted. Usage is billed to your account.",
+    "model": "Model",
+    "model_hint": "Default {model}; a Sonnet or Haiku model costs less.",
+    "effort": "Effort",
+    "effort_hint": "Higher is more thorough but slower and costs more.",
+    "base_url": "API base URL (optional)",
+    "base_url_hint": "Only for a gateway in front of the Anthropic API."
+  },
+  "dash": {
+    "running": "running",
+    "stopped": "{n} stopped",
+    "failed": "{n} failed",
+    "down": "{n} down",
+    "never": "never",
+    "today": "Traffic today",
+    "blocked": "Blocked IPs",
+    "alerts": "Alerts",
+    "last24h": "last 24 hours",
+    "security": "Security check",
+    "no_risks": "No risks found.",
+    "fix": "Fix",
+    "level": {
+      "critical": "High",
+      "warning": "Medium",
+      "info": "Low"
+    },
+    "risks": {
+      "no_entry": "No security entry: the login page is reachable by anyone who finds the port.",
+      "default_port": "The panel uses the default port 8888.",
+      "panel_http": "Panel SSL is off: logins travel unencrypted.",
+      "panel_open": "No authorised IPs or BasicAuth in front of the panel.",
+      "no_2fa": "Two-factor authentication is off for the admin.",
+      "firewall_off": "The firewall is off.",
+      "waf_off": "The WAF is off.",
+      "crowdsec_off": "CrowdSec is not installed.",
+      "no_recent_backup": "No backup in the last 7 days.",
+      "no_alert_channel": "No alert channel: you will not be notified of problems.",
+      "ssl_expiring": "{n} certificate(s) expire within 14 days.",
+      "probes_down": "{n} uptime check(s) are down.",
+      "cron_failed": "{n} cron job(s) failed on their last run.",
+      "procs_down": "{n} guarded process(es) are not running."
+    }
+  },
+  "adv": {
+    "title": "Advanced",
+    "access": "Access",
+    "allow_ips": "Allow only",
+    "allow_ips_hint": "When set, every other IP gets 403. IPs or CIDRs.",
+    "deny_ips": "Block IPs",
+    "deny_ua": "Block user agents",
+    "deny_ua_hint": "Case-insensitive parts of the User-Agent, e.g. MJ12bot, python-requests",
+    "hotlink": "Hotlink protection",
+    "hotlink_hint": "Domains allowed to embed images and media; empty = off. Your own domains are always allowed.",
+    "limits": "Limits",
+    "rate": "Requests per IP",
+    "rate_hint": "0 = no limit; over the limit returns 429.",
+    "burst": "burst",
+    "conn": "Connections per IP",
+    "max_body": "Upload limit",
+    "behaviour": "Behaviour",
+    "autoindex": "Directory listing",
+    "error_pages": "Custom error pages (/404.html, /50x.html in the site root)",
+    "open_basedir": "Prevent cross-site access (open_basedir)",
+    "block_xmlrpc": "Block xmlrpc.php (WordPress)",
+    "redirects": "Redirects"
+  },
+  "stats": {
+    "title": "Traffic",
+    "today": "Today",
+    "days": "{n} days",
+    "traffic": "Bandwidth",
+    "errors": "4xx / 5xx",
+    "errors_5xx": "5xx errors",
+    "spiders_excluded": "{n} crawler requests are counted in PV but not in UV or the top lists.",
+    "per_hour": "Per hour",
+    "per_day": "Per day",
+    "top_urls": "Pages",
+    "top_ips": "Visitors",
+    "countries": "Countries",
+    "referrers": "Referrers",
+    "spiders": "Crawlers",
+    "status": "Status codes",
+    "url": "Path",
+    "referrer": "Site",
+    "spider": "Crawler",
+    "country": "Country",
+    "hits": "Requests",
+    "unknown": "Unknown"
+  },
+  "wp": {
+    "install_intro": "Install WordPress into this site: a MySQL / MariaDB database is created, wp-config.php is written and the admin user is set up with WP-CLI.",
+    "need_mysql": "Install MySQL or MariaDB from the App Store first.",
+    "site_title": "Site title",
+    "admin_user": "Admin user",
+    "admin_pass": "Admin password",
+    "admin_email": "Admin email",
+    "language": "Language",
+    "db_engine": "Database engine",
+    "install": "Install WordPress",
+    "version": "Version",
+    "admins": "Administrators",
+    "updates": "Plugin / theme updates",
+    "actions": {
+      "core_update": "Update WordPress",
+      "plugins_update": "Update all plugins",
+      "themes_update": "Update all themes",
+      "verify": "Verify core files",
+      "cache_flush": "Flush caches",
+      "plugin_activate": "Activate plugin",
+      "plugin_deactivate": "Deactivate plugin",
+      "plugin_update": "Update plugin",
+      "plugin_delete": "Delete plugin",
+      "theme_activate": "Activate theme",
+      "theme_update": "Update theme",
+      "file_edit": "Dashboard file editor",
+      "debug": "Debug mode",
+      "admin_password": "Reset admin password"
+    },
+    "no_file_edit": "Disable the dashboard plugin / theme editor (DISALLOW_FILE_EDIT)",
+    "xmlrpc_hint": "xmlrpc.php blocked (change it in Advanced)",
+    "reset_password": "Reset password of",
+    "new_password": "New password (8+)",
+    "plugin": "Plugin",
+    "theme": "Theme",
+    "update": "Update",
+    "activate": "Activate",
+    "deactivate": "Deactivate"
   }
 }

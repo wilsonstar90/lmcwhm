@@ -9,7 +9,7 @@ import { get, post, put, ApiError } from '../api/client'
 import { datetime } from '../format'
 
 interface Run { id: number; job_id: number; started_at: number; duration_ms: number; status: string; exit_code: number; output?: string; manual: boolean }
-interface Job { id: number; name: string; type: 'shell' | 'url' | 'logrotate'; schedule: string; command: string; enabled: boolean; timeout: number; next: number; running: boolean; last?: Run }
+interface Job { id: number; name: string; type: 'shell' | 'url' | 'logrotate' | 'backup'; schedule: string; command: string; enabled: boolean; timeout: number; next: number; running: boolean; last?: Run }
 
 const { t, locale } = useI18n()
 const msg = useMessage()
@@ -185,7 +185,7 @@ const runCols: DataTableColumns<Run> = [
 
 const modeOptions = computed(() => (['seconds', 'minutes', 'hourly', 'daily', 'weekly', 'monthly', 'custom'] as Mode[]).map((m) => ({ label: t(`cron.modes.${m}`), value: m })))
 const dowOptions = computed(() => [0, 1, 2, 3, 4, 5, 6].map((d) => ({ label: new Intl.DateTimeFormat(locale.value, { weekday: 'long' }).format(new Date(2026, 0, 4 + d)), value: d })))
-const typeOptions = computed(() => (['shell', 'url', 'logrotate'] as const).map((v) => ({ label: t(`cron.types.${v}`), value: v })))
+const typeOptions = computed(() => (['shell', 'url', 'logrotate', 'backup'] as const).map((v) => ({ label: t(`cron.types.${v}`), value: v })))
 </script>
 
 <template>
@@ -231,6 +231,9 @@ const typeOptions = computed(() => (['shell', 'url', 'logrotate'] as const).map(
           <n-input v-model:value="f.command" type="textarea" :autosize="{ minRows: 4, maxRows: 14 }" style="font-family: monospace" placeholder="#!/bin/bash" />
         </n-form-item>
         <n-form-item v-if="f.type === 'url'" label="URL"><n-input v-model:value="f.command" placeholder="https://example.com/cron.php" /></n-form-item>
+        <n-form-item v-if="f.type === 'backup'" :label="t('cron.types.backup')" :feedback="t('bk.cron_hint')">
+          <n-input v-model:value="f.command" type="textarea" :autosize="{ minRows: 3, maxRows: 8 }" style="font-family: monospace" placeholder='{"kind":"site","target":"*","dests":["local"],"keep":7}' />
+        </n-form-item>
         <n-form-item v-if="f.type === 'logrotate'" :label="t('cron.keep')" :feedback="t('cron.logrotate_hint')">
           <n-input-number v-model:value="f.keep" :min="1" :max="365" />
         </n-form-item>

@@ -22,7 +22,11 @@
     "copied": "已复制",
     "copy": "复制",
     "delete": "删除",
-    "edit": "编辑"
+    "edit": "编辑",
+    "actions": "操作",
+    "confirm_delete": "确定删除？",
+    "create": "创建",
+    "created": "创建时间"
   },
   "login": {
     "title": "登录面板",
@@ -46,7 +50,13 @@
     "logs": "日志",
     "settings": "面板设置",
     "logout": "退出",
-    "domains": "域名 / SNI"
+    "domains": "域名 / SNI",
+    "backup": "备份",
+    "ftp": "FTP / SFTP",
+    "processes": "进程守护",
+    "uptime": "网站拨测",
+    "alerts": "告警中心",
+    "ai": "AI 助手"
   },
   "home": {
     "system": "系统信息",
@@ -185,7 +195,8 @@
       "invalid_command": "启动命令无效",
       "passthrough_no_ssl": "TLS 直通网站的证书由后端提供",
       "not_project": "不是运行环境项目",
-      "invalid_waf_rule": "规则 ID 必须是数字"
+      "invalid_waf_rule": "规则 ID 必须是数字",
+      "invalid_advanced": "高级设置无效（IP、User-Agent、域名或重定向）"
     },
     "cf": {
       "no_token": "请先设置 Cloudflare API Token"
@@ -278,6 +289,67 @@
     "crowdsec": {
       "not_installed": "CrowdSec 未运行",
       "invalid_ip": "IP 或 CIDR 无效"
+    },
+    "backup": {
+      "not_found": "找不到备份",
+      "invalid_plan": "备份设置无效",
+      "invalid_target": "备份对象无效",
+      "invalid_dest": "存储位置无效",
+      "restore_unsupported": "此类备份无法在此还原（面板备份请用 lmcwhm backup restore-panel）",
+      "invalid_archive": "备份文件损坏或类型不符",
+      "invalid_name": "文件名无效（需为 .gz 压缩文件）",
+      "invalid_remote": "云存储设置无效",
+      "remote_unauthorized": "云存储拒绝授权：{value}",
+      "auth_expired": "授权代码已过期",
+      "remote_not_found": "云端已无此文件"
+    },
+    "ai": {
+      "no_key": "未设置 Anthropic API key",
+      "refused": "模型拒绝了此请求",
+      "invalid_config": "AI 设置无效",
+      "failed": "AI 请求失败：{value}"
+    },
+    "token": {
+      "not_found": "找不到 Token",
+      "invalid": "Token 设置无效",
+      "invalid_name": "请输入名称（最多 64 字）",
+      "invalid_scope": "权限无效",
+      "invalid_ip": "IP 或 CIDR 无效"
+    },
+    "alert": {
+      "not_found": "找不到",
+      "invalid_rule": "规则无效：请检查数值并选择通知渠道",
+      "invalid_channel": "通知渠道设置无效"
+    },
+    "probe": {
+      "not_found": "找不到拨测",
+      "invalid": "拨测设置无效"
+    },
+    "proc": {
+      "not_found": "找不到进程",
+      "invalid_name": "名称无效",
+      "exists": "已有同名进程",
+      "invalid_command": "命令无效",
+      "invalid_user": "没有此用户",
+      "invalid_dir": "目录不存在",
+      "invalid_env": "环境变量须为 KEY=value"
+    },
+    "ftp": {
+      "not_found": "找不到账户",
+      "invalid_username": "用户名无效",
+      "exists": "用户名已被占用（或为系统账户）",
+      "invalid_password": "密码：8–64 个可见字符，不能有空格",
+      "invalid_dir": "目录必须在网站根目录内",
+      "invalid_kind": "协议无效",
+      "not_enabled": "FTP 未开启"
+    },
+    "wp": {
+      "not_php": "WordPress 需要 PHP 网站",
+      "not_wordpress": "此网站没有 WordPress",
+      "root_not_empty": "网站目录不为空",
+      "invalid_input": "请检查标题、管理员、密码（至少 8 位）和邮箱",
+      "no_mysql": "WordPress 需要 MySQL 或 MariaDB",
+      "invalid_action": "未知操作"
     }
   },
   "task": {
@@ -373,7 +445,8 @@
     "passthrough_hint": "TLS 后端的 主机:端口；HTTP 会跳转到 HTTPS",
     "passthrough_short": "TLS 直通",
     "tab_project": "项目",
-    "project_logs": "输出（最后 200 行）"
+    "project_logs": "输出（最后 200 行）",
+    "composer_hint": "以 www-data 身份在网站目录、网站的 PHP 容器中执行 Composer。"
   },
   "app": {
     "installed": "已安装",
@@ -689,7 +762,8 @@
     "types": {
       "shell": "Shell 脚本",
       "url": "访问 URL",
-      "logrotate": "日志切割"
+      "logrotate": "日志切割",
+      "backup": "备份"
     },
     "status": {
       "running": "执行中",
@@ -722,7 +796,8 @@
       "logrotate": "切割网站日志",
       "docker_prune": "清理 Docker 镜像",
       "apt": "系统更新"
-    }
+    },
+    "run": "执行"
   },
   "sec": {
     "firewall": "防火墙",
@@ -870,5 +945,421 @@
     "alerts": "告警",
     "events": "事件数",
     "decision": "决策"
+  },
+  "bk": {
+    "tab_list": "备份文件",
+    "tab_plans": "备份计划",
+    "tab_remotes": "云存储",
+    "run_now": "立即备份",
+    "import": "导入",
+    "all_kinds": "全部类型",
+    "local_usage": "本地存储：{dir} · {size}",
+    "kind": "类型",
+    "kinds": {
+      "site": "网站",
+      "database": "数据库",
+      "panel": "面板配置",
+      "volume": "Docker 卷",
+      "path": "目录"
+    },
+    "target": "对象",
+    "all": "全部",
+    "path": "目录路径",
+    "file": "文件",
+    "size": "大小",
+    "dest": "存储位置",
+    "local": "本地",
+    "download": "下载",
+    "restore": "还原",
+    "delete_confirm": "删除这份备份（云端的也会删除）？",
+    "new_plan": "新建备份计划",
+    "what": "备份内容",
+    "keep": "保留份数",
+    "keep_hint": "每个对象和位置保留最新几份；0 = 全部保留。",
+    "exclude": "排除",
+    "exclude_hint": "文件或目录名称模式，例如 node_modules、*.log、cache",
+    "plan_name_hint": "可留空，默认以类型和对象命名",
+    "presets": {
+      "daily": "每天 03:00",
+      "twice": "每天两次（03:00、15:00）",
+      "hourly6": "每 6 小时",
+      "weekly": "每周日 03:00",
+      "custom": "自定义（cron 表达式）"
+    },
+    "start": "开始",
+    "started": "备份已开始",
+    "cron_hint": "JSON 格式的备份计划；在“备份”页面修改更方便。",
+    "restore_into": "还原到",
+    "restore_original": "原数据库",
+    "restore_warn": {
+      "site": "{target} 的文件将被此备份替换。完整解压后才会替换现有文件。",
+      "database": "数据库将被备份内容覆盖，备份之后写入的数据会丢失。",
+      "volume": "卷 {target} 中所有内容将被删除后还原。请先停止使用它的容器。",
+      "path": "目录 {target} 将被此备份替换。"
+    },
+    "import_hint": "先用文件管理上传备份文件（例如从另一台服务器迁移），再在此登记，之后即可还原。",
+    "file_path": "服务器上的文件路径",
+    "remote_intro": "备份可上传到 Google Drive 或 OneDrive。你需自行注册 OAuth 应用，再用一次性代码授权面板，无需设置回调地址。",
+    "howto": {
+      "gdrive": "Google Cloud Console → API 和服务：启用 Google Drive API，再到“凭据”→“创建 OAuth 客户端 ID”→ 类型选“电视和受限输入设备”。将 Client ID 和密钥粘贴到这里。面板只能看到自己创建的文件（drive.file 权限）。",
+      "onedrive": "Azure 门户 →“应用注册”→“新注册”（个人和/或工作账户）。在“身份验证”中启用“允许公共客户端流”。将“应用程序(客户端) ID”粘贴到这里。文件会放在 Apps/<应用名称> 文件夹。"
+    },
+    "remote_name": "名称",
+    "tenant": "租户 (Tenant)",
+    "connect": "连接",
+    "provider": "服务商",
+    "account": "账户",
+    "connected": "已连接",
+    "not_connected": "未授权",
+    "reauthorize": "重新授权",
+    "remote_delete_confirm": "移除这个云存储？云端的备份不会删除，但会从列表消失。",
+    "authorize_title": "授权面板",
+    "authorize_step1": "1. 打开此网页并登录：",
+    "authorize_step2": "2. 输入此代码：",
+    "authorize_wait": "授权完成后此窗口会自动关闭。",
+    "authorized": "已连接：{account}",
+    "auth_expired": "代码已过期或被拒绝，请重试。"
+  },
+  "alert": {
+    "tab_rules": "告警规则",
+    "tab_channels": "通知渠道",
+    "tab_history": "告警记录",
+    "need_channel": "请先添加通知渠道。",
+    "new_rule": "新建规则",
+    "name": "名称",
+    "kind": "类型",
+    "enabled": "启用",
+    "test": "发送测试",
+    "test_sent": "测试消息已发送",
+    "condition": "条件",
+    "channels": "通知渠道",
+    "firing": "{n} 个告警中",
+    "ok": "正常",
+    "severity": "级别",
+    "message": "内容",
+    "delivery": "发送结果",
+    "smtp_host": "SMTP 服务器",
+    "port": "端口",
+    "security": "加密",
+    "username": "用户名",
+    "password": "密码",
+    "from": "发件人",
+    "to": "收件人",
+    "tg_hint": "用 BotFather 创建机器人，先给它发一条消息，再填入你的 chat ID。",
+    "webhook_url": "Webhook 地址",
+    "webhook_hint": "会收到 JSON POST：title、body、severity、kind、host、time。",
+    "sign_secret": "加签密钥（可选）",
+    "cooldown": "重复通知间隔（分钟）",
+    "cooldown_hint": "问题未解决期间，每隔这么久再通知一次；恢复正常时也会通知。",
+    "channel_kinds": {
+      "email": "邮件",
+      "telegram": "Telegram",
+      "webhook": "Webhook",
+      "wecom": "企业微信",
+      "dingtalk": "钉钉",
+      "slack": "Slack",
+      "discord": "Discord"
+    },
+    "rule_kinds": {
+      "cpu": "CPU 过高",
+      "mem": "内存过高",
+      "load": "负载过高",
+      "disk": "磁盘将满",
+      "service_down": "服务停止",
+      "ssl_expiry": "SSL 即将到期",
+      "probe_down": "拨测失败",
+      "cron_failed": "计划任务/备份失败",
+      "login_failed": "面板登录失败",
+      "panel_login": "面板登录通知",
+      "ssh_login": "SSH 登录通知"
+    },
+    "rule_desc": {
+      "cpu": "CPU {minutes} 分钟平均 ≥ {threshold}%",
+      "mem": "内存 {minutes} 分钟平均 ≥ {threshold}%",
+      "load": "1 分钟负载在 {minutes} 分钟内平均 ≥ {threshold}",
+      "disk": "根目录磁盘使用 ≥ {threshold}%",
+      "service_down": "面板管理的容器（网站服务、数据库、项目）未在运行",
+      "ssl_expiry": "网站证书 {days} 天内到期",
+      "probe_down": "拨测变为故障（及恢复）",
+      "cron_failed": "计划任务或备份失败/超时",
+      "login_failed": "{minutes} 分钟内面板登录失败 ≥ {count} 次",
+      "panel_login": "每次面板成功登录",
+      "ssh_login": "每次 SSH 成功登录"
+    },
+    "params": {
+      "threshold": "阈值",
+      "minutes": "分钟",
+      "days": "天数",
+      "count": "次数"
+    },
+    "sev": {
+      "info": "信息",
+      "warning": "警告",
+      "critical": "严重",
+      "resolved": "已恢复"
+    }
+  },
+  "probe": {
+    "new": "新建拨测",
+    "alert_hint": "在告警中心添加“拨测失败”规则即可收到通知。",
+    "name": "名称",
+    "type": "类型",
+    "target": "目标",
+    "target_hint": {
+      "http": "完整地址，例如 https://example.com/health",
+      "tcp": "主机:端口，例如 db.example.com:5432",
+      "ping": "主机名或 IP"
+    },
+    "keyword": "页面必须包含",
+    "keyword_hint": "可选，响应中必须出现的文字",
+    "expect": "预期状态码",
+    "expect_hint": "0 = 任何 2xx/3xx",
+    "interval": "间隔",
+    "timeout": "超时",
+    "fails": "连续失败几次才算故障",
+    "latency": "响应时间",
+    "last_error": "最近错误",
+    "check": "立即检查",
+    "history": "历史",
+    "days": "{n} 天",
+    "paused": "已暂停",
+    "state": {
+      "up": "正常",
+      "down": "故障",
+      "unknown": "等待中"
+    },
+    "availability": "可用性",
+    "failures": "失败记录",
+    "no_failures": "这段时间没有失败。"
+  },
+  "proc": {
+    "new": "新建守护进程",
+    "intro": "以 systemd 服务运行：退出时自动重启、开机自启，输出记录在 journal。",
+    "name": "名称",
+    "name_hint": "小写字母、数字、- 和 _；服务名为 lmcwhm-proc-<名称>。",
+    "command": "启动命令",
+    "command_hint": "bash 脚本；主程序需在前台运行（建议用 exec）。",
+    "dir": "运行目录",
+    "user": "运行用户",
+    "env": "环境变量",
+    "env_hint": "KEY=value，每个标签一个",
+    "logs": "日志",
+    "restarts": "重启次数",
+    "since": "运行自",
+    "save_start": "保存并启动"
+  },
+  "ftp": {
+    "new": "新建账户",
+    "kind": "协议",
+    "recommended": "推荐",
+    "username": "用户名",
+    "username_hint": "3–32 位小写字母、数字、- 或 _；SFTP 会创建同名系统账户。",
+    "password": "密码",
+    "change_password": "修改密码",
+    "dir": "目录",
+    "connect": "连接方式",
+    "created": "账户已创建",
+    "host": "主机",
+    "port_21": "端口 21，被动模式",
+    "port_ssh": "你的 SSH 端口",
+    "ftp_hint": "端口 {ports} · 被动地址 {ip}",
+    "sftp_hint": "SFTP 通过 sshd：用户被限制在自己的目录，无法登录 shell。",
+    "ftp_off": "FTP 未开启：请在上方开启，否则账户只会保存。"
+  },
+  "ai": {
+    "analyze": "AI 分析",
+    "tab_chat": "AI 助手",
+    "tab_settings": "设置",
+    "no_key": "添加 Anthropic API key 才能使用 AI 助手。",
+    "intro": "询问任何关于这台服务器的问题。AI 会用只读工具查看日志、监控和配置，再告诉你该怎么做；它不会修改任何东西。",
+    "placeholder": "例如：为什么 example.com 返回 502？（Enter 发送，Shift+Enter 换行）",
+    "send": "发送",
+    "clear": "新对话",
+    "thinking": "调查中…",
+    "steps": "查阅了 {n} 项资料",
+    "usage": "{model} · 输入 {input} / 输出 {output} tokens",
+    "quick": {
+      "security": {
+        "label": "安全排查",
+        "prompt": "帮我做一次安全排查：防火墙、SSH 和面板登录、WAF 和 CrowdSec 事件、可疑请求。列出风险等级和修复方法。"
+      },
+      "load": {
+        "label": "为什么这么慢？",
+        "prompt": "查看过去 24 小时的 CPU、内存、磁盘和网络用量，告诉我负载是什么造成的。"
+      },
+      "backups": {
+        "label": "检查备份",
+        "prompt": "检查备份覆盖：哪些网站和数据库没有近期或异地备份，哪些备份任务失败？"
+      },
+      "errors": {
+        "label": "找网站错误",
+        "prompt": "检查所有网站的 5xx 错误、错误日志和已停止的容器，并解释原因。"
+      }
+    },
+    "prompt_ssh": "分析最近的 SSH 登录：暴力破解来源、异常的成功登录，以及是否需要封禁。",
+    "prompt_site_access": "分析 {domain} 的访问日志：流量、错误、主要访客和可疑请求。",
+    "prompt_site_error": "查看 {domain} 的错误日志，逐一说明问题和修复方法。",
+    "prompt_site_traffic": "总结 {domain} 的流量，指出异常情况（爬虫、攻击、错误激增）。",
+    "prompt_waf": "检查最近的 WAF 事件：哪些是真攻击、哪些像误报？建议每个网站要排除哪些规则。",
+    "connect_title": "连接 AI 客户端（MCP）",
+    "connect_ssh": "通过 SSH（无需 token，使用你的 SSH 登录；推荐）：",
+    "connect_http": "通过 HTTPS 和 API Token（面板端口需可访问；自签证书需被客户端信任）：",
+    "new_token": "新建 API Token",
+    "download_skill": "下载 Claude Code Skill",
+    "tokens": "API Token",
+    "tools": "工具（{n}）",
+    "prompts": "Skills（MCP prompts）",
+    "tool": "工具",
+    "description": "说明",
+    "scope": "权限",
+    "scopes": {
+      "read": "只读",
+      "operate": "操作",
+      "admin": "管理员"
+    },
+    "scope_hint": {
+      "read": "只能读取日志、监控和配置。",
+      "operate": "另可重启容器、封禁 IP、执行计划任务和备份、签发证书。",
+      "admin": "另可用 root 执行任意 shell 命令。只给完全信任的客户端。"
+    },
+    "ips": "允许 IP",
+    "ips_hint": "留空 = 任何 IP（面板本身的授权 IP 仍生效）",
+    "any_ip": "任何",
+    "ttl": "有效天数（0 = 永久）",
+    "expires": "到期",
+    "never": "永不",
+    "last_used": "最后使用",
+    "revoke": "撤销",
+    "revoke_confirm": "撤销这个 token？使用它的客户端将立即失效。",
+    "token_created": "Token 已创建",
+    "token_once": "请立即复制：只会显示一次。",
+    "api_key": "Anthropic API key",
+    "api_key_hint": "从 console.anthropic.com 获取；加密存储。费用由你的账户支付。",
+    "model": "模型",
+    "model_hint": "默认 {model}；Sonnet 或 Haiku 更便宜。",
+    "effort": "思考深度",
+    "effort_hint": "越高越详细，但越慢也越贵。",
+    "base_url": "API 地址（可选）",
+    "base_url_hint": "仅在 Anthropic API 前有网关时才需填写。"
+  },
+  "dash": {
+    "running": "运行中",
+    "stopped": "{n} 个已停止",
+    "failed": "{n} 个失败",
+    "down": "{n} 个故障",
+    "never": "从未",
+    "today": "今日流量",
+    "blocked": "已封 IP",
+    "alerts": "告警",
+    "last24h": "过去 24 小时",
+    "security": "安全检查",
+    "no_risks": "未发现风险。",
+    "fix": "处理",
+    "level": {
+      "critical": "高",
+      "warning": "中",
+      "info": "低"
+    },
+    "risks": {
+      "no_entry": "未设置安全入口：任何找到端口的人都能看到登录页。",
+      "default_port": "面板使用默认端口 8888。",
+      "panel_http": "面板 SSL 已关闭：登录数据未加密。",
+      "panel_open": "面板未设置授权 IP 或 BasicAuth。",
+      "no_2fa": "管理员未开启双因素认证。",
+      "firewall_off": "防火墙未开启。",
+      "waf_off": "WAF 未开启。",
+      "crowdsec_off": "未安装 CrowdSec。",
+      "no_recent_backup": "过去 7 天没有备份。",
+      "no_alert_channel": "未设置告警渠道：出问题不会通知你。",
+      "ssl_expiring": "{n} 张证书 14 天内到期。",
+      "probes_down": "{n} 个拨测故障中。",
+      "cron_failed": "{n} 个计划任务上次执行失败。",
+      "procs_down": "{n} 个守护进程未运行。"
+    }
+  },
+  "adv": {
+    "title": "高级设置",
+    "access": "访问限制",
+    "allow_ips": "仅允许 IP",
+    "allow_ips_hint": "设置后其他 IP 一律 403。可填 IP 或 CIDR。",
+    "deny_ips": "封禁 IP",
+    "deny_ua": "封禁 User-Agent",
+    "deny_ua_hint": "User-Agent 中的字符串（不区分大小写），例如 MJ12bot、python-requests",
+    "hotlink": "防盗链",
+    "hotlink_hint": "允许引用图片和媒体的域名；留空 = 关闭。自己的域名始终允许。",
+    "limits": "流量限制",
+    "rate": "每个 IP 请求速率",
+    "rate_hint": "0 = 不限；超出返回 429。",
+    "burst": "突发",
+    "conn": "每个 IP 并发连接",
+    "max_body": "上传上限",
+    "behaviour": "功能",
+    "autoindex": "目录列表 (Indexes)",
+    "error_pages": "自定义错误页（网站目录的 /404.html、/50x.html）",
+    "open_basedir": "防跨站 (open_basedir)",
+    "block_xmlrpc": "封禁 xmlrpc.php（WordPress）",
+    "redirects": "重定向"
+  },
+  "stats": {
+    "title": "访问报表",
+    "today": "今天",
+    "days": "{n} 天",
+    "traffic": "流量",
+    "errors": "4xx / 5xx",
+    "errors_5xx": "5xx 错误",
+    "spiders_excluded": "{n} 个爬虫请求计入 PV，但不计入 UV 和排行榜。",
+    "per_hour": "每小时",
+    "per_day": "每天",
+    "top_urls": "热门页面",
+    "top_ips": "访客 IP",
+    "countries": "地区",
+    "referrers": "来源",
+    "spiders": "爬虫",
+    "status": "状态码",
+    "url": "路径",
+    "referrer": "网站",
+    "spider": "爬虫",
+    "country": "国家/地区",
+    "hits": "请求",
+    "unknown": "未知"
+  },
+  "wp": {
+    "install_intro": "将 WordPress 安装到此网站：自动创建 MySQL/MariaDB 数据库、写入 wp-config.php，再用 WP-CLI 创建管理员。",
+    "need_mysql": "请先在软件商店安装 MySQL 或 MariaDB。",
+    "site_title": "网站标题",
+    "admin_user": "管理员账号",
+    "admin_pass": "管理员密码",
+    "admin_email": "管理员邮箱",
+    "language": "语言",
+    "db_engine": "数据库引擎",
+    "install": "安装 WordPress",
+    "version": "版本",
+    "admins": "管理员",
+    "updates": "插件/主题更新",
+    "actions": {
+      "core_update": "更新 WordPress",
+      "plugins_update": "更新全部插件",
+      "themes_update": "更新全部主题",
+      "verify": "检查核心完整性",
+      "cache_flush": "清除缓存",
+      "plugin_activate": "启用插件",
+      "plugin_deactivate": "停用插件",
+      "plugin_update": "更新插件",
+      "plugin_delete": "删除插件",
+      "theme_activate": "启用主题",
+      "theme_update": "更新主题",
+      "file_edit": "后台文件编辑器",
+      "debug": "调试模式",
+      "admin_password": "重置管理员密码"
+    },
+    "no_file_edit": "禁用后台插件/主题编辑器（DISALLOW_FILE_EDIT）",
+    "xmlrpc_hint": "已封禁 xmlrpc.php（在“高级设置”修改）",
+    "reset_password": "重置密码：",
+    "new_password": "新密码（至少 8 位）",
+    "plugin": "插件",
+    "theme": "主题",
+    "update": "更新",
+    "activate": "启用",
+    "deactivate": "停用"
   }
 }
