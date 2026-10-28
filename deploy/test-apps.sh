@@ -378,10 +378,12 @@ class H(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
 http.server.HTTPServer(('127.0.0.1', 18192), H).serve_forever()
 EOF
-: > /tmp/hook.log
 python3 /tmp/hook.py & HOOK=$!
+for _ in $(seq 1 30); do curl -s -o /dev/null -X POST -d x http://127.0.0.1:18192/ && break; sleep 0.3; done
+: > /tmp/hook.log
 CH="$(api POST /alerts/channels '{"name":"hook","kind":"webhook","enabled":true,"config":{"url":"http://127.0.0.1:18192/"}}' | jget "['id']")"
-[[ "$(api POST "/alerts/channels/$CH/test" | jget "['ok']")" == True ]] || fail "alert channel test"
+out="$(api POST "/alerts/channels/$CH/test")"
+[[ "$(jget "['ok']" <<<"$out")" == True ]] || fail "alert channel test: $out"
 grep -q "test notification" /tmp/hook.log || fail "test notification not delivered"
 grep -q '"id"' <<<"$(api POST /alerts/rules "{\"name\":\"probes\",\"kind\":\"probe_down\",\"channels\":[$CH],\"enabled\":true}")" || fail "alert rule"
 grep -q "db.test" /etc/hosts || echo "127.0.0.1 db.test" >> /etc/hosts
