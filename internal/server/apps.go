@@ -26,6 +26,7 @@ func (s *Server) appRoutes(r chi.Router) {
 	r.Get("/apps/{id}/config", s.handleAppConfig)
 	r.Put("/apps/{id}/config", s.handlePutAppConfig)
 	r.Get("/apps/{id}/credentials", s.handleAppCredentials)
+	s.dbManageRoutes(r)
 
 	r.Get("/databases", s.handleDatabases)
 	r.Post("/databases", s.handleCreateDatabase)
@@ -279,7 +280,10 @@ func (s *Server) handleRestartProject(w http.ResponseWriter, r *http.Request) {
 // users. The tools keep their own CSRF tokens, so the panel's CSRF header is
 // not required here; only the tool's own cookies go upstream, never the
 // panel session. With strip, prefix is removed from the upstream path.
-func (s *Server) toolProxy(w http.ResponseWriter, r *http.Request, port int, prefix string, strip bool, cookie func(string) bool) {
+// toolProxy serves a tool on a loopback port to signed-in panel users;
+// signon, when set, is passed to the tool as PMASignonHeader (any value the
+// browser sent is dropped).
+func (s *Server) toolProxy(w http.ResponseWriter, r *http.Request, port int, prefix string, strip bool, cookie func(string) bool, signon string) {
 	c, err := r.Cookie(sessionCookie)
 	if err != nil {
 		notFound(w)
@@ -308,6 +312,10 @@ func (s *Server) toolProxy(w http.ResponseWriter, r *http.Request, port int, pre
 				pr.Out.URL.RawPath = ""
 			}
 			pr.Out.Header.Del("Cookie")
+			pr.Out.Header.Del(appstore.PMASignonHeader)
+			if signon != "" {
+				pr.Out.Header.Set(appstore.PMASignonHeader, signon)
+			}
 			for _, ck := range pr.In.Cookies() {
 				if cookie(ck.Name) {
 					pr.Out.AddCookie(ck)
@@ -323,12 +331,19 @@ func (s *Server) toolProxy(w http.ResponseWriter, r *http.Request, port int, pre
 func (s *Server) handleAdminer(w http.ResponseWriter, r *http.Request) {
 	s.toolProxy(w, r, s.Apps.AdminerPort(r.Context()), "/adminer", true, func(n string) bool {
 		return strings.HasPrefix(n, "adminer")
-	})
+	}, "")
 }
 
-// handlePMA serves phpMyAdmin, which Apache already serves under the same prefix.
+// handlePMA serves phpMyAdmin, which Apache already serves under the same
+// prefix; a one-time link to the sign-on script carries the credentials.
 func (s *Server) handlePMA(w http.ResponseWriter, r *http.Request) {
+	signon := ""
+	if c, err := r.Cookie(sessionCookie); err == nil {
+		if _, err := s.Auth.Resolve(r.Context(), c.Value); err == nil {
+			signon = s.signonHeader(r) // only for a signed-in panel user
+		}
+	}
 	s.toolProxy(w, r, s.Apps.PMAPort(r.Context()), appstore.PMAPrefix, false, func(n string) bool {
-		return strings.HasPrefix(n, "phpMyAdmin") || strings.HasPrefix(strings.ToLower(n), "pma")
-	})
+		return strings.HasPrefix(n, "phpMyAdmin") || strings.HasPrefix(strings.ToLower(n), "pma") || n == "LMCWHMSignon"
+	}, signon)
 }

@@ -91,6 +91,7 @@ type Deps struct {
 }
 
 type Server struct {
+	pmaLinks pmaLinks // one-time phpMyAdmin sign-on links
 	Deps
 	secret  string
 	restart chan struct{}

@@ -101,22 +101,53 @@ docker exec -e PGPASSWORD="$NEWPW" lmcwhm-postgres17 psql -h 127.0.0.1 -U blog -
 code="$(api POST /databases "{\"app_id\":$MID,\"name\":\"x'; DROP\"}" | jget "['code']")"
 [[ "$code" == db.invalid_name ]] || fail "unsafe name accepted: $code"
 
-# phpMyAdmin: one server per MySQL / MariaDB, signed in through the panel session.
+# phpMyAdmin: one server per MySQL / MariaDB, signed in by one-time links:
+# a database's link shows only that database, the root link every one.
 task POST /apps/install '{"app":"mysql","version":"8.4"}'
 MYID="$(app_id mysql 8.4)"
 task POST /databases "{\"app_id\":$MYID,\"name\":\"pmtest\"}"
+task POST /databases "{\"app_id\":$MYID,\"name\":\"pmother\"}"
 task POST /apps/install '{"app":"phpmyadmin","version":"5.2"}'
 ss -ltnH | awk '{print $4}' | grep -E ':8091$' | grep -qv '^127\.0\.0\.1:' && fail "phpMyAdmin listens beyond loopback: $(ss -ltn | grep 8091)"
 pma_server() { api GET /databases | python3 -c "import sys,json; print(json.load(sys.stdin)['phpmyadmin'][sys.argv[1]])" "$1"; }
-pma() { curl -sk -b "$JAR" "$P/phpmyadmin/index.php?route=/server/databases&server=$1"; }
-out="$(pma "$(pma_server "$MID")")"
+db_id() { api GET /databases | python3 -c "import sys,json; print([d['id'] for d in json.load(sys.stdin)['items'] if d['name']==sys.argv[1]][0])" "$1"; }
+PJ="$(mktemp)"; cp "$JAR" "$PJ"
+pma_signon() { curl -sk -b "$PJ" -c "$PJ" -L -o /dev/null -w '%{http_code}' "$P$(api GET "$1" | jget "['url']")"; }
+pma_dbs() { curl -sk -b "$PJ" -c "$PJ" "$P/phpmyadmin/index.php?route=/server/databases&server=$1"; }
+[[ "$(pma_signon "/databases/$(db_id pmtest)/phpmyadmin")" == 200 ]] || fail "phpMyAdmin sign-on as the database user"
+out="$(pma_dbs "$(pma_server "$MYID")")"
+[[ "$out" == *pmtest* && "$out" != *pmother* ]] || { echo "$out" | tail -40; fail "phpMyAdmin for one database shows others"; }
+[[ "$(pma_signon "/apps/$MYID/phpmyadmin")" == 200 ]] || fail "phpMyAdmin root sign-on"
+out="$(pma_dbs "$(pma_server "$MYID")")"
+[[ "$out" == *pmtest* && "$out" == *pmother* ]] || { echo "$out" | tail -40; fail "phpMyAdmin root cannot see every database"; }
+[[ "$(pma_signon "/apps/$MID/phpmyadmin")" == 200 ]] || fail "phpMyAdmin root sign-on (MariaDB)"
+out="$(pma_dbs "$(pma_server "$MID")")"
 [[ "$out" == *shop* ]] || { echo "$out" | tail -40; fail "phpMyAdmin cannot open MariaDB"; }
-out="$(pma "$(pma_server "$MYID")")"
-[[ "$out" == *pmtest* ]] || { echo "$out" | tail -40; fail "phpMyAdmin cannot open MySQL 8.4"; }
+# A link works once; the sign-on script without one, or straight on loopback, signs nobody in.
+URL="$(api GET "/databases/$(db_id pmtest)/phpmyadmin" | jget "['url']")"
+curl -sk -b "$PJ" -o /dev/null "$P$URL"
+[[ "$(curl -sk -b "$JAR" -o /dev/null -w '%{http_code}' "$P$URL")" == 403 ]] || fail "phpMyAdmin sign-on link reused"
+[[ "$(curl -s -o /dev/null -w '%{http_code}' -H 'X-Lmcwhm-Signon: x' http://127.0.0.1:8091/phpmyadmin/lmcwhm-signon.php)" == 403 ]] || fail "forged sign-on header accepted"
+out="$(curl -s -L http://127.0.0.1:8091/phpmyadmin/index.php?route=/server/databases)"
+[[ "$out" != *pmtest* ]] || fail "phpMyAdmin on loopback is signed in without a link"
 J2="$(mktemp)"; curl -sk -c "$J2" -o /dev/null "$P/console" # security entry passed, not signed in
 [[ "$(curl -sk -b "$J2" -o /dev/null -w '%{http_code}' "$P/phpmyadmin/")" == 404 ]] || fail "phpMyAdmin reachable without a panel session"
-[[ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8091/phpmyadmin/)" == 200 ]] || fail "phpMyAdmin not on loopback 8091"
-pass "phpMyAdmin opens MariaDB and MySQL 8.4 from the panel session only"
+[[ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8091/phpmyadmin/)" =~ ^(200|302)$ ]] || fail "phpMyAdmin not on loopback 8091"
+pass "phpMyAdmin: per-database sign-on shows only that database; root link; one-time links; MariaDB and MySQL 8.4"
+
+# Database settings window: MySQL status, slow log, binary logs, tuning with restart.
+api GET "/apps/$MYID/mysql/status" | python3 -c "import sys,json; s=json.load(sys.stdin); assert s['uptime']>0 and s['vars']['max_connections'] and s['status']['connections'], s" || fail "mysql status"
+api POST "/apps/$MYID/mysql/slowlog" '{"on":true,"seconds":0.1}' | grep -q '"ok":true' || fail "slow log on"
+docker exec -e MYSQL_PWD="$(api GET "/apps/$MYID/credentials" | jget "['password']")" lmcwhm-mysql84 mysql -uroot -h127.0.0.1 -e "SELECT SLEEP(0.3)" >/dev/null
+for _ in 1 2 3 4 5; do api GET "/apps/$MYID/mysql/slowlog" | grep -q 'SLEEP' && break; sleep 1; done
+api GET "/apps/$MYID/mysql/slowlog" | grep -q 'SLEEP' || fail "slow query not logged: $(api GET "/apps/$MYID/mysql/slowlog")"
+api GET "/apps/$MYID/mysql/binlogs" | python3 -c "import sys,json; b=json.load(sys.stdin); assert b['enabled'] and b['files'], b" || fail "mysql 8.4 binary logs"
+task PUT "/apps/$MYID/mysql/tuning" '{"values":{"max_connections":"321","tmp_table_size":"48M"}}'
+api GET "/apps/$MYID/mysql/status" | python3 -c "import sys,json; v=json.load(sys.stdin)['vars']; assert v['max_connections']=='321' and v['tmp_table_size']==str(48<<20), v" || fail "tuning not applied"
+code="$(api PUT "/apps/$MYID/mysql/tuning" '{"values":{"max_connections":"1; DROP"}}' | jget "['code']")"
+[[ "$code" == app.bad_setting ]] || fail "bad tuning value accepted: $code"
+api GET "/apps/$MYID/service" | python3 -c "import sys,json; s=json.load(sys.stdin); assert s['state']=='running' and s['data_size']>0, s" || fail "service info"
+pass "database settings: MySQL status, slow log, binary logs, tuning applied with restart"
 
 # A PHP site reaches MariaDB over the loopback port.
 task POST /sites '{"domain":"db.test","type":"php","php_version":"8.3","ssl":"none"}'
@@ -139,6 +170,27 @@ for _ in $(seq 1 300); do st="$(api GET "/tasks/$t" | jget "['status']")"; [[ "$
 [[ "$(api GET "/apps/$RID/config" | jget "['config']")" == "$conf" ]] || fail "redis.conf not restored"
 [[ "$(docker inspect -f '{{.State.Status}}' lmcwhm-redis74)" == running ]] || fail "redis not running after rollback"
 pass "config edit restarts the service and rolls back a broken file"
+
+# Redis key browser and settings applied live (no restart, keys kept); port move.
+api POST "/apps/$RID/redis/key" '{"db":3,"key":"lmc:a","value":"hello","ttl":0}' | grep -q '"ok":true' || fail "redis set"
+api POST "/apps/$RID/redis/key" '{"db":3,"key":"lmc:b","value":"x","ttl":600}' >/dev/null
+api GET "/apps/$RID/redis/dbs" | python3 -c "import sys,json; d=json.load(sys.stdin)['items']; assert len(d)>=4 and d[3]['keys']==2, d" || fail "redis db counts"
+api GET "/apps/$RID/redis/keys?db=3&match=lmc" | python3 -c "import sys,json; k={x['key']:x for x in json.load(sys.stdin)['keys']}; assert k['lmc:a']['preview']=='hello' and k['lmc:a']['ttl']==-1 and 0<k['lmc:b']['ttl']<=600, k" || fail "redis scan"
+api GET "/apps/$RID/redis/key?db=3&key=lmc:a" | grep -q '"value":"hello"' || fail "redis get"
+api POST "/apps/$RID/redis/delete" '{"db":3,"keys":["lmc:b"]}' | grep -q '"deleted":1' || fail "redis delete"
+cur="$(api GET "/apps/$RID/redis/settings")"
+new="$(python3 -c "import json,sys; s=json.loads(sys.argv[1]); s.update(maxmemory='64mb', maxmemory_policy='allkeys-lfu', save=['600 5']); print(json.dumps(s))" "$cur")"
+[[ "$(api PUT "/apps/$RID/redis/settings" "$new" | jget "['task_id']")" == "" ]] || fail "redis settings restarted instead of applying live"
+api GET "/apps/$RID/redis/info" | python3 -c "import sys,json; i=json.load(sys.stdin); assert i['maxmemory']==str(64<<20) and i['maxmemory_policy']=='allkeys-lfu', {k:i.get(k) for k in ('maxmemory','maxmemory_policy')}" || fail "redis settings not live"
+api GET "/apps/$RID/redis/keys?db=3" | grep -q 'lmc:a' || fail "redis lost keys on a live setting"
+api GET "/apps/$RID/config" | jget "['config']" | grep -q '^save 600 5$' || fail "redis.conf not written"
+task POST "/apps/$RID/port" '{"port":16379}'
+api GET "/apps/$RID/redis/key?db=3&key=lmc:a" | grep -q '"value":"hello"' || fail "redis after port move"
+ss -ltnH | awk '{print $4}' | grep -q '^127.0.0.1:16379$' || fail "redis not on the new port"
+code="$(api POST "/apps/$RID/port" '{"port":22}' | jget "['code']")"
+[[ "$code" == app.bad_port ]] || fail "privileged port accepted: $code"
+task POST "/apps/$RID/port" '{"port":6379}'
+pass "Redis: key browser, settings applied live, port moved"
 
 # ---------- Docker manager: create container, bind a domain ----------
 task POST /docker/containers '{"name":"hello","image":"nginx:stable","ports":["127.0.0.1:8181:80"],"restart":"unless-stopped"}'

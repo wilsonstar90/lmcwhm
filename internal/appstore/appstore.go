@@ -47,7 +47,9 @@ type Installed struct {
 	HasConfig bool   `json:"has_config"`
 	Databases bool   `json:"databases"`
 	CreatedAt int64  `json:"created_at"`
-	secret    string
+	// OOMProtect: started with a low OOM score (settings window).
+	OOMProtect bool `json:"oom_protect"`
+	secret     string
 }
 
 // AdminUser is the engine's superuser that the panel uses.
@@ -87,7 +89,7 @@ func (sv *Service) dir(app, version string) string {
 // ---- persistence ----
 
 func (sv *Service) list(ctx context.Context, where string, args ...any) ([]Installed, error) {
-	rows, err := sv.st.DB.QueryContext(ctx, `SELECT id, app, version, port, secret, created_at FROM apps `+where+` ORDER BY app, version DESC`, args...)
+	rows, err := sv.st.DB.QueryContext(ctx, `SELECT id, app, version, port, secret, created_at, oom_protect FROM apps `+where+` ORDER BY app, version DESC`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +98,7 @@ func (sv *Service) list(ctx context.Context, where string, args ...any) ([]Insta
 	for rows.Next() {
 		var i Installed
 		var sealed string
-		if err := rows.Scan(&i.ID, &i.App, &i.Version, &i.Port, &sealed, &i.CreatedAt); err != nil {
+		if err := rows.Scan(&i.ID, &i.App, &i.Version, &i.Port, &sealed, &i.CreatedAt, &i.OOMProtect); err != nil {
 			return nil, err
 		}
 		a, v, ok := Lookup(i.App, i.Version)
@@ -493,6 +495,9 @@ func (sv *Service) args(i Installed) []string {
 		a = []string{"--network", "host", i.Image, "php", "-S", fmt.Sprintf("127.0.0.1:%d", i.Port), "-t", "/var/www/html"}
 	case "phpmyadmin":
 		a = sv.pmaArgs(i)
+	}
+	if i.OOMProtect {
+		a = append([]string{"--oom-score-adj", "-800"}, a...)
 	}
 	return a
 }

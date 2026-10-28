@@ -9,6 +9,8 @@ import {
 import { get, post, patch, ApiError } from '../api/client'
 import type { Database, InstalledApp } from '../api/types'
 import TaskModal from '../components/TaskModal.vue'
+import DbSettings from '../components/DbSettings.vue'
+import RedisKeys from '../components/RedisKeys.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -16,12 +18,16 @@ const msg = useMessage()
 const fail = (e: unknown) => msg.error(e instanceof ApiError ? e.text : String(e))
 
 const dbs = ref<Database[]>([])
-const engines = ref<InstalledApp[]>([])
+// Installed database services, one tab each (only installed engines show).
+const services = ref<InstalledApp[]>([])
+const engines = computed(() => services.value.filter((i) => i.databases))
+const settings = ref<InstalledApp | null>(null)
 const adminer = ref(false)
 // phpMyAdmin server number per engine app id (empty = phpMyAdmin not installed)
 const pma = ref<Record<number, number>>({})
 const loading = ref(false)
-const engine = ref<number | 'all'>('all')
+const engine = ref<number | null>(null)
+const current = computed(() => services.value.find((e) => e.id === engine.value) ?? null)
 const show = ref(false)
 const task = ref<{ id: string; title: string } | null>(null)
 const revealed = ref<Set<number>>(new Set())
@@ -37,7 +43,8 @@ async function load() {
     dbs.value = d.items
     adminer.value = d.adminer
     pma.value = d.phpmyadmin ?? {}
-    engines.value = a.items.filter((i) => i.databases)
+    services.value = a.items.filter((i) => i.kind === 'database')
+    if (!services.value.some((e) => e.id === engine.value)) engine.value = services.value[0]?.id ?? null
   } catch (e) {
     fail(e)
   } finally {
@@ -46,18 +53,29 @@ async function load() {
 }
 onMounted(load)
 
-const engineName = (d: Database) => engines.value.find((e) => e.id === d.app_id)?.name ?? d.engine
 const engineOptions = computed(() => engines.value.map((e) => ({ label: `${e.name} ${e.version} (127.0.0.1:${e.port})`, value: e.id })))
 const isMySQL = (app: string) => app === 'mysql' || app === 'mariadb'
 const hasMySQL = computed(() => engines.value.some((e) => isMySQL(e.app)))
 const hasPMA = computed(() => Object.keys(pma.value).length > 0)
-const pmaURL = (d: Database) =>
-  `/phpmyadmin/index.php?route=/database/structure&server=${pma.value[d.app_id]}&db=${encodeURIComponent(d.name)}`
-const filtered = computed(() => (engine.value === 'all' ? dbs.value : dbs.value.filter((d) => d.app_id === engine.value)))
+const filtered = computed(() => dbs.value.filter((d) => d.app_id === engine.value))
+
+// phpMyAdmin opens through a one-time sign-on link: from a database row as
+// that database's own user (only it is shown), from the toolbar as root.
+async function openPMA(path: string) {
+  const win = window.open('about:blank', '_blank')
+  try {
+    const r = await get<{ url: string }>(path)
+    if (win) win.location.href = r.url
+    else window.location.href = r.url
+  } catch (e) {
+    win?.close()
+    fail(e)
+  }
+}
 
 function openCreate() {
   f.value = blank()
-  f.value.app_id = engine.value === 'all' ? (engines.value[0]?.id ?? 0) : engine.value
+  f.value.app_id = current.value?.databases ? current.value.id : (engines.value[0]?.id ?? 0)
   show.value = true
 }
 
@@ -113,7 +131,6 @@ function toggle(id: number) {
 
 const columns: DataTableColumns<Database> = [
   { title: () => t('db.name'), key: 'name', render: (d) => h('b', d.name) },
-  { title: () => t('db.engine'), key: 'engine', width: 150, render: (d) => h(NTag, { size: 'small' }, () => `${engineName(d)} ${d.version}`) },
   { title: () => t('db.username'), key: 'username', width: 140 },
   {
     title: () => t('db.password'),
@@ -139,7 +156,7 @@ const columns: DataTableColumns<Database> = [
     width: 260,
     render: (d) =>
       h(NSpace, { size: 6 }, () => [
-        pma.value[d.app_id] ? h(NButton, { size: 'tiny', type: 'primary', ghost: true, tag: 'a', href: pmaURL(d), target: '_blank' }, () => 'phpMyAdmin') : null,
+        pma.value[d.app_id] ? h(NButton, { size: 'tiny', type: 'primary', ghost: true, onClick: () => openPMA(`/databases/${d.id}/phpmyadmin`) }, () => 'phpMyAdmin') : null,
         h(NButton, { size: 'tiny', onClick: () => (pw.value = { db: d, value: '' }) }, () => t('db.change_password')),
         h(
           NPopconfirm,
@@ -152,27 +169,34 @@ const columns: DataTableColumns<Database> = [
 </script>
 
 <template>
-  <n-alert v-if="!loading && !engines.length" type="info" :show-icon="false" style="margin-bottom: 12px">
+  <n-alert v-if="!loading && !services.length" type="info" :show-icon="false" style="margin-bottom: 12px">
     {{ t('db.no_engine') }}
     <n-button text type="primary" @click="router.push({ name: 'appstore' })">{{ t('menu.appstore') }} →</n-button>
   </n-alert>
-  <n-alert v-if="!loading && hasMySQL && !hasPMA" type="default" :show-icon="false" style="margin-bottom: 12px">
+  <n-alert v-if="!loading && current && isMySQL(current.app) && !hasPMA" type="default" :show-icon="false" style="margin-bottom: 12px">
     {{ t('db.pma_hint') }}
     <n-button text type="primary" @click="router.push({ name: 'appstore' })">{{ t('menu.appstore') }} →</n-button>
   </n-alert>
-  <n-tabs v-if="engines.length > 1" v-model:value="engine" type="segment" size="small" style="margin-bottom: 12px; max-width: 720px">
-    <n-tab name="all">{{ t('db.all') }}</n-tab>
-    <n-tab v-for="e in engines" :key="e.id" :name="e.id">{{ e.name }} {{ e.version }}</n-tab>
+  <n-tabs v-if="services.length" :value="engine ?? undefined" type="line" @update:value="(v: number) => (engine = v)" style="margin-bottom: 12px">
+    <n-tab v-for="e in services" :key="e.id" :name="e.id">{{ e.name }} {{ e.version }}</n-tab>
   </n-tabs>
-  <n-space justify="space-between" style="margin-bottom: 12px">
-    <n-space>
-      <n-button type="primary" :disabled="!engines.length" @click="openCreate">{{ t('db.create') }}</n-button>
-      <n-button v-if="hasPMA" tag="a" href="/phpmyadmin/" target="_blank">phpMyAdmin</n-button>
-      <n-button v-if="adminer" tag="a" href="/adminer/" target="_blank">Adminer</n-button>
+  <template v-if="current">
+    <n-space justify="space-between" align="center" style="margin-bottom: 12px">
+      <n-space align="center">
+        <n-button v-if="current.databases" type="primary" @click="openCreate">{{ t('db.create') }}</n-button>
+        <n-button v-if="isMySQL(current.app) && pma[current.id]" @click="openPMA(`/apps/${current.id}/phpmyadmin`)">{{ t('db.pma_root') }}</n-button>
+        <n-button v-if="adminer && current.databases" tag="a" href="/adminer/" target="_blank">Adminer</n-button>
+        <n-button @click="settings = current">{{ t('db.settings') }}</n-button>
+      </n-space>
+      <n-space align="center">
+        <span class="hint">127.0.0.1:{{ current.port }}</span>
+        <n-tag size="small" :type="current.state === 'running' ? 'success' : 'error'">{{ current.state || '—' }}</n-tag>
+        <n-button size="small" @click="load">{{ t('common.refresh') }}</n-button>
+      </n-space>
     </n-space>
-    <n-button size="small" @click="load">{{ t('common.refresh') }}</n-button>
-  </n-space>
-  <n-data-table size="small" :columns="columns" :data="filtered" :loading="loading" :row-key="(r: Database) => r.id" :scroll-x="1100" />
+    <RedisKeys v-if="current.app === 'redis'" :key="current.id" :app="current" />
+    <n-data-table v-else size="small" :columns="columns" :data="filtered" :loading="loading" :row-key="(r: Database) => r.id" :scroll-x="1000" />
+  </template>
 
   <n-modal :show="show" @update:show="(v: boolean) => (show = v)">
     <n-card :title="t('db.create')" style="width: min(520px, calc(100vw - 32px))" closable @close="show = false">
@@ -215,5 +239,13 @@ const columns: DataTableColumns<Database> = [
     </n-card>
   </n-modal>
 
+  <DbSettings :app="settings" @close="settings = null" @changed="load" />
   <TaskModal :task-id="task?.id ?? null" :title="task?.title ?? ''" @close="task = null; load()" @done="load" />
 </template>
+
+<style scoped>
+.hint {
+  font-size: 12px;
+  opacity: 0.65;
+}
+</style>
