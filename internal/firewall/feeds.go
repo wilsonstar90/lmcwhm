@@ -115,7 +115,8 @@ func (c FeedConfig) all() []Feed {
 	return append(append([]Feed{}, FeedCatalog...), c.Custom...)
 }
 
-// SaveFeeds stores the selection; feeds no longer enabled are lifted at once.
+// SaveFeeds stores the selection (custom lists are always enabled); feeds no
+// longer enabled are lifted at once.
 func (sv *Service) SaveFeeds(ctx context.Context, enabled []string, custom []Feed, hours int) error {
 	c := sv.FeedConfig(ctx)
 	seen := map[string]bool{}
@@ -138,6 +139,10 @@ func (sv *Service) SaveFeeds(ctx context.Context, enabled []string, custom []Fee
 		known[f.ID] = true
 	}
 	c.Enabled = []string{}
+	// Custom lists are always on.
+	for _, f := range cus {
+		enabled = append(enabled, f.ID)
+	}
 	for _, id := range enabled {
 		if !known[id] {
 			return ErrFeedUnknown

@@ -96,6 +96,13 @@ func TestRefreshFeeds(t *testing.T) {
 	if f = sv.Feeds(ctx); f.Blocking != 1 {
 		t.Fatalf("after unsubscribe %+v", f)
 	}
+	// A custom list is enabled without being named.
+	if err := sv.SaveFeeds(ctx, nil, []Feed{{URL: "https://example.com/l.txt"}}, 6); err != nil {
+		t.Fatal(err)
+	}
+	if f = sv.Feeds(ctx); len(f.Enabled) != 1 || f.Enabled[0] != "custom1" || f.Custom[0].Name != "example.com" || f.Blocking != 0 {
+		t.Fatalf("custom feed %+v", f)
+	}
 	time.Sleep(400 * time.Millisecond)
 	if c, _ := sv.Config(ctx); c.Policy != "drop" || sv.Pending() {
 		t.Fatalf("ban sync armed or reverted the drop policy: %+v pending=%v", c, sv.Pending())

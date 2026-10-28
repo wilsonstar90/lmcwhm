@@ -58,9 +58,9 @@ function removeCustom(i: number) {
 async function save() {
   saving.value = true
   try {
-    // Custom lists are always subscribed; the server numbers them custom1..n.
+    // Custom lists are always subscribed (the server numbers them custom1..n).
     const list = custom.value.filter((c) => c.url.trim())
-    const ids = [...enabled.value.filter((id) => !id.startsWith('custom')), ...list.map((_, i) => `custom${i + 1}`)]
+    const ids = enabled.value.filter((id) => !id.startsWith('custom'))
     f.value = await put<Feeds>('/firewall/feeds', { enabled: ids, custom: list, hours: hours.value })
     enabled.value = [...f.value.enabled]
     custom.value = f.value.custom.map((x) => ({ ...x }))
