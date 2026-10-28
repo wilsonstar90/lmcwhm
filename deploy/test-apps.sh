@@ -172,11 +172,13 @@ pass "TLS passthrough by SNI"
 # ---------- SNI matching: exact > deeper wildcard > wildcard; no partial-label matches ----------
 task POST /sites '{"domain":"w.test","aliases":["*.w.test"],"type":"static","ssl":"none"}'
 task POST /sites '{"domain":"deep.w.test","type":"proxy","proxy_target":"127.0.0.1:18888","passthrough":true,"ssl":"none"}'
-sni_subj() { openssl s_client -connect 127.0.0.1:443 -servername "$1" </dev/null 2>/dev/null | openssl x509 -noout -subject; }
-[[ "$(sni_subj deep.w.test)" == "$panel" ]] || fail "exact passthrough inside a wildcard site"
-[[ "$(sni_subj other.w.test)" != "$panel" ]] || fail "wildcard host was passed through"
-[[ "$(sni_subj pass.test.evil.example)" != "$panel" ]] || fail "suffix-label hostname matched pass.test"
-[[ "$(sni_subj x.pass.test)" != "$panel" ]] || fail "subdomain matched pass.test"
+# Fingerprints, not subjects: the default and panel certificates are both self-signed "lmcwhm".
+sni_fp() { openssl s_client -connect 127.0.0.1:443 -servername "$1" </dev/null 2>/dev/null | openssl x509 -noout -fingerprint -sha256; }
+panel_fp="$(openssl s_client -connect 127.0.0.1:18888 </dev/null 2>/dev/null | openssl x509 -noout -fingerprint -sha256)"
+[[ -n "$panel_fp" && "$(sni_fp deep.w.test)" == "$panel_fp" ]] || fail "exact passthrough inside a wildcard site"
+[[ "$(sni_fp other.w.test)" != "$panel_fp" ]] || fail "wildcard host was passed through"
+[[ "$(sni_fp pass.test.evil.example)" != "$panel_fp" ]] || fail "suffix-label hostname matched pass.test"
+[[ "$(sni_fp x.pass.test)" != "$panel_fp" ]] || fail "subdomain matched pass.test"
 [[ "$(get80 other.w.test /)" == *"w.test"* ]] || fail "wildcard alias not served by nginx"
 api GET '/routes/resolve?host=a.b.w.test' | grep -q '"match":"wildcard"' || fail "resolve wildcard"
 api GET '/routes/resolve?host=deep.w.test' | python3 -c "import sys,json; r=json.load(sys.stdin); assert r['match']=='exact' and r['route']['mode']=='passthrough', r" || fail "resolve exact"
