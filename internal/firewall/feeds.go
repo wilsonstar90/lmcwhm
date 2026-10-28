@@ -16,17 +16,26 @@ import (
 	"time"
 )
 
-// Public IP blocklists ("feeds"): downloaded on a schedule and enforced as
-// temporary blocks (source "feed:<id>") that expire on their own when a feed
-// stops being refreshed. Unlike the CrowdSec community blocklist they need no
-// signal sharing.
+// Public IP lists ("feeds"), downloaded on a schedule as entries (source
+// "feed:<id>") that expire on their own when a feed stops being refreshed:
+//   - block feeds: malicious IPs, enforced as temporary blocks. Unlike the
+//     CrowdSec community blocklist they need no signal sharing.
+//   - trust feeds: Cloudflare and search / AI crawlers, kept in the "trust"
+//     list, which exempts them from every block and ban (CrowdSec, feeds,
+//     manual) but, unlike the allow list, does not open any port: anyone can
+//     originate traffic from Cloudflare (Workers), so trusting it on SSH or a
+//     database port would bypass the firewall.
 
 type Feed struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	URL  string `json:"url"`
-	Info string `json:"info,omitempty"`
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	URL   string `json:"url"`
+	Info  string `json:"info,omitempty"`
+	Kind  string `json:"kind"`            // block | trust
+	Group string `json:"group,omitempty"` // trust catalog: cdn | search | ai | social
 }
+
+const sefinek = "https://raw.githubusercontent.com/sefinek/trusted-ips-whitelist/main/lists/"
 
 var FeedCatalog = []Feed{
 	{ID: "spamhaus_drop", Name: "Spamhaus DROP (IPv4)", URL: "https://www.spamhaus.org/drop/drop_v4.json", Info: "hijacked / criminal networks"},
@@ -37,6 +46,39 @@ var FeedCatalog = []Feed{
 	{ID: "cins", Name: "CINS Army", URL: "https://cinsscore.com/list/ci-badguys.txt", Info: "scanners and attackers"},
 	{ID: "et_compromised", Name: "Emerging Threats compromised", URL: "https://rules.emergingthreats.net/blockrules/compromised-ips.txt", Info: "compromised hosts"},
 	{ID: "feodo", Name: "abuse.ch Feodo Tracker", URL: "https://feodotracker.abuse.ch/downloads/ipblocklist.txt", Info: "botnet C2 servers"},
+
+	{ID: "cloudflare4", Kind: KindTrust, Group: "cdn", Name: "Cloudflare (IPv4)", URL: "https://www.cloudflare.com/ips-v4"},
+	{ID: "cloudflare6", Kind: KindTrust, Group: "cdn", Name: "Cloudflare (IPv6)", URL: "https://www.cloudflare.com/ips-v6"},
+	{ID: "googlebot", Kind: KindTrust, Group: "search", Name: "Googlebot", URL: sefinek + "googlebot/ips.txt"},
+	{ID: "google_special", Kind: KindTrust, Group: "search", Name: "Google special crawlers", URL: sefinek + "google-special-crawlers/ips.txt", Info: "AdsBot, Google-Safety, …"},
+	{ID: "google_fetchers", Kind: KindTrust, Group: "search", Name: "Google user-triggered fetchers", URL: sefinek + "google-user-triggered-fetchers/ips.txt", Info: "Site Verification, Feedfetcher, …"},
+	{ID: "bingbot", Kind: KindTrust, Group: "search", Name: "Bingbot", URL: sefinek + "bingbot/ips.txt", Info: "Bing; also powers Yahoo search"},
+	{ID: "baidu", Kind: KindTrust, Group: "search", Name: "Baiduspider", URL: sefinek + "baidu/ips.txt"},
+	{ID: "yandexbot", Kind: KindTrust, Group: "search", Name: "YandexBot", URL: sefinek + "yandexbot/ips.txt"},
+	{ID: "duckduckbot", Kind: KindTrust, Group: "search", Name: "DuckDuckBot", URL: sefinek + "duckduckbot/ips.txt"},
+	{ID: "applebot", Kind: KindTrust, Group: "search", Name: "Applebot", URL: sefinek + "applebot/ips.txt"},
+	{ID: "all_ai", Kind: KindTrust, Group: "ai", Name: "All AI crawlers", URL: sefinek + "all-ai-ips.txt", Info: "GPTBot, ChatGPT, ClaudeBot, Perplexity, …"},
+	{ID: "gptbot", Kind: KindTrust, Group: "ai", Name: "OpenAI GPTBot", URL: sefinek + "gptbot/ips.txt"},
+	{ID: "oai_searchbot", Kind: KindTrust, Group: "ai", Name: "OpenAI OAI-SearchBot", URL: sefinek + "oai-searchbot/ips.txt"},
+	{ID: "chatgpt_user", Kind: KindTrust, Group: "ai", Name: "ChatGPT-User", URL: sefinek + "chatgpt-user/ips.txt"},
+	{ID: "claudebot", Kind: KindTrust, Group: "ai", Name: "Anthropic ClaudeBot", URL: sefinek + "claudebot/ips.txt"},
+	{ID: "perplexitybot", Kind: KindTrust, Group: "ai", Name: "PerplexityBot", URL: sefinek + "perplexitybot/ips.txt"},
+	{ID: "perplexity_user", Kind: KindTrust, Group: "ai", Name: "Perplexity-User", URL: sefinek + "perplexity-user/ips.txt"},
+	{ID: "facebookbot", Kind: KindTrust, Group: "social", Name: "Facebook crawler", URL: sefinek + "facebookbot/ips.txt", Info: "link previews"},
+	{ID: "telegrambot", Kind: KindTrust, Group: "social", Name: "Telegram bot", URL: sefinek + "telegrambot/ips.txt", Info: "link previews"},
+}
+
+const (
+	KindBlock = "block"
+	KindTrust = "trust"
+)
+
+func init() {
+	for i := range FeedCatalog {
+		if FeedCatalog[i].Kind == "" {
+			FeedCatalog[i].Kind = KindBlock
+		}
+	}
 }
 
 const (
@@ -67,6 +109,7 @@ type FeedConfig struct {
 	Running  bool                  `json:"running"`
 	Catalog  []Feed                `json:"catalog,omitempty"`
 	Blocking int                   `json:"blocking"`
+	Trusted  int                   `json:"trusted"`
 }
 
 var feedMu sync.Mutex
@@ -93,7 +136,7 @@ func (sv *Service) FeedConfig(ctx context.Context) FeedConfig {
 }
 
 func (sv *Service) saveFeeds(ctx context.Context, c FeedConfig) error {
-	c.Catalog, c.Running, c.Blocking = nil, false, 0
+	c.Catalog, c.Running, c.Blocking, c.Trusted = nil, false, 0, 0
 	b, _ := json.Marshal(c)
 	_, err := sv.st.DB.ExecContext(ctx, `INSERT INTO settings(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, feedsKey, string(b))
 	return err
@@ -107,7 +150,9 @@ func (sv *Service) Feeds(ctx context.Context) FeedConfig {
 	if !c.Running {
 		feedMu.Unlock()
 	}
-	sv.st.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM fw_ips WHERE source LIKE 'feed:%' AND expires_at > ?`, time.Now().Unix()).Scan(&c.Blocking)
+	now := time.Now().Unix()
+	sv.st.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM fw_ips WHERE list = 'block' AND source LIKE 'feed:%' AND expires_at > ?`, now).Scan(&c.Blocking)
+	sv.st.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM fw_ips WHERE list = 'trust' AND source LIKE 'feed:%' AND expires_at > ?`, now).Scan(&c.Trusted)
 	return c
 }
 
@@ -128,6 +173,10 @@ func (sv *Service) SaveFeeds(ctx context.Context, enabled []string, custom []Fee
 		}
 		f.URL = u.String()
 		f.ID = fmt.Sprintf("custom%d", i+1)
+		if f.Kind != KindTrust {
+			f.Kind = KindBlock
+		}
+		f.Group = ""
 		if strings.TrimSpace(f.Name) == "" {
 			f.Name = u.Host
 		}
@@ -200,7 +249,7 @@ var reserved = func() []netip.Prefix {
 	return out
 }()
 
-// protected collects what a feed must never cover: the allow list, this
+// protected collects what a block feed must never cover: the allow list, this
 // server's addresses and where the panel was logged into in the last 30 days.
 func (sv *Service) protected(ctx context.Context) []netip.Prefix {
 	out := append([]netip.Prefix{}, reserved...)
@@ -312,14 +361,20 @@ func (sv *Service) RefreshFeeds(ctx context.Context) error {
 	for _, f := range c.all() {
 		byID[f.ID] = f
 	}
-	guard := sv.protected(ctx)
 	// Twice the interval plus slack: survives one failed download.
 	ttl := time.Duration(2*c.Hours)*time.Hour + time.Hour
 	total, changed := 0, false
+	// Trusted ranges need no guard here: the ruleset exempts them from drops,
+	// so a block CIDR that overlaps one is kept whole.
+	blockGuard := sv.protected(ctx)
 	for _, id := range c.Enabled {
 		f, ok := byID[id]
 		if !ok {
 			continue
+		}
+		guard := blockGuard
+		if f.Kind == KindTrust {
+			guard = reserved
 		}
 		st := FeedStatus{LastRun: time.Now().Unix()}
 		entries, skipped, err := fetch(ctx, f.URL, guard)
@@ -337,7 +392,7 @@ func (sv *Service) RefreshFeeds(ctx context.Context) error {
 		}
 		total += len(entries)
 		st.Entries, st.Skipped = len(entries), skipped
-		if err := sv.replaceFeed(ctx, feedSourcePfx+id, f.Name, entries, ttl); err != nil {
+		if err := sv.replaceFeed(ctx, f.Kind, feedSourcePfx+id, f.Name, entries, ttl); err != nil {
 			st.Error = err.Error()
 		}
 		changed = true
@@ -351,8 +406,8 @@ func (sv *Service) RefreshFeeds(ctx context.Context) error {
 	return nil
 }
 
-// replaceFeed makes source's blocks exactly entries, all expiring after ttl.
-func (sv *Service) replaceFeed(ctx context.Context, source, remark string, entries []string, ttl time.Duration) error {
+// replaceFeed makes source's entries in list exactly entries, all expiring after ttl.
+func (sv *Service) replaceFeed(ctx context.Context, list, source, remark string, entries []string, ttl time.Duration) error {
 	tx, err := sv.st.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -362,14 +417,14 @@ func (sv *Service) replaceFeed(ctx context.Context, source, remark string, entri
 	if _, err := tx.ExecContext(ctx, `DELETE FROM fw_ips WHERE source = ?`, source); err != nil {
 		return err
 	}
-	stmt, err := tx.PrepareContext(ctx, `INSERT INTO fw_ips(ip, list, source, remark, expires_at, created_at) VALUES(?, 'block', ?, ?, ?, ?)
+	stmt, err := tx.PrepareContext(ctx, `INSERT INTO fw_ips(ip, list, source, remark, expires_at, created_at) VALUES(?, ?, ?, ?, ?, ?)
 		ON CONFLICT(ip, list) DO NOTHING`)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 	for _, ip := range entries {
-		if _, err := stmt.ExecContext(ctx, ip, source, remark, now.Add(ttl).Unix(), now.Unix()); err != nil {
+		if _, err := stmt.ExecContext(ctx, ip, list, source, remark, now.Add(ttl).Unix(), now.Unix()); err != nil {
 			return err
 		}
 	}

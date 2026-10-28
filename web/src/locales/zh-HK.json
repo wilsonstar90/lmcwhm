@@ -920,7 +920,8 @@
     "list": "名單",
     "lists": {
       "block": "黑名單",
-      "allow": "白名單"
+      "allow": "白名單",
+      "trust": "信任"
     },
     "origin": "來源",
     "sources": {
@@ -1833,6 +1834,19 @@
     "updated": "更新時間",
     "custom": "自訂名單（每行一個 IP 或 CIDR；一律啟用）",
     "name": "名稱",
-    "add_custom": "加入名單網址"
+    "add_custom": "加入名單網址",
+    "count": "封鎖中條目"
+  },
+  "fwtrust": {
+    "title": "信任 IP 白名單（自動更新）",
+    "intro": "Cloudflare 同搜尋引擎 / AI 爬蟲嘅 IP 段，定時自動下載。信任 IP 永遠唔會被封鎖：CrowdSec、惡意 IP 黑名單、手動封鎖都封唔到佢哋。不過佢哋唔會開放所有端口，端口規則同預設策略照樣生效，因為任何人都可以經 Cloudflare（Workers）發出連線，完全放行會令 SSH 同資料庫暴露。Yahoo 用 Bing 嘅爬蟲；搜狗同 360 冇公開 IP 名單。",
+    "count": "信任中條目",
+    "group": "類別",
+    "groups": {
+      "cdn": "Cloudflare",
+      "search": "搜尋引擎",
+      "ai": "AI 爬蟲",
+      "social": "社交預覽"
+    }
   }
 }

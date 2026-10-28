@@ -537,10 +537,14 @@ func (sv *Service) Ruleset(ctx context.Context, c Config) (string, error) {
 		{"allow4", "ipv4_addr", "interval; auto-merge;"}, {"allow6", "ipv6_addr", "interval; auto-merge;"},
 		{"block4", "ipv4_addr", "interval; auto-merge;"}, {"block6", "ipv6_addr", "interval; auto-merge;"},
 		{"ban4", "ipv4_addr", "timeout;"}, {"ban6", "ipv6_addr", "timeout;"},
+		{"trust4", "ipv4_addr", "interval; auto-merge;"}, {"trust6", "ipv6_addr", "interval; auto-merge;"},
 	} {
 		fmt.Fprintf(&b, "\tset %s { type %s; flags %s%s }\n", s.name, s.typ, s.flags, elems(sets[s.name]))
 	}
-	drops := "\t\tip saddr @block4 counter drop\n\t\tip6 saddr @block6 counter drop\n\t\tip saddr @ban4 counter drop\n\t\tip6 saddr @ban6 counter drop\n"
+	// Trusted ranges (Cloudflare, crawlers) are never blocked or banned, but
+	// get no other exemption: port rules and the default policy still apply.
+	drops := "\t\tip saddr @block4 ip saddr != @trust4 counter drop\n\t\tip6 saddr @block6 ip6 saddr != @trust6 counter drop\n" +
+		"\t\tip saddr @ban4 ip saddr != @trust4 counter drop\n\t\tip6 saddr @ban6 ip6 saddr != @trust6 counter drop\n"
 	fmt.Fprintf(&b, "\tchain input {\n\t\ttype filter hook input priority -10; policy %s;\n", c.Policy)
 	b.WriteString("\t\tiif \"lo\" accept\n\t\tip saddr @allow4 accept\n\t\tip6 saddr @allow6 accept\n")
 	b.WriteString(drops)

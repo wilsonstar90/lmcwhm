@@ -6,6 +6,7 @@ import { get, post, ApiError } from '../api/client'
 import type { FirewallIP, FirewallView, SyncReport } from '../api/types'
 import { datetime } from '../format'
 import IpGeo from './IpGeo.vue'
+import SecFeeds from './SecFeeds.vue'
 
 const { t, locale } = useI18n()
 const msg = useMessage()
@@ -102,6 +103,7 @@ const columns: DataTableColumns<FirewallIP> = [
     </n-space>
     <p class="hint">{{ t('fw.lists_hint') }}</p>
   </n-card>
+  <SecFeeds kind="trust" />
 
   <n-card size="small" :title="t('fw.sync')" style="margin-top: 16px">
     <template #header-extra><n-button size="small" :loading="syncing" :disabled="!fw?.cf_sync && !fw?.linode_sync && !fw?.linode_ports" @click="sync">{{ t('fw.sync_now') }}</n-button></template>

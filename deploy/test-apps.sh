@@ -298,13 +298,21 @@ nft list set inet lmcwhm block6 | grep -q "2a0e:1c80::/29" || fail "feed IPv6 CI
 ! nft list set inet lmcwhm block4 | grep -q "10.0.0.0/8" || fail "bogon from a feed blocked"
 api GET '/firewall/ips?list=block' | python3 -c "import sys,json; assert not any(x['source'].startswith('feed:') for x in json.load(sys.stdin)['items'])" || fail "feed entries in the IP list"
 api GET /firewall | grep -q '"pending":false' || fail "feed refresh armed the drop-policy confirmation"
+# Trust feed: the banned address becomes exempt from drops, without being accepted on every port.
+printf '45.155.205.233\n2a0e:1c80::/32\n' > "$FEEDDIR/trust.txt"
+api PUT /firewall/feeds '{"enabled":[],"custom":[{"name":"test","url":"http://127.0.0.1:18191/list.txt"},{"name":"trusted","url":"http://127.0.0.1:18191/trust.txt","kind":"trust"}],"hours":6}' >/dev/null
+for _ in $(seq 1 20); do api GET /firewall/feeds | grep -q '"trusted":2' && break; sleep 1; done
+api GET /firewall/feeds | grep -q '"trusted":2' || fail "trust feed: $(api GET /firewall/feeds)"
+nft list set inet lmcwhm trust4 | grep -q "45.155.205.233" || fail "trusted IP not in trust4"
+nft list chain inet lmcwhm input | grep -q 'ip saddr @ban4 ip saddr != @trust4' || fail "bans do not exempt trusted IPs"
+! nft list chain inet lmcwhm input | grep -q '@trust4 accept' || fail "trusted IPs accepted on every port"
 api PUT /firewall/feeds '{"enabled":[],"custom":[],"hours":6}' >/dev/null
 api GET /firewall/feeds | grep -q '"blocking":0' || fail "unsubscribed feed kept its blocks"
 ! nft list set inet lmcwhm block4 | grep -q "1.10.16.0/20" || fail "feed CIDR left in nft"
 kill $FEEDHTTPD
 fwput '{"policy":"accept"}' >/dev/null
 kill $HTTPD
-pass "firewall: block list, port rules, protected ports, drop policy confirm / revert, public blocklist feed"
+pass "firewall: block list, port rules, protected ports, drop policy confirm / revert, public blocklist and trusted-IP feeds"
 
 # WAF: OWASP CRS blocks an SQL injection; a site can opt out.
 task PUT /waf '{"enabled":true,"engine":"On","paranoia":1,"anomaly":5}'

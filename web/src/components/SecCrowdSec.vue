@@ -108,7 +108,7 @@ const alertCols: DataTableColumns<Alert> = [
       <n-alert v-if="st.community && !st.community_bans" type="info" :show-icon="false" style="margin-top: 12px">{{ t('cs.community_empty') }}</n-alert>
     </template>
   </n-card>
-  <SecFeeds />
+  <SecFeeds kind="block" />
 
   <template v-if="st?.installed">
     <n-card size="small" :title="t('cs.bans')" style="margin-top: 16px">

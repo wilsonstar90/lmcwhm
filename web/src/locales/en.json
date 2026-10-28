@@ -920,7 +920,8 @@
     "list": "List",
     "lists": {
       "block": "Blocked",
-      "allow": "Allowed"
+      "allow": "Allowed",
+      "trust": "Trusted"
     },
     "origin": "Source",
     "sources": {
@@ -1833,6 +1834,19 @@
     "updated": "Updated",
     "custom": "Custom lists (one IP or CIDR per line; always on)",
     "name": "Name",
-    "add_custom": "Add a list URL"
+    "add_custom": "Add a list URL",
+    "count": "Blocked entries"
+  },
+  "fwtrust": {
+    "title": "Trusted IPs (auto-updated)",
+    "intro": "Cloudflare and search engine / AI crawler ranges, downloaded on a schedule. Trusted IPs are never blocked or banned: not by CrowdSec, malicious IP lists or manual blocks. They are not opened to every port: port rules and the default policy still apply, because anyone can send traffic from Cloudflare (Workers) and fully allowing it would expose SSH and databases. Yahoo uses Bing's crawler; Sogou and 360 publish no IP lists.",
+    "count": "Trusted entries",
+    "group": "Type",
+    "groups": {
+      "cdn": "Cloudflare",
+      "search": "Search engines",
+      "ai": "AI crawlers",
+      "social": "Social previews"
+    }
   }
 }

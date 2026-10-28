@@ -108,3 +108,43 @@ func TestRefreshFeeds(t *testing.T) {
 		t.Fatalf("ban sync armed or reverted the drop policy: %+v pending=%v", c, sv.Pending())
 	}
 }
+
+func TestTrustFeeds(t *testing.T) {
+	sv, log := newSvc(t)
+	ctx := context.Background()
+	sv.Update(ctx, func(c *Config) { c.Enabled, c.Policy = true, "accept" })
+	lists := map[string]string{
+		"https://www.cloudflare.com/ips-v4": "173.245.48.0/20\n103.21.244.0/22\n10.0.0.0/8\n",
+		"https://bl.example/list":           "173.245.0.0/16\n5.6.7.8\n",
+	}
+	fetch = func(ctx context.Context, u string, guard []netip.Prefix) ([]string, int, error) {
+		return ParseFeed(strings.NewReader(lists[u]), guard)
+	}
+	defer func() { fetch = fetchFeed }()
+	if err := sv.SaveFeeds(ctx, []string{"cloudflare4"}, []Feed{{Name: "bl", URL: "https://bl.example/list"}}, 6); err != nil {
+		t.Fatal(err)
+	}
+	if err := sv.RefreshFeeds(ctx); err != nil {
+		t.Fatal(err)
+	}
+	f := sv.Feeds(ctx)
+	// The block CIDR overlapping Cloudflare is kept whole; the ruleset exempts the trusted part.
+	if f.Trusted != 2 || f.Blocking != 2 || f.Status["cloudflare4"].Skipped != 1 || f.Custom[0].Kind != KindBlock {
+		t.Fatalf("feeds %+v", f)
+	}
+	if ips, _ := sv.IPs(ctx, "allow"); len(ips) != 0 {
+		t.Fatalf("trusted ranges in the allow list: %+v", ips)
+	}
+	b, _ := os.ReadFile(log)
+	rs := string(b)
+	if !strings.Contains(rs, "set trust4 { type ipv4_addr; flags interval; auto-merge; elements = { 103.21.244.0/22, 173.245.48.0/20 }") {
+		t.Fatalf("trust set missing:\n%s", rs)
+	}
+	if !strings.Contains(rs, "ip saddr @block4 ip saddr != @trust4 counter drop") || !strings.Contains(rs, "ip6 saddr @ban6 ip6 saddr != @trust6 counter drop") {
+		t.Fatalf("drops do not exempt trusted ranges:\n%s", rs)
+	}
+	// Trusted ranges open nothing: no accept on them.
+	if strings.Contains(rs, "@trust4 accept") {
+		t.Fatal("trusted ranges accepted")
+	}
+}

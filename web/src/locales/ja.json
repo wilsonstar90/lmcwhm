@@ -920,7 +920,8 @@
     "list": "リスト",
     "lists": {
       "block": "ブロック",
-      "allow": "許可"
+      "allow": "許可",
+      "trust": "信頼"
     },
     "origin": "出所",
     "sources": {
@@ -1833,6 +1834,19 @@
     "updated": "更新日時",
     "custom": "カスタムリスト（1 行に IP か CIDR 1 つ・常に有効）",
     "name": "名前",
-    "add_custom": "リスト URL を追加"
+    "add_custom": "リスト URL を追加",
+    "count": "ブロック中のエントリー"
+  },
+  "fwtrust": {
+    "title": "信頼 IP（自動更新）",
+    "intro": "Cloudflare と検索エンジン / AI クローラーの IP 帯を定期ダウンロードします。信頼 IP は CrowdSec・悪性 IP リスト・手動ブロックのいずれでもブロックされません。ただし全ポートは開放せず、ポートルールと既定ポリシーは適用されます。誰でも Cloudflare（Workers）から通信できるため、完全許可すると SSH やデータベースが露出するからです。Yahoo は Bing のクローラーを使用し、Sogou と 360 は IP リストを公開していません。",
+    "count": "信頼中のエントリー",
+    "group": "種類",
+    "groups": {
+      "cdn": "Cloudflare",
+      "search": "検索エンジン",
+      "ai": "AI クローラー",
+      "social": "SNS プレビュー"
+    }
   }
 }

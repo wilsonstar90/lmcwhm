@@ -5,9 +5,13 @@ import { NAlert, NButton, NCard, NCheckbox, NDataTable, NInput, NInputNumber, NS
 import { get, post, put, ApiError } from '../api/client'
 import { datetime } from '../format'
 
-interface Feed { id: string; name: string; url: string; info?: string }
+// One card per feed kind: "block" (malicious IPs) or "trust" (Cloudflare and
+// crawlers, never banned). Both share one configuration on the server.
+const props = defineProps<{ kind: 'block' | 'trust' }>()
+
+interface Feed { id: string; name: string; url: string; info?: string; kind: string; group?: string }
 interface FeedStatus { last_run: number; entries: number; skipped: number; error?: string }
-interface Feeds { enabled: string[]; custom: Feed[]; hours: number; status: Record<string, FeedStatus>; last_run: number; running: boolean; catalog: Feed[]; blocking: number }
+interface Feeds { enabled: string[]; custom: Feed[]; hours: number; status: Record<string, FeedStatus>; last_run: number; running: boolean; catalog: Feed[]; blocking: number; trusted: number }
 
 const { t, locale } = useI18n()
 const msg = useMessage()
@@ -20,14 +24,18 @@ const fwEnabled = ref(true)
 const saving = ref(false)
 let timer: number | undefined
 
+const mine = (x: Feed) => x.kind === props.kind
+const p = computed(() => (props.kind === 'trust' ? 'fwtrust' : 'fwfeed'))
+
+function reset(v: Feeds) {
+  enabled.value = [...v.enabled]
+  custom.value = v.custom.filter(mine).map((x) => ({ ...x }))
+  hours.value = v.hours
+}
 async function load() {
   try {
     f.value = await get<Feeds>('/firewall/feeds')
-    if (!saving.value) {
-      enabled.value = [...f.value.enabled]
-      custom.value = f.value.custom.map((x) => ({ ...x }))
-      hours.value = f.value.hours
-    }
+    if (!saving.value) reset(f.value)
     fwEnabled.value = (await get<{ enabled: boolean }>('/firewall')).enabled
   } catch (e) {
     fail(e)
@@ -38,33 +46,34 @@ async function load() {
 onMounted(load)
 onUnmounted(() => clearTimeout(timer))
 
-const rows = computed<Feed[]>(() => [...(f.value?.catalog ?? []), ...custom.value.filter((c) => c.id)])
+const catalog = computed(() => (f.value?.catalog ?? []).filter(mine))
+const rows = computed<Feed[]>(() => [...catalog.value, ...custom.value.filter((c) => c.id)])
 const dirty = computed(() => {
   if (!f.value) return false
   return JSON.stringify([...enabled.value].sort()) !== JSON.stringify([...f.value.enabled].sort()) ||
-    hours.value !== f.value.hours || JSON.stringify(custom.value) !== JSON.stringify(f.value.custom)
+    hours.value !== f.value.hours || JSON.stringify(custom.value) !== JSON.stringify(f.value.custom.filter(mine))
 })
 
 function toggle(id: string, on: boolean) {
   enabled.value = on ? [...enabled.value, id] : enabled.value.filter((x) => x !== id)
 }
-function addCustom() {
-  custom.value.push({ id: '', name: '', url: '' })
+function toggleGroup(group: string, on: boolean) {
+  const ids = catalog.value.filter((x) => x.group === group).map((x) => x.id)
+  enabled.value = on ? [...new Set([...enabled.value, ...ids])] : enabled.value.filter((x) => !ids.includes(x))
 }
-function removeCustom(i: number) {
-  custom.value.splice(i, 1)
-}
+const groups = computed(() => [...new Set(catalog.value.map((x) => x.group).filter((g): g is string => !!g))])
+const groupOn = (g: string) => catalog.value.filter((x) => x.group === g).every((x) => enabled.value.includes(x.id))
 
 async function save() {
   saving.value = true
   try {
-    // Custom lists are always subscribed (the server numbers them custom1..n).
-    const list = custom.value.filter((c) => c.url.trim())
+    // Custom lists are always subscribed (the server numbers them custom1..n);
+    // the other card's custom lists are sent back unchanged.
+    const others = (f.value?.custom ?? []).filter((x) => !mine(x))
+    const list = [...others, ...custom.value.filter((c) => c.url.trim()).map((c) => ({ ...c, kind: props.kind }))]
     const ids = enabled.value.filter((id) => !id.startsWith('custom'))
     f.value = await put<Feeds>('/firewall/feeds', { enabled: ids, custom: list, hours: hours.value })
-    enabled.value = [...f.value.enabled]
-    custom.value = f.value.custom.map((x) => ({ ...x }))
-    hours.value = f.value.hours
+    reset(f.value)
     msg.success(t('fwfeed.saved'))
   } catch (e) {
     fail(e)
@@ -82,12 +91,15 @@ async function refresh() {
   }
 }
 
-const cols: DataTableColumns<Feed> = [
+const cols = computed<DataTableColumns<Feed>>(() => [
   { title: '', key: 'on', width: 50, render: (x) => (x.id.startsWith('custom') ? null : h(NCheckbox, { checked: enabled.value.includes(x.id), 'onUpdate:checked': (v: boolean) => toggle(x.id, v) })) },
   {
     title: () => t('fwfeed.list'), key: 'name',
     render: (x) => h('div', [h('a', { href: x.url, target: '_blank', rel: 'noopener noreferrer', style: 'color: inherit' }, x.name), x.info ? h('div', { class: 'hint' }, x.info) : null]),
   },
+  ...(props.kind === 'trust'
+    ? [{ title: () => t('fwtrust.group'), key: 'group', width: 120, render: (x: Feed) => (x.group ? h(NTag, { size: 'small' }, () => t(`fwtrust.groups.${x.group}`)) : '—') }]
+    : []),
   {
     title: () => t('fwfeed.entries'), key: 'entries', width: 150,
     render: (x) => {
@@ -110,26 +122,29 @@ const cols: DataTableColumns<Feed> = [
       ])
     },
   },
-]
+])
 </script>
 
 <template>
-  <n-card size="small" :title="t('fwfeed.title')" style="margin-top: 16px">
+  <n-card size="small" :title="t(`${p}.title`)" style="margin-top: 16px">
     <template #header-extra>
       <n-space align="center">
         <n-button size="small" :loading="f?.running" :disabled="!f?.enabled.length" @click="refresh">{{ t('fwfeed.refresh') }}</n-button>
         <n-button size="small" type="primary" :disabled="!dirty" :loading="saving" @click="save">{{ t('common.save') }}</n-button>
       </n-space>
     </template>
-    <p class="hint" style="margin-top: 0">{{ t('fwfeed.intro') }}</p>
+    <p class="hint" style="margin-top: 0">{{ t(`${p}.intro`) }}</p>
     <n-alert v-if="!fwEnabled" type="warning" :show-icon="false" style="margin: 8px 0">{{ t('cs.fw_off') }}</n-alert>
     <n-space :size="32" align="end" style="margin: 8px 0 12px">
-      <n-statistic :label="t('fwfeed.blocking')" :value="(f?.blocking ?? 0).toLocaleString()" />
+      <n-statistic :label="t(`${p}.count`)" :value="((kind === 'trust' ? f?.trusted : f?.blocking) ?? 0).toLocaleString()" />
       <n-statistic :label="t('fwfeed.last_run')" :value="f?.last_run ? datetime(f.last_run, locale) : '—'" />
       <div>
         <div class="hint" style="margin-bottom: 4px">{{ t('fwfeed.every') }}</div>
         <n-input-number v-model:value="hours" size="small" :min="1" :max="48" style="width: 110px"><template #suffix>h</template></n-input-number>
       </div>
+    </n-space>
+    <n-space v-if="groups.length" style="margin-bottom: 8px">
+      <n-checkbox v-for="g in groups" :key="g" :checked="groupOn(g)" @update:checked="(v: boolean) => toggleGroup(g, v)">{{ t(`fwtrust.groups.${g}`) }}</n-checkbox>
     </n-space>
     <n-data-table size="small" :columns="cols" :data="rows" :row-key="(x: Feed) => x.id" :scroll-x="760" />
     <div style="margin-top: 12px">
@@ -137,10 +152,10 @@ const cols: DataTableColumns<Feed> = [
       <n-space vertical>
         <n-space v-for="(c, i) in custom" :key="i" align="center" :wrap="false">
           <n-input v-model:value="c.name" size="small" :placeholder="t('fwfeed.name')" style="width: 160px" />
-          <n-input v-model:value="c.url" size="small" placeholder="https://example.com/blocklist.txt" style="width: 360px" />
-          <n-button size="small" quaternary type="error" @click="removeCustom(i)">{{ t('common.delete') }}</n-button>
+          <n-input v-model:value="c.url" size="small" placeholder="https://example.com/list.txt" style="width: 360px" />
+          <n-button size="small" quaternary type="error" @click="custom.splice(i, 1)">{{ t('common.delete') }}</n-button>
         </n-space>
-        <n-button size="small" dashed @click="addCustom">{{ t('fwfeed.add_custom') }}</n-button>
+        <n-button size="small" dashed @click="custom.push({ id: '', name: '', url: '', kind })">{{ t('fwfeed.add_custom') }}</n-button>
       </n-space>
     </div>
   </n-card>

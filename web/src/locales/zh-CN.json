@@ -920,7 +920,8 @@
     "list": "名单",
     "lists": {
       "block": "黑名单",
-      "allow": "白名单"
+      "allow": "白名单",
+      "trust": "信任"
     },
     "origin": "来源",
     "sources": {
@@ -1833,6 +1834,19 @@
     "updated": "更新时间",
     "custom": "自定义名单（每行一个 IP 或 CIDR；一律启用）",
     "name": "名称",
-    "add_custom": "添加名单网址"
+    "add_custom": "添加名单网址",
+    "count": "封锁中条目"
+  },
+  "fwtrust": {
+    "title": "信任 IP 白名单（自动更新）",
+    "intro": "Cloudflare 与搜索引擎 / AI 爬虫的 IP 段，定时自动下载。信任 IP 永不封锁：CrowdSec、恶意 IP 黑名单、手动封锁均不影响。但不会开放所有端口，端口规则与默认策略照常生效，因为任何人都能经 Cloudflare（Workers）发起连接，完全放行会暴露 SSH 与数据库。Yahoo 使用 Bing 的爬虫；搜狗与 360 未公开 IP 名单。",
+    "count": "信任中条目",
+    "group": "类别",
+    "groups": {
+      "cdn": "Cloudflare",
+      "search": "搜索引擎",
+      "ai": "AI 爬虫",
+      "social": "社交预览"
+    }
   }
 }
