@@ -262,11 +262,40 @@ whm/
 - **App Store 目錄**：暫時內置喺 binary（`internal/appstore/catalog.go`），未做 Git/HTTP 倉庫同 `manifest.yaml`；加新軟件 = 加一項 Catalog + 容器參數。
 - **服務網絡**：資料庫 / Redis / Memcached 用預設 bridge，只發佈 `127.0.0.1:<端口>`（同引擎多版本自動揀下一個空閒端口）；面板經 `docker exec` 用引擎自帶 CLI（mysql / mariadb / psql / mongosh / sqlcmd）管理，唔需要 Go 資料庫驅動。Adminer 用 host network（可直達所有 127.0.0.1 資料庫），由面板 `/adminer/` 反代並檢查面板 session。
 - **Runtime 項目**：唔用 pm2 / supervisor，每個項目一個容器（`lmcwhm-proj-<域名>`，host network、`--restart always`），Docker 就係守護進程；Python 預設命令會喺項目目錄建 `.venv`，重建容器都唔使重裝依賴。
-- **反向代理 / 綁定域名**：網站類型 `proxy` 統一處理「容器綁域名」；TLS 直通網站唔生成 Nginx 設定，直接寫入 HAProxy `passthrough.map`，port 80 一律 301 去 HTTPS。
+- **反向代理 / 綁定域名**：網站類型 `proxy` 統一處理「容器綁域名」；TLS 直通網站唔生成 Nginx 設定，直接寫入 HAProxy SNI map（v0.4 起係 `sni_exact.map` / `sni_wild.map`），port 80 一律 301 去 HTTPS。
 - **Docker 管理**：繼續用 `docker` CLI（`--format '{{json .}}'`），即時用量用 `docker stats --no-stream` 每 5 秒輪詢，日誌用輪詢代替 WS 串流。
 - **檔案管理器**：根目錄預設 `/`（同 aaPanel 一樣，管理員本身係 root），可用 `LMCWHM_FILES_ROOT` 收窄；回收站喺 `/www/.Recycle_bin`，跨磁碟時提示改為永久刪除。編輯器暫用純文字框，未接 Monaco。
-- **未包括（留待之後）**：資料庫備份 / 還原（M6）、遠端存取開關（M5 防火牆）、PHP 擴展管理 / php.ini 編輯、phpMyAdmin 單點登入、Tomcat、Redis key 瀏覽。
+- **未包括（留待之後）**：資料庫備份 / 還原（M6）、PHP 擴展管理 / php.ini 編輯、Tomcat、Redis key 瀏覽。phpMyAdmin 已經喺 v0.3.1 加咗，以 root 自動登入，經 `/phpmyadmin/` 反代。
 - **CI**：`deploy/test-apps.sh` 喺 Ubuntu runner 用真 Docker 測試安裝 runtime / 資料庫、Node / Python 項目、MariaDB / PostgreSQL 建庫 + PHP 連線、設定檔回滾、容器綁域名、Compose、TLS 直通、分塊上傳、zip-slip。
+
+## 4C. SNI / 域名管理：架構檢查同處理方式
+**原則：每個域名只有一個擁有者。** 網站、Docker 綁定、遠端伺服器、TLS 直通全部都係 `sites` 表入面嘅一個站點（類型 php / static / node / python / java / proxy），域名就係主域名或者別名。SNI 管理頁（「域名 / SNI」）只係呢張表嘅檢視同捷徑，冇另一張路由表，所以面板顯示嘅同 HAProxy 實際行緊嘅唔會唔一致。新增域名有兩個方法：加做現有站點嘅別名，或者開一個新嘅 proxy 站點（Docker 端口、http(s)://伺服器、host:port 直通）。
+
+**搵到嘅衝突（v0.4 已修正）**
+| # | 問題 | 影響 | 處理 |
+|---|---|---|---|
+| 1 | 直通用 `map_dom` 匹配：只要域名嘅其中一段相同就當中 | `pass.test` 會連 `x.pass.test`、`pass.test.evil.example` 都直通，子域名唔可以另外指去其他服務 | 改成兩張 map：`*_exact.map`（`map_str`，完全匹配）同 `*_wild.map`（`map_end`，`*.a.com` 存做 `.a.com`，長嘅排先）。完全匹配一定贏通配符，較深嘅通配符贏較淺嘅，同 nginx `server_name` 一致 |
+| 2 | `force_https` / `hsts` 用完全匹配 | 通配符別名（`*.a.com`）永遠唔會 301 去 HTTPS，亦唔會送 HSTS | 用同一套 exact + wild map，而且每個域名都有一項（`0` / `1`），子域名唔會被上層通配符嘅設定影響 |
+| 3 | 每個直通域名一個 backend | 同一目標重複 backend | 相同目標共用一個 `be_pass_N` |
+| 4 | Cloudflare 橙雲 + TLS 直通 | Cloudflare 自己終止 TLS，後端證書要 Cloudflare 接受 | SNI 頁顯示警告，建議灰雲 |
+| 5 | Docker 綁定之後容器被刪 | 域名變成上游無回應 | SNI 頁檢查上游 TCP，顯示「上游冇回應」同埋容器名 |
+| 6 | 通配符站點入面有其他站點嘅子域名 | 容易以為通配符涵蓋晒 | 通配符行列出被覆蓋嘅子域名 |
+
+SNI 頁亦會檢查證書係咪涵蓋該域名、DNS 係咪指向本機、亦有「路由測試」：輸入一個域名，就會顯示由邊條規則處理（完全 / 通配符 / 預設），同 HAProxy 用嘅規則一樣（`webenv.MatchHost`）。
+
+**仍然未做**：面板本身經 443 用域名入（SNI → 面板端口）。可以先用一個直通 proxy 站點指去 `127.0.0.1:<面板端口>`；改面板端口時要同步修改。
+
+## 4D. M4 / M5 實作備註
+- **更新 / 修復（首頁）**：面板查 GitHub 最新 release（API 被限流時讀 `releases/latest` 轉址），用 `systemd-run` 開一個獨立單元行 `lmcwhm update|repair`，所以安裝程式重啟面板都唔會中斷；需要再輸入密碼。修復可以選擇按資料庫重建 HAProxy / nginx / PHP 容器（下次啟動時處理）。
+- **監察**：每 5 秒取樣；最近 1 小時放記憶體，每分鐘平均值寫入 SQLite（`metrics`，保留 30 日）。圖表係自己寫嘅 SVG，冇加圖表庫。
+- **計劃任務**：robfig/cron（可選秒欄位，用面板時區）；Shell（root、獨立 process group，逾時會殺成棵進程樹）、URL、網站日誌切割（gzip + `nginx -s reopen`）。上次未完成就略過並記錄；每個任務保留最近 200 次輸出尾段（64 KB）。
+- **日誌中心**：檔案由尾讀起（每次最多掃 64 MB）；SSH 由 `/var/log/auth.log` 讀，冇就讀 journal（支援 RFC 3339 同傳統時間格式）；網站訪問日誌解析成表格。
+- **IP 歸屬地**：用 DB-IP Lite（CC BY 4.0），唔使註冊；預設國家 + ASN（約 18 MB），可以改用城市庫（約 130 MB）；每月自動更新。
+- **防火牆**：只管理自己嘅 nftables 表 `inet lmcwhm`，由資料庫生成，先 `nft -c` 驗證再一次過原子替換；唔會掂 ufw / Docker 規則。input chain priority −10，黑名單亦套用到 forward chain（Docker 發佈端口）。「預設拒絕」要瀏覽器喺 60 秒內用新連線確認：改動嘅回應會關閉舊連線，因為已建立嘅連線唔會被新規則擋，用舊連線確認證明唔到乜嘢。冇確認或者期間面板重啟，就自動還原做「允許」。SSH 救援：`lmcwhm firewall-off`。
+- **Cloudflare / Linode**：只同步永久封鎖（臨時封鎖變動太快，會撞 API 限額）。Cloudflare 用每個 Zone 嘅 IP Access Rules（備註 `lmcwhm`）；Linode 喺所選雲防火牆最前面放一條 `lmcwhm-block` DROP 規則，可以再加一條 `lmcwhm-ports` ACCEPT 規則。其他規則唔會改；每條規則最多 255 個地址，超出部分只喺本機生效。
+- **WAF**：開啟時 nginx 容器換成官方 `owasp/modsecurity-crs`（CRS 4.25 LTS，固定日期 tag），用同一份生成設定（兩個映像都掛載喺 `/etc/nginx/lmcwhm`，以 `-c` 啟動）；ModSecurity / CRS 參數由映像 entrypoint 按環境變數生成。每個站點可以關閉 WAF 或者排除規則 ID；攔截記錄來自 JSON audit log。
+- **CrowdSec**：容器以 host network 運行，LAPI 喺 `127.0.0.1:8085`（8080 已經俾 nginx 用咗），讀網站日誌同 auth.log；面板就係 bouncer，每 10 秒拉 decision stream，用一個 transaction 寫入防火牆 ban set，社群黑名單幾萬個 IP 都只會重載一次。
+- **CI**：`deploy/test-apps.sh` 用 bridge 網絡上嘅 busybox 容器扮外部客戶，實測黑名單、端口規則、受保護端口、drop 確認 / 自動還原、CRS 攔 SQL 注入同站點豁免、CrowdSec decision 寫入 nftables，同埋 `firewall-off`。Linode / Cloudflare 只有用假 API 嘅單元測試。
 
 ## 5. 路線圖
 | 階段 | 內容 | 完成標準 |

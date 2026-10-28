@@ -3,7 +3,24 @@
 自研伺服器控制面板（aaPanel / 寶塔式），Go 單一 Binary + Vue 3 / Naive UI。
 完整架構與路線圖：[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
-## 目前進度：M3（Docker 管理、檔案、終端）
+## 目前進度：M5（防火牆、WAF、CrowdSec）
+
+**M5 — 安全**
+- 伺服器防火牆（nftables，獨立表 `inet lmcwhm`，唔會改 ufw / Docker 規則）：IP 黑名單 / 白名單（CIDR、IPv4 / IPv6、永久或限時）、端口規則（TCP / UDP、範圍、來源）、Ping 開關、受保護端口（SSH、面板、80、443）；「預設拒絕」要 60 秒內確認仲連得到面板，否則自動還原；救援：`lmcwhm firewall-off`
+- 封鎖同步到 Cloudflare（每個 Zone 嘅 IP Access Rules，另可改安全等級 / Under Attack）同 Linode 雲防火牆
+- WAF：ModSecurity v3 + OWASP CRS 4.25 LTS（攔截 / 只偵測、偏執等級、異常分數門檻），每個網站可以單獨關閉或者排除規則，攔截記錄可以一鍵排除
+- CrowdSec：分析網站同 SSH 日誌，封鎖決定由面板寫入防火牆；可選社群黑名單、警報、手動封鎖 / 解封
+
+**M4 — 監察 / 計劃任務 / 日誌**
+- 監察：CPU、記憶體、負載、磁碟 I/O、網絡（15 分鐘至 30 日）、資源用得最多嘅進程、面板服務狀態
+- 計劃任務：Shell（root）、訪問 URL、網站日誌切割；可用秒級週期、預覽之後幾次執行時間、上次未完成會略過、保留每次輸出；有範本（日誌切割、清理 Docker 映像、系統更新）
+- 日誌中心：面板操作 / 登入、SSH 登入（失敗最多嘅 IP）、網站訪問（解析成表格）/ 錯誤日誌（搜尋、下載、清空）、容器、系統 journal、計劃任務
+- IP 歸屬地：每個 IP 旁邊顯示國旗、地區、ASN（DB-IP Lite，每月自動更新）
+
+**域名 / SNI 管理 + 更新 / 修復**
+- 「域名 / SNI」頁：列出 443 / 80 上每個域名同佢連去邊（網站、Docker 容器、伺服器、TLS 直通），並檢查證書、DNS 同上游；有路由測試；可以加子域名 / 通配符
+- 邊緣路由：完全匹配優先於通配符，較深嘅通配符優先於較淺嘅；修正咗直通域名誤中子域名嘅問題
+- 首頁「更新」（檢查 GitHub 最新版）同「修復」（重裝目前版本，可以重建網站環境容器）；網站、資料庫、設定全部保留
 
 **M3 — Docker 管理 / 檔案管理器 / Terminal**
 - Docker：容器列表（即時 CPU / 記憶體 / 網絡）、建立（端口、環境變數、掛載、重啟策略、資源限制）、啟停 / 暫停 / 刪除、日誌、詳細資料、`docker exec` 終端；Images（拉取 / 刪除 / 清理）、Volumes、網絡；Compose 項目（網頁編輯 yml + .env，up / down / restart / pull、日誌）
@@ -20,7 +37,7 @@
 
 **M1 — 網站管理**
 - HAProxy 3.0 邊緣：80 / 443（IPv4 + IPv6 分開監聽，客戶真實 IP 正確傳遞），按 TLS SNI 分流：
-  需要直通嘅域名原封轉發（passthrough，M3 Docker 應用會用），其餘喺本機終止 TLS，每個域名自動揀返自己張證書
+  需要直通嘅域名原封轉發（passthrough），其餘喺本機終止 TLS，每個域名自動揀返自己張證書
 - Nginx + PHP-FPM 7.4 / 8.0 / 8.1 / 8.2 / 8.3 / 8.4（Docker 容器，每版本一個，內置 mysqli / pdo_mysql / opcache / bcmath / exif），亦支援靜態網站
 - 網站：新增、別名、切換 PHP 版本、停止 / 啟動、刪除（可選刪檔案 + DNS）、強制 HTTPS、HSTS、睇 Nginx 設定
 - Cloudflare：API Token 加密儲存，自動建立 / 更新 / 清理 A（IPv4）+ AAAA（IPv6）記錄，可選橙雲代理
@@ -116,5 +133,6 @@ git push origin v0.1.0
 | `lmcwhm unlock` | 解除登入失敗鎖定 |
 | `lmcwhm log` | 面板日誌最後 100 行 |
 | `lmcwhm update` / `repair` / `reset-panel` | 見上面「修復 / 強制更新」 |
+| `lmcwhm firewall-off` | 關閉面板防火牆（鎖死自己時用；ufw / Docker 規則唔受影響） |
 
 CLI 直接讀寫 `/opt/lmcwhm/data/panel.db`，面板無運行都可以救援。
