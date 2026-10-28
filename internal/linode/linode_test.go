@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -53,5 +54,24 @@ func TestInstanceByIP(t *testing.T) {
 	}
 	if _, err := New("bad").Firewalls(context.Background()); err == nil {
 		t.Fatal("bad token accepted")
+	}
+}
+
+func TestScopeHint(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"errors":[{"reason":"Your OAuth token is not authorized to use this endpoint."}]}`))
+	}))
+	defer srv.Close()
+	old := BaseURL
+	BaseURL = srv.URL
+	defer func() { BaseURL = old }()
+	_, err := New("tok").Firewalls(context.Background())
+	if err == nil || !strings.Contains(err.Error(), `"Firewalls: Read/Write"`) {
+		t.Fatalf("firewalls: %v", err)
+	}
+	_, err = New("tok").InstanceByIP(context.Background(), "192.0.2.1")
+	if err == nil || !strings.Contains(err.Error(), `"Linodes: Read/Write"`) {
+		t.Fatalf("instances: %v", err)
 	}
 }

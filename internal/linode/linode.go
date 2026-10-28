@@ -36,6 +36,17 @@ func New(token string) *Client {
 	return &Client{token: token, http: &http.Client{Timeout: 20 * time.Second}}
 }
 
+// scopeHint names the Personal Access Token scope an endpoint needs.
+func scopeHint(path string) string {
+	switch {
+	case strings.HasPrefix(path, "/networking/firewalls"):
+		return `the token needs the "Firewalls: Read/Write" scope`
+	case strings.HasPrefix(path, "/linode/"):
+		return `the token needs the "Linodes: Read/Write" scope`
+	}
+	return "the token lacks a scope for " + path
+}
+
 func (c *Client) do(ctx context.Context, method, path string, body, out any) error {
 	if c.token == "" {
 		return ErrNoToken
@@ -69,7 +80,11 @@ func (c *Client) do(ctx context.Context, method, path string, body, out any) err
 		for _, x := range e.Errors {
 			msgs = append(msgs, strings.TrimSpace(x.Field+" "+x.Reason))
 		}
-		return fmt.Errorf("linode: HTTP %d %s", res.StatusCode, strings.Join(msgs, "; "))
+		msg := fmt.Sprintf("linode: HTTP %d %s", res.StatusCode, strings.Join(msgs, "; "))
+		if (res.StatusCode == http.StatusUnauthorized || res.StatusCode == http.StatusForbidden) && strings.Contains(msg, "not authorized") {
+			msg += " — " + scopeHint(path)
+		}
+		return errors.New(msg)
 	}
 	if out != nil {
 		return json.Unmarshal(b, out)
