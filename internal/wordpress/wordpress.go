@@ -5,6 +5,7 @@
 package wordpress
 
 import (
+	"archive/zip"
 	"context"
 	"crypto/sha512"
 	"encoding/hex"
@@ -241,9 +242,9 @@ func (sv *Service) Install(ctx context.Context, siteID int64, in InstallInput) (
 			return ErrNoEngine
 		}
 		os.Remove(filepath.Join(s.Root, "index.html")) // placeholder page
-		log("downloading WordPress (%s)", in.Locale)
-		if out, err := sv.wp(ctx, s, "core", "download", "--locale="+in.Locale, "--force"); err != nil {
-			return fmt.Errorf("%v\n%s", err, out)
+		// Not "wp core download": PHP's tar reader truncates WordPress's long paths.
+		if err := downloadCore(ctx, s.Root, log); err != nil {
+			return err
 		}
 		log("writing wp-config.php")
 		if _, err := sv.wp(ctx, s, "config", "create", "--dbname="+db.Name, "--dbuser="+db.Username, "--dbpass="+db.Password,
@@ -255,10 +256,112 @@ func (sv *Service) Install(ctx context.Context, siteID int64, in InstallInput) (
 			"--admin_user="+in.AdminUser, "--admin_password="+in.AdminPass, "--admin_email="+in.AdminEmail, "--skip-email"); err != nil {
 			return err
 		}
+		if in.Locale != "en_US" {
+			log("installing language %s", in.Locale)
+			if out, err := sv.wp(ctx, s, "language", "core", "install", in.Locale, "--activate"); err != nil {
+				log("language: %v %s", err, out) // the site works in English
+			}
+		}
 		sv.wp(ctx, s, "config", "set", "DISALLOW_FILE_EDIT", "true", "--raw")
 		log("WordPress %s installed; admin: %s://%s/wp-admin/", version(s.Root), scheme, s.Domain)
 		return nil
 	}), nil
+}
+
+// coreAPI tells which WordPress release is current (a variable for tests).
+var (
+	coreAPI   = "https://api.wordpress.org/core/version-check/1.7/"
+	newClient = func() *http.Client { return &http.Client{Timeout: 10 * time.Minute} }
+)
+
+// downloadCore puts the latest WordPress release into root (owned by www-data).
+func downloadCore(ctx context.Context, root string, log tasks.Logf) error {
+	client := newClient()
+	get := func(u string) (*http.Response, error) {
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		res, err := client.Do(req)
+		if err == nil && res.StatusCode != http.StatusOK {
+			res.Body.Close()
+			return nil, fmt.Errorf("GET %s: HTTP %d", u, res.StatusCode)
+		}
+		return res, err
+	}
+	res, err := get(coreAPI)
+	if err != nil {
+		return err
+	}
+	var vc struct {
+		Offers []struct {
+			Download string `json:"download"`
+			Version  string `json:"current"`
+		} `json:"offers"`
+	}
+	err = json.NewDecoder(res.Body).Decode(&vc)
+	res.Body.Close()
+	if err != nil || len(vc.Offers) == 0 || !strings.HasPrefix(vc.Offers[0].Download, "https://") {
+		return errors.New("cannot find the latest WordPress release")
+	}
+	log("downloading WordPress %s", vc.Offers[0].Version)
+	res, err = get(vc.Offers[0].Download)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	tmp, err := os.CreateTemp("", "wordpress-*.zip")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	defer tmp.Close()
+	n, err := io.Copy(tmp, io.LimitReader(res.Body, 256<<20))
+	if err != nil {
+		return err
+	}
+	zr, err := zip.NewReader(tmp, n)
+	if err != nil {
+		return err
+	}
+	rt, err := os.OpenRoot(root)
+	if err != nil {
+		return err
+	}
+	defer rt.Close()
+	for _, f := range zr.File {
+		name, ok := strings.CutPrefix(f.Name, "wordpress/")
+		if !ok || name == "" {
+			continue
+		}
+		if strings.HasSuffix(name, "/") {
+			if err := rt.MkdirAll(strings.TrimSuffix(name, "/"), 0o755); err != nil {
+				return err
+			}
+			rt.Lchown(strings.TrimSuffix(name, "/"), 33, 33)
+			continue
+		}
+		if dir := filepath.Dir(name); dir != "." {
+			if err := rt.MkdirAll(dir, 0o755); err != nil {
+				return err
+			}
+			rt.Lchown(dir, 33, 33)
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return err
+		}
+		w, err := rt.OpenFile(name, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+		if err == nil {
+			_, err = io.Copy(w, rc)
+			if cerr := w.Close(); err == nil {
+				err = cerr
+			}
+		}
+		rc.Close()
+		if err != nil {
+			return err
+		}
+		rt.Lchown(name, 33, 33)
+	}
+	return nil
 }
 
 // ---- maintenance ----
