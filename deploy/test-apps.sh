@@ -532,8 +532,10 @@ task POST /backups/run '{"kind":"snapshot","dests":["local"],"keep":1}'
 SNAP="$(api GET '/backups?kind=snapshot' | jget "['items'][0]['id']")"
 SS="$(api POST "/backups/$SNAP/share" | jget "['token']")"
 curl -sk -X POST "$P/s/$SS" -o /tmp/snap.tar.gz
-tar -tzf /tmp/snap.tar.gz | grep -q '^home/data/panel.db$' || fail "snapshot lacks the panel database"
-tar -tzf /tmp/snap.tar.gz | grep -q '^www/db.test/index.php$' || fail "snapshot lacks website files"
+LIST="$(tar -tzf /tmp/snap.tar.gz)" || fail "snapshot is not a tar.gz: $(head -c 200 /tmp/snap.tar.gz)"
+grep -qx 'home/data/panel.db' <<<"$LIST" || fail "snapshot lacks the panel database"
+grep -qx 'www/db.test/index.php' <<<"$LIST" || fail "snapshot lacks website files"
+grep -qx 'snapshot.json' <<<"$(head -1 <<<"$LIST")" || fail "snapshot manifest not first"
 pass "DNS template preview; snapshot with panel, apps and websites, downloadable for migration"
 
 # Manifest for the installable app (PWA).
