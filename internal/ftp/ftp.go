@@ -311,6 +311,7 @@ func (sv *Service) SetEnabled(ctx context.Context, on bool, log func(string, ...
 		return err
 	}
 	if !on {
+		log("removing container %s", Container)
 		return dockerx.Remove(ctx, Container)
 	}
 	return sv.ensure(ctx, log)

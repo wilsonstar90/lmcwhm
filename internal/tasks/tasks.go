@@ -115,6 +115,6 @@ func (m *Manager) Get(id string) (Task, bool) {
 		return Task{}, false
 	}
 	c := *t
-	c.Log = append([]string(nil), t.Log...)
+	c.Log = append(make([]string, 0, len(t.Log)), t.Log...)
 	return c, true
 }
