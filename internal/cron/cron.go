@@ -475,9 +475,13 @@ func (sv *Service) dispatch(ctx context.Context, j Job, out io.Writer) (int, err
 // timeout kills the whole tree.
 func runShell(ctx context.Context, script string, out io.Writer) (int, error) {
 	cmd := exec.Command("/bin/bash", "-c", script)
-	cmd.Dir = "/root"
-	if _, err := os.Stat(cmd.Dir); err != nil {
-		cmd.Dir = "/"
+	// The panel runs as root, so this is /root; "/" when there is no usable home.
+	cmd.Dir = "/"
+	if home, err := os.UserHomeDir(); err == nil {
+		if f, err := os.Open(home); err == nil {
+			f.Close()
+			cmd.Dir = home
+		}
 	}
 	cmd.Env = append(os.Environ(), "HOME="+cmd.Dir, "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
 	cmd.Stdout, cmd.Stderr = out, out
