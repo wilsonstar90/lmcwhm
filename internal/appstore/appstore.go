@@ -234,8 +234,14 @@ func (sv *Service) Install(ctx context.Context, key, version string, avoid map[i
 			inst.secret = newPassword()
 			inst.Container = ContainerName(key, version)
 			dir := sv.dir(key, version)
-			if err := os.RemoveAll(dir); err != nil {
-				return err
+			// Data kept by an earlier uninstall belongs to the old admin
+			// password, so it cannot be reused; set it aside instead of deleting it.
+			if _, err := os.Stat(dir); err == nil {
+				old := fmt.Sprintf("%s.old-%d", dir, time.Now().Unix())
+				if err := os.Rename(dir, old); err != nil {
+					return err
+				}
+				log("previous data moved to %s", old)
 			}
 			if err := sv.prepare(inst, dir); err != nil {
 				return err

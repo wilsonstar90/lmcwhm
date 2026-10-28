@@ -180,3 +180,20 @@ func TestZipSlip(t *testing.T) {
 		t.Error("file written outside the destination")
 	}
 }
+
+func TestChmodSpecialBits(t *testing.T) {
+	f, root := newFS(t)
+	if err := os.WriteFile(filepath.Join(root, "x"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Chmod("/x", "2755", false); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Stat(filepath.Join(root, "x"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != 0o755 || fi.Mode()&os.ModeSetgid == 0 {
+		t.Fatalf("mode = %v, want setgid 0755", fi.Mode())
+	}
+}

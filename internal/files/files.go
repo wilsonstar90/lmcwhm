@@ -572,6 +572,7 @@ func (f *FS) Chmod(p, mode string, recursive bool) error {
 	if err != nil || m > 0o7777 {
 		return ErrBadMode
 	}
+	fm := fileMode(uint32(m))
 	r, err := rel(p)
 	if err != nil {
 		return err
@@ -585,8 +586,24 @@ func (f *FS) Chmod(p, mode string, recursive bool) error {
 		if fi, err := root.Lstat(x); err == nil && fi.Mode()&fs.ModeSymlink != 0 {
 			return nil // chmod would follow the link
 		}
-		return root.Chmod(x, fs.FileMode(m))
+		return root.Chmod(x, fm)
 	}))
+}
+
+// fileMode converts Unix mode bits to an fs.FileMode, whose setuid, setgid and
+// sticky flags are not the Unix bit positions (fs.FileMode(0o4755) drops setuid).
+func fileMode(m uint32) fs.FileMode {
+	fm := fs.FileMode(m & 0o777)
+	if m&0o4000 != 0 {
+		fm |= fs.ModeSetuid
+	}
+	if m&0o2000 != 0 {
+		fm |= fs.ModeSetgid
+	}
+	if m&0o1000 != 0 {
+		fm |= fs.ModeSticky
+	}
+	return fm
 }
 
 func lookupID(name string, group bool) (int, error) {
