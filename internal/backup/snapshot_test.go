@@ -38,10 +38,10 @@ func TestSnapshotRoundTrip(t *testing.T) {
 		t.Fatalf("manifest %+v", m)
 	}
 	for p, want := range map[string]string{
-		filepath.Join(dst, "data", "secret.key"):                  "k",
-		filepath.Join(dst, "edge", "haproxy.cfg"):                 "cfg",
+		filepath.Join(dst, "data", "secret.key"):                      "k",
+		filepath.Join(dst, "edge", "haproxy.cfg"):                     "cfg",
 		filepath.Join(dst, "apps", "mysql", "8.4", "data", "ibdata1"): "db",
-		filepath.Join(www, "a.com", "index.php"):                  "<?php",
+		filepath.Join(www, "a.com", "index.php"):                      "<?php",
 	} {
 		if b, err := os.ReadFile(p); err != nil || string(b) != want {
 			t.Errorf("%s = %q %v", p, b, err)

@@ -12,9 +12,9 @@ import (
 func fake(t *testing.T) (*Service, *[]string) {
 	root := t.TempDir()
 	for p, body := range map[string]string{
-		"/etc/fstab":              "UUID=x / ext4 defaults 0 1\n/swapfile none swap sw 0 0\n",
-		"/etc/hosts":              "127.0.0.1 localhost\n127.0.1.1 old old\n10.0.0.5 old\n",
-		"/etc/ssh/sshd_config":    "#Port 22\nPermitRootLogin yes\n",
+		"/etc/fstab":                 "UUID=x / ext4 defaults 0 1\n/swapfile none swap sw 0 0\n",
+		"/etc/hosts":                 "127.0.0.1 localhost\n127.0.1.1 old old\n10.0.0.5 old\n",
+		"/etc/ssh/sshd_config":       "#Port 22\nPermitRootLogin yes\n",
 		"/root/.ssh/authorized_keys": "",
 	} {
 		os.MkdirAll(filepath.Dir(filepath.Join(root, p)), 0o755)

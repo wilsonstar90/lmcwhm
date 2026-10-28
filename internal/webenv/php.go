@@ -33,8 +33,8 @@ var (
 type PHPExt struct {
 	Name string `json:"name"`
 	Desc string `json:"desc"`
-	Min  string `json:"min,omitempty"` // first PHP version supported
-	Max  string `json:"max,omitempty"` // last PHP version supported
+	Min  string `json:"min,omitempty"`  // first PHP version supported
+	Max  string `json:"max,omitempty"`  // last PHP version supported
 	Slow bool   `json:"slow,omitempty"` // compiles for several minutes
 }
 

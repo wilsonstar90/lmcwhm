@@ -16,11 +16,11 @@ func TestScan(t *testing.T) {
 	defer st.Close()
 	root := filepath.Join(dir, "root")
 	for p, body := range map[string]string{
-		"/etc/passwd":                    "root:x:0:0::/root:/bin/bash\ntoor:x:0:0::/root:/bin/sh\nbob:x:1000:1000::/home/bob:/bin/bash\n",
-		"/etc/shadow":                    "root:$6$abc:19000::::::\nbob::19000::::::\n",
-		"/var/run/reboot-required":       "",
-		"/proc/sys/kernel/randomize_va_space": "0\n",
-		"/www/wwwroot/a.com/index.php":   "<?php",
+		"/etc/passwd":                                 "root:x:0:0::/root:/bin/bash\ntoor:x:0:0::/root:/bin/sh\nbob:x:1000:1000::/home/bob:/bin/bash\n",
+		"/etc/shadow":                                 "root:$6$abc:19000::::::\nbob::19000::::::\n",
+		"/var/run/reboot-required":                    "",
+		"/proc/sys/kernel/randomize_va_space":         "0\n",
+		"/www/wwwroot/a.com/index.php":                "<?php",
 		"/www/wwwroot/a.com/wp-content/uploads/x.php": "<?php",
 	} {
 		os.MkdirAll(filepath.Dir(filepath.Join(root, p)), 0o755)
