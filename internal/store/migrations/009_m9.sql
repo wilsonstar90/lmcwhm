@@ -73,3 +73,9 @@ CREATE TABLE file_favorites (
     created_at INTEGER NOT NULL,
     UNIQUE(user_id, path)
 );
+
+-- Mail server domains (mailboxes and aliases live in the mail container's config).
+CREATE TABLE mail_domains (
+    name       TEXT PRIMARY KEY,
+    created_at INTEGER NOT NULL
+);

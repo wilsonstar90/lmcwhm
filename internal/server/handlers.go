@@ -65,7 +65,7 @@ func (s *Server) handler() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer, securityHeaders, s.gate)
 
-	r.Route("/api/v1", func(r chi.Router) {
+	s.api = r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/public/meta", s.handleMeta)
 		r.Post("/auth/login", s.handleLogin)
 
@@ -107,6 +107,8 @@ func (s *Server) handler() http.Handler {
 			s.m8Routes(r)
 			s.phpRoutes(r)
 			s.m9Routes(r)
+			s.m10Routes(r)
+			r.Get("/openapi.json", s.handleOpenAPI)
 			r.Get("/logs/login", s.handleLoginLogs)
 			r.Get("/logs/operation", s.handleOperationLogs)
 		})
@@ -116,6 +118,7 @@ func (s *Server) handler() http.Handler {
 	})
 
 	r.HandleFunc("/mcp", s.mcpAuth)
+	r.Get("/manifest.webmanifest", s.handleManifest)
 	r.Get("/s/{token}", s.handlePublicShare)
 	r.Post("/s/{token}", s.handlePublicShare)
 	if s.Apps != nil {
@@ -156,6 +159,31 @@ func (s *Server) spa(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Write(index)
+}
+
+// handleManifest is the PWA manifest; it starts at the security entry so an
+// installed app can sign in again after its session expires.
+func (s *Server) handleManifest(w http.ResponseWriter, r *http.Request) {
+	cfg := s.Settings.Get()
+	name := cfg.PanelAlias
+	if name == "" {
+		name = "lmcwhm"
+	}
+	start := "/"
+	if cfg.SecurityEntry != "" {
+		start = cfg.SecurityEntry
+	}
+	w.Header().Set("Content-Type", "application/manifest+json")
+	w.Header().Set("Cache-Control", "no-cache")
+	json.NewEncoder(w).Encode(map[string]any{
+		"name": name, "short_name": name, "start_url": start, "scope": "/", "id": "/",
+		"display": "standalone", "background_color": "#101014", "theme_color": "#18a058",
+		"icons": []map[string]string{
+			{"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
+			{"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png"},
+			{"src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+		},
+	})
 }
 
 func (s *Server) handleMeta(w http.ResponseWriter, r *http.Request) {

@@ -32,6 +32,7 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/ftp"
 	"github.com/wilsonstar90/lmcwhm/internal/geoip"
 	"github.com/wilsonstar90/lmcwhm/internal/i18n"
+	"github.com/wilsonstar90/lmcwhm/internal/mail"
 	"github.com/wilsonstar90/lmcwhm/internal/malware"
 	"github.com/wilsonstar90/lmcwhm/internal/monitor"
 	"github.com/wilsonstar90/lmcwhm/internal/netinfo"
@@ -99,7 +100,7 @@ func main() {
 	root.AddCommand(serveCmd(), versionCmd())
 	root.AddCommand(cliCommands()...)
 	root.AddCommand(maintenanceCommands()...)
-	root.AddCommand(backupCommand(), mcpCommand())
+	root.AddCommand(backupCommand(), mcpCommand(), snapshotCommand())
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
@@ -243,6 +244,26 @@ func serveCmd() *cobra.Command {
 				return nil
 			}
 			tp := tamper.New(a.st, env.WWWRoot, a.paths.Home)
+			mailSvc := mail.New(a.st, a.paths.Home)
+			go mailSvc.Boot(ctx)
+			mailSvc.Cert = func(host string) string {
+				if _, err := os.Stat(env.CertPath(host)); err == nil {
+					return env.CertPath(host)
+				}
+				return ""
+			}
+			go func() { // pick up renewed certificates
+				t := time.NewTicker(6 * time.Hour)
+				defer t.Stop()
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case <-t.C:
+						mailSvc.SyncCert(ctx)
+					}
+				}
+			}()
 			defer tp.Stop()
 			srv, err := server.New(server.Deps{
 				Paths: a.paths, Settings: a.settings, Auth: a.auth, Audit: a.audit,
@@ -253,7 +274,7 @@ func serveCmd() *cobra.Command {
 				Tokens: apitoken.New(a.st), AI: ai.New(a.st, box, nil),
 				Alerts: alerts, Probes: probes, Stats: stats, Procs: procs, WP: wordpress.New(sites, dbs, env, tm), FTP: ftpSvc,
 				Toolbox: tb, SecScan: secscan.New(a.st), Malware: malware.New(a.st, env.WWWRoot, a.paths.Home), Tamper: tp,
-				Shares: fileshare.New(a.st),
+				Shares: fileshare.New(a.st), Mail: mailSvc,
 			})
 			if err != nil {
 				return err

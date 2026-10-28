@@ -23,6 +23,10 @@ type tarSource struct {
 	dir    string // directory on disk
 	prefix string // path inside the archive
 	skip   func(rel string) bool
+	// before runs before the source is read and returns what to run after
+	// (snapshots pause the App Store containers around their data).
+	before func() func()
+	pause  bool
 }
 
 func excluded(rel string, patterns []string) bool {
@@ -45,6 +49,10 @@ func writeTarGz(ctx context.Context, w io.Writer, srcs []tarSource, exclude []st
 	for _, s := range srcs {
 		if _, err := os.Lstat(s.dir); err != nil {
 			return err
+		}
+		after := func() {}
+		if s.before != nil {
+			after = s.before()
 		}
 		err := filepath.WalkDir(s.dir, func(p string, d fs.DirEntry, err error) error {
 			if err != nil {
@@ -99,6 +107,7 @@ func writeTarGz(ctx context.Context, w io.Writer, srcs []tarSource, exclude []st
 			}
 			return nil
 		})
+		after()
 		if err != nil {
 			return err
 		}

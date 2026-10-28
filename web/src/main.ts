@@ -28,5 +28,10 @@ async function boot() {
   }
   await setLang(lang)
   app.mount('#app')
+  // Installable app (PWA). Browsers refuse service workers on untrusted
+  // certificates (the self-signed panel SSL), which is harmless.
+  if ('serviceWorker' in navigator && import.meta.env.PROD) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {})
+  }
 }
 boot()

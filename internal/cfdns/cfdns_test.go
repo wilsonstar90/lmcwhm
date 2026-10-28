@@ -112,3 +112,61 @@ func TestZoneAndUpsert(t *testing.T) {
 		t.Fatalf("bad token: %v", err)
 	}
 }
+
+func TestRecordCheckAndTemplates(t *testing.T) {
+	p := 10
+	ok := []FullRecord{
+		{Type: "a", Name: "WWW.Example.com.", Content: "1.2.3.4", Proxied: true},
+		{Type: "MX", Name: "example.com", Content: "mail.example.com", Priority: &p},
+		{Type: "SRV", Name: "_sip._tls.example.com", Data: map[string]any{"priority": 100.0, "weight": "1", "port": 443, "target": "sip.example.net"}},
+		{Type: "CAA", Name: "example.com", Data: map[string]any{"flags": 0, "tag": "issue", "value": "letsencrypt.org"}},
+		{Type: "TXT", Name: "_dmarc.example.com", Content: "v=DMARC1; p=none"},
+	}
+	for _, r := range ok {
+		if err := r.Check(); err != nil {
+			t.Errorf("%+v: %v", r, err)
+		}
+	}
+	r := ok[0]
+	r.Check()
+	if r.Type != "A" || r.Name != "www.example.com" {
+		t.Errorf("normalised: %+v", r)
+	}
+	bad := []FullRecord{
+		{Type: "A", Name: "x.com", Content: "::1"},
+		{Type: "MX", Name: "x.com", Content: "mail.x.com"},
+		{Type: "CAA", Name: "x.com", Data: map[string]any{"flags": 0, "tag": "bogus", "value": "x"}},
+		{Type: "TXT", Name: "bad name.com", Content: "x"},
+		{Type: "PTR", Name: "x.com", Content: "y"},
+	}
+	for _, r := range bad {
+		if err := r.Check(); err == nil {
+			t.Errorf("accepted %+v", r)
+		}
+	}
+	var m365 Template
+	for _, tp := range Templates {
+		if tp.Key == "microsoft365" {
+			m365 = tp
+		}
+	}
+	recs := Expand(m365, map[string]string{"domain": "a.example.com"})
+	if recs[0].Content != "a-example-com.mail.protection.outlook.com" || recs[3].Data["target"] != "sipdir.online.lync.com" {
+		t.Fatalf("expand: %+v", recs)
+	}
+	var self Template
+	for _, tp := range Templates {
+		if tp.Key == "self_mail" {
+			self = tp
+		}
+	}
+	recs = Expand(self, map[string]string{"domain": "a.com", "mailhost": "mail.a.com", "ip4": "1.2.3.4", "ip6": ""})
+	for _, r := range recs {
+		if r.Type == "AAAA" {
+			t.Fatal("empty IPv6 record kept")
+		}
+		if err := r.Check(); err != nil {
+			t.Fatalf("%+v: %v", r, err)
+		}
+	}
+}

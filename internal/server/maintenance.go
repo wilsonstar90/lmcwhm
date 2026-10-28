@@ -35,12 +35,14 @@ var (
 	errMaintRunning     = errors.New("maint.running")
 	errMaintUnsupported = errors.New("maint.unsupported")
 	errUpToDate         = errors.New("maint.up_to_date")
+	errNoRollback       = errors.New("maint.no_rollback")
 )
 
 func (s *Server) maintenanceRoutes(r chi.Router) {
 	r.Get("/system/update", s.handleCheckUpdate)
 	r.Post("/system/update", s.handleRunMaintenance("update"))
 	r.Post("/system/repair", s.handleRunMaintenance("repair"))
+	r.Post("/system/rollback", s.handleRunMaintenance("rollback"))
 	r.Get("/system/maintenance", s.handleMaintenanceStatus)
 }
 
@@ -56,8 +58,8 @@ type releaseInfo struct {
 
 var (
 	relMu     sync.Mutex
-	relCache  releaseInfo
-	relExpiry time.Time
+	relCache  = map[bool]releaseInfo{}
+	relExpiry = map[bool]time.Time{}
 )
 
 // semver parses "v1.2.3" (pre-release / build suffixes ignored).
@@ -98,16 +100,22 @@ func latestTagByRedirect(ctx context.Context) (string, error) {
 	return tag, nil
 }
 
-func latestRelease(ctx context.Context, force bool) releaseInfo {
+// latestRelease finds the newest stable release, or with beta the newest
+// release of any kind (pre-releases included).
+func latestRelease(ctx context.Context, force, beta bool) releaseInfo {
 	relMu.Lock()
 	defer relMu.Unlock()
-	if !force && time.Now().Before(relExpiry) {
-		return relCache
+	if !force && time.Now().Before(relExpiry[beta]) {
+		return relCache[beta]
 	}
 	info := releaseInfo{Current: "v" + strings.TrimPrefix(config.Version, "v")}
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, releasesAPI, nil)
+	api := releasesAPI
+	if beta {
+		api = strings.TrimSuffix(releasesAPI, "/latest") + "?per_page=1"
+	}
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, api, nil)
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", "lmcwhm/"+config.Version)
 	var gh struct {
@@ -118,14 +126,25 @@ func latestRelease(ctx context.Context, force bool) releaseInfo {
 	}
 	res, err := http.DefaultClient.Do(req)
 	if err == nil {
-		if res.StatusCode == http.StatusOK {
+		if res.StatusCode == http.StatusOK && beta {
+			var list []struct {
+				TagName     string `json:"tag_name"`
+				Body        string `json:"body"`
+				HTMLURL     string `json:"html_url"`
+				PublishedAt string `json:"published_at"`
+			}
+			json.NewDecoder(res.Body).Decode(&list)
+			if len(list) > 0 {
+				gh = list[0]
+			}
+		} else if res.StatusCode == http.StatusOK {
 			json.NewDecoder(res.Body).Decode(&gh)
 		} else {
 			err = fmt.Errorf("github: %s", res.Status)
 		}
 		res.Body.Close()
 	}
-	if gh.TagName == "" {
+	if gh.TagName == "" && !beta {
 		// The API allows 60 anonymous requests per hour per IP; the release
 		// page redirect to /releases/tag/<tag> is not rate limited.
 		if tag, ferr := latestTagByRedirect(ctx); ferr == nil {
@@ -137,17 +156,40 @@ func latestRelease(ctx context.Context, force bool) releaseInfo {
 			err = errors.New("github: no release")
 		}
 		info.Error = err.Error()
-		relCache, relExpiry = info, time.Now().Add(time.Minute)
+		relCache[beta], relExpiry[beta] = info, time.Now().Add(time.Minute)
 		return info
 	}
 	info.Latest, info.Notes, info.URL, info.Published = gh.TagName, gh.Body, gh.HTMLURL, gh.PublishedAt
 	info.Newer = gh.TagName != "" && newerVersion(gh.TagName, info.Current)
-	relCache, relExpiry = info, time.Now().Add(10*time.Minute)
+	relCache[beta], relExpiry[beta] = info, time.Now().Add(10*time.Minute)
 	return info
 }
 
 func (s *Server) handleCheckUpdate(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, latestRelease(r.Context(), r.URL.Query().Get("force") == "1"))
+	info := latestRelease(r.Context(), r.URL.Query().Get("force") == "1", r.URL.Query().Get("channel") == "beta")
+	writeJSON(w, http.StatusOK, map[string]any{
+		"current": info.Current, "latest": info.Latest, "newer": info.Newer, "notes": info.Notes, "url": info.URL,
+		"published_at": info.Published, "error": info.Error, "rollback": previousVersion(r.Context()),
+	})
+}
+
+// previousVersion is the version `lmcwhm rollback` returns to ("" = none).
+func previousVersion(ctx context.Context) string {
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, exe+".prev", "version").Output()
+	if err != nil {
+		return ""
+	}
+	f := strings.Fields(string(out))
+	if len(f) < 2 {
+		return ""
+	}
+	return f[1]
 }
 
 func (s *Server) maintLog() string { return filepath.Join(s.Paths.LogDir, "maintenance.log") }
@@ -166,7 +208,9 @@ func (s *Server) handleRunMaintenance(action string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Password string `json:"password"`
-			Rebuild  bool   `json:"rebuild"` // repair: also recreate the web stack containers
+			Rebuild  bool   `json:"rebuild"`   // repair: also recreate the web stack containers
+			Channel  string `json:"channel"`   // update: "beta" includes pre-releases
+			WithData bool   `json:"with_data"` // rollback: also restore the pre-update data backup
 		}
 		if err := decode(r, &in); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
@@ -185,10 +229,25 @@ func (s *Server) handleRunMaintenance(action string) http.HandlerFunc {
 			writeErr(w, http.StatusConflict, errMaintRunning)
 			return
 		}
-		rel := latestRelease(r.Context(), true)
+		beta := in.Channel == "beta"
+		rel := latestRelease(r.Context(), true, beta)
 		if action == "update" && rel.Error == "" && !rel.Newer {
 			writeErr(w, http.StatusBadRequest, errUpToDate)
 			return
+		}
+		args := []string{action}
+		switch {
+		case action == "update" && beta:
+			args = append(args, "--channel", "beta")
+		case action == "rollback":
+			if previousVersion(r.Context()) == "" {
+				writeErr(w, http.StatusBadRequest, errNoRollback)
+				return
+			}
+			rel.Latest = previousVersion(r.Context())
+			if in.WithData {
+				args = append(args, "--with-data")
+			}
 		}
 		exe, err := os.Executable()
 		if err != nil {
@@ -204,9 +263,10 @@ func (s *Server) handleRunMaintenance(action string) http.HandlerFunc {
 			writeErr(w, http.StatusInternalServerError, err)
 			return
 		}
-		cmd := exec.Command("systemd-run", "--unit", maintUnit, "--collect", "--quiet",
-			"-p", "StandardOutput=append:"+s.maintLog(), "-p", "StandardError=append:"+s.maintLog(),
-			"/bin/bash", "-c", `"$0" "$1"; echo "== exit $?"`, exe, action)
+		run := []string{"--unit", maintUnit, "--collect", "--quiet",
+			"-p", "StandardOutput=append:" + s.maintLog(), "-p", "StandardError=append:" + s.maintLog(),
+			"/bin/bash", "-c", `"$0" "$@"; echo "== exit $?"`, exe}
+		cmd := exec.Command("systemd-run", append(run, args...)...)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			s.Log.Error("maintenance", "err", err, "out", string(out))
 			writeErr(w, http.StatusInternalServerError, err)

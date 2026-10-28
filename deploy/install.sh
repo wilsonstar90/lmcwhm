@@ -15,6 +15,9 @@
 #   --reset-panel      lock-out recovery: new entry + admin password, self-signed
 #                      SSL, 2FA / authorized IP / domain / BasicAuth off
 #   --binary FILE      install a local build instead of downloading
+#   --channel beta     newest release including pre-releases (default: stable)
+#   --offline FILE     install from an offline bundle (deploy/make-offline.sh):
+#                      binary, Docker static binaries and the core images
 #   --port N --entry /path --username U --password P
 #                      fresh install: initial values; upgrade: applied as changes
 #   --skip-docker      do not install Docker
@@ -31,6 +34,8 @@ KEEP_BACKUPS=5
 
 VERSION=latest
 BINARY=""
+CHANNEL=stable
+OFFLINE=""
 REPAIR=0
 RESET_PANEL=0
 SKIP_DOCKER=0
@@ -49,6 +54,8 @@ while [[ $# -gt 0 ]]; do
     --repair)      REPAIR=1; shift ;;
     --reset-panel) RESET_PANEL=1; shift ;;
     --binary)      BINARY="$2"; shift 2 ;;
+    --channel)     CHANNEL="$2"; shift 2 ;;
+    --offline)     OFFLINE="$2"; shift 2 ;;
     --port)        OPT_PORT="$2"; shift 2 ;;
     --entry)       OPT_ENTRY="$2"; shift 2 ;;
     --username)    OPT_USER="$2"; shift 2 ;;
@@ -81,6 +88,19 @@ case "$(uname -m)" in
   *) die "unsupported architecture $(uname -m)" ;;
 esac
 
+# ---- offline bundle: unpack first, everything below uses its files ----
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+if [[ -n "$OFFLINE" ]]; then
+  [[ -f "$OFFLINE" ]] || die "offline bundle not found: $OFFLINE"
+  step "Unpacking offline bundle $OFFLINE"
+  mkdir -p "$WORK/offline"
+  tar -xzf "$OFFLINE" -C "$WORK/offline"
+  B="$WORK/offline"
+  [[ -f "$B/lmcwhm-linux-${ARCH}" ]] || die "the bundle is for another CPU architecture (need ${ARCH})"
+  BINARY="$B/lmcwhm-linux-${ARCH}"
+fi
+
 # ---- mode ----
 MODE=fresh
 if [[ -f "$DATA_DIR/panel.db" ]]; then
@@ -108,7 +128,9 @@ step "Checking base packages"
 export DEBIAN_FRONTEND=noninteractive
 need_pkgs=()
 for p in curl ca-certificates tar gnupg nftables; do dpkg -s "$p" >/dev/null 2>&1 || need_pkgs+=("$p"); done
-if [[ ${#need_pkgs[@]} -gt 0 ]]; then
+if [[ ${#need_pkgs[@]} -gt 0 && -n "$OFFLINE" ]]; then
+  yellow "Offline: not installing ${need_pkgs[*]} (install them later for the firewall)"
+elif [[ ${#need_pkgs[@]} -gt 0 ]]; then
   apt-get update -qq
   apt-get install -y -qq "${need_pkgs[@]}" >/dev/null
 fi
@@ -124,7 +146,56 @@ install_docker() {
   apt-get install -y -qq "$@" docker-ce docker-ce-cli containerd.io docker-compose-plugin >/dev/null
   systemctl enable --now docker
 }
-if [[ $SKIP_DOCKER -eq 0 ]]; then
+# Offline: Docker's static binaries from the bundle, run by systemd units.
+install_docker_static() {
+  tar -xzf "$B/docker.tgz" -C "$WORK"
+  install -m 0755 "$WORK"/docker/* /usr/bin/
+  getent group docker >/dev/null || groupadd --system docker
+  cat > /etc/systemd/system/containerd.service <<'CEOF'
+[Unit]
+Description=containerd (lmcwhm offline install)
+After=network.target
+[Service]
+ExecStart=/usr/bin/containerd
+Restart=always
+Delegate=yes
+KillMode=process
+LimitNOFILE=1048576
+[Install]
+WantedBy=multi-user.target
+CEOF
+  cat > /etc/systemd/system/docker.service <<'DEOF'
+[Unit]
+Description=Docker Engine (lmcwhm offline install)
+After=network-online.target containerd.service
+Wants=network-online.target
+Requires=containerd.service
+[Service]
+ExecStart=/usr/bin/dockerd --containerd=/run/containerd/containerd.sock
+Restart=always
+LimitNOFILE=1048576
+Delegate=yes
+KillMode=process
+[Install]
+WantedBy=multi-user.target
+DEOF
+  systemctl daemon-reload
+  systemctl enable --now containerd docker
+}
+if [[ $SKIP_DOCKER -eq 0 && -n "$OFFLINE" ]]; then
+  if ! command -v docker >/dev/null 2>&1; then
+    step "Installing Docker (static binaries from the offline bundle)"
+    install_docker_static
+  fi
+  for _ in $(seq 1 20); do docker info >/dev/null 2>&1 && break; sleep 1; done
+  if [[ -d "$B/images" ]]; then
+    for img in "$B"/images/*.tar; do
+      [[ -f "$img" ]] || continue
+      step "Loading image $(basename "$img")"
+      docker load -q -i "$img" >/dev/null
+    done
+  fi
+elif [[ $SKIP_DOCKER -eq 0 ]]; then
   if ! command -v docker >/dev/null 2>&1; then
     step "Installing Docker Engine"
     install_docker
@@ -139,13 +210,17 @@ if [[ $SKIP_DOCKER -eq 0 ]]; then
 fi
 
 # ---- fetch the new binary (before touching anything) ----
-WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
 NEW_BIN="$WORK/lmcwhm"
 if [[ -n "$BINARY" ]]; then
   step "Using local binary $BINARY"
   cp "$BINARY" "$NEW_BIN"
 else
+  if [[ "$VERSION" == latest && "$CHANNEL" == beta ]]; then
+    # The newest release of any kind (the API lists newest first).
+    VERSION="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases?per_page=1" | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')"
+    [[ -n "$VERSION" ]] || die "could not find the newest release"
+    step "Beta channel: $VERSION"
+  fi
   if [[ "$VERSION" == latest ]]; then
     BASE="https://github.com/${REPO}/releases/latest/download"
   else
@@ -281,7 +356,9 @@ if [[ $healthy -ne 1 ]]; then
   journalctl -u lmcwhm -n 30 --no-pager || true
   exit 1
 fi
-rm -f "$BIN.prev"
+# $BIN.prev stays: `lmcwhm rollback` returns to it (with the data backup above).
+if [[ -n "$BACKUP_FILE" ]]; then printf '%s\n' "$BACKUP_FILE" > "$HOME_DIR/bin/.prev-backup"; fi
+if [[ "$OLD_VERSION" == "$NEW_VERSION" ]]; then rm -f "$BIN.prev" "$HOME_DIR/bin/.prev-backup"; fi
 
 # ---- summary ----
 if [[ -n "$INFO" ]]; then

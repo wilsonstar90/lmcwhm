@@ -142,7 +142,7 @@ func (sv *Service) ParsePlan(ctx context.Context, cmd string) (Plan, error) {
 				return p, ErrBadTarget
 			}
 		}
-	case KindPanel:
+	case KindPanel, KindSnapshot:
 		p.Target = ""
 	case KindVolume:
 		if !volumeRe.MatchString(p.Target) {
@@ -232,6 +232,8 @@ func (sv *Service) units(ctx context.Context, p Plan) ([]unit, error) {
 		}
 	case KindPanel:
 		out = append(out, unit{kind: KindPanel, target: "panel", ext: ".tar.gz", write: sv.writePanel})
+	case KindSnapshot:
+		out = append(out, unit{kind: KindSnapshot, target: "server", ext: ".tar.gz", write: sv.writeSnapshot})
 	case KindVolume:
 		vol := p.Target
 		out = append(out, unit{kind: KindVolume, target: vol, ext: ".tar.gz", write: func(ctx context.Context, w io.Writer) error {

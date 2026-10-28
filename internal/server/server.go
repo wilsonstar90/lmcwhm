@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/wilsonstar90/lmcwhm/internal/ai"
 	"github.com/wilsonstar90/lmcwhm/internal/alert"
 	"github.com/wilsonstar90/lmcwhm/internal/apitoken"
@@ -30,6 +32,7 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/firewall"
 	"github.com/wilsonstar90/lmcwhm/internal/ftp"
 	"github.com/wilsonstar90/lmcwhm/internal/geoip"
+	"github.com/wilsonstar90/lmcwhm/internal/mail"
 	"github.com/wilsonstar90/lmcwhm/internal/malware"
 	"github.com/wilsonstar90/lmcwhm/internal/mcp"
 	"github.com/wilsonstar90/lmcwhm/internal/monitor"
@@ -84,6 +87,7 @@ type Deps struct {
 	Malware  *malware.Service
 	Tamper   *tamper.Service
 	Shares   *fileshare.Service
+	Mail     *mail.Service
 }
 
 type Server struct {
@@ -91,6 +95,7 @@ type Server struct {
 	secret  string
 	restart chan struct{}
 	MCP     *mcp.Server
+	api     chi.Router // /api/v1, for the OpenAPI description
 }
 
 func New(d Deps) (*Server, error) {
