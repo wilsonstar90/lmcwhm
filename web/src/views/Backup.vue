@@ -8,6 +8,7 @@ import {
 import { get, post, put, ApiError } from '../api/client'
 import { bytes, datetime } from '../format'
 import TaskModal from '../components/TaskModal.vue'
+import PathInput from '../components/PathInput.vue'
 
 interface Rec { id: number; kind: string; target: string; target_id: number; name: string; size: number; dest: string; dest_name: string; job_id: number; created_at: number }
 type Opt = { label: string; value: string }
@@ -322,7 +323,7 @@ const remoteCols = computed<DataTableColumns<Remote>>(() => [
         <n-form-item v-if="['site', 'database', 'volume'].includes(f.kind)" :label="t('bk.target')">
           <n-select v-model:value="f.target" :options="targetOptions(f.kind, true)" filterable />
         </n-form-item>
-        <n-form-item v-if="f.kind === 'path'" :label="t('bk.path')"><n-input v-model:value="f.target" placeholder="/opt/data" /></n-form-item>
+        <n-form-item v-if="f.kind === 'path'" :label="t('bk.path')"><PathInput v-model:value="f.target" placeholder="/opt/data" /></n-form-item>
         <n-form-item :label="t('bk.dest')">
           <n-select v-model:value="f.dests" :options="targets.dest.map((d) => ({ label: d.value === 'local' ? t('bk.local') : d.label, value: d.value }))" multiple />
         </n-form-item>
@@ -384,7 +385,7 @@ const remoteCols = computed<DataTableColumns<Remote>>(() => [
         <n-form-item v-if="imp.kind === 'database'" :label="t('bk.target')"><n-select v-model:value="imp.target_id" :options="targets.database" /></n-form-item>
         <n-form-item v-else-if="imp.kind === 'site'" :label="t('bk.target')"><n-select v-model:value="imp.target" :options="targets.site" /></n-form-item>
         <n-form-item v-else-if="imp.kind !== 'panel'" :label="t('bk.target')"><n-input v-model:value="imp.target" :placeholder="imp.kind === 'path' ? '/opt/data' : 'volume'" /></n-form-item>
-        <n-form-item :label="t('bk.file_path')"><n-input v-model:value="imp.path" placeholder="/root/site_example.com_20261028_030000.tar.gz" /></n-form-item>
+        <n-form-item :label="t('bk.file_path')"><PathInput v-model:value="imp.path" mode="file" placeholder="/root/site_example.com_20261028_030000.tar.gz" /></n-form-item>
       </n-form>
       <template #footer>
         <n-space justify="end"><n-button type="primary" :disabled="!imp.path" @click="doImport">{{ t('bk.import') }}</n-button></n-space>

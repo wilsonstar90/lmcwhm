@@ -9,6 +9,7 @@ import { get, post, put, ApiError } from '../api/client'
 import type { InstalledApp } from '../api/types'
 import { bytes, datetime } from '../format'
 import TaskModal from './TaskModal.vue'
+import { CodeEditor } from './code-editor'
 
 // The settings window of one installed engine (aaPanel 軟件設定).
 const props = defineProps<{ app: InstalledApp | null }>()
@@ -372,7 +373,7 @@ function taskDone() {
           <!-- config file -->
           <template v-else-if="name === 'config'">
             <p class="hint" style="margin-top: 0">{{ t(isMy ? 'dbs.config_hint_my' : 'dbs.config_hint_redis') }}</p>
-            <n-input v-model:value="config" type="textarea" :rows="20" class="mono" />
+            <CodeEditor v-model="config" :language="isMy ? 'my.cnf' : 'redis.conf'" height="440px" />
             <n-space style="margin-top: 12px"><n-button type="primary" @click="saveConfig">{{ t('app.save_restart') }}</n-button></n-space>
           </template>
 

@@ -2204,5 +2204,28 @@
     "block_forever": "永久封鎖",
     "block_confirm": "在所有連接埠永久封鎖 {ip}？",
     "block_remark": "由流量總覽封鎖"
+  },
+  "ce": {
+    "keys": "Ctrl/⌘+S 儲存 · Ctrl/⌘+F 搜尋與取代 · Ctrl/⌘+Alt+G 跳至指定行"
+  },
+  "fp": {
+    "title": "選擇資料夾",
+    "title_file": "選擇檔案",
+    "root": "根目錄",
+    "filter": "篩選目前目錄",
+    "new_file": "新增檔案",
+    "new_folder": "新增資料夾",
+    "file_name": "檔案名稱",
+    "folder_name": "資料夾名稱",
+    "bad_name": "名稱不可包含 /",
+    "up": "上一層",
+    "name": "名稱",
+    "modified": "修改時間",
+    "perm": "權限 / 擁有者",
+    "chosen": "目前選取資料夾",
+    "chosen_file": "目前選取檔案",
+    "hint": "點一下選取資料夾，點兩下開啟。",
+    "hint_file": "點一下選取檔案；點兩下開啟資料夾。",
+    "add_folder": "加入資料夾"
   }
 }

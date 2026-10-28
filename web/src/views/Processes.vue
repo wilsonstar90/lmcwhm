@@ -6,6 +6,8 @@ import {
 } from 'naive-ui'
 import { get, post, put, ApiError } from '../api/client'
 import { bytes, datetime } from '../format'
+import { CodeEditor } from '../components/code-editor'
+import PathInput from '../components/PathInput.vue'
 
 interface Proc { id: number; name: string; command: string; dir: string; user: string; env: string[]; remark: string; state: string; sub_state: string; pid: number; since: number; restarts: number; mem_bytes: number }
 
@@ -102,10 +104,10 @@ const cols = computed<DataTableColumns<Proc>>(() => [
       <n-form label-placement="top">
         <n-form-item :label="t('proc.name')" :feedback="t('proc.name_hint')"><n-input v-model:value="f.name" placeholder="queue-worker" /></n-form-item>
         <n-form-item :label="t('proc.command')" :feedback="t('proc.command_hint')">
-          <n-input v-model:value="f.command" type="textarea" :autosize="{ minRows: 3, maxRows: 10 }" style="font-family: monospace" placeholder="exec php artisan queue:work" />
+          <CodeEditor v-model="f.command" language="shell" height="140px" placeholder="exec php artisan queue:work" />
         </n-form-item>
         <n-space>
-          <n-form-item :label="t('proc.dir')"><n-input v-model:value="f.dir" style="width: 320px" /></n-form-item>
+          <n-form-item :label="t('proc.dir')"><div style="width: 320px"><PathInput v-model:value="f.dir" /></div></n-form-item>
           <n-form-item :label="t('proc.user')"><n-input v-model:value="f.user" style="width: 140px" /></n-form-item>
         </n-space>
         <n-form-item :label="t('proc.env')" :feedback="t('proc.env_hint')"><n-dynamic-tags v-model:value="f.env" /></n-form-item>

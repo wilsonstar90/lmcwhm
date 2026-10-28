@@ -2,11 +2,13 @@
 import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-  NButton, NCard, NCheckbox, NCode, NDataTable, NDrawer, NDrawerContent, NDynamicTags, NForm, NFormItem, NInput, NInputNumber, NModal, NPopconfirm,
+  NButton, NCard, NCheckbox, NCode, NDataTable, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NInputNumber, NModal, NPopconfirm,
   NSelect, NSpace, NSwitch, NTag, NTimePicker, useMessage, type DataTableColumns,
 } from 'naive-ui'
+import PathTags from '../components/PathTags.vue'
 import { get, post, put, ApiError } from '../api/client'
 import { datetime } from '../format'
+import { CodeEditor } from '../components/code-editor'
 
 interface Run { id: number; job_id: number; started_at: number; duration_ms: number; status: string; exit_code: number; output?: string; manual: boolean }
 interface Job { id: number; name: string; type: 'shell' | 'url' | 'logrotate' | 'backup' | 'system' | 'ip_feeds' | 'malware_scan'; schedule: string; command: string; enabled: boolean; timeout: number; next: number; running: boolean; last?: Run }
@@ -249,11 +251,11 @@ watch(() => f.value?.type, (ty, old) => {
           <code>{{ schedule }}</code> · {{ t('cron.preview') }}: {{ preview.slice(0, 3).map((x) => datetime(x, locale)).join(' · ') || '—' }}
         </p>
         <n-form-item v-if="f.type === 'shell'" :label="t('cron.script')" :feedback="t('cron.script_hint')">
-          <n-input v-model:value="f.command" type="textarea" :autosize="{ minRows: 4, maxRows: 14 }" style="font-family: monospace" placeholder="#!/bin/bash" />
+          <CodeEditor v-model="f.command" language="shell" height="240px" placeholder="#!/bin/bash" />
         </n-form-item>
         <n-form-item v-if="f.type === 'url'" label="URL"><n-input v-model:value="f.command" placeholder="https://example.com/cron.php" /></n-form-item>
         <n-form-item v-if="f.type === 'backup'" :label="t('cron.types.backup')" :feedback="t('bk.cron_hint')">
-          <n-input v-model:value="f.command" type="textarea" :autosize="{ minRows: 3, maxRows: 8 }" style="font-family: monospace" placeholder='{"kind":"site","target":"*","dests":["local"],"keep":7}' />
+          <CodeEditor v-model="f.command" language="json" height="140px" placeholder='{"kind":"site","target":"*","dests":["local"],"keep":7}' />
         </n-form-item>
         <n-form-item v-if="f.type === 'system'" :label="t('cron.task')" :feedback="t(`cron.sys_hint.${f.command}`)">
           <n-select v-model:value="f.command" :options="systemOptions" />
@@ -262,7 +264,7 @@ watch(() => f.value?.type, (ty, old) => {
           <n-select v-model:value="f.command" :options="feedOptions" />
         </n-form-item>
         <template v-if="f.type === 'malware_scan'">
-          <n-form-item :label="t('cron.mw_paths')" :feedback="t('cron.mw_paths_hint')"><n-dynamic-tags v-model:value="f.mwPaths" /></n-form-item>
+          <n-form-item :label="t('cron.mw_paths')" :feedback="t('cron.mw_paths_hint')"><PathTags v-model:value="f.mwPaths" /></n-form-item>
           <n-checkbox v-model:checked="f.mwClam" style="margin-bottom: 12px">{{ t('cron.mw_clam') }}</n-checkbox>
         </template>
         <n-form-item v-if="f.type === 'logrotate'" :label="t('cron.keep')" :feedback="t('cron.logrotate_hint')">

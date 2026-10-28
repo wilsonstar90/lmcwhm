@@ -10,6 +10,7 @@ import {
 import { get, post, put, ApiError } from '../api/client'
 import TaskModal from './TaskModal.vue'
 import LogsModal from './LogsModal.vue'
+import { CodeEditor } from './code-editor'
 
 interface Ver { version: string; eol: boolean; state: string; port: number; extensions: string[]; sites: number }
 interface Ext { name: string; desc: string; min?: string; max?: string; slow?: boolean }
@@ -160,7 +161,7 @@ const statusKeys = ['pool', 'process manager', 'accepted conn', 'listen queue', 
         </n-tab-pane>
         <n-tab-pane name="custom" :tab="t('php.custom')">
           <p class="sub">{{ t('php.custom_hint') }}</p>
-          <n-input v-model:value="cur.conf.custom_ini" type="textarea" :rows="14" class="mono" placeholder="xdebug.mode = debug" />
+          <CodeEditor v-model="cur.conf.custom_ini" language="ini" height="300px" placeholder="xdebug.mode = debug" />
         </n-tab-pane>
         <n-tab-pane name="fpm" :tab="t('php.fpm')">
           <n-form label-placement="left" label-width="200" size="small">

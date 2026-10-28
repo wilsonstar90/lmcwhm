@@ -9,6 +9,7 @@ import { get, patch, post, ApiError } from '../api/client'
 import type { Site } from '../api/types'
 import { datetime } from '../format'
 import TaskModal from '../components/TaskModal.vue'
+import PathInput from '../components/PathInput.vue'
 
 interface Account { id: number; kind: 'ftp' | 'sftp'; username: string; dir: string; site_id: number; enabled: boolean; remark: string; created_at: number }
 interface Status { enabled: boolean; state: string; public_ip: string; ports: string; sftp_ready: boolean }
@@ -140,7 +141,7 @@ const cols = computed<DataTableColumns<Account>>(() => [
         </n-form-item>
         <n-alert v-if="f.kind === 'ftp' && !status?.enabled" type="warning" :show-icon="false" style="margin-bottom: 12px">{{ t('ftp.ftp_off') }}</n-alert>
         <n-form-item :label="t('route.site')"><n-select :value="f.site_id" :options="sites.filter((s) => !s.passthrough).map((s) => ({ label: s.domain, value: s.id }))" filterable @update:value="pickSite" /></n-form-item>
-        <n-form-item :label="t('ftp.dir')"><n-input v-model:value="f.dir" placeholder="/www/wwwroot/example.com" /></n-form-item>
+        <n-form-item :label="t('ftp.dir')"><PathInput v-model:value="f.dir" placeholder="/www/wwwroot/example.com" /></n-form-item>
         <n-form-item :label="t('ftp.username')" :feedback="t('ftp.username_hint')"><n-input v-model:value="f.username" /></n-form-item>
         <n-form-item :label="t('ftp.password')"><n-input v-model:value="f.password"><template #suffix><n-button text size="tiny" @click="f.password = genPass()">↻</n-button></template></n-input></n-form-item>
         <n-form-item :label="t('site.remark')"><n-input v-model:value="f.remark" /></n-form-item>

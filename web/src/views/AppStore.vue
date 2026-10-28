@@ -10,6 +10,7 @@ import type { CatalogApp, InstalledApp } from '../api/types'
 import TaskModal from '../components/TaskModal.vue'
 import LogsModal from '../components/LogsModal.vue'
 import PhpVersions from '../components/PhpVersions.vue'
+import { CodeEditor } from '../components/code-editor'
 
 const { t } = useI18n()
 const msg = useMessage()
@@ -194,7 +195,7 @@ const versionOptions = (a: CatalogApp) =>
   <n-modal :show="!!cfg" @update:show="(v: boolean) => !v && (cfg = null)">
     <n-card v-if="cfg" :title="`${t('app.config')} · ${cfg.app.name} ${cfg.app.version}`" style="width: min(800px, calc(100vw - 32px))" closable @close="cfg = null">
       <p class="desc">{{ t('app.config_hint') }}</p>
-      <n-input v-model:value="cfg.body" type="textarea" :rows="18" class="mono" />
+      <CodeEditor v-model="cfg.body" :language="cfg.app.app === 'redis' ? 'redis.conf' : 'my.cnf'" height="460px" />
       <template #footer>
         <n-space justify="end">
           <n-button @click="cfg = null">{{ t('common.cancel') }}</n-button>

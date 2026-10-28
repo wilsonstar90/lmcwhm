@@ -10,6 +10,7 @@ import { get, post, put, ApiError } from '../api/client'
 import type { Site } from '../api/types'
 import DetailDrawer, { type DetailRow } from './DetailDrawer.vue'
 import { datetime } from '../format'
+import PathInput from './PathInput.vue'
 
 interface Rule { id: number; site_id: number; path: string; mode: 'lock' | 'watch'; exts: string[]; exclude: string[]; restore: boolean; enabled: boolean; state: string; error?: string; files: number }
 interface Ev { id: number; rule_id: number; path: string; op: string; action: string; created_at: number }
@@ -129,7 +130,7 @@ const evCols = computed<DataTableColumns<Ev>>(() => [
     <n-card v-if="f" :title="f.id ? t('common.edit') : t('tp.new')" style="width: min(620px, calc(100vw - 32px))" closable @close="f = null">
       <n-form label-placement="top">
         <n-form-item v-if="!f.id" :label="t('route.site')"><n-select :value="f.site_id || null" :options="sites.map((s) => ({ label: s.domain, value: s.id }))" filterable @update:value="pickSite" /></n-form-item>
-        <n-form-item :label="t('tp.path')"><n-input v-model:value="f.path" placeholder="/www/wwwroot/example.com" /></n-form-item>
+        <n-form-item :label="t('tp.path')"><PathInput v-model:value="f.path" placeholder="/www/wwwroot/example.com" /></n-form-item>
         <n-form-item :label="t('tp.mode')">
           <n-radio-group v-model:value="f.mode">
             <n-radio-button value="watch">{{ t('tp.modes.watch') }}</n-radio-button>

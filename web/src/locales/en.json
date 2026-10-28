@@ -2204,5 +2204,28 @@
     "block_forever": "Block permanently",
     "block_confirm": "Block {ip} on every port permanently?",
     "block_remark": "from the traffic overview"
+  },
+  "ce": {
+    "keys": "Ctrl/⌘+S save · Ctrl/⌘+F find and replace · Ctrl/⌘+Alt+G go to line"
+  },
+  "fp": {
+    "title": "Choose a folder",
+    "title_file": "Choose a file",
+    "root": "Root",
+    "filter": "Filter this folder",
+    "new_file": "New file",
+    "new_folder": "New folder",
+    "file_name": "File name",
+    "folder_name": "Folder name",
+    "bad_name": "A name cannot contain /",
+    "up": "Up one level",
+    "name": "Name",
+    "modified": "Modified",
+    "perm": "Permissions / owner",
+    "chosen": "Selected folder",
+    "chosen_file": "Selected file",
+    "hint": "Click a folder to select it, double-click to open it.",
+    "hint_file": "Click a file to select it; double-click a folder to open it.",
+    "add_folder": "Add a folder"
   }
 }

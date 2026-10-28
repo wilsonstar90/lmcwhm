@@ -10,6 +10,7 @@ import { get, post, put, getCsrf, ApiError } from '../api/client'
 import type { FileEntry, TrashItem } from '../api/types'
 import { bytes, datetime } from '../format'
 import FilesExtras from '../components/FilesExtras.vue'
+import { CodeEditor } from '../components/code-editor'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -180,12 +181,6 @@ async function saveEditor() {
     fail(e)
   } finally {
     ed.saving = false
-  }
-}
-function editorKey(ev: KeyboardEvent) {
-  if ((ev.ctrlKey || ev.metaKey) && ev.key === 's') {
-    ev.preventDefault()
-    saveEditor()
   }
 }
 
@@ -388,10 +383,10 @@ const columns: DataTableColumns<FileEntry> = [
 
   <n-modal :show="!!editor" @update:show="(v: boolean) => !v && (editor = null)">
     <n-card v-if="editor" :title="editor.path" style="width: min(1100px, calc(100vw - 32px))" closable @close="editor = null">
-      <n-input v-model:value="editor.content" type="textarea" class="mono" :autosize="{ minRows: 20, maxRows: 32 }" @keydown="editorKey" />
+      <CodeEditor v-model="editor.content" :language="editor.path.split('/').pop()" height="min(64vh, 720px)" @save="saveEditor" />
       <template #footer>
         <n-space justify="space-between" align="center">
-          <span style="font-size: 12px; opacity: 0.6">Ctrl/⌘ + S</span>
+          <span style="font-size: 12px; opacity: 0.6">{{ t('ce.keys') }}</span>
           <n-space>
             <n-button @click="editor = null">{{ t('common.close') }}</n-button>
             <n-button type="primary" :loading="editor.saving" @click="saveEditor">{{ t('common.save') }}</n-button>

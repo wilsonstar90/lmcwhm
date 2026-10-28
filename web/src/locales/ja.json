@@ -2204,5 +2204,28 @@
     "block_forever": "無期限ブロック",
     "block_confirm": "{ip} を全ポートで無期限ブロックしますか？",
     "block_remark": "トラフィック概要から"
+  },
+  "ce": {
+    "keys": "Ctrl/⌘+S 保存 · Ctrl/⌘+F 検索と置換 · Ctrl/⌘+Alt+G 行へ移動"
+  },
+  "fp": {
+    "title": "フォルダーを選択",
+    "title_file": "ファイルを選択",
+    "root": "ルート",
+    "filter": "このフォルダーを絞り込み",
+    "new_file": "新規ファイル",
+    "new_folder": "新規フォルダー",
+    "file_name": "ファイル名",
+    "folder_name": "フォルダー名",
+    "bad_name": "名前に / は使えません",
+    "up": "一つ上へ",
+    "name": "名前",
+    "modified": "更新日時",
+    "perm": "権限 / 所有者",
+    "chosen": "選択中のフォルダー",
+    "chosen_file": "選択中のファイル",
+    "hint": "クリックで選択、ダブルクリックで開きます。",
+    "hint_file": "クリックでファイルを選択、ダブルクリックでフォルダーを開きます。",
+    "add_folder": "フォルダーを追加"
   }
 }

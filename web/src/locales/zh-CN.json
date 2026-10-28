@@ -2204,5 +2204,28 @@
     "block_forever": "永久封锁",
     "block_confirm": "在所有端口永久封锁 {ip}？",
     "block_remark": "由流量总览封锁"
+  },
+  "ce": {
+    "keys": "Ctrl/⌘+S 保存 · Ctrl/⌘+F 搜索和替换 · Ctrl/⌘+Alt+G 跳到指定行"
+  },
+  "fp": {
+    "title": "选择文件夹",
+    "title_file": "选择文件",
+    "root": "根目录",
+    "filter": "筛选当前目录",
+    "new_file": "新建文件",
+    "new_folder": "新建文件夹",
+    "file_name": "文件名",
+    "folder_name": "文件夹名称",
+    "bad_name": "名称不能包含 /",
+    "up": "上一级",
+    "name": "名称",
+    "modified": "修改时间",
+    "perm": "权限 / 所有者",
+    "chosen": "当前选中文件夹",
+    "chosen_file": "当前选中文件",
+    "hint": "单击选择文件夹，双击打开。",
+    "hint_file": "单击选择文件；双击打开文件夹。",
+    "add_folder": "添加文件夹"
   }
 }
