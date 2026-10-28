@@ -44,7 +44,8 @@
     "monitor": "監視",
     "logs": "ログ",
     "settings": "設定",
-    "logout": "ログアウト"
+    "logout": "ログアウト",
+    "domains": "ドメイン / SNI"
   },
   "home": {
     "system": "システム",
@@ -210,6 +211,11 @@
     "terminal": {
       "invalid_target": "コンテナが無効です",
       "invalid_ticket": "ターミナルのセッションが期限切れです。再接続してください"
+    },
+    "maint": {
+      "running": "更新または修復が既に実行中です",
+      "unsupported": "systemd と root が必要です（install.sh でインストール）",
+      "up_to_date": "既に最新バージョンです"
     }
   },
   "task": {
@@ -471,5 +477,101 @@
     "reconnect": "再接続",
     "disconnect": "切断",
     "closed": "セッションは終了しました。"
+  },
+  "route": {
+    "intro": "443/80 番ポートの各ホスト名とその転送先です。ホスト名は 1 つのサイト・Docker バインド・プロキシにのみ属します。完全一致はワイルドカードより優先され、深いワイルドカードは浅いものより優先されます。",
+    "add": "ホスト名を追加",
+    "remove": "削除",
+    "remove_confirm": "{site} から {host} を削除しますか？",
+    "next": "次へ",
+    "host": "ホスト名",
+    "host_hint": "完全なホスト名（api.example.com）またはワイルドカード（*.example.com）",
+    "connect_to": "接続先",
+    "site": "サイト",
+    "container": "コンテナ",
+    "port": "公開ポート",
+    "target": "転送先",
+    "mode": "TLS",
+    "wildcard": "ワイルドカード",
+    "alias": "エイリアス",
+    "warnings": "チェック",
+    "check": "DNS / 上流を確認",
+    "test": "テスト",
+    "test_placeholder": "どのルートが処理するか… 例: shop.example.com",
+    "warned": "{n} 件のホスト名に注意が必要です。「チェック」列のタグにカーソルを合わせてください。",
+    "cert_none": "証明書なし",
+    "cert_backend": "バックエンド側",
+    "modes": {
+      "terminate": "終端",
+      "passthrough": "パススルー"
+    },
+    "kinds": {
+      "alias": "既存サイト",
+      "site": "新しいサイト",
+      "docker": "Docker コンテナ",
+      "server": "サーバー / URL",
+      "passthrough": "TLS パススルー"
+    },
+    "kind_hint": {
+      "alias": "ホスト名（サブドメインなど）を既存サイトに追加します。追加後、それを含む証明書を申請してください。",
+      "site": "このホスト名で PHP・静的・Node.js・Python・Java サイトを作成します。",
+      "docker": "コンテナがこのサーバーで公開しているポートへ HTTP をプロキシします。HTTPS はエッジで終端します。",
+      "server": "別のサーバーやサービス（http(s)://host:port）へリバースプロキシします。",
+      "passthrough": "SNI に基づき TLS ストリームをそのまま host:port へ転送します。証明書はバックエンドが持ちます。"
+    },
+    "match": {
+      "exact": "{host} は完全一致",
+      "wildcard": "{host} は {pattern} に一致",
+      "default": "{host} のルートはありません。既定の証明書と nginx の既定ページが返ります。"
+    },
+    "dns": {
+      "ok": "このサーバー",
+      "other": "別の場所",
+      "none": "レコードなし"
+    },
+    "no_cert": {
+      "short": "証明書なし",
+      "long": "このホスト名を含む有効な証明書がないため、ブラウザには既定の証明書が表示されます。サイトの SSL で申請してください（ワイルドカードは DNS-01）。"
+    },
+    "cf_passthrough": {
+      "short": "Cloudflare + パススルー",
+      "long": "Cloudflare プロキシ（オレンジ雲）は TLS を自身で終端するため、バックエンドは Cloudflare が受け入れる証明書を提示する必要があります。DNS のみ（グレー雲）も検討してください。"
+    },
+    "upstream_down": {
+      "short": "上流が応答なし",
+      "long": "転送先アドレスが応答しません。コンテナやサービスが停止している可能性があります。"
+    },
+    "dns_none": {
+      "short": "DNS なし",
+      "long": "このホスト名はまだ名前解決できません。"
+    },
+    "dns_elsewhere": {
+      "short": "DNS が別の場所",
+      "long": "このホスト名はこのサーバーのパブリック IP 以外を指しています。"
+    },
+    "wildcard_overridden": {
+      "short": "一部上書き",
+      "long": "ワイルドカード内の次のホスト名は別のサイトに属します: {hosts}"
+    }
+  },
+  "maint": {
+    "available": "{v} が利用可能",
+    "latest": "最新です",
+    "notes": "リリースノート",
+    "check_failed": "GitHub に接続できません",
+    "check": "更新を確認",
+    "update": "更新",
+    "repair": "修復",
+    "update_desc": "GitHub から {to}（現在 {from}）をダウンロードしてインストールします。パネルは一時的に再起動します。",
+    "repair_desc": "現在のバージョンを再インストールします。プログラム、systemd サービス、Docker を確認して再構築します。",
+    "kept": "保持されるもの: サイトのファイル（/www）、データベースとアプリのデータ、証明書、ファイアウォール規則、パネル設定とアカウント。",
+    "rebuild": "保存済みの設定から Web スタックのコンテナ（HAProxy・nginx・PHP-FPM）も再作成する",
+    "password": "パネルのパスワード",
+    "progress": "更新 / 修復",
+    "wait": "実行中… 途中でパネルが再起動しますが、その後もログが表示されます。",
+    "done": "完了しました。",
+    "done_version": "完了: {v} で稼働中です。",
+    "failed": "失敗しました（exit {code}）。インストーラーは以前のバージョンに戻しました。ログを確認してください。",
+    "reload": "ページを再読み込み"
   }
 }

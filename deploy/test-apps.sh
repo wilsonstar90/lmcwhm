@@ -169,6 +169,33 @@ panel="$(openssl s_client -connect 127.0.0.1:18888 </dev/null 2>/dev/null | open
 [[ "$(curl -s -o /dev/null -w '%{http_code}' --resolve pass.test:80:127.0.0.1 http://pass.test/)" == 301 ]] || fail "passthrough http redirect"
 pass "TLS passthrough by SNI"
 
+# ---------- SNI matching: exact > deeper wildcard > wildcard; no partial-label matches ----------
+task POST /sites '{"domain":"w.test","aliases":["*.w.test"],"type":"static","ssl":"none"}'
+task POST /sites '{"domain":"deep.w.test","type":"proxy","proxy_target":"127.0.0.1:18888","passthrough":true,"ssl":"none"}'
+sni_subj() { openssl s_client -connect 127.0.0.1:443 -servername "$1" </dev/null 2>/dev/null | openssl x509 -noout -subject; }
+[[ "$(sni_subj deep.w.test)" == "$panel" ]] || fail "exact passthrough inside a wildcard site"
+[[ "$(sni_subj other.w.test)" != "$panel" ]] || fail "wildcard host was passed through"
+[[ "$(sni_subj pass.test.evil.example)" != "$panel" ]] || fail "suffix-label hostname matched pass.test"
+[[ "$(sni_subj x.pass.test)" != "$panel" ]] || fail "subdomain matched pass.test"
+[[ "$(get80 other.w.test /)" == *"w.test"* ]] || fail "wildcard alias not served by nginx"
+api GET '/routes/resolve?host=a.b.w.test' | grep -q '"match":"wildcard"' || fail "resolve wildcard"
+api GET '/routes/resolve?host=deep.w.test' | python3 -c "import sys,json; r=json.load(sys.stdin); assert r['match']=='exact' and r['route']['mode']=='passthrough', r" || fail "resolve exact"
+api GET '/routes?check=1' | python3 -c "
+import sys,json
+rs={r['host']:r for r in json.load(sys.stdin)['items']}
+assert rs['*.w.test']['overrides']==['deep.w.test'], rs['*.w.test']
+assert rs['hello.test']['health'] in ('up','down'), rs['hello.test']
+assert 'route.no_cert' in rs['w.test']['warnings'], rs['w.test']
+" || fail "routes list"
+pass "SNI: exact beats wildcard, no partial matches; routes API"
+
+# ---------- dashboard update / repair ----------
+api GET /system/update | python3 -c "import sys,json; r=json.load(sys.stdin); assert r['latest'].startswith('v') or r.get('error'), r" || fail "update check"
+code="$(api POST /system/repair '{"password":"wrong"}' | jget "['code']")"
+[[ "$code" == auth.bad_password ]] || fail "repair without the password: $code"
+api GET /system/maintenance | grep -q '"running":false' || fail "maintenance status"
+pass "update check; repair needs the password"
+
 # ---------- file manager ----------
 printf 'chunk-1|' | curl -sk -b "$JAR" -X POST -H "X-CSRF-Token: $CSRF" --data-binary @- "$P/api/v1/files/upload?path=/www/wwwroot/up.txt&offset=0" >/dev/null
 printf 'chunk-2' | curl -sk -b "$JAR" -X POST -H "X-CSRF-Token: $CSRF" --data-binary @- "$P/api/v1/files/upload?path=/www/wwwroot/up.txt&offset=8&last=1" >/dev/null

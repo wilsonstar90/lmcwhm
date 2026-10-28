@@ -44,7 +44,8 @@
     "monitor": "Monitor",
     "logs": "Logs",
     "settings": "Settings",
-    "logout": "Sign out"
+    "logout": "Sign out",
+    "domains": "Domains / SNI"
   },
   "home": {
     "system": "System",
@@ -210,6 +211,11 @@
     "terminal": {
       "invalid_target": "Invalid container",
       "invalid_ticket": "The terminal session expired; connect again"
+    },
+    "maint": {
+      "running": "An update or repair is already running",
+      "unsupported": "Needs a systemd server and root (installed with install.sh)",
+      "up_to_date": "Already on the latest version"
     }
   },
   "task": {
@@ -471,5 +477,101 @@
     "reconnect": "Reconnect",
     "disconnect": "Disconnect",
     "closed": "Session closed."
+  },
+  "route": {
+    "intro": "Every hostname on ports 443/80 and where it goes. A hostname belongs to exactly one website, Docker binding or proxy; exact names win over wildcards, and a deeper wildcard over a shallower one.",
+    "add": "Add hostname",
+    "remove": "Remove",
+    "remove_confirm": "Remove {host} from {site}?",
+    "next": "Next",
+    "host": "Hostname",
+    "host_hint": "Exact (api.example.com) or wildcard (*.example.com)",
+    "connect_to": "Connect to",
+    "site": "Site",
+    "container": "Container",
+    "port": "Published port",
+    "target": "Target",
+    "mode": "TLS",
+    "wildcard": "wildcard",
+    "alias": "alias",
+    "warnings": "Checks",
+    "check": "Check DNS / upstreams",
+    "test": "Test",
+    "test_placeholder": "Which route serves… e.g. shop.example.com",
+    "warned": "{n} hostname(s) need attention — hover the tags in the Checks column.",
+    "cert_none": "No cert",
+    "cert_backend": "At backend",
+    "modes": {
+      "terminate": "Terminate",
+      "passthrough": "Passthrough"
+    },
+    "kinds": {
+      "alias": "Existing site",
+      "site": "New website",
+      "docker": "Docker container",
+      "server": "Server / URL",
+      "passthrough": "TLS passthrough"
+    },
+    "kind_hint": {
+      "alias": "Adds the hostname (e.g. a subdomain) to an existing site; request a certificate that covers it afterwards.",
+      "site": "Creates a PHP, static, Node.js, Python or Java website for this hostname.",
+      "docker": "Proxies HTTP to a port a container publishes on this server; HTTPS ends at the edge.",
+      "server": "Reverse-proxies to another server or service: http(s)://host:port.",
+      "passthrough": "Forwards the raw TLS stream by SNI to host:port; the backend holds the certificate."
+    },
+    "match": {
+      "exact": "{host} matches exactly",
+      "wildcard": "{host} matches {pattern}",
+      "default": "No route for {host}: it gets the default certificate and nginx's default page."
+    },
+    "dns": {
+      "ok": "This server",
+      "other": "Elsewhere",
+      "none": "No record"
+    },
+    "no_cert": {
+      "short": "No certificate",
+      "long": "No valid certificate covers this hostname, so browsers see the default certificate. Request one under the site's SSL (wildcards need DNS-01)."
+    },
+    "cf_passthrough": {
+      "short": "Cloudflare + passthrough",
+      "long": "Cloudflare's proxy (orange cloud) ends TLS itself, so the backend must present a certificate Cloudflare accepts; consider DNS only (grey cloud)."
+    },
+    "upstream_down": {
+      "short": "Upstream down",
+      "long": "Nothing answers at the target address; the container or service may be stopped."
+    },
+    "dns_none": {
+      "short": "No DNS",
+      "long": "The hostname does not resolve yet."
+    },
+    "dns_elsewhere": {
+      "short": "DNS elsewhere",
+      "long": "The hostname resolves to an address that is not this server's public IP."
+    },
+    "wildcard_overridden": {
+      "short": "Partly overridden",
+      "long": "These hostnames inside the wildcard belong to other sites: {hosts}"
+    }
+  },
+  "maint": {
+    "available": "{v} available",
+    "latest": "Up to date",
+    "notes": "Release notes",
+    "check_failed": "Could not reach GitHub",
+    "check": "Check for updates",
+    "update": "Update",
+    "repair": "Repair",
+    "update_desc": "Download and install {to} (now {from}) from GitHub. The panel restarts for a moment.",
+    "repair_desc": "Reinstall the current version: program files, the systemd service and Docker are checked and rebuilt.",
+    "kept": "Kept: website files (/www), databases and app data, certificates, firewall rules, panel settings and accounts.",
+    "rebuild": "Also recreate the web stack containers (HAProxy, nginx, PHP-FPM) from the saved configuration",
+    "password": "Panel password",
+    "progress": "Update / repair",
+    "wait": "Running… the panel restarts during this, the log continues afterwards.",
+    "done": "Finished.",
+    "done_version": "Finished: now running {v}.",
+    "failed": "Failed (exit {code}); the installer rolled back to the previous version. See the log.",
+    "reload": "Reload page"
   }
 }

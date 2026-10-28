@@ -44,7 +44,8 @@
     "monitor": "监控",
     "logs": "日志",
     "settings": "面板设置",
-    "logout": "退出"
+    "logout": "退出",
+    "domains": "域名 / SNI"
   },
   "home": {
     "system": "系统信息",
@@ -210,6 +211,11 @@
     "terminal": {
       "invalid_target": "容器无效",
       "invalid_ticket": "终端会话已过期，请重新连接"
+    },
+    "maint": {
+      "running": "已有更新或修复正在执行",
+      "unsupported": "需要 systemd 服务器和 root（使用 install.sh 安装）",
+      "up_to_date": "已是最新版本"
     }
   },
   "task": {
@@ -471,5 +477,101 @@
     "reconnect": "重新连接",
     "disconnect": "断开",
     "closed": "会话已结束。"
+  },
+  "route": {
+    "intro": "443/80 端口上的每个域名及其去向。每个域名只属于一个网站、Docker 绑定或反向代理；精确匹配优先于通配符，更深的通配符优先于更浅的。",
+    "add": "添加域名",
+    "remove": "移除",
+    "remove_confirm": "从 {site} 移除 {host}？",
+    "next": "下一步",
+    "host": "域名",
+    "host_hint": "完整域名（api.example.com）或通配符（*.example.com）",
+    "connect_to": "连接到",
+    "site": "站点",
+    "container": "容器",
+    "port": "发布端口",
+    "target": "目标",
+    "mode": "TLS",
+    "wildcard": "通配符",
+    "alias": "别名",
+    "warnings": "检查",
+    "check": "检查 DNS / 上游",
+    "test": "测试",
+    "test_placeholder": "由哪条路由处理… 例如 shop.example.com",
+    "warned": "有 {n} 个域名需要注意，请将鼠标移到“检查”列的标签查看详情。",
+    "cert_none": "无证书",
+    "cert_backend": "由后端提供",
+    "modes": {
+      "terminate": "终止",
+      "passthrough": "直通"
+    },
+    "kinds": {
+      "alias": "现有站点",
+      "site": "新网站",
+      "docker": "Docker 容器",
+      "server": "服务器 / URL",
+      "passthrough": "TLS 直通"
+    },
+    "kind_hint": {
+      "alias": "将域名（例如子域名）添加到现有站点；之后再申请覆盖它的证书。",
+      "site": "为此域名创建 PHP、静态、Node.js、Python 或 Java 网站。",
+      "docker": "将 HTTP 反代到容器在本机发布的端口；HTTPS 在边缘终止。",
+      "server": "反向代理到其他服务器或服务：http(s)://host:port。",
+      "passthrough": "按 SNI 将原始 TLS 流转发到 host:port；证书由后端持有。"
+    },
+    "match": {
+      "exact": "{host} 精确匹配",
+      "wildcard": "{host} 匹配 {pattern}",
+      "default": "{host} 没有路由：会收到默认证书和 nginx 默认页。"
+    },
+    "dns": {
+      "ok": "本机",
+      "other": "其他地址",
+      "none": "无记录"
+    },
+    "no_cert": {
+      "short": "无证书",
+      "long": "没有有效证书覆盖此域名，浏览器会看到默认证书。请在站点 SSL 申请（通配符需使用 DNS-01）。"
+    },
+    "cf_passthrough": {
+      "short": "Cloudflare + 直通",
+      "long": "Cloudflare 代理（橙色云）会自行终止 TLS，后端必须提供 Cloudflare 接受的证书；可考虑改为仅 DNS（灰色云）。"
+    },
+    "upstream_down": {
+      "short": "上游无响应",
+      "long": "目标地址没有响应，容器或服务可能已停止。"
+    },
+    "dns_none": {
+      "short": "无 DNS",
+      "long": "此域名尚未解析到任何地址。"
+    },
+    "dns_elsewhere": {
+      "short": "DNS 指向别处",
+      "long": "此域名解析到的地址不是本机的公网 IP。"
+    },
+    "wildcard_overridden": {
+      "short": "部分被覆盖",
+      "long": "通配符范围内以下域名属于其他站点：{hosts}"
+    }
+  },
+  "maint": {
+    "available": "有新版本 {v}",
+    "latest": "已是最新",
+    "notes": "更新说明",
+    "check_failed": "无法连接 GitHub",
+    "check": "检查更新",
+    "update": "更新",
+    "repair": "修复",
+    "update_desc": "从 GitHub 下载并安装 {to}（当前为 {from}）。面板会短暂重启。",
+    "repair_desc": "重新安装当前版本：检查并重建程序文件、systemd 服务和 Docker。",
+    "kept": "将保留：网站文件（/www）、数据库和应用数据、证书、防火墙规则、面板设置和账户。",
+    "rebuild": "同时按已保存的配置重建网站环境容器（HAProxy、nginx、PHP-FPM）",
+    "password": "面板密码",
+    "progress": "更新 / 修复",
+    "wait": "执行中… 期间面板会重启，之后继续显示日志。",
+    "done": "完成。",
+    "done_version": "完成：当前运行 {v}。",
+    "failed": "失败（exit {code}）；安装程序已回滚到之前版本，详见日志。",
+    "reload": "重新加载页面"
   }
 }

@@ -44,7 +44,8 @@
     "monitor": "監控",
     "logs": "日誌",
     "settings": "面板設定",
-    "logout": "登出"
+    "logout": "登出",
+    "domains": "域名 / SNI"
   },
   "home": {
     "system": "系統資料",
@@ -210,6 +211,11 @@
     "terminal": {
       "invalid_target": "容器無效",
       "invalid_ticket": "終端連線已過期，請重新連接"
+    },
+    "maint": {
+      "running": "已經有更新或修復進行緊",
+      "unsupported": "需要 systemd 伺服器同 root（用 install.sh 安裝）",
+      "up_to_date": "已經係最新版本"
     }
   },
   "task": {
@@ -471,5 +477,101 @@
     "reconnect": "重新連接",
     "disconnect": "斷開",
     "closed": "連線已結束。"
+  },
+  "route": {
+    "intro": "443/80 端口上每個域名同佢去邊度。每個域名只屬於一個網站、Docker 綁定或者反向代理；完全匹配優先於通配符，較深嘅通配符優先於較淺嘅。",
+    "add": "新增域名",
+    "remove": "移除",
+    "remove_confirm": "由 {site} 移除 {host}？",
+    "next": "下一步",
+    "host": "域名",
+    "host_hint": "完整域名（api.example.com）或通配符（*.example.com）",
+    "connect_to": "連結到",
+    "site": "站點",
+    "container": "容器",
+    "port": "發佈端口",
+    "target": "目標",
+    "mode": "TLS",
+    "wildcard": "通配符",
+    "alias": "別名",
+    "warnings": "檢查",
+    "check": "檢查 DNS / 上游",
+    "test": "測試",
+    "test_placeholder": "邊條路由處理… 例如 shop.example.com",
+    "warned": "有 {n} 個域名需要留意，請將滑鼠移到「檢查」欄嘅標籤睇詳情。",
+    "cert_none": "冇證書",
+    "cert_backend": "由後端提供",
+    "modes": {
+      "terminate": "終止",
+      "passthrough": "直通"
+    },
+    "kinds": {
+      "alias": "現有站點",
+      "site": "新網站",
+      "docker": "Docker 容器",
+      "server": "伺服器 / URL",
+      "passthrough": "TLS 直通"
+    },
+    "kind_hint": {
+      "alias": "將域名（例如子域名）加到現有站點；之後再申請涵蓋佢嘅證書。",
+      "site": "為呢個域名建立 PHP、靜態、Node.js、Python 或 Java 網站。",
+      "docker": "將 HTTP 反代到容器喺本機發佈嘅端口；HTTPS 喺邊緣終止。",
+      "server": "反向代理到其他伺服器或服務：http(s)://host:port。",
+      "passthrough": "按 SNI 將原始 TLS 串流轉發到 host:port；證書由後端持有。"
+    },
+    "match": {
+      "exact": "{host} 完全匹配",
+      "wildcard": "{host} 匹配 {pattern}",
+      "default": "{host} 冇路由：會收到預設證書同 nginx 預設頁。"
+    },
+    "dns": {
+      "ok": "本機",
+      "other": "其他地址",
+      "none": "冇記錄"
+    },
+    "no_cert": {
+      "short": "冇證書",
+      "long": "冇有效證書涵蓋呢個域名，瀏覽器會見到預設證書。請喺站點 SSL 申請（通配符要用 DNS-01）。"
+    },
+    "cf_passthrough": {
+      "short": "Cloudflare + 直通",
+      "long": "Cloudflare 代理（橙雲）會自己終止 TLS，所以後端要有 Cloudflare 接受嘅證書；可以考慮改用僅 DNS（灰雲）。"
+    },
+    "upstream_down": {
+      "short": "上游冇回應",
+      "long": "目標地址冇回應，容器或服務可能已停止。"
+    },
+    "dns_none": {
+      "short": "冇 DNS",
+      "long": "呢個域名仲未解析到任何地址。"
+    },
+    "dns_elsewhere": {
+      "short": "DNS 指向其他地方",
+      "long": "呢個域名解析到嘅地址唔係本機嘅公網 IP。"
+    },
+    "wildcard_overridden": {
+      "short": "部分被覆蓋",
+      "long": "通配符範圍內以下域名屬於其他站點：{hosts}"
+    }
+  },
+  "maint": {
+    "available": "有新版本 {v}",
+    "latest": "已經係最新",
+    "notes": "更新說明",
+    "check_failed": "連唔到 GitHub",
+    "check": "檢查更新",
+    "update": "更新",
+    "repair": "修復",
+    "update_desc": "由 GitHub 下載並安裝 {to}（而家係 {from}）。面板會短暫重啟。",
+    "repair_desc": "重新安裝目前版本：檢查並重建程式檔案、systemd 服務同 Docker。",
+    "kept": "會保留：網站檔案（/www）、資料庫同 App 數據、證書、防火牆規則、面板設定同帳戶。",
+    "rebuild": "同時按已保存嘅設定重建網站環境容器（HAProxy、nginx、PHP-FPM）",
+    "password": "面板密碼",
+    "progress": "更新 / 修復",
+    "wait": "進行中… 期間面板會重啟，之後會繼續顯示日誌。",
+    "done": "完成。",
+    "done_version": "完成：而家運行緊 {v}。",
+    "failed": "失敗（exit {code}）；安裝程式已回滾到之前版本，詳情睇日誌。",
+    "reload": "重新載入頁面"
   }
 }

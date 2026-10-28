@@ -365,18 +365,54 @@ func (e *Env) ensureDefaultCert() error {
 	return os.WriteFile(p, append(crt, key...), 0o600)
 }
 
-func mapLines(sites []Site, pick func(Site) bool) []byte {
-	var lines []string
-	for _, s := range sites {
-		if s.Stopped || !pick(s) {
-			continue
-		}
-		for _, h := range s.Hosts() {
-			lines = append(lines, strings.ToLower(h)+" 1")
+// Host maps come in pairs, read by HAProxy in this order: <name>_exact.map
+// (map_str, exact hostnames) and <name>_wild.map (map_end, "*.a.com" stored as
+// ".a.com", longest suffix first). An exact hostname therefore always wins
+// over a wildcard, and a deeper wildcard over a shallower one, like nginx's
+// server_name. MatchHost applies the same rules in Go.
+func hostMaps(name string, entries map[string]string, files map[string][]byte) {
+	var exact, wild []string
+	for h, v := range entries {
+		if strings.HasPrefix(h, "*.") {
+			wild = append(wild, h[1:]+" "+v)
+		} else {
+			exact = append(exact, h+" "+v)
 		}
 	}
-	sort.Strings(lines)
-	return []byte(strings.Join(lines, "\n") + "\n")
+	sort.Strings(exact)
+	sort.Slice(wild, func(i, j int) bool {
+		a, b := strings.Fields(wild[i])[0], strings.Fields(wild[j])[0]
+		if len(a) != len(b) {
+			return len(a) > len(b)
+		}
+		return a < b
+	})
+	files["maps/"+name+"_exact.map"] = []byte(strings.Join(exact, "\n") + "\n")
+	files["maps/"+name+"_wild.map"] = []byte(strings.Join(wild, "\n") + "\n")
+}
+
+// MatchHost returns the pattern (an exact hostname or "*.suffix") that routes
+// host, or "" when none does (the default route).
+func MatchHost(patterns []string, host string) string {
+	host = strings.TrimSuffix(strings.ToLower(host), ".")
+	best := ""
+	for _, p := range patterns {
+		p = strings.ToLower(p)
+		if p == host {
+			return p
+		}
+		if strings.HasPrefix(p, "*.") && strings.HasSuffix(host, p[1:]) && len(p) > len(best) {
+			best = p
+		}
+	}
+	return best
+}
+
+func flag(b bool) string {
+	if b {
+		return "1"
+	}
+	return "0"
 }
 
 type edgeData struct {
@@ -405,25 +441,39 @@ func (e *Env) edgeFiles(sites []Site, pass []Passthrough) (map[string][]byte, er
 		}
 	}
 	files["crt-list.txt"] = []byte(strings.Join(crt, "\n") + "\n")
-	// Passthrough hosts terminate TLS at their backend, so plain HTTP always redirects.
-	files["maps/force_https.map"] = mapLines(sites, func(s Site) bool { return s.Passthrough || (s.ForceHTTPS && s.HasCert) })
-	files["maps/hsts.map"] = mapLines(sites, func(s Site) bool { return s.HSTS && s.HasCert })
 
-	data := edgeData{Dir: dir, IPv6: hasIPv6(), ACMEPort: ACMEPort, NginxPort: NginxPort}
+	// Every hostname gets an entry in each map (also "0" / be_terminate), so an
+	// exact hostname is never captured by another site's wildcard.
+	sni, fh, hsts := map[string]string{}, map[string]string{}, map[string]string{}
 	for _, s := range sites {
+		for _, h := range s.Hosts() {
+			h = strings.ToLower(h)
+			sni[h] = "be_terminate"
+			// Passthrough hosts terminate TLS at their backend, so plain HTTP always redirects.
+			fh[h] = flag(!s.Stopped && (s.Passthrough || (s.ForceHTTPS && s.HasCert)))
+			hsts[h] = flag(!s.Stopped && s.HSTS && s.HasCert)
+		}
 		if s.Passthrough && !s.Stopped {
 			for _, h := range s.Hosts() {
 				pass = append(pass, Passthrough{Host: h, Target: s.Upstream})
 			}
 		}
 	}
-	var pm []string
-	for i, p := range pass {
-		be := fmt.Sprintf("be_pass_%d", i)
-		data.Passthrough = append(data.Passthrough, passBackend{Backend: be, Target: p.Target, ProxyProtocol: p.ProxyProtocol})
-		pm = append(pm, strings.ToLower(p.Host)+" "+be)
+	data := edgeData{Dir: dir, IPv6: hasIPv6(), ACMEPort: ACMEPort, NginxPort: NginxPort}
+	backends := map[string]string{} // one backend per distinct target
+	for _, p := range pass {
+		key := fmt.Sprintf("%s|%v", p.Target, p.ProxyProtocol)
+		be, ok := backends[key]
+		if !ok {
+			be = fmt.Sprintf("be_pass_%d", len(backends))
+			backends[key] = be
+			data.Passthrough = append(data.Passthrough, passBackend{Backend: be, Target: p.Target, ProxyProtocol: p.ProxyProtocol})
+		}
+		sni[strings.ToLower(p.Host)] = be
 	}
-	files["maps/passthrough.map"] = []byte(strings.Join(pm, "\n") + "\n")
+	hostMaps("sni", sni, files)
+	hostMaps("force_https", fh, files)
+	hostMaps("hsts", hsts, files)
 	cfg, err := render("haproxy.cfg.tmpl", data)
 	if err != nil {
 		return nil, err
@@ -441,6 +491,9 @@ func (e *Env) writeEdge(sites []Site, pass []Passthrough) error {
 		if err := writeIfChanged(filepath.Join(e.EdgeDir(), name), body); err != nil {
 			return err
 		}
+	}
+	for _, old := range []string{"passthrough.map", "force_https.map", "hsts.map"} { // before v0.4
+		os.Remove(filepath.Join(e.EdgeDir(), "maps", old))
 	}
 	return nil
 }

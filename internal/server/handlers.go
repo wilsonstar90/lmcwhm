@@ -74,6 +74,7 @@ func (s *Server) handler() http.Handler {
 			r.Post("/auth/logout", s.handleLogout)
 			r.Get("/auth/me", s.handleMe)
 			r.Get("/system/overview", s.handleOverview)
+			s.maintenanceRoutes(r)
 
 			r.Get("/settings", s.handleGetSettings)
 			r.Put("/settings", s.handlePutSettings)
@@ -87,6 +88,7 @@ func (s *Server) handler() http.Handler {
 
 			if s.Sites != nil {
 				s.siteRoutes(r)
+				s.routeRoutes(r)
 			}
 			if s.Apps != nil {
 				s.appRoutes(r)

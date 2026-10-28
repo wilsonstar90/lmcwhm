@@ -17,8 +17,10 @@ defaults
     timeout tunnel  1h
 
 # ---- :443 — route on the TLS ClientHello SNI ----
-# Hostnames in passthrough.map are forwarded untouched (TLS ends at the backend);
-# everything else is terminated below with the certificates in crt-list.txt.
+# sni_exact.map / sni_wild.map name the backend of every hostname: be_pass_N
+# forwards the stream untouched (TLS ends at the backend), be_terminate ends
+# TLS below with the certificates in crt-list.txt. Exact names win over
+# wildcards (".a.com" = "*.a.com", longest first); unknown names terminate.
 frontend fe_sni
     mode tcp
     bind 0.0.0.0:443
@@ -26,8 +28,11 @@ frontend fe_sni
     bind :::443 v6only
 {{- end}}
     tcp-request inspect-delay 5s
+    # set-var must precede accept, which ends tcp-request content evaluation.
+    tcp-request content set-var(txn.sni) req.ssl_sni,lower,map_str({{.Dir}}/maps/sni_exact.map)
+    tcp-request content set-var(txn.sni) req.ssl_sni,lower,map_end({{.Dir}}/maps/sni_wild.map) if !{ var(txn.sni) -m found }
     tcp-request content accept if { req.ssl_hello_type 1 }
-    use_backend %[req.ssl_sni,lower,map_dom({{.Dir}}/maps/passthrough.map)] if { req.ssl_sni,lower,map_dom({{.Dir}}/maps/passthrough.map) -m found }
+    use_backend %[var(txn.sni)] if { var(txn.sni) -m found }
     default_backend be_terminate
 
 backend be_terminate
@@ -45,7 +50,9 @@ frontend fe_https
     http-request set-header X-Forwarded-Proto https
     http-request set-header X-Forwarded-Port 443
     http-request set-var(txn.host) req.hdr(host),field(1,:),lower
-    http-response set-header Strict-Transport-Security "max-age=31536000" if { var(txn.host),map({{.Dir}}/maps/hsts.map) -m found }
+    http-request set-var(txn.hsts) var(txn.host),map_str({{.Dir}}/maps/hsts_exact.map)
+    http-request set-var(txn.hsts) var(txn.host),map_end({{.Dir}}/maps/hsts_wild.map) if !{ var(txn.hsts) -m found }
+    http-response set-header Strict-Transport-Security "max-age=31536000" if { var(txn.hsts) -m str 1 }
     # HTTP-01 validators follow redirects to HTTPS (e.g. Cloudflare "Always Use HTTPS").
     use_backend be_acme if { path_beg /.well-known/acme-challenge/ }
     default_backend be_web
@@ -61,7 +68,10 @@ frontend fe_http
     http-request set-header X-Forwarded-Proto http
     http-request set-header X-Forwarded-Port 80
     acl acme path_beg /.well-known/acme-challenge/
-    http-request redirect scheme https code 301 if !acme { req.hdr(host),field(1,:),lower,map({{.Dir}}/maps/force_https.map) -m found }
+    http-request set-var(txn.host) req.hdr(host),field(1,:),lower
+    http-request set-var(txn.fh) var(txn.host),map_str({{.Dir}}/maps/force_https_exact.map)
+    http-request set-var(txn.fh) var(txn.host),map_end({{.Dir}}/maps/force_https_wild.map) if !{ var(txn.fh) -m found }
+    http-request redirect scheme https code 301 if !acme { var(txn.fh) -m str 1 }
     use_backend be_acme if acme
     default_backend be_web
 

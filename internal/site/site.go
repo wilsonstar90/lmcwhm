@@ -112,6 +112,8 @@ type Service struct {
 	tasks  *tasks.Manager
 	// Runtimes is set when the App Store is available (runtime projects).
 	Runtimes Runtimes
+	// RebuildMarker, when the file exists at boot, recreates the web stack containers.
+	RebuildMarker string
 }
 
 func NewService(st *store.Store, env *webenv.Env, cfg *webcfg.Store, issuer *acme.Issuer, tm *tasks.Manager) *Service {
@@ -404,11 +406,37 @@ func (sv *Service) Boot(ctx context.Context) error {
 		return nil
 	}
 	return sv.tasks.RunSync(ctx, func(ctx context.Context) error {
+		if sv.RebuildMarker != "" {
+			if _, err := os.Stat(sv.RebuildMarker); err == nil {
+				os.Remove(sv.RebuildMarker)
+				if err := sv.removeStack(ctx); err != nil {
+					return err
+				}
+			}
+		}
 		if err := sv.ensureStack(ctx, "", func(string, ...any) {}); err != nil {
 			return err
 		}
 		return sv.Apply(ctx)
 	})
+}
+
+// removeStack deletes the edge, nginx and PHP-FPM containers so ensureStack
+// recreates them from the database (panel repair "rebuild the web stack").
+// Site files, certificates and databases live outside the containers.
+func (sv *Service) removeStack(ctx context.Context) error {
+	names := []string{webenv.HAProxyName, webenv.NginxName}
+	for _, v := range webenv.PHPVersions {
+		names = append(names, webenv.PHPName(v))
+	}
+	for _, n := range names {
+		if dockerx.State(ctx, n) != "" {
+			if err := dockerx.Remove(ctx, n); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // ---- create ----

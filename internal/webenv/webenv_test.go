@@ -29,16 +29,16 @@ func TestRender(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := string(edge["haproxy.cfg"])
-	for _, want := range []string{"bind 0.0.0.0:443", "bind 0.0.0.0:80", "req.ssl_sni,lower,map_dom(", "abns@lmcwhm_https", "server s1 127.0.0.1:9443 send-proxy-v2", "127.0.0.1:8899", "127.0.0.1:8080"} {
+	for _, want := range []string{"bind 0.0.0.0:443", "bind 0.0.0.0:80", "req.ssl_sni,lower,map_str(", "map_end(", "abns@lmcwhm_https", "server s1 127.0.0.1:9443 send-proxy-v2", "127.0.0.1:8899", "127.0.0.1:8080"} {
 		if !strings.Contains(cfg, want) {
 			t.Errorf("haproxy.cfg missing %q", want)
 		}
 	}
-	if got := string(edge["maps/force_https.map"]); got != "a.com 1\nwww.a.com 1\n" {
-		t.Errorf("force_https.map = %q", got)
+	if got := string(edge["maps/force_https_exact.map"]); got != "a.com 1\nb.org 0\nc.net 0\nwww.a.com 1\n" {
+		t.Errorf("force_https_exact.map = %q", got)
 	}
-	if got := string(edge["maps/passthrough.map"]); got != "app.example.com be_pass_0\n" {
-		t.Errorf("passthrough.map = %q", got)
+	if got := string(edge["maps/sni_exact.map"]); got != "a.com be_terminate\napp.example.com be_pass_0\nb.org be_terminate\nc.net be_terminate\nwww.a.com be_terminate\n" {
+		t.Errorf("sni_exact.map = %q", got)
 	}
 	crt := string(edge["crt-list.txt"])
 	if !strings.HasPrefix(crt, filepath.Join(e.CertDir(), "default.pem")) || !strings.Contains(crt, "a.com.pem") || strings.Contains(crt, "c.net") {
@@ -83,13 +83,41 @@ func TestRenderProxy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := string(edge["maps/passthrough.map"]); got != "tls.test be_pass_0\nwww.tls.test be_pass_1\n" {
-		t.Errorf("passthrough.map = %q", got)
+	if got := string(edge["maps/sni_exact.map"]); got != "node.test be_terminate\noff.test be_terminate\ntls.test be_pass_0\nwww.tls.test be_pass_0\n" {
+		t.Errorf("sni_exact.map = %q", got)
 	}
 	if cfg := string(edge["haproxy.cfg"]); !strings.Contains(cfg, "server s1 127.0.0.1:8443\n") || strings.Contains(cfg, "9443") {
 		t.Errorf("haproxy.cfg passthrough backends:\n%s", cfg)
 	}
-	if got := string(edge["maps/force_https.map"]); got != "tls.test 1\nwww.tls.test 1\n" {
-		t.Errorf("force_https.map = %q", got)
+	if got := string(edge["maps/force_https_exact.map"]); got != "node.test 0\noff.test 0\ntls.test 1\nwww.tls.test 1\n" {
+		t.Errorf("force_https_exact.map = %q", got)
+	}
+}
+
+func TestWildcardMaps(t *testing.T) {
+	e := &Env{Home: t.TempDir(), WWWRoot: "/www/wwwroot", WWWLogs: "/www/wwwlogs"}
+	sites := []Site{
+		{Domain: "a.com", Aliases: []string{"*.a.com"}, Type: "static", ForceHTTPS: true, HasCert: true},
+		{Domain: "x.a.com", Type: "proxy", Upstream: "127.0.0.1:9443", Passthrough: true},
+		{Domain: "b.a.com", Aliases: []string{"*.b.a.com"}, Type: "proxy", Upstream: "127.0.0.1:9444", Passthrough: true},
+	}
+	edge, err := e.edgeFiles(sites, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(edge["maps/sni_wild.map"]); got != ".b.a.com be_pass_1\n.a.com be_terminate\n" {
+		t.Errorf("sni_wild.map = %q", got)
+	}
+	if got := string(edge["maps/force_https_wild.map"]); got != ".b.a.com 1\n.a.com 1\n" {
+		t.Errorf("force_https_wild.map = %q", got)
+	}
+	pats := []string{"a.com", "*.a.com", "x.a.com", "b.a.com", "*.b.a.com"}
+	for host, want := range map[string]string{
+		"a.com": "a.com", "x.a.com": "x.a.com", "y.a.com": "*.a.com", "c.b.a.com": "*.b.a.com",
+		"d.x.a.com": "*.a.com", "a.com.evil.org": "", "xa.com": "",
+	} {
+		if got := MatchHost(pats, host); got != want {
+			t.Errorf("MatchHost(%s) = %q, want %q", host, got, want)
+		}
 	}
 }

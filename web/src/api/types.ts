@@ -220,3 +220,35 @@ export interface TrashItem {
   size: number
   deleted_at: number
 }
+
+export interface Route {
+  host: string
+  wildcard: boolean
+  primary: boolean
+  site_id: number
+  domain: string
+  type: SiteType
+  mode: 'terminate' | 'passthrough'
+  upstream: string
+  stopped: boolean
+  container: string
+  force_https: boolean
+  hsts: boolean
+  cert_issuer: string
+  cert_not_after: number
+  cert_covers: boolean
+  dns_managed: boolean
+  dns_proxied: boolean
+  overrides?: string[]
+  health: '' | 'up' | 'down'
+  dns: '' | 'ok' | 'other' | 'none'
+  dns_addrs?: string[]
+  warnings: string[]
+}
+
+export interface RouteResolution {
+  host: string
+  pattern: string
+  match: 'exact' | 'wildcard' | 'default'
+  route?: Route
+}

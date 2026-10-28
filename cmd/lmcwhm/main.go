@@ -135,6 +135,7 @@ func serveCmd() *cobra.Command {
 			}()
 			tm := tasks.NewManager()
 			sites := site.NewService(a.st, env, webCfg, &acme.Issuer{Cfg: webCfg, HTTP: responder}, tm)
+			sites.RebuildMarker = server.RebuildMarker(a.paths)
 			apps := appstore.New(a.st, box, tm, a.paths.Home)
 			apps.InUse = sites.UsesRuntime
 			sites.Runtimes = apps

@@ -42,3 +42,18 @@ func TestCertNames(t *testing.T) {
 		}
 	}
 }
+
+func TestResolveRoutes(t *testing.T) {
+	routes := []Route{{Host: "a.com"}, {Host: "*.a.com"}, {Host: "x.a.com"}}
+	for host, want := range map[string]string{"A.com.": "exact", "y.a.com": "wildcard", "x.a.com": "exact", "b.com": "default"} {
+		if got := Resolve(routes, host).Match; got != want {
+			t.Errorf("Resolve(%s) = %s, want %s", host, got, want)
+		}
+	}
+	if UpstreamPort("http://127.0.0.1:8181") != 8181 || UpstreamPort("127.0.0.1:8443") != 8443 || UpstreamPort("http://10.0.0.2:80") != 0 {
+		t.Error("UpstreamPort")
+	}
+	if reversed("*.a.com") <= reversed("a.com") || reversed("x.a.com") <= reversed("a.com") {
+		t.Error("reversed order")
+	}
+}

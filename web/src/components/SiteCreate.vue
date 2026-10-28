@@ -9,7 +9,7 @@ import {
 import { get, post, ApiError } from '../api/client'
 import type { InstalledApp, SiteType } from '../api/types'
 
-type Preset = Partial<{ type: SiteType; proxy_target: string; remark: string }>
+type Preset = Partial<{ domain: string; type: SiteType; proxy_target: string; passthrough: boolean; remark: string }>
 const props = defineProps<{ show: boolean; phpVersions: string[]; hasCF: boolean; preset?: Preset }>()
 const emit = defineEmits<{ close: []; created: [taskId: string, domain: string] }>()
 const { t } = useI18n()
