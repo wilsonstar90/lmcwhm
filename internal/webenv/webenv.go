@@ -267,6 +267,8 @@ func (e *Env) Ensure(ctx context.Context, sites []Site, pass []Passthrough, log 
 			return err
 		}
 	}
+	// nginx workers (uid 101 in both images) may write the WAF audit log.
+	os.Chown(filepath.Dir(e.WAFLog()), 101, 101)
 	if err := e.ensureDefaultCert(); err != nil {
 		return err
 	}
