@@ -7,8 +7,9 @@ import type { FirewallIP } from '../api/types'
 import { datetime } from '../format'
 import IpGeo from './IpGeo.vue'
 import TaskModal from './TaskModal.vue'
+import SecFeeds from './SecFeeds.vue'
 
-interface Status { installed: boolean; state: string; community: boolean; last_poll: number; poll_error?: string; bans: number }
+interface Status { installed: boolean; state: string; community: boolean; last_poll: number; poll_error?: string; bans: number; community_bans: number }
 interface Alert { id: number; scenario: string; created_at: string; events_count: number; source: { ip?: string; range?: string; cn?: string; as_name?: string; scope: string; value: string }; decisions?: { duration: string; type: string }[] | null }
 
 const { t, locale } = useI18n()
@@ -92,7 +93,7 @@ const alertCols: DataTableColumns<Alert> = [
         <n-space :size="32">
           <n-statistic :label="t('common.status')"><n-tag :type="st.state === 'running' ? 'success' : 'error'">{{ st.state || '—' }}</n-tag></n-statistic>
           <n-statistic :label="t('cs.active_bans')" :value="st.bans" />
-          <n-statistic :label="t('cs.community_short')" :value="st.community ? t('fw.on') : t('fw.off')" />
+          <n-statistic :label="t('cs.community_short')" :value="st.community ? st.community_bans.toLocaleString() : t('fw.off')" />
           <n-statistic :label="t('cs.last_poll')" :value="st.last_poll ? datetime(st.last_poll, locale) : '—'" />
         </n-space>
         <n-space>
@@ -104,8 +105,10 @@ const alertCols: DataTableColumns<Alert> = [
           </n-popconfirm>
         </n-space>
       </n-space>
+      <n-alert v-if="st.community && !st.community_bans" type="info" :show-icon="false" style="margin-top: 12px">{{ t('cs.community_empty') }}</n-alert>
     </template>
   </n-card>
+  <SecFeeds />
 
   <template v-if="st?.installed">
     <n-card size="small" :title="t('cs.bans')" style="margin-top: 16px">

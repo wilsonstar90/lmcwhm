@@ -282,9 +282,29 @@ sleep 1
 [[ "$(api POST /firewall/confirm | jget "['ok']")" == True ]] || fail "confirm"
 sleep 2
 api GET /firewall | grep -q '"policy":"drop"' || fail "confirmed drop policy lost"
+# Public blocklist feed: overlapping CIDRs and bogons from a list URL land in
+# the ban sets without re-arming the drop-policy confirmation.
+FEEDDIR="$(mktemp -d)"
+printf '# test list\n10.0.0.0/8\n1.10.16.0/20\n1.10.20.0/24\n198.51.100.0/24\n45.155.205.233\t5\n2a0e:1c80::/29\n' > "$FEEDDIR/list.txt"
+python3 -m http.server 18191 --bind 127.0.0.1 --directory "$FEEDDIR" >/dev/null 2>&1 &
+FEEDHTTPD=$!
+sleep 1
+api PUT /firewall/feeds '{"enabled":[],"custom":[{"name":"test","url":"http://127.0.0.1:18191/list.txt"}],"hours":6}' | grep -q '"custom1"' || fail "feed not saved"
+for _ in $(seq 1 20); do api GET /firewall/feeds | grep -q '"blocking":4' && break; sleep 1; done
+api GET /firewall/feeds | python3 -c "import sys,json; f=json.load(sys.stdin); s=f['status']['custom1']; assert f['blocking']==4 and s['entries']==4 and s['skipped']==2 and not s.get('error'), f" || fail "feed refresh: $(api GET /firewall/feeds)"
+nft list set inet lmcwhm block4 | grep -q "1.10.16.0/20" || fail "feed CIDR not in block4: $(nft list set inet lmcwhm block4)"
+nft list set inet lmcwhm ban4 | grep -q "45.155.205.233" || fail "feed IP not in ban4"
+nft list set inet lmcwhm block6 | grep -q "2a0e:1c80::/29" || fail "feed IPv6 CIDR not in block6"
+! nft list set inet lmcwhm block4 | grep -q "10.0.0.0/8" || fail "bogon from a feed blocked"
+api GET '/firewall/ips?list=block' | python3 -c "import sys,json; assert not any(x['source'].startswith('feed:') for x in json.load(sys.stdin)['items'])" || fail "feed entries in the IP list"
+api GET /firewall | grep -q '"pending":false' || fail "feed refresh armed the drop-policy confirmation"
+api PUT /firewall/feeds '{"enabled":[],"custom":[],"hours":6}' >/dev/null
+api GET /firewall/feeds | grep -q '"blocking":0' || fail "unsubscribed feed kept its blocks"
+! nft list set inet lmcwhm block4 | grep -q "1.10.16.0/20" || fail "feed CIDR left in nft"
+kill $FEEDHTTPD
 fwput '{"policy":"accept"}' >/dev/null
 kill $HTTPD
-pass "firewall: block list, port rules, protected ports, drop policy confirm / revert"
+pass "firewall: block list, port rules, protected ports, drop policy confirm / revert, public blocklist feed"
 
 # WAF: OWASP CRS blocks an SQL injection; a site can opt out.
 task PUT /waf '{"enabled":true,"engine":"On","paranoia":1,"anomaly":5}'

@@ -293,7 +293,9 @@
       "self_block": "That would block your own address",
       "nothing_to_confirm": "Nothing waiting for confirmation",
       "confirm_old_connection": "Confirmation must use a new connection",
-      "ruleset_rejected": "nftables rejected the ruleset: {detail}"
+      "ruleset_rejected": "nftables rejected the ruleset: {detail}",
+      "feed_unknown": "Unknown blocklist",
+      "feed_bad_url": "A list URL must start with http:// or https://"
     },
     "waf": {
       "invalid_settings": "Invalid WAF settings"
@@ -1005,14 +1007,15 @@
     "uninstall_confirm": "Remove CrowdSec and lift its bans?",
     "fw_off": "The firewall is off: CrowdSec bans are recorded but not enforced. Enable it under Firewall.",
     "active_bans": "Active bans",
-    "last_poll": "Last sync",
+    "last_poll": "Panel last read",
     "bans": "Bans",
     "ban": "Ban",
     "unban": "Unban",
     "scenario": "Scenario / reason",
     "alerts": "Alerts",
     "events": "Events",
-    "decision": "Decision"
+    "decision": "Decision",
+    "community_empty": "The community blocklist is still empty. CrowdSec only sends it to engines that share signals, and this server has not detected an attack yet, so it has nothing to share. It fills in once attacks are detected. Until then, subscribe to the public blocklists below."
   },
   "bk": {
     "tab_list": "Backups",
@@ -1815,5 +1818,21 @@
       "tls": "TLS certificate",
       "port25": "Outbound port 25 open"
     }
+  },
+  "fwfeed": {
+    "title": "Public malicious IP blocklists",
+    "intro": "Downloaded on a schedule and blocked by the panel firewall; works without CrowdSec. Private ranges, this server's addresses, the allow list and IPs that logged into the panel in the last 30 days are never blocked. Entries expire by themselves if a list stops updating.",
+    "blocking": "Blocked entries",
+    "last_run": "Last update",
+    "every": "Update every",
+    "refresh": "Update now",
+    "saved": "Saved; downloading the lists",
+    "list": "List",
+    "entries": "Entries",
+    "skipped": "{n} skipped (protected)",
+    "updated": "Updated",
+    "custom": "Custom lists (one IP or CIDR per line; always on)",
+    "name": "Name",
+    "add_custom": "Add a list URL"
   }
 }

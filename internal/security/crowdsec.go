@@ -282,7 +282,11 @@ func (c *CrowdSec) Poll(ctx context.Context) error {
 			continue
 		}
 		if ttl, err := time.ParseDuration(d.Duration); err == nil && ttl > 0 {
-			add = append(add, firewall.Ban{IP: d.Value, TTL: ttl, Remark: d.Scenario})
+			remark := d.Scenario
+			if d.Origin == "CAPI" || d.Origin == "lists" {
+				remark = communityPfx + d.Scenario
+			}
+			add = append(add, firewall.Ban{IP: d.Value, TTL: ttl, Remark: remark})
 		}
 	}
 	return c.fw.SyncBans(ctx, "crowdsec", add, remove)
@@ -322,7 +326,12 @@ type CSStatus struct {
 	LastPoll  int64  `json:"last_poll"`
 	PollError string `json:"poll_error,omitempty"`
 	Bans      int    `json:"bans"`
+	// Community: entries from the community blocklist (CAPI), which CrowdSec
+	// only sends to engines that have shared signals.
+	CommunityBans int `json:"community_bans"`
 }
+
+const communityPfx = "community: "
 
 func (c *CrowdSec) Status(ctx context.Context) CSStatus {
 	cfg := c.Config(ctx)
@@ -337,6 +346,7 @@ func (c *CrowdSec) Status(ctx context.Context) CSStatus {
 	st.PollError = c.pollErr
 	c.mu.Unlock()
 	c.st.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM fw_ips WHERE source = 'crowdsec' AND (expires_at = 0 OR expires_at > ?)`, time.Now().Unix()).Scan(&st.Bans)
+	c.st.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM fw_ips WHERE source = 'crowdsec' AND remark LIKE ? AND expires_at > ?`, communityPfx+"%", time.Now().Unix()).Scan(&st.CommunityBans)
 	return st
 }
 

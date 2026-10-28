@@ -293,7 +293,9 @@
       "self_block": "自分のアドレスをブロックすることになります",
       "nothing_to_confirm": "確認待ちの変更はありません",
       "confirm_old_connection": "確認には新しい接続が必要です",
-      "ruleset_rejected": "nftables がルールを拒否しました: {detail}"
+      "ruleset_rejected": "nftables がルールを拒否しました: {detail}",
+      "feed_unknown": "不明なブロックリスト",
+      "feed_bad_url": "リスト URL は http:// か https:// で始めてください"
     },
     "waf": {
       "invalid_settings": "WAF 設定が無効です"
@@ -1005,14 +1007,15 @@
     "uninstall_confirm": "CrowdSec を削除し、そのブロックを解除しますか？",
     "fw_off": "ファイアウォールが無効です。CrowdSec のブロックは記録のみで適用されません。「ファイアウォール」で有効にしてください。",
     "active_bans": "有効なブロック",
-    "last_poll": "前回同期",
+    "last_poll": "パネル最終読み取り",
     "bans": "ブロック",
     "ban": "ブロック",
     "unban": "解除",
     "scenario": "シナリオ / 理由",
     "alerts": "アラート",
     "events": "イベント数",
-    "decision": "判定"
+    "decision": "判定",
+    "community_empty": "コミュニティブロックリストはまだ空です。CrowdSec はシグナルを共有するエンジンにのみ配信しますが、このサーバーはまだ攻撃を検知しておらず共有するものがありません。攻撃を検知すると届き始めます。それまでは下の公開ブロックリストを購読してください。"
   },
   "bk": {
     "tab_list": "バックアップ",
@@ -1815,5 +1818,21 @@
       "tls": "TLS 証明書",
       "port25": "送信ポート 25 が開いている"
     }
+  },
+  "fwfeed": {
+    "title": "公開悪性 IP ブロックリスト",
+    "intro": "定期的にダウンロードしてパネルのファイアウォールでブロックします。CrowdSec は不要です。プライベート帯域、このサーバーのアドレス、許可リスト、過去 30 日にパネルへログインした IP はブロックしません。リストの更新が止まるとエントリーは自動で期限切れになります。",
+    "blocking": "ブロック中のエントリー",
+    "last_run": "最終更新",
+    "every": "更新間隔",
+    "refresh": "今すぐ更新",
+    "saved": "保存しました。リストをダウンロード中",
+    "list": "リスト",
+    "entries": "エントリー",
+    "skipped": "{n} 件スキップ（保護対象）",
+    "updated": "更新日時",
+    "custom": "カスタムリスト（1 行に IP か CIDR 1 つ・常に有効）",
+    "name": "名前",
+    "add_custom": "リスト URL を追加"
   }
 }

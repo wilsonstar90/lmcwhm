@@ -395,8 +395,12 @@ func (sv *Service) removeIP(ctx context.Context, x IP) error {
 	if _, err := sv.st.DB.ExecContext(ctx, `DELETE FROM fw_ips WHERE ip = ? AND list = ?`, x.IP, x.List); err != nil {
 		return err
 	}
-	c, _ := sv.Config(ctx)
-	if c.Enabled && sv.Available() {
+	if x.List == "block" {
+		// Lifting a block cannot cut anyone off: no confirmation needed.
+		if err := sv.applyBans(ctx); err != nil {
+			return err
+		}
+	} else if c, _ := sv.Config(ctx); c.Enabled && sv.Available() {
 		if _, err := sv.Apply(ctx); err != nil {
 			return err
 		}
@@ -798,10 +802,17 @@ func (sv *Service) SyncBans(ctx context.Context, source string, add []Ban, remov
 	if err := tx.Commit(); err != nil {
 		return err
 	}
-	c, _ := sv.Config(ctx)
-	if c.Enabled && sv.Available() {
-		_, err := sv.Apply(ctx)
+	return sv.applyBans(ctx)
+}
+
+// applyBans reinstalls the ruleset after only ban entries changed. It does
+// not arm the drop-policy confirmation: bans cannot be what locks the admin
+// out (the allow list is matched first), and nobody is there to confirm a
+// background sync, so arming would revert "drop" to "accept".
+func (sv *Service) applyBans(ctx context.Context) error {
+	c, err := sv.Config(ctx)
+	if err != nil || !c.Enabled || !sv.Available() {
 		return err
 	}
-	return nil
+	return sv.install(ctx, c)
 }

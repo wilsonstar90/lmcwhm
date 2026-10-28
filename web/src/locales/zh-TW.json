@@ -293,7 +293,9 @@
       "self_block": "這會封鎖您自己的位址",
       "nothing_to_confirm": "沒有等待確認的變更",
       "confirm_old_connection": "確認必須使用新連線",
-      "ruleset_rejected": "nftables 拒絕規則：{detail}"
+      "ruleset_rejected": "nftables 拒絕規則：{detail}",
+      "feed_unknown": "未知的黑名單",
+      "feed_bad_url": "名單網址須以 http:// 或 https:// 開頭"
     },
     "waf": {
       "invalid_settings": "WAF 設定無效"
@@ -1005,14 +1007,15 @@
     "uninstall_confirm": "移除 CrowdSec 並解除其封鎖？",
     "fw_off": "防火牆未開啟：CrowdSec 封鎖只會記錄，尚未執行。請在「防火牆」開啟。",
     "active_bans": "生效中封鎖",
-    "last_poll": "上次同步",
+    "last_poll": "面板上次讀取",
     "bans": "封鎖",
     "ban": "封鎖",
     "unban": "解除",
     "scenario": "情境 / 原因",
     "alerts": "警報",
     "events": "事件數",
-    "decision": "決定"
+    "decision": "決定",
+    "community_empty": "社群黑名單目前是空的。CrowdSec 只會派發給有分享攻擊訊號的引擎，而本機尚未偵測到攻擊，沒有可分享的內容；偵測到攻擊後才會陸續收到。在此之前，可訂閱下方的公共惡意 IP 黑名單。"
   },
   "bk": {
     "tab_list": "備份檔",
@@ -1815,5 +1818,21 @@
       "tls": "TLS 憑證",
       "port25": "外送 25 埠暢通"
     }
+  },
+  "fwfeed": {
+    "title": "公共惡意 IP 黑名單",
+    "intro": "定時下載，由面板防火牆封鎖；不需安裝 CrowdSec。私有網段、本機位址、IP 白名單，以及最近 30 天登入過面板的 IP 永不封鎖。名單停止更新時條目會自動過期。",
+    "blocking": "封鎖中條目",
+    "last_run": "上次更新",
+    "every": "更新間隔",
+    "refresh": "立即更新",
+    "saved": "已儲存，正在下載名單",
+    "list": "名單",
+    "entries": "條目",
+    "skipped": "略過 {n} 個（受保護）",
+    "updated": "更新時間",
+    "custom": "自訂名單（每行一個 IP 或 CIDR；一律啟用）",
+    "name": "名稱",
+    "add_custom": "加入名單網址"
   }
 }

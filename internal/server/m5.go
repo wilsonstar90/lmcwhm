@@ -35,6 +35,9 @@ func (s *Server) m5Routes(r chi.Router) {
 		r.Post("/firewall/linode/attach", s.handleLinodeAttach)
 		r.Get("/firewall/cloudflare", s.handleCFZones)
 		r.Post("/firewall/cloudflare/level", s.handleCFLevel)
+		r.Get("/firewall/feeds", s.handleFWFeeds)
+		r.Put("/firewall/feeds", s.handlePutFWFeeds)
+		r.Post("/firewall/feeds/refresh", s.handleFWFeedsRefresh)
 	}
 	if s.WAF != nil {
 		r.Get("/waf", s.handleWAF)
@@ -191,13 +194,49 @@ func (s *Server) handleDeleteFWRule(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true, "confirm": armed})
 }
 
+// handleFWIPs lists the block / allow entries; public blocklist feeds (tens of
+// thousands of entries) are left out and shown as counts by /firewall/feeds.
 func (s *Server) handleFWIPs(w http.ResponseWriter, r *http.Request) {
 	ips, err := s.Firewall.IPs(r.Context(), r.URL.Query().Get("list"))
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": ips})
+	out := ips[:0]
+	for _, x := range ips {
+		if !strings.HasPrefix(x.Source, "feed:") {
+			out = append(out, x)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": out})
+}
+
+func (s *Server) handleFWFeeds(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.Firewall.Feeds(r.Context()))
+}
+
+func (s *Server) handlePutFWFeeds(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Enabled []string        `json:"enabled"`
+		Custom  []firewall.Feed `json:"custom"`
+		Hours   int             `json:"hours"`
+	}
+	if err := decode(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := s.Firewall.SaveFeeds(r.Context(), in.Enabled, in.Custom, in.Hours); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	s.auditCat(r, "security", "firewall.feeds", strings.Join(in.Enabled, ","))
+	go s.Firewall.RefreshFeeds(context.Background())
+	writeJSON(w, http.StatusOK, s.Firewall.Feeds(r.Context()))
+}
+
+func (s *Server) handleFWFeedsRefresh(w http.ResponseWriter, r *http.Request) {
+	go s.Firewall.RefreshFeeds(context.Background())
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 // handleAddFWIP blocks or allows an address. Blocking the address the panel

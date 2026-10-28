@@ -291,6 +291,7 @@ func serveCmd() *cobra.Command {
 				}
 			}()
 			go crowdsec.Run(ctx, log.Error)
+			go fw.FeedLoop(ctx)
 			if err := server.WritePID(a.paths.PIDFile); err != nil {
 				return err
 			}
