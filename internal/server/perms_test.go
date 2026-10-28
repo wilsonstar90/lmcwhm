@@ -67,7 +67,7 @@ func TestRESTTokensAndOpenAPI(t *testing.T) {
 	if r, _ := e.do("PUT", "/api/v1/settings", map[string]any{"panel_alias": "viaapi"}, bearer(adminTok)); r.StatusCode != 200 {
 		t.Fatalf("admin token PUT (no CSRF needed): %d", r.StatusCode)
 	}
-	r, spec := e.do("GET", "/api/v1/openapi.json", nil, bearer(adminTok))
+	r, spec := e.do("GET", "/api/v1/openapi.json", nil, bearer(readTok))
 	if r.StatusCode != 200 || spec["openapi"] != "3.0.3" {
 		t.Fatalf("openapi: %d", r.StatusCode)
 	}

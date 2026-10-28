@@ -20,7 +20,7 @@ var errForbidden = errors.New("auth.forbidden")
 // "" = any signed-in user; "admin" = administrators only (also the default
 // for anything not listed, so a new route is closed until it is mapped).
 var moduleOf = map[string]string{
-	"auth": "", "tasks": "", "geoip": "",
+	"auth": "", "tasks": "", "geoip": "", "openapi.json": "",
 	"sites": "website", "routes": "website", "web": "website", "wordpress": "website", "sitestats": "website", "varnish": "website",
 	"dns":       "domains",
 	"databases": "database",
