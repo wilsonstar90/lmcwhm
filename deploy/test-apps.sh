@@ -520,7 +520,8 @@ pass "sub-user permissions, REST API token scopes, OpenAPI description"
 # File search, share link, remote download.
 grep -q index.php <<<"$(api GET '/files/search?dir=/www/wwwroot/db.test&q=db-ok&content=1')" || fail "content search"
 SH="$(api POST /files/shares '{"path":"/www/wwwroot/db.test/index.php","hours":1}' | jget "['token']")"
-grep -q db-ok-42 <<<"$(curl -sk -X POST "$P/s/$SH")" || fail "share link download (without the security entry)"
+out="$(curl -sk -X POST "$P/s/$SH")"
+grep -q 'new mysqli' <<<"$out" || fail "share link download (without the security entry): ${out:0:200}"
 task POST /files/fetch '{"url":"https://raw.githubusercontent.com/wilsonstar90/lmcwhm/main/README.md","dir":"/tmp","name":"fetched.md"}'
 grep -q lmcwhm /tmp/fetched.md || fail "remote download"
 pass "file search, share link, remote download"
