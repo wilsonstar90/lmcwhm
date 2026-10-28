@@ -16,6 +16,7 @@ import (
 
 	"github.com/wilsonstar90/lmcwhm/internal/acme"
 	"github.com/wilsonstar90/lmcwhm/internal/ai"
+	"github.com/wilsonstar90/lmcwhm/internal/alert"
 	"github.com/wilsonstar90/lmcwhm/internal/apitoken"
 	"github.com/wilsonstar90/lmcwhm/internal/appstore"
 	"github.com/wilsonstar90/lmcwhm/internal/audit"
@@ -26,20 +27,26 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/database"
 	"github.com/wilsonstar90/lmcwhm/internal/dockermgr"
 	"github.com/wilsonstar90/lmcwhm/internal/files"
+	"github.com/wilsonstar90/lmcwhm/internal/ftp"
+	"github.com/wilsonstar90/lmcwhm/internal/netinfo"
 	"github.com/wilsonstar90/lmcwhm/internal/firewall"
 	"github.com/wilsonstar90/lmcwhm/internal/geoip"
 	"github.com/wilsonstar90/lmcwhm/internal/i18n"
 	"github.com/wilsonstar90/lmcwhm/internal/monitor"
+	"github.com/wilsonstar90/lmcwhm/internal/probe"
 	"github.com/wilsonstar90/lmcwhm/internal/secrets"
 	"github.com/wilsonstar90/lmcwhm/internal/security"
 	"github.com/wilsonstar90/lmcwhm/internal/server"
 	"github.com/wilsonstar90/lmcwhm/internal/settings"
 	"github.com/wilsonstar90/lmcwhm/internal/site"
+	"github.com/wilsonstar90/lmcwhm/internal/sitestats"
 	"github.com/wilsonstar90/lmcwhm/internal/store"
+	"github.com/wilsonstar90/lmcwhm/internal/supervisor"
 	"github.com/wilsonstar90/lmcwhm/internal/tasks"
 	"github.com/wilsonstar90/lmcwhm/internal/terminal"
 	"github.com/wilsonstar90/lmcwhm/internal/webcfg"
 	"github.com/wilsonstar90/lmcwhm/internal/webenv"
+	"github.com/wilsonstar90/lmcwhm/internal/wordpress"
 	"github.com/wilsonstar90/lmcwhm/web"
 )
 
@@ -176,6 +183,45 @@ func serveCmd() *cobra.Command {
 			bk := backup.New(a.st, box, a.paths.Home)
 			bk.WWWRoot, bk.Sites, bk.DBs, bk.Apps = env.WWWRoot, sites, dbs, apps
 			jobs.Backups = bk
+			alerts := alert.New(a.st, box)
+			jobs.OnResult = func(j cron.Job, r cron.Run) {
+				if r.Status == "failed" || r.Status == "timeout" {
+					alerts.Emit(context.Background(), alert.KindCronFailed, fmt.Sprint(j.ID), "warning",
+						fmt.Sprintf("Cron job %q %s", j.Name, r.Status), tailText(r.Output, 800), false)
+				}
+			}
+			probes := probe.New(a.st)
+			probes.Notify = func(p probe.Probe, down bool, detail string) {
+				if down {
+					alerts.Emit(context.Background(), alert.KindProbeDown, fmt.Sprint(p.ID), "critical", "DOWN: "+p.Name+" ("+p.Target+")", detail, false)
+				} else {
+					alerts.Emit(context.Background(), alert.KindProbeDown, fmt.Sprint(p.ID), "resolved", "UP: "+p.Name+" ("+p.Target+")", detail, true)
+				}
+			}
+			go probes.Run(ctx)
+			stats := sitestats.New(a.st, env.WWWLogs, loc)
+			stats.Sites = func(ctx context.Context) []string {
+				var out []string
+				if list, err := sites.List(ctx); err == nil {
+					for _, s := range list {
+						if !s.Passthrough {
+							out = append(out, s.Domain)
+						}
+					}
+				}
+				return out
+			}
+			go stats.Run(ctx, log.Error)
+			ftpSvc := ftp.New(a.st, box, a.paths.Home, env.WWWRoot)
+			ftpSvc.PublicIP = func(ctx context.Context) string {
+				if c, err := webCfg.Get(ctx); err == nil && c.ServerIPv4 != "" {
+					return c.ServerIPv4
+				}
+				return netinfo.PublicIPv4(ctx)
+			}
+			go ftpSvc.Boot(ctx, func(f string, a ...any) { log.Info(fmt.Sprintf(f, a...)) })
+			procs := supervisor.New(a.st, a.paths.Home)
+			go procs.Boot(ctx)
 			if err := jobs.Start(ctx); err != nil {
 				log.Error("cron", "err", err)
 			}
@@ -188,11 +234,14 @@ func serveCmd() *cobra.Command {
 				Files: files.New(os.Getenv("LMCWHM_FILES_ROOT")), Term: terminal.New(),
 				Monitor: mon, Cron: jobs, GeoIP: geo, Firewall: fw, WAF: waf, CrowdSec: crowdsec, Backup: bk,
 				Tokens: apitoken.New(a.st), AI: ai.New(a.st, box, nil),
+				Alerts: alerts, Probes: probes, Stats: stats, Procs: procs, WP: wordpress.New(sites, dbs, env, tm), FTP: ftpSvc,
 			})
 			if err != nil {
 				return err
 			}
 			fw.OnBlocksChanged = srv.SyncFirewall
+			alerts.Src = srv.AlertSources()
+			go alerts.Run(ctx)
 			go func() {
 				if err := srv.ServeMCPSocket(ctx, server.MCPSocket(a.paths)); err != nil {
 					log.Error("mcp socket", "err", err)
@@ -220,4 +269,12 @@ func serveCmd() *cobra.Command {
 			return srv.Run(ctx)
 		},
 	}
+}
+
+// tailText keeps the end of s (where errors are).
+func tailText(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return "…" + s[len(s)-n:]
 }

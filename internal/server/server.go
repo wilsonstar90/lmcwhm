@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/wilsonstar90/lmcwhm/internal/ai"
+	"github.com/wilsonstar90/lmcwhm/internal/alert"
 	"github.com/wilsonstar90/lmcwhm/internal/apitoken"
 	"github.com/wilsonstar90/lmcwhm/internal/appstore"
 	"github.com/wilsonstar90/lmcwhm/internal/audit"
@@ -26,16 +27,21 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/dockermgr"
 	"github.com/wilsonstar90/lmcwhm/internal/files"
 	"github.com/wilsonstar90/lmcwhm/internal/firewall"
+	"github.com/wilsonstar90/lmcwhm/internal/ftp"
 	"github.com/wilsonstar90/lmcwhm/internal/geoip"
 	"github.com/wilsonstar90/lmcwhm/internal/mcp"
 	"github.com/wilsonstar90/lmcwhm/internal/monitor"
+	"github.com/wilsonstar90/lmcwhm/internal/probe"
 	"github.com/wilsonstar90/lmcwhm/internal/security"
 	"github.com/wilsonstar90/lmcwhm/internal/settings"
 	"github.com/wilsonstar90/lmcwhm/internal/site"
+	"github.com/wilsonstar90/lmcwhm/internal/sitestats"
+	"github.com/wilsonstar90/lmcwhm/internal/supervisor"
 	"github.com/wilsonstar90/lmcwhm/internal/tasks"
 	"github.com/wilsonstar90/lmcwhm/internal/terminal"
 	"github.com/wilsonstar90/lmcwhm/internal/tlsutil"
 	"github.com/wilsonstar90/lmcwhm/internal/webcfg"
+	"github.com/wilsonstar90/lmcwhm/internal/wordpress"
 )
 
 type Deps struct {
@@ -62,6 +68,12 @@ type Deps struct {
 	Backup   *backup.Service
 	Tokens   *apitoken.Service
 	AI       *ai.Service
+	Alerts   *alert.Service
+	Probes   *probe.Service
+	Stats    *sitestats.Service
+	Procs    *supervisor.Service
+	WP       *wordpress.Service
+	FTP      *ftp.Service
 }
 
 type Server struct {

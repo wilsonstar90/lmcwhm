@@ -41,7 +41,7 @@ var (
 	ErrNotFound = errors.New("alert.not_found")
 	ErrRule     = errors.New("alert.invalid_rule")
 	kinds       = map[string]bool{KindCPU: true, KindMem: true, KindLoad: true, KindDisk: true, KindServiceDown: true, KindSSLExpiry: true,
-		KindProbeDown: true, KindCronFailed: true, KindLoginFailed: true, KindPanelLogin: true, KindSSHLogin: true, KindFirewallDrop: true}
+		KindProbeDown: true, KindCronFailed: true, KindLoginFailed: true, KindPanelLogin: true, KindSSHLogin: true}
 )
 
 type Channel struct {

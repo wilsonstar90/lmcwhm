@@ -74,6 +74,7 @@ func (s *Server) handler() http.Handler {
 			r.Post("/auth/logout", s.handleLogout)
 			r.Get("/auth/me", s.handleMe)
 			r.Get("/system/overview", s.handleOverview)
+			r.Get("/system/summary", s.handleSummary)
 			s.maintenanceRoutes(r)
 
 			r.Get("/settings", s.handleGetSettings)
@@ -103,6 +104,7 @@ func (s *Server) handler() http.Handler {
 			s.m5Routes(r)
 			s.m6Routes(r)
 			s.m7Routes(r)
+			s.m8Routes(r)
 			r.Get("/logs/login", s.handleLoginLogs)
 			r.Get("/logs/operation", s.handleOperationLogs)
 		})

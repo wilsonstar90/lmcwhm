@@ -419,6 +419,41 @@ func (s *Server) buildMCP() *mcp.Server {
 			return runShell(ctx, a.Command, time.Duration(clampInt(a.Timeout, 60, 600))*time.Second), nil
 		})
 
+	if s.Probes != nil {
+		add(read, "list_probes", "Uptime probes", "Uptime checks with state (up / down), latency, last error, certificate days left and 24h / 7d uptime.", nil, false,
+			noArgs(func(ctx context.Context) (any, error) { return s.Probes.List(ctx) }))
+	}
+	if s.Stats != nil {
+		add(read, "site_report", "Website traffic report", "PV, UV, bandwidth, status codes, spiders, top URLs / IPs / referrers and countries of a site over the last days.",
+			O(map[string]any{"domain": S("site domain"), "days": I("days (1 = today)", 1, 30)}, "domain"), false,
+			func(ctx context.Context, raw json.RawMessage) (any, error) {
+				var a struct {
+					Domain string
+					Days   int
+				}
+				if err := mcp.Args(raw, &a); err != nil {
+					return nil, err
+				}
+				var country func(string) string
+				if s.GeoIP != nil {
+					country = func(ip string) string { return s.GeoIP.Lookup(ip).Country }
+				}
+				rep, err := s.Stats.Report(ctx, a.Domain, clampInt(a.Days, 1, 30), country)
+				rep.Series = nil // the totals and tops are what matter here
+				return rep, err
+			})
+	}
+	if s.Alerts != nil {
+		add(read, "alert_events", "Alert history", "Recent alerts sent by the alert center.", O(map[string]any{"limit": I("entries", 1, 200)}), false,
+			func(ctx context.Context, raw json.RawMessage) (any, error) {
+				var a struct{ Limit int }
+				if err := mcp.Args(raw, &a); err != nil {
+					return nil, err
+				}
+				list, _, err := s.Alerts.Events(ctx, clampInt(a.Limit, 50, 200), 0)
+				return list, err
+			})
+	}
 	addPrompts(m)
 	return m
 }
