@@ -3,7 +3,25 @@
 自研伺服器控制面板（aaPanel / 寶塔式），Go 單一 Binary + Vue 3 / Naive UI。
 完整架構與路線圖：[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
-## 目前進度：M8（備份、MCP / AI、網站運維工具）
+## 目前進度：M10（安全運維、工具箱、子用戶、快照遷移、郵件）
+
+**M10 — 遷移、升級、郵件**
+- 整機快照：面板資料庫同設定、App Store 數據（複製時短暫暫停資料庫）、所有網站檔案打包成一個檔（備份 → 整機快照，可存本地 / Google Drive / OneDrive）；新機器裝好 lmcwhm 後 `sudo lmcwhm snapshot restore <檔案或面板產生嘅 24 小時下載連結>` 即搬晒過去
+- 升級：穩定 / 測試（含 pre-release）通道、更新前自動備份數據、失敗自動回滾；之後亦可以 `sudo lmcwhm rollback`（`--with-data` 連數據一齊還原）或喺首頁一鍵回滾
+- 離線安裝：喺有網絡嘅機器跑 `deploy/make-offline.sh` 打包（binary、Docker 靜態程式、核心映像同已建好嘅 PHP 映像），再 `install.sh --offline <包>`
+- PWA：可以喺手機 / 電腦「安裝」面板（由安全入口開始）
+- DNS 記錄編輯器（Cloudflare）：A / AAAA / CNAME / MX / TXT / SRV / CAA / NS，模板一鍵加 Google Workspace、Microsoft 365、Zoho、本機郵件、CAA、DMARC、「唔寄信」
+- 郵件伺服器（docker-mailserver：Postfix、Dovecot、OpenDKIM、Fail2ban）：網域、信箱（容量限制）、別名 / 全收、DKIM 自動產生，MX / SPF / DKIM / DMARC 一鍵寫入 Cloudflare，寄信能力檢測（MX、A、PTR、SPF、DKIM、DMARC、TLS、外發 25 端口）
+
+**M9 — 安全運維、工具箱、子用戶**
+- 安全風險掃描：SSH（root 密碼登入、預設端口…）、系統帳戶（uid 0、空密碼）、未裝安全更新、需要重開機、自動更新、內核加固、公網開放端口、EOL PHP、網站可寫權限、uploads 內 PHP，連面板設定檢查；評分、一鍵修復、下載 HTML 報告、每週自動掃描並告警
+- 木馬掃描：PHP / JSP / ASP Webshell 規則、圖片內藏 PHP，可選 ClamAV；隔離（可還原）、按內容忽略
+- 網站防篡改：監察模式（inotify，改動自動由基準副本還原，新檔移走）或鎖定模式（chattr +i），可排除 uploads / cache 目錄，改動記錄同告警
+- 工具箱：Swap、主機名、DNS 伺服器、時區 / NTP、SSH（端口、root 登入、密碼 / 金鑰登入、授權金鑰；防止鎖死自己）、進程管理、網絡連接、磁碟同目錄佔用分析、垃圾清理
+- 面板子用戶：按模組授權，可限指定網站；API Token 亦可以直接呼叫 REST API（read / operate / admin），附自動產生嘅 OpenAPI 文檔
+- 檔案管理：全文搜尋、分享連結（有效期、密碼、次數）、收藏夾、遠程下載
+- PHP 每版本設定：擴展（redis、imagick、swoole、xdebug、ioncube、sqlsrv… 共 35 個）、php.ini 表單、disable_functions、自訂 ini、FPM 進程池（按記憶體建議值）、負載狀態、慢日誌；儲存前用 `php-fpm -t` 測試
+- Varnish 頁面緩存：逐個網站開啟、緩存時間、排除路徑、清除緩存；登入用戶 / POST / 後台 / 設 Cookie 嘅回應唔會緩存
 
 **M8 — 網站運維**
 - 首頁：網站、資料庫、容器、計劃任務、守護進程、撥測、備份、今日流量、封鎖 IP、告警數字；安全檢查評分（安全入口、預設端口、面板 SSL、兩步驗證、防火牆、WAF、CrowdSec、備份、告警渠道、證書到期…）連「處理」捷徑
@@ -124,7 +142,8 @@ curl -fsSL https://raw.githubusercontent.com/wilsonstar90/lmcwhm/main/deploy/ins
 
 | 命令 | 作用 |
 |---|---|
-| `sudo lmcwhm update` | 更新到最新版（`--version v0.1.1` 指定版本） |
+| `sudo lmcwhm update` | 更新到最新版（`--version v0.1.1` 指定版本，`--channel beta` 包括測試版） |
+| `sudo lmcwhm rollback` | 返回上次更新前嘅版本（`--with-data` 同時還原當時備份嘅數據） |
 | `sudo lmcwhm repair` | 重新安裝目前版本，修復被改壞嘅程式 / 服務 |
 | `sudo lmcwhm reset-panel` | 鎖死自己入唔到面板時用：新安全入口 + 新管理員密碼、自簽 SSL、關閉 2FA / 授權 IP / 綁定域名 / BasicAuth；**端口保持不變**（可加 `--port`） |
 
@@ -160,6 +179,7 @@ git push origin v0.1.0
 | `lmcwhm firewall-off` | 關閉面板防火牆（鎖死自己時用；ufw / Docker 規則唔受影響） |
 | `lmcwhm backup list` / `backup panel` | 列出備份 / 立即備份面板設定 |
 | `lmcwhm backup restore-panel <檔案>` | 還原面板設定（先停止面板） |
+| `lmcwhm snapshot restore <檔案或連結>` | 還原整機快照（搬機） |
 | `lmcwhm mcp --stdio` | MCP（經 SSH 俾 AI 客戶端用） |
 
 CLI 直接讀寫 `/opt/lmcwhm/data/panel.db`，面板無運行都可以救援。

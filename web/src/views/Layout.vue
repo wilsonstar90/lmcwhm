@@ -12,9 +12,16 @@ const router = useRouter()
 const session = useSession()
 const collapsed = ref(window.innerWidth < 768)
 
-const items = ['home', 'website', 'domains', 'database', 'docker', 'appstore', 'files', 'ftp', 'terminal', 'cron', 'processes', 'backup', 'security', 'monitor', 'uptime', 'alerts', 'logs', 'ai', 'settings']
+const items = ['home', 'website', 'domains', 'database', 'docker', 'appstore', 'files', 'ftp', 'terminal', 'cron', 'processes', 'backup', 'security', 'monitor', 'uptime', 'alerts', 'logs', 'mail', 'toolbox', 'ai', 'settings']
+// Sub-users see the modules they were granted (the API enforces it too).
+const can = (key: string) => {
+  const u = session.user
+  if (!u || u.is_admin || key === 'home') return true
+  if (key === 'settings') return true // the account tab
+  return (u.perms ?? []).includes(key)
+}
 const menu = computed<MenuOption[]>(() =>
-  items.map((key) => ({
+  items.filter(can).map((key) => ({
     key,
     label: () => h(RouterLink, { to: { name: key } }, { default: () => t(`menu.${key}`) }),
   })),

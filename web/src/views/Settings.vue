@@ -10,6 +10,7 @@ import { get, post, put, ApiError } from '../api/client'
 import type { CertInfo, PanelSettings, SSLMode } from '../api/types'
 import { LANGUAGES, setLang, type Lang } from '../i18n'
 import { useSession } from '../stores/session'
+import SettingsUsers from '../components/SettingsUsers.vue'
 
 const { t } = useI18n()
 const msg = useMessage()
@@ -22,6 +23,7 @@ const saving = ref(false)
 const fail = (e: unknown) => msg.error(e instanceof ApiError ? e.text : String(e))
 
 async function load() {
+  if (!session.user?.is_admin) return // sub-users only manage their own account
   form.value = await get<PanelSettings>('/settings')
   ipsText.value = (form.value.allowed_ips ?? []).join('\n')
   loadSSL()
@@ -142,8 +144,8 @@ const langOptions = LANGUAGES.map((l) => ({ label: l.label, value: l.value }))
 </script>
 
 <template>
-  <n-tabs v-if="form" type="line" animated>
-    <n-tab-pane name="panel" :tab="t('settings.tab_panel')">
+  <n-tabs type="line" animated :default-value="session.user?.is_admin ? 'panel' : 'account'">
+    <n-tab-pane v-if="form" name="panel" :tab="t('settings.tab_panel')">
       <n-card size="small">
         <n-form label-placement="top" style="max-width: 560px">
           <n-form-item :label="t('settings.alias')">
@@ -169,7 +171,7 @@ const langOptions = LANGUAGES.map((l) => ({ label: l.label, value: l.value }))
       </n-card>
     </n-tab-pane>
 
-    <n-tab-pane name="security" :tab="t('settings.tab_security')">
+    <n-tab-pane v-if="form" name="security" :tab="t('settings.tab_security')">
       <n-space vertical :size="16">
         <n-card size="small">
           <n-form label-placement="top" style="max-width: 560px">
@@ -226,7 +228,7 @@ const langOptions = LANGUAGES.map((l) => ({ label: l.label, value: l.value }))
       </n-space>
     </n-tab-pane>
 
-    <n-tab-pane name="ssl" :tab="t('settings.tab_ssl')">
+    <n-tab-pane v-if="form" name="ssl" :tab="t('settings.tab_ssl')">
       <n-card size="small">
         <n-form label-placement="top" style="max-width: 640px">
           <n-form-item :label="t('settings.ssl_mode')">
@@ -286,5 +288,6 @@ const langOptions = LANGUAGES.map((l) => ({ label: l.label, value: l.value }))
         </n-card>
       </n-space>
     </n-tab-pane>
+    <n-tab-pane v-if="session.user?.is_admin" name="users" :tab="t('users.tab')" display-directive="show:lazy"><SettingsUsers /></n-tab-pane>
   </n-tabs>
 </template>

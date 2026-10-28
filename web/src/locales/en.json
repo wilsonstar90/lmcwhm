@@ -56,7 +56,9 @@
     "processes": "Processes",
     "uptime": "Uptime",
     "alerts": "Alerts",
-    "ai": "AI / MCP"
+    "ai": "AI / MCP",
+    "mail": "Mail",
+    "toolbox": "Toolbox"
   },
   "home": {
     "system": "System",
@@ -161,7 +163,13 @@
       "weak_password": "Password must be at least 8 characters",
       "bad_username": "Username: 3-32 letters, digits, _ - .",
       "bad_password": "Wrong password",
-      "totp_already_enabled": "2FA is already enabled; disable it first"
+      "totp_already_enabled": "2FA is already enabled; disable it first",
+      "forbidden": "You do not have access to this module",
+      "disabled": "This account is disabled",
+      "last_admin": "The last administrator cannot be removed or demoted (or yourself)",
+      "user_exists": "This username is taken",
+      "user_not_found": "User not found",
+      "invalid_permission": "Unknown module"
     },
     "settings": {
       "invalid_port": "Port must be 1-65535",
@@ -199,12 +207,14 @@
       "invalid_advanced": "Invalid advanced setting (IPs, user agents, domains or redirects)"
     },
     "cf": {
-      "no_token": "Set a Cloudflare API token first"
+      "no_token": "Set a Cloudflare API token first",
+      "api_error": "Cloudflare: {message}"
     },
     "web": {
       "invalid_email": "Invalid email",
       "invalid_directory": "The ACME directory URL must start with https://",
-      "invalid_ip": "Invalid IP address"
+      "invalid_ip": "Invalid IP address",
+      "varnish_invalid": "Cache memory must be 32–65536 MB"
     },
     "docker": {
       "not_available": "Docker is not available",
@@ -245,7 +255,8 @@
       "invalid_mode": "Permissions: octal, e.g. 755",
       "invalid_owner": "Unknown user or group",
       "invalid_format": "Unsupported archive format",
-      "trash_cross_device": "The recycle bin is on another disk"
+      "trash_cross_device": "The recycle bin is on another disk",
+      "invalid_query": "Enter at least 2 characters"
     },
     "terminal": {
       "invalid_target": "Invalid container",
@@ -254,7 +265,8 @@
     "maint": {
       "running": "An update or repair is already running",
       "unsupported": "Needs a systemd server and root (installed with install.sh)",
-      "up_to_date": "Already on the latest version"
+      "up_to_date": "Already on the latest version",
+      "no_rollback": "No previous version to roll back to"
     },
     "cron": {
       "not_found": "Job not found",
@@ -301,7 +313,8 @@
       "invalid_remote": "Invalid cloud storage settings",
       "remote_unauthorized": "Cloud storage refused the authorisation: {value}",
       "auth_expired": "The authorisation code expired",
-      "remote_not_found": "The file no longer exists on the cloud storage"
+      "remote_not_found": "The file no longer exists on the cloud storage",
+      "invalid_snapshot": "This is not a panel snapshot"
     },
     "ai": {
       "no_key": "No Anthropic API key configured",
@@ -350,6 +363,53 @@
       "invalid_input": "Check the title, admin user, password (8+) and email",
       "no_mysql": "WordPress needs MySQL or MariaDB",
       "invalid_action": "Unknown action"
+    },
+    "php": {
+      "invalid_config": "Invalid PHP setting: {field}",
+      "unknown_extension": "Extension not available for this version: {field}",
+      "unknown_version": "Unknown PHP version",
+      "in_use": "Still used by {site}"
+    },
+    "toolbox": {
+      "invalid": "Invalid value",
+      "invalid_hostname": "Invalid hostname",
+      "invalid_timezone": "Unknown timezone",
+      "invalid_dns": "DNS servers must be IP addresses (up to 6)",
+      "invalid_port": "Invalid port",
+      "invalid_key": "Not a valid SSH public key",
+      "ssh_lockout": "Refused: nobody could log in over SSH afterwards",
+      "protected_process": "This process cannot be stopped here"
+    },
+    "secscan": {
+      "not_found": "Report not found",
+      "unknown_fix": "No automatic fix for this finding"
+    },
+    "malware": {
+      "not_found": "File not found",
+      "invalid_path": "Only folders inside the website root can be scanned"
+    },
+    "tamper": {
+      "not_found": "Rule not found",
+      "invalid_rule": "Invalid rule",
+      "invalid_path": "Choose an existing folder inside the website root",
+      "path_exists": "This folder already has a rule",
+      "watch_unsupported": "Watch mode needs Linux"
+    },
+    "share": {
+      "not_found": "Link not found"
+    },
+    "dns": {
+      "invalid_record": "Invalid record: {field}"
+    },
+    "mail": {
+      "invalid_hostname": "Use a full hostname such as mail.example.com",
+      "invalid_domain": "Invalid domain",
+      "invalid_address": "Invalid or still used address: {field}",
+      "weak_password": "Use at least 8 characters",
+      "not_running": "The mail server is not running",
+      "unknown_domain": "Add the domain first",
+      "port_busy": "Port {field} is already in use",
+      "invalid_quota": "Quota like 500M or 2G"
     }
   },
   "task": {
@@ -707,7 +767,12 @@
     "done": "Finished.",
     "done_version": "Finished: now running {v}.",
     "failed": "Failed (exit {code}); the installer rolled back to the previous version. See the log.",
-    "reload": "Reload page"
+    "reload": "Reload page",
+    "stable": "Stable",
+    "beta": "Beta",
+    "rollback_to": "Roll back to {v}",
+    "rollback_desc": "Go back from {from} to {to}, the version installed before the last update.",
+    "with_data": "Also restore the panel data backed up before that update (changes made since are kept aside)"
   },
   "geo": {
     "lan": "LAN",
@@ -802,7 +867,10 @@
   "sec": {
     "firewall": "Firewall",
     "ips": "IP lists",
-    "cloud": "Linode / Cloudflare"
+    "cloud": "Linode / Cloudflare",
+    "scan": "Security scan",
+    "malware": "Webshell scan",
+    "tamper": "Tamper protection"
   },
   "fw": {
     "title": "Server firewall (nftables)",
@@ -960,7 +1028,8 @@
       "database": "Database",
       "panel": "Panel",
       "volume": "Docker volume",
-      "path": "Directory"
+      "path": "Directory",
+      "snapshot": "Server snapshot"
     },
     "target": "Target",
     "all": "All",
@@ -1018,7 +1087,14 @@
     "authorize_step2": "2. Enter this code:",
     "authorize_wait": "This window closes by itself once you approve.",
     "authorized": "Connected: {account}",
-    "auth_expired": "The code expired or was declined; try again."
+    "auth_expired": "The code expired or was declined; try again.",
+    "snapshot_hint": "A snapshot holds the panel database and settings, App Store data (databases are paused briefly while copied) and all website files: everything needed to move this server to a new machine. Docker named volumes of your own Compose projects are not included.",
+    "migrate": "Migrate",
+    "migrate_1": "On the new server, install lmcwhm:",
+    "migrate_2_link": "Then restore this snapshot straight from this server (a download link valid for 24 hours, 3 downloads):",
+    "migrate_link_hint": "If the panel limits access by IP, allow the new server's IP first.",
+    "migrate_2_file": "Download the snapshot, copy it to the new server, then run:",
+    "migrate_3": "The panel restarts with the old settings, address and password, and recreates the websites and apps. Finally point the domains' DNS at the new server's IP."
   },
   "alert": {
     "tab_rules": "Rules",
@@ -1071,7 +1147,10 @@
       "cron_failed": "Cron / backup failed",
       "login_failed": "Failed panel logins",
       "panel_login": "Panel login",
-      "ssh_login": "SSH login"
+      "ssh_login": "SSH login",
+      "tamper": "Protected file changed",
+      "malware": "Webshell scan found files",
+      "security_scan": "Security scan: critical risks"
     },
     "rule_desc": {
       "cpu": "CPU ≥ {threshold}% averaged over {minutes} min",
@@ -1298,7 +1377,14 @@
     "error_pages": "Custom error pages (/404.html, /50x.html in the site root)",
     "open_basedir": "Prevent cross-site access (open_basedir)",
     "block_xmlrpc": "Block xmlrpc.php (WordPress)",
-    "redirects": "Redirects"
+    "redirects": "Redirects",
+    "varnish": "Varnish page cache",
+    "varnish_on": "Serve this site through Varnish",
+    "varnish_ttl": "Cache time",
+    "varnish_ttl_hint": "For pages without their own Cache-Control. Logged-in users, POSTs, admin pages and responses that set cookies are never cached.",
+    "varnish_exclude": "Never cache",
+    "varnish_exclude_hint": "Path prefixes, e.g. /api",
+    "varnish_purge": "Purge this site's cache"
   },
   "stats": {
     "title": "Traffic",
@@ -1361,5 +1447,373 @@
     "update": "Update",
     "activate": "Activate",
     "deactivate": "Deactivate"
+  },
+  "php": {
+    "version": "Version",
+    "not_installed": "not installed",
+    "sites": "Sites",
+    "extensions": "Extensions",
+    "install": "Install",
+    "settings": "Settings",
+    "reload": "Reload",
+    "remove_confirm": "Remove this PHP container? Its settings are kept.",
+    "hint": "Each PHP version runs as its own PHP-FPM container; a version starts automatically when a website uses it.",
+    "ext_hint": "Ticked extensions are compiled into an image layer for this version (install-php-extensions). Saving rebuilds it, which can take several minutes; the running version keeps serving until the new one passes its test.",
+    "loaded": "loaded",
+    "slow": "slow build",
+    "unsupported": "Not available for this version",
+    "builtin": "Built in",
+    "ini": "php.ini",
+    "panel_tz": "(panel timezone)",
+    "disable_functions": "Disabled functions",
+    "disable_hint": "PHP code cannot call these functions (disable_functions). WP-CLI and Composer run through the CLI and are not affected.",
+    "add_dangerous": "Add recommended list",
+    "clear": "Clear",
+    "custom": "Custom ini",
+    "custom_hint": "Extra php.ini lines appended after the settings above, e.g. extension options. The whole configuration is tested with php-fpm -t before it is applied.",
+    "fpm": "FPM pool",
+    "suggest": "Suggest for {mem} MB RAM",
+    "slowlog": "Slow log",
+    "status": "Status",
+    "not_running": "This version is not running.",
+    "save": "Test and apply"
+  },
+  "varnish": {
+    "idle": "not used",
+    "hit_rate": "Hit rate",
+    "objects": "Objects",
+    "storage": "Storage used",
+    "sites": "Sites",
+    "memory": "Cache memory",
+    "purge_all": "Purge all",
+    "hint": "Turn the cache on per website under Website → Settings → Advanced. Varnish runs only while a site uses it."
+  },
+  "api": {
+    "docs": "API reference",
+    "tokens": "API tokens",
+    "intro": "Every route the panel uses. Call them with an API token: Authorization: Bearer lmc_… (read tokens: GET only; operate: every module except panel administration; admin: everything). Long operations return a task_id to poll at GET /tasks/{id}."
+  },
+  "scan": {
+    "run": "Scan now",
+    "download": "Download report",
+    "none": "No scan yet",
+    "summary": "{c} critical, {w} warnings, {i} notes",
+    "clean": "No risks found.",
+    "weekly": "The panel also scans weekly and alerts on critical findings (Alerts → Security scan).",
+    "level": "Level",
+    "category": "Area",
+    "finding": "Finding",
+    "fix": "Fix",
+    "report": "Security report",
+    "ai_prompt": "Explain these security scan findings for my server and tell me what to fix first:",
+    "cat": {
+      "panel": "Panel",
+      "ssh": "SSH",
+      "accounts": "Accounts",
+      "system": "System",
+      "network": "Network",
+      "web": "Websites"
+    },
+    "risks": {
+      "ssh_root_login": "root may log in over SSH",
+      "ssh_password_auth": "SSH accepts passwords (keys are safer)",
+      "ssh_default_port": "SSH listens on the default port 22",
+      "ssh_max_auth_tries": "SSH allows many password attempts per connection",
+      "ssh_empty_passwords": "SSH accepts empty passwords",
+      "ssh_x11": "SSH X11 forwarding is on",
+      "uid0_users": "Other accounts with root privileges (uid 0)",
+      "empty_passwords": "System accounts without a password",
+      "reboot_required": "A reboot is needed to finish updates (new kernel)",
+      "security_updates": "{n} security updates are not installed",
+      "pending_updates": "{n} package updates available",
+      "no_auto_updates": "Automatic security updates are off",
+      "sysctl": "Kernel network / memory hardening is not applied",
+      "docker_api_exposed": "The Docker API is reachable from the network",
+      "exposed_ports": "Services listen on public addresses",
+      "php_eol": "Websites run PHP versions without security support",
+      "world_writable": "World-writable files in website folders",
+      "php_in_uploads": "PHP files in WordPress uploads (often a webshell)"
+    },
+    "fix_confirm": {
+      "ssh_root": "Allow root to log in with SSH keys only?",
+      "sysctl_harden": "Apply the kernel hardening settings (/etc/sysctl.d/90-lmcwhm.conf)?",
+      "apt_upgrade": "Install all package updates now (apt-get upgrade)?",
+      "auto_updates": "Install unattended-upgrades and turn on automatic security updates?",
+      "lock_empty": "Lock the accounts that have no password?",
+      "chmod_web": "Remove write permission for others from every file in the website folders?"
+    }
+  },
+  "mw": {
+    "scan": "Scan for webshells",
+    "summary": "{files} files scanned, {n} suspicious",
+    "findings": "Suspicious files",
+    "quarantined": "Quarantine",
+    "clean": "Nothing suspicious found.",
+    "hint": "Signature rules for PHP / JSP / ASP webshells and code hidden in images. Check a file before deleting it: some plugins legitimately use eval or base64. Ignore whitelists the exact content.",
+    "file": "File",
+    "line": "line {n}",
+    "quarantine": "Quarantine",
+    "quarantine_confirm": "Move this file out of the website (it can be restored)?",
+    "ignore": "Ignore",
+    "original": "Original location",
+    "restore": "Restore",
+    "paths_hint": "Folders to scan (inside {root})",
+    "clamav": "Also scan with ClamAV (first run downloads ~300 MB of signatures, needs ~1.5 GB RAM)",
+    "rules": {
+      "eval_decode": "eval of decoded data",
+      "eval_input": "eval of request input",
+      "exec_input": "command run from request input",
+      "callback_input": "callback from request input",
+      "variable_function": "function name from request input",
+      "preg_e": "preg_replace /e code execution",
+      "known_shell": "known webshell",
+      "jsp_exec": "JSP command execution",
+      "asp_eval": "ASP eval of request",
+      "long_base64": "long encoded blob",
+      "chr_chain": "chr() obfuscation",
+      "hex_escapes": "hex-escape obfuscation",
+      "write_input": "writes request input to a file",
+      "php_in_image": "PHP code inside an image",
+      "php_in_uploads": "PHP file in uploads",
+      "clamav": "ClamAV: {sig}"
+    }
+  },
+  "tp": {
+    "intro": "Watch mode reports every change to protected files and can undo it (new files are moved aside). Lock mode makes them immutable: nothing, not even PHP or root, can change them until the rule is off — turn it off before updating the site.",
+    "new": "Protect a folder",
+    "path": "Folder",
+    "mode": "Mode",
+    "modes": {
+      "watch": "Watch",
+      "lock": "Lock"
+    },
+    "mode_hint": {
+      "watch": "inotify watches the folder; with Restore on, changed or deleted files are put back from a baseline copy taken now.",
+      "lock": "Sets the immutable attribute (chattr +i) on protected files and folders. Excluded folders stay writable."
+    },
+    "restore": "Restore changes automatically",
+    "restore_short": "restore",
+    "exts": "Protected file types",
+    "exclude": "Excluded folders",
+    "exclude_hint": "Relative to the folder, e.g. wp-content/uploads",
+    "baseline": "Accept current files",
+    "events": "Recent changes",
+    "file": "File",
+    "op": "Change",
+    "action": "Result",
+    "state": {
+      "locked": "locked",
+      "watching": "watching",
+      "off": "off",
+      "error": "error"
+    },
+    "ops": {
+      "modify": "modified",
+      "create": "created",
+      "delete": "deleted",
+      "rename": "renamed",
+      "attrib": "permissions"
+    },
+    "actions": {
+      "logged": "logged",
+      "restored": "restored",
+      "removed": "moved aside",
+      "failed": "failed"
+    }
+  },
+  "users": {
+    "tab": "Users",
+    "intro": "Operator accounts for the panel (not hosting customers): each sees only the modules ticked here, optionally only some websites. Administrators can do everything.",
+    "new": "Add user",
+    "you": "you",
+    "role": "Role",
+    "admin": "Administrator",
+    "operator": "Operator",
+    "perms": "Modules",
+    "all": "everything",
+    "sites_n": "{n} sites",
+    "keep_password": "Leave empty to keep the current password",
+    "sites": "Websites",
+    "all_sites": "All websites",
+    "sites_hint": "When set, the user manages only these sites; modules that reach the whole server (files, terminal, Docker, ...) are then unavailable.",
+    "root_warning": "Files and Terminal act as root on the server: only grant them to people you would give the root password."
+  },
+  "dns": {
+    "tab": "DNS zone editor",
+    "routes_tab": "Domain routes",
+    "no_token": "Add a Cloudflare API token (Website → Environment) with Zone: DNS Edit permission to edit DNS here.",
+    "add": "Add record",
+    "templates": "Templates",
+    "template": "Template",
+    "domain": "Domain",
+    "type": "Type",
+    "name": "Name",
+    "value": "Value",
+    "auto": "Auto",
+    "proxy": "Proxied",
+    "dns_only": "DNS only",
+    "priority": "Priority",
+    "weight": "Weight",
+    "port": "Port",
+    "target": "Target",
+    "name_hint": "Leave empty for {zone} itself",
+    "applied": "{n} records added or updated",
+    "apply": "Add records",
+    "template_hint": "Existing identical records are skipped; an existing SPF or DMARC record is replaced (a name may only have one).",
+    "param": {
+      "mailhost": "Mail server hostname"
+    },
+    "ph": {
+      "A": "203.0.113.10",
+      "AAAA": "2001:db8::10",
+      "CNAME": "target.example.com",
+      "MX": "mail.example.com",
+      "TXT": "v=spf1 mx ~all",
+      "NS": "ns1.example.com",
+      "SRV": "",
+      "CAA": ""
+    }
+  },
+  "fx": {
+    "favorites": "Favorites",
+    "fav": "Add this folder",
+    "unfav": "Remove this folder",
+    "search": "Search",
+    "query": "Name or text",
+    "in_content": "Search inside files",
+    "truncated": "Showing the first results only; narrow the folder or the query.",
+    "remote": "Remote download",
+    "save_as": "Save as",
+    "save_in": "Into {dir}",
+    "download": "Download",
+    "share": "Share link",
+    "shares": "Share links",
+    "valid_for": "Valid for",
+    "hours": "hours",
+    "max_downloads": "Max downloads",
+    "optional": "optional",
+    "share_hint": "0 = no limit. Anyone with the link can download this file (the panel's IP allow-list still applies).",
+    "create_link": "Create link",
+    "expires": "Expires",
+    "expired": "expired",
+    "never": "never",
+    "downloads": "Downloads"
+  },
+  "tb": {
+    "system": "System",
+    "swap_now": "In use {used} of {total}",
+    "swap_suggest": "Suggested {n} MB",
+    "swap_hint": "The swap file is /swapfile; 0 removes it.",
+    "hostname": "Hostname",
+    "dns": "DNS servers",
+    "dns_resolved": "Set through systemd-resolved; empty = back to the DHCP servers.",
+    "dns_plain": "Written to /etc/resolv.conf.",
+    "time": "Time",
+    "synced": "synchronised",
+    "not_synced": "not synchronised",
+    "ntp": "Automatic time (NTP)",
+    "sync_now": "Sync now",
+    "tz_hint": "The panel's own timezone (logs, cron) is under Settings.",
+    "ssh_settings": "SSH server",
+    "running": "running",
+    "stopped": "stopped",
+    "ssh_port": "Port",
+    "ssh_port_hint": "The panel firewall opens the new port first; also open it in a cloud firewall you manage elsewhere.",
+    "root_login": "root login",
+    "root": {
+      "prohibit-password": "keys only",
+      "yes": "allowed",
+      "no": "not allowed"
+    },
+    "password_auth": "Password login",
+    "pubkey_auth": "Key login",
+    "max_tries": "Max auth tries",
+    "keepalive": "Keep-alive interval",
+    "lockout": "Turn on password or key login (with a key added below), or nobody can log in.",
+    "ssh_confirm": "Restart SSH with these settings? Keep this session open until you have tested a new login.",
+    "keys": "root's authorized keys",
+    "no_keys": "No keys yet.",
+    "add_key": "Add key",
+    "processes": "Processes",
+    "search": "Search",
+    "name": "Name",
+    "user": "User",
+    "memory": "Memory",
+    "started": "Started",
+    "command": "Command",
+    "terminate": "Stop",
+    "kill": "Kill",
+    "kill_confirm": "Stop {name}?",
+    "connections": "Connections",
+    "listen_only": "Listening ports only",
+    "conn_count": "{n} sockets",
+    "proto": "Protocol",
+    "local": "Local",
+    "remote": "Remote",
+    "disks": "Disks",
+    "free": "free",
+    "usage": "Space used by folder",
+    "analyze": "Analyze",
+    "up": "Up",
+    "cleanup": "Cleanup",
+    "rescan": "Rescan",
+    "clean": "Clean {n}",
+    "clean_confirm": "Delete the selected files?",
+    "freed": "{n} freed",
+    "junk": {
+      "system_logs": "Rotated system logs",
+      "journal": "systemd journal",
+      "apt_cache": "Package cache",
+      "tmp": "Old temporary files",
+      "site_logs": "Rotated website logs",
+      "panel_tmp": "Panel temporary files",
+      "docker": "Unused Docker images"
+    },
+    "junk_hint": {
+      "system_logs": "/var/log/*.1, *.gz",
+      "journal": "Shrunk to 100 MB",
+      "apt_cache": "Downloaded .deb files",
+      "tmp": "/tmp files untouched for 7 days",
+      "site_logs": "/www/wwwlogs rotated files",
+      "panel_tmp": "Unfinished uploads and downloads",
+      "docker": "Dangling images and build cache"
+    }
+  },
+  "mail": {
+    "off": "off",
+    "no_tls": "no TLS certificate",
+    "enable": "Enable mail server",
+    "reapply": "Apply",
+    "disable": "Disable",
+    "disable_confirm": "Stop the mail server? Mailboxes and keys are kept.",
+    "intro": "docker-mailserver (Postfix, Dovecot, OpenDKIM, Fail2ban) on ports {ports}. Use a hostname such as mail.example.com: add it as a website and issue SSL first so mail uses TLS. Open these ports in your cloud firewall; many providers block outbound port 25 until you ask.",
+    "domains": "Domains",
+    "domain": "Domain",
+    "add_domain": "Add domain",
+    "domain_delete": "Remove this domain? Delete its mailboxes first.",
+    "mailboxes": "Mailboxes",
+    "add_account": "Add mailbox",
+    "address": "Address",
+    "quota": "Quota",
+    "quota_hint": "e.g. 500M or 2G; 0 = unlimited",
+    "account_delete": "Delete this mailbox and its mail?",
+    "client_hint": "Mail clients: IMAP {host}:993 (SSL), SMTP {host}:465 (SSL) or 587 (STARTTLS); username = full address.",
+    "aliases": "Aliases",
+    "alias_from": "From",
+    "alias_to": "Deliver to",
+    "add_alias": "Add alias",
+    "check": "Check",
+    "dns_apply": "Add these records in Cloudflare",
+    "ptr_hint": "Also set the server IP's reverse DNS (PTR) to the mail hostname at your VPS provider (e.g. Linode → Network → Reverse DNS).",
+    "checks": {
+      "mx": "MX points here",
+      "a": "Hostname resolves to this server",
+      "ptr": "Reverse DNS (PTR)",
+      "spf": "SPF allows this server",
+      "dkim": "DKIM key published",
+      "dmarc": "DMARC policy",
+      "tls": "TLS certificate",
+      "port25": "Outbound port 25 open"
+    }
   }
 }

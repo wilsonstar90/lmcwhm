@@ -183,6 +183,7 @@ onMounted(() => {
         </n-space>
       </n-card>
       <n-card size="small" :title="t('ai.tokens')" style="margin-top: 16px">
+        <template #header-extra><router-link :to="{ name: 'apidocs' }">{{ t('api.docs') }} →</router-link></template>
         <n-data-table size="small" :columns="tokenCols" :data="tokens" :row-key="(x: Token) => x.id" :scroll-x="900" />
       </n-card>
       <n-card v-if="info" size="small" :title="t('ai.tools', { n: info.tools.length })" style="margin-top: 16px">

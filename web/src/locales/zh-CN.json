@@ -56,7 +56,9 @@
     "processes": "进程守护",
     "uptime": "网站拨测",
     "alerts": "告警中心",
-    "ai": "AI 助手"
+    "ai": "AI 助手",
+    "mail": "邮件",
+    "toolbox": "工具箱"
   },
   "home": {
     "system": "系统信息",
@@ -161,7 +163,13 @@
       "weak_password": "密码至少需要 8 个字符",
       "bad_username": "用户名需 3-32 位字母数字、_ - .",
       "bad_password": "密码错误",
-      "totp_already_enabled": "两步验证已开启，请先关闭"
+      "totp_already_enabled": "两步验证已开启，请先关闭",
+      "forbidden": "你没有使用此模块的权限",
+      "disabled": "此账户已停用",
+      "last_admin": "不能移除或降级最后一个管理员（或你自己）",
+      "user_exists": "用户名已被使用",
+      "user_not_found": "找不到用户",
+      "invalid_permission": "未知的模块"
     },
     "settings": {
       "invalid_port": "端口需介于 1-65535",
@@ -199,12 +207,14 @@
       "invalid_advanced": "高级设置无效（IP、User-Agent、域名或重定向）"
     },
     "cf": {
-      "no_token": "请先设置 Cloudflare API Token"
+      "no_token": "请先设置 Cloudflare API Token",
+      "api_error": "Cloudflare：{message}"
     },
     "web": {
       "invalid_email": "邮箱格式错误",
       "invalid_directory": "ACME Directory URL 必须是 https://",
-      "invalid_ip": "IP 格式错误"
+      "invalid_ip": "IP 格式错误",
+      "varnish_invalid": "缓存内存须为 32–65536 MB"
     },
     "docker": {
       "not_available": "Docker 不可用",
@@ -245,7 +255,8 @@
       "invalid_mode": "权限：八进制，例如 755",
       "invalid_owner": "未知的用户或用户组",
       "invalid_format": "不支持的压缩格式",
-      "trash_cross_device": "回收站在另一块磁盘上"
+      "trash_cross_device": "回收站在另一块磁盘上",
+      "invalid_query": "请输入至少 2 个字符"
     },
     "terminal": {
       "invalid_target": "容器无效",
@@ -254,7 +265,8 @@
     "maint": {
       "running": "已有更新或修复正在执行",
       "unsupported": "需要 systemd 服务器和 root（使用 install.sh 安装）",
-      "up_to_date": "已是最新版本"
+      "up_to_date": "已是最新版本",
+      "no_rollback": "没有旧版本可回滚"
     },
     "cron": {
       "not_found": "找不到任务",
@@ -301,7 +313,8 @@
       "invalid_remote": "云存储设置无效",
       "remote_unauthorized": "云存储拒绝授权：{value}",
       "auth_expired": "授权代码已过期",
-      "remote_not_found": "云端已无此文件"
+      "remote_not_found": "云端已无此文件",
+      "invalid_snapshot": "这不是面板快照"
     },
     "ai": {
       "no_key": "未设置 Anthropic API key",
@@ -350,6 +363,53 @@
       "invalid_input": "请检查标题、管理员、密码（至少 8 位）和邮箱",
       "no_mysql": "WordPress 需要 MySQL 或 MariaDB",
       "invalid_action": "未知操作"
+    },
+    "php": {
+      "invalid_config": "PHP 设置无效：{field}",
+      "unknown_extension": "此版本没有此扩展：{field}",
+      "unknown_version": "未知的 PHP 版本",
+      "in_use": "仍有网站在用：{site}"
+    },
+    "toolbox": {
+      "invalid": "数值无效",
+      "invalid_hostname": "主机名无效",
+      "invalid_timezone": "未知时区",
+      "invalid_dns": "DNS 服务器须为 IP 地址（最多 6 个）",
+      "invalid_port": "端口无效",
+      "invalid_key": "不是有效的 SSH 公钥",
+      "ssh_lockout": "已拒绝：这样之后没人能通过 SSH 登录",
+      "protected_process": "此进程不能在此结束"
+    },
+    "secscan": {
+      "not_found": "找不到报告",
+      "unknown_fix": "此问题没有自动修复"
+    },
+    "malware": {
+      "not_found": "找不到文件",
+      "invalid_path": "只能扫描网站根目录内的目录"
+    },
+    "tamper": {
+      "not_found": "找不到规则",
+      "invalid_rule": "规则无效",
+      "invalid_path": "请选择网站根目录内已有的目录",
+      "path_exists": "此目录已有规则",
+      "watch_unsupported": "监控模式需要 Linux"
+    },
+    "share": {
+      "not_found": "找不到链接"
+    },
+    "dns": {
+      "invalid_record": "记录无效：{field}"
+    },
+    "mail": {
+      "invalid_hostname": "请使用完整主机名，例如 mail.example.com",
+      "invalid_domain": "域名无效",
+      "invalid_address": "地址无效或仍在使用：{field}",
+      "weak_password": "至少 8 个字符",
+      "not_running": "邮件服务器未运行",
+      "unknown_domain": "请先添加域名",
+      "port_busy": "端口 {field} 已被占用",
+      "invalid_quota": "容量格式如 500M 或 2G"
     }
   },
   "task": {
@@ -707,7 +767,12 @@
     "done": "完成。",
     "done_version": "完成：当前运行 {v}。",
     "failed": "失败（exit {code}）；安装程序已回滚到之前版本，详见日志。",
-    "reload": "重新加载页面"
+    "reload": "重新加载页面",
+    "stable": "稳定版",
+    "beta": "测试版",
+    "rollback_to": "回滚到 {v}",
+    "rollback_desc": "从 {from} 回到上次更新前的 {to}。",
+    "with_data": "同时还原更新前备份的面板数据（之后的改动会另存）"
   },
   "geo": {
     "lan": "内网",
@@ -802,7 +867,10 @@
   "sec": {
     "firewall": "防火墙",
     "ips": "IP 名单",
-    "cloud": "Linode / Cloudflare"
+    "cloud": "Linode / Cloudflare",
+    "scan": "安全扫描",
+    "malware": "木马扫描",
+    "tamper": "防篡改"
   },
   "fw": {
     "title": "服务器防火墙（nftables）",
@@ -960,7 +1028,8 @@
       "database": "数据库",
       "panel": "面板配置",
       "volume": "Docker 卷",
-      "path": "目录"
+      "path": "目录",
+      "snapshot": "整机快照"
     },
     "target": "对象",
     "all": "全部",
@@ -1018,7 +1087,14 @@
     "authorize_step2": "2. 输入此代码：",
     "authorize_wait": "授权完成后此窗口会自动关闭。",
     "authorized": "已连接：{account}",
-    "auth_expired": "代码已过期或被拒绝，请重试。"
+    "auth_expired": "代码已过期或被拒绝，请重试。",
+    "snapshot_hint": "快照包含面板数据库和设置、App Store 数据（复制时数据库会短暂暂停）和所有网站文件，即迁移到新机器所需的一切。自定义 Compose 项目的 Docker 命名卷不包含在内。",
+    "migrate": "迁移",
+    "migrate_1": "在新服务器安装 lmcwhm：",
+    "migrate_2_link": "然后直接从这台服务器还原快照（下载链接 24 小时内有效，最多 3 次）：",
+    "migrate_link_hint": "如果面板限制了授权 IP，请先加入新服务器的 IP。",
+    "migrate_2_file": "下载快照并复制到新服务器，然后执行：",
+    "migrate_3": "面板会以原来的设置、地址和密码重新启动，并重建网站和软件。最后把域名 DNS 指向新服务器 IP。"
   },
   "alert": {
     "tab_rules": "告警规则",
@@ -1071,7 +1147,10 @@
       "cron_failed": "计划任务/备份失败",
       "login_failed": "面板登录失败",
       "panel_login": "面板登录通知",
-      "ssh_login": "SSH 登录通知"
+      "ssh_login": "SSH 登录通知",
+      "tamper": "受保护文件被改动",
+      "malware": "木马扫描发现可疑文件",
+      "security_scan": "安全扫描：严重风险"
     },
     "rule_desc": {
       "cpu": "CPU {minutes} 分钟平均 ≥ {threshold}%",
@@ -1298,7 +1377,14 @@
     "error_pages": "自定义错误页（网站目录的 /404.html、/50x.html）",
     "open_basedir": "防跨站 (open_basedir)",
     "block_xmlrpc": "封禁 xmlrpc.php（WordPress）",
-    "redirects": "重定向"
+    "redirects": "重定向",
+    "varnish": "Varnish 页面缓存",
+    "varnish_on": "经 Varnish 缓存此网站",
+    "varnish_ttl": "缓存时间",
+    "varnish_ttl_hint": "用于没有自己 Cache-Control 的页面。已登录用户、POST、后台页面和设置 Cookie 的响应永不缓存。",
+    "varnish_exclude": "不缓存路径",
+    "varnish_exclude_hint": "路径前缀，例如 /api",
+    "varnish_purge": "清除此网站缓存"
   },
   "stats": {
     "title": "访问报表",
@@ -1361,5 +1447,373 @@
     "update": "更新",
     "activate": "启用",
     "deactivate": "停用"
+  },
+  "php": {
+    "version": "版本",
+    "not_installed": "未安装",
+    "sites": "网站数",
+    "extensions": "扩展",
+    "install": "安装",
+    "settings": "设置",
+    "reload": "重载",
+    "remove_confirm": "删除这个 PHP 容器？设置会保留。",
+    "hint": "每个 PHP 版本是独立的 PHP-FPM 容器；有网站使用时会自动启动。",
+    "ext_hint": "勾选的扩展会编译进此版本的镜像（install-php-extensions）。保存时会重建，可能需要几分钟；新版本测试通过前，旧的照常运行。",
+    "loaded": "已加载",
+    "slow": "编译较慢",
+    "unsupported": "此版本不支持",
+    "builtin": "内置",
+    "ini": "php.ini",
+    "panel_tz": "（面板时区）",
+    "disable_functions": "禁用函数",
+    "disable_hint": "PHP 程序不能调用这些函数（disable_functions）。WP-CLI 和 Composer 通过 CLI 运行，不受影响。",
+    "add_dangerous": "加入推荐列表",
+    "clear": "清空",
+    "custom": "自定义 ini",
+    "custom_hint": "追加在上面设置之后的额外 php.ini 行，例如扩展选项。应用前会用 php-fpm -t 测试整个配置。",
+    "fpm": "FPM 性能",
+    "suggest": "按 {mem} MB 内存推荐",
+    "slowlog": "慢日志",
+    "status": "负载状态",
+    "not_running": "此版本未运行。",
+    "save": "测试并应用"
+  },
+  "varnish": {
+    "idle": "未使用",
+    "hit_rate": "命中率",
+    "objects": "缓存对象",
+    "storage": "已用容量",
+    "sites": "网站",
+    "memory": "缓存内存",
+    "purge_all": "清除全部",
+    "hint": "在 网站 → 设置 → 高级 逐个网站开启缓存。有网站使用时才运行 Varnish。"
+  },
+  "api": {
+    "docs": "API 文档",
+    "tokens": "API Token",
+    "intro": "面板用到的所有接口。用 API Token 调用：Authorization: Bearer lmc_…（read 只能 GET；operate 可用所有模块但不含面板管理；admin 全部）。耗时操作返回 task_id，用 GET /tasks/{id} 查询。"
+  },
+  "scan": {
+    "run": "立即扫描",
+    "download": "下载报告",
+    "none": "暂无扫描记录",
+    "summary": "{c} 个严重、{w} 个警告、{i} 个提示",
+    "clean": "未发现风险。",
+    "weekly": "面板每周也会自动扫描，有严重问题会告警（告警中心 → 安全扫描）。",
+    "level": "级别",
+    "category": "范畴",
+    "finding": "问题",
+    "fix": "一键修复",
+    "report": "安全报告",
+    "ai_prompt": "解释以下服务器安全扫描结果，并告诉我应优先修复哪些：",
+    "cat": {
+      "panel": "面板",
+      "ssh": "SSH",
+      "accounts": "系统账户",
+      "system": "系统",
+      "network": "网络",
+      "web": "网站"
+    },
+    "risks": {
+      "ssh_root_login": "允许 root 通过 SSH 登录",
+      "ssh_password_auth": "SSH 接受密码登录（密钥更安全）",
+      "ssh_default_port": "SSH 使用默认端口 22",
+      "ssh_max_auth_tries": "SSH 每次连接允许过多次密码尝试",
+      "ssh_empty_passwords": "SSH 接受空密码",
+      "ssh_x11": "SSH X11 转发已开启",
+      "uid0_users": "存在其他拥有 root 权限（uid 0）的账户",
+      "empty_passwords": "有系统账户未设密码",
+      "reboot_required": "需要重启以完成更新（新内核）",
+      "security_updates": "有 {n} 个安全更新未安装",
+      "pending_updates": "有 {n} 个软件包可更新",
+      "no_auto_updates": "未开启自动安全更新",
+      "sysctl": "未应用内核网络和内存加固设置",
+      "docker_api_exposed": "Docker API 可从网络访问",
+      "exposed_ports": "有服务在公网地址监听",
+      "php_eol": "有网站使用已停止安全支持的 PHP 版本",
+      "world_writable": "网站目录存在所有人可写的文件",
+      "php_in_uploads": "WordPress 上传目录有 PHP 文件（通常是木马）"
+    },
+    "fix_confirm": {
+      "ssh_root": "改为 root 只能用 SSH 密钥登录？",
+      "sysctl_harden": "应用内核加固设置（/etc/sysctl.d/90-lmcwhm.conf）？",
+      "apt_upgrade": "立即安装所有软件包更新（apt-get upgrade）？",
+      "auto_updates": "安装 unattended-upgrades 并开启自动安全更新？",
+      "lock_empty": "锁定没有密码的账户？",
+      "chmod_web": "移除网站目录所有文件的“其他人可写”权限？"
+    }
+  },
+  "mw": {
+    "scan": "扫描木马",
+    "summary": "已扫描 {files} 个文件，{n} 个可疑",
+    "findings": "可疑文件",
+    "quarantined": "隔离区",
+    "clean": "未发现可疑文件。",
+    "hint": "用规则检测 PHP / JSP / ASP 木马和藏在图片里的代码。删除前请先检查：部分插件会正当使用 eval 或 base64。“忽略”按文件内容加入白名单。",
+    "file": "文件",
+    "line": "第 {n} 行",
+    "quarantine": "隔离",
+    "quarantine_confirm": "将文件移出网站（之后可还原）？",
+    "ignore": "忽略",
+    "original": "原位置",
+    "restore": "还原",
+    "paths_hint": "要扫描的目录（{root} 之内）",
+    "clamav": "同时用 ClamAV 扫描（首次需下载约 300 MB 病毒库，约需 1.5 GB 内存）",
+    "rules": {
+      "eval_decode": "eval 解码后的数据",
+      "eval_input": "eval 请求输入",
+      "exec_input": "用请求输入执行命令",
+      "callback_input": "请求输入作为回调函数",
+      "variable_function": "请求输入作为函数名",
+      "preg_e": "preg_replace /e 执行代码",
+      "known_shell": "已知木马",
+      "jsp_exec": "JSP 命令执行",
+      "asp_eval": "ASP eval 请求",
+      "long_base64": "超长编码字符串",
+      "chr_chain": "chr() 混淆",
+      "hex_escapes": "十六进制转义混淆",
+      "write_input": "将请求输入写入文件",
+      "php_in_image": "图片内含 PHP 代码",
+      "php_in_uploads": "上传目录的 PHP 文件",
+      "clamav": "ClamAV：{sig}"
+    }
+  },
+  "tp": {
+    "intro": "监控模式记录受保护文件的每次改动，并可自动还原（新文件会被移走）。锁定模式让文件不可修改：PHP 甚至 root 都改不了，直到规则关闭——更新网站前请先关闭。",
+    "new": "保护目录",
+    "path": "目录",
+    "mode": "模式",
+    "modes": {
+      "watch": "监控",
+      "lock": "锁定"
+    },
+    "mode_hint": {
+      "watch": "用 inotify 监控目录；开启还原后，被修改或删除的文件会从现在建立的基准副本还原。",
+      "lock": "为受保护文件和目录设置不可变属性（chattr +i）。排除的目录仍可写。"
+    },
+    "restore": "自动还原改动",
+    "restore_short": "还原",
+    "exts": "受保护文件类型",
+    "exclude": "排除目录",
+    "exclude_hint": "相对于目录，例如 wp-content/uploads",
+    "baseline": "接受当前文件",
+    "events": "最近改动",
+    "file": "文件",
+    "op": "改动",
+    "action": "处理",
+    "state": {
+      "locked": "已锁定",
+      "watching": "监控中",
+      "off": "已关闭",
+      "error": "错误"
+    },
+    "ops": {
+      "modify": "修改",
+      "create": "新增",
+      "delete": "删除",
+      "rename": "重命名",
+      "attrib": "权限"
+    },
+    "actions": {
+      "logged": "已记录",
+      "restored": "已还原",
+      "removed": "已移走",
+      "failed": "失败"
+    }
+  },
+  "users": {
+    "tab": "子用户",
+    "intro": "面板操作员账号（不是租户）：每个账号只能使用勾选的模块，也可只管理指定网站。管理员拥有全部权限。",
+    "new": "新增用户",
+    "you": "你",
+    "role": "角色",
+    "admin": "管理员",
+    "operator": "操作员",
+    "perms": "模块权限",
+    "all": "全部",
+    "sites_n": "{n} 个网站",
+    "keep_password": "留空即保留原密码",
+    "sites": "网站",
+    "all_sites": "所有网站",
+    "sites_hint": "设置后用户只能管理这些网站；可访问整台服务器的模块（文件、终端、Docker 等）将停用。",
+    "root_warning": "文件和终端以 root 身份操作服务器：只应授予你愿意给 root 密码的人。"
+  },
+  "dns": {
+    "tab": "DNS 记录",
+    "routes_tab": "域名路由",
+    "no_token": "请先添加 Cloudflare API Token（网站 → 环境），需要 Zone: DNS Edit 权限，才能在此编辑 DNS。",
+    "add": "添加记录",
+    "templates": "模板",
+    "template": "模板",
+    "domain": "域名",
+    "type": "类型",
+    "name": "名称",
+    "value": "值",
+    "auto": "自动",
+    "proxy": "橙云代理",
+    "dns_only": "仅 DNS",
+    "priority": "优先级",
+    "weight": "权重",
+    "port": "端口",
+    "target": "目标",
+    "name_hint": "留空代表 {zone} 本身",
+    "applied": "已添加或更新 {n} 条记录",
+    "apply": "添加记录",
+    "template_hint": "相同记录会跳过；现有 SPF 或 DMARC 记录将被替换（每个名称只能有一条）。",
+    "param": {
+      "mailhost": "邮件服务器主机名"
+    },
+    "ph": {
+      "A": "203.0.113.10",
+      "AAAA": "2001:db8::10",
+      "CNAME": "target.example.com",
+      "MX": "mail.example.com",
+      "TXT": "v=spf1 mx ~all",
+      "NS": "ns1.example.com",
+      "SRV": "",
+      "CAA": ""
+    }
+  },
+  "fx": {
+    "favorites": "收藏夹",
+    "fav": "收藏此目录",
+    "unfav": "取消收藏",
+    "search": "搜索",
+    "query": "文件名或内容",
+    "in_content": "搜索文件内容",
+    "truncated": "仅显示部分结果；请缩小目录或关键字范围。",
+    "remote": "远程下载",
+    "save_as": "保存为",
+    "save_in": "保存到 {dir}",
+    "download": "下载",
+    "share": "分享链接",
+    "shares": "分享链接",
+    "valid_for": "有效期",
+    "hours": "小时",
+    "max_downloads": "最多下载次数",
+    "optional": "选填",
+    "share_hint": "0 即不限。持有链接的人都可下载（面板的授权 IP 仍然生效）。",
+    "create_link": "创建链接",
+    "expires": "到期",
+    "expired": "已过期",
+    "never": "永不",
+    "downloads": "下载次数"
+  },
+  "tb": {
+    "system": "系统",
+    "swap_now": "已用 {used} / {total}",
+    "swap_suggest": "建议 {n} MB",
+    "swap_hint": "Swap 文件为 /swapfile；设为 0 即删除。",
+    "hostname": "主机名",
+    "dns": "DNS 服务器",
+    "dns_resolved": "通过 systemd-resolved 设置；留空即恢复 DHCP 提供的服务器。",
+    "dns_plain": "写入 /etc/resolv.conf。",
+    "time": "时间",
+    "synced": "已同步",
+    "not_synced": "未同步",
+    "ntp": "自动校时（NTP）",
+    "sync_now": "立即校时",
+    "tz_hint": "面板自己的时区（日志、计划任务）在设置中。",
+    "ssh_settings": "SSH 服务",
+    "running": "运行中",
+    "stopped": "已停止",
+    "ssh_port": "端口",
+    "ssh_port_hint": "面板防火墙会先放行新端口；若有其他云防火墙，也请放行。",
+    "root_login": "root 登录",
+    "root": {
+      "prohibit-password": "仅限密钥",
+      "yes": "允许",
+      "no": "禁止"
+    },
+    "password_auth": "密码登录",
+    "pubkey_auth": "密钥登录",
+    "max_tries": "最多验证次数",
+    "keepalive": "保持连接间隔",
+    "lockout": "请开启密码或密钥登录（并在下方添加密钥），否则没人能登录。",
+    "ssh_confirm": "用这些设置重启 SSH？测试新登录成功前请保持当前连接。",
+    "keys": "root 的授权密钥",
+    "no_keys": "暂无密钥。",
+    "add_key": "添加密钥",
+    "processes": "进程",
+    "search": "搜索",
+    "name": "名称",
+    "user": "用户",
+    "memory": "内存",
+    "started": "启动时间",
+    "command": "命令",
+    "terminate": "结束",
+    "kill": "强制结束",
+    "kill_confirm": "结束 {name}？",
+    "connections": "网络连接",
+    "listen_only": "仅显示监听端口",
+    "conn_count": "共 {n} 个连接",
+    "proto": "协议",
+    "local": "本地",
+    "remote": "远端",
+    "disks": "磁盘",
+    "free": "可用",
+    "usage": "目录占用分析",
+    "analyze": "分析",
+    "up": "上层",
+    "cleanup": "垃圾清理",
+    "rescan": "重新扫描",
+    "clean": "清理 {n}",
+    "clean_confirm": "删除所选文件？",
+    "freed": "已释放 {n}",
+    "junk": {
+      "system_logs": "系统旧日志",
+      "journal": "systemd 日志",
+      "apt_cache": "软件包缓存",
+      "tmp": "旧临时文件",
+      "site_logs": "网站旧日志",
+      "panel_tmp": "面板临时文件",
+      "docker": "未使用 Docker 镜像"
+    },
+    "junk_hint": {
+      "system_logs": "/var/log/*.1、*.gz",
+      "journal": "缩减到 100 MB",
+      "apt_cache": "已下载的 .deb 文件",
+      "tmp": "/tmp 中 7 天未改动的文件",
+      "site_logs": "/www/wwwlogs 旧日志",
+      "panel_tmp": "未完成的上传和下载",
+      "docker": "悬空镜像和构建缓存"
+    }
+  },
+  "mail": {
+    "off": "未启用",
+    "no_tls": "无 TLS 证书",
+    "enable": "启用邮件服务器",
+    "reapply": "应用",
+    "disable": "停用",
+    "disable_confirm": "停止邮件服务器？邮箱和密钥会保留。",
+    "intro": "docker-mailserver（Postfix、Dovecot、OpenDKIM、Fail2ban），使用端口 {ports}。主机名请用如 mail.example.com：先将其添加为网站并申请 SSL，邮件才会使用 TLS。请在云防火墙放行这些端口；许多服务商默认封锁出站 25 端口，需申请开通。",
+    "domains": "域名",
+    "domain": "域名",
+    "add_domain": "添加域名",
+    "domain_delete": "移除此域名？请先删除其邮箱。",
+    "mailboxes": "邮箱",
+    "add_account": "新增邮箱",
+    "address": "地址",
+    "quota": "容量限制",
+    "quota_hint": "例如 500M 或 2G；0 即无限",
+    "account_delete": "删除此邮箱及其邮件？",
+    "client_hint": "邮件客户端：IMAP {host}:993（SSL），SMTP {host}:465（SSL）或 587（STARTTLS）；用户名 = 完整地址。",
+    "aliases": "别名转发",
+    "alias_from": "来源",
+    "alias_to": "转发到",
+    "add_alias": "添加别名",
+    "check": "检测",
+    "dns_apply": "通过 Cloudflare 添加这些记录",
+    "ptr_hint": "另外请在 VPS 服务商将服务器 IP 的反向 DNS（PTR）设为邮件主机名（如 Linode → Network → Reverse DNS）。",
+    "checks": {
+      "mx": "MX 指向本机",
+      "a": "主机名解析到本机",
+      "ptr": "反向 DNS（PTR）",
+      "spf": "SPF 包含本机",
+      "dkim": "DKIM 公钥已发布",
+      "dmarc": "DMARC 策略",
+      "tls": "TLS 证书",
+      "port25": "出站 25 端口畅通"
+    }
   }
 }

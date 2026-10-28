@@ -29,7 +29,7 @@ const targets = ref<Targets>({ site: [], database: [], volume: [], dest: [] })
 const remotes = ref<Remote[]>([])
 const jobs = ref<Job[]>([])
 const task = ref<{ id: string; title: string } | null>(null)
-const kinds = ['site', 'database', 'panel', 'volume', 'path']
+const kinds = ['site', 'database', 'panel', 'snapshot', 'volume', 'path']
 const kindOptions = computed(() => kinds.map((k) => ({ label: t(`bk.kinds.${k}`), value: k })))
 
 async function loadRecs() {
@@ -65,10 +65,24 @@ function targetOptions(kind: string, all: boolean): Opt[] {
   return all && (kind === 'site' || kind === 'database') ? [{ label: t('bk.all'), value: '*' }, ...list] : list
 }
 function targetLabel(p: Plan) {
-  if (p.kind === 'panel') return t('bk.kinds.panel')
+  if (p.kind === 'panel' || p.kind === 'snapshot') return t(`bk.kinds.${p.kind}`)
   if (p.target === '*') return t('bk.all')
   return targetOptions(p.kind, false).find((o) => o.value === p.target)?.label ?? p.target
 }
+
+// ---- snapshot migration ----
+const migrate = ref<{ rec: Rec; url: string } | null>(null)
+async function openMigrate(r: Rec) {
+  migrate.value = { rec: r, url: '' }
+  if (r.dest !== 'local') return
+  try {
+    const sh = await post<{ token: string }>(`/backups/${r.id}/share`)
+    migrate.value.url = `${location.origin}/s/${sh.token}`
+  } catch (e) {
+    fail(e)
+  }
+}
+const copy = (s: string) => navigator.clipboard?.writeText(s).then(() => msg.success(t('common.copied')))
 
 // ---- run now / plan form ----
 interface Form { mode: 'now' | 'plan'; id: number; name: string; kind: string; target: string; dests: string[]; keep: number; exclude: string[]; schedule: string; preset: string; enabled: boolean }
@@ -90,7 +104,7 @@ function openForm(mode: 'now' | 'plan', j?: Job) {
   if (mode === 'now') x.target = ''
   f.value = x
 }
-const plan = (x: Form): Plan => ({ kind: x.kind, target: x.kind === 'panel' ? '' : x.target, dests: x.dests, keep: x.keep, exclude: x.exclude })
+const plan = (x: Form): Plan => ({ kind: x.kind, target: x.kind === 'panel' || x.kind === 'snapshot' ? '' : x.target, dests: x.dests, keep: x.keep, exclude: x.exclude })
 async function submit() {
   const x = f.value!
   try {
@@ -172,7 +186,11 @@ const recCols = computed<DataTableColumns<Rec>>(() => [
     render: (r) =>
       h(NSpace, { size: 4 }, () => [
         h(NButton, { size: 'tiny', tag: 'a', href: `/api/v1/backups/${r.id}/download` }, () => t('bk.download')),
-        r.kind !== 'panel' ? h(NButton, { size: 'tiny', onClick: () => ((restoreOf.value = r), (into.value = null)) }, () => t('bk.restore')) : null,
+        r.kind === 'snapshot'
+          ? h(NButton, { size: 'tiny', type: 'primary', onClick: () => openMigrate(r) }, () => t('bk.migrate'))
+          : r.kind !== 'panel'
+            ? h(NButton, { size: 'tiny', onClick: () => ((restoreOf.value = r), (into.value = null)) }, () => t('bk.restore'))
+            : null,
         h(NPopconfirm, { onPositiveClick: () => del(r) }, { trigger: () => h(NButton, { size: 'tiny', type: 'error', quaternary: true }, () => t('common.delete')), default: () => t('bk.delete_confirm') }),
       ]),
   },
@@ -300,6 +318,7 @@ const remoteCols = computed<DataTableColumns<Remote>>(() => [
             <n-radio-button v-for="k in kinds" :key="k" :value="k">{{ t(`bk.kinds.${k}`) }}</n-radio-button>
           </n-radio-group>
         </n-form-item>
+        <n-alert v-if="f.kind === 'snapshot'" type="info" :show-icon="false" style="margin-bottom: 12px">{{ t('bk.snapshot_hint') }}</n-alert>
         <n-form-item v-if="['site', 'database', 'volume'].includes(f.kind)" :label="t('bk.target')">
           <n-select v-model:value="f.target" :options="targetOptions(f.kind, true)" filterable />
         </n-form-item>
@@ -320,9 +339,25 @@ const remoteCols = computed<DataTableColumns<Remote>>(() => [
       <template #footer>
         <n-space justify="end">
           <n-button @click="f = null">{{ t('common.cancel') }}</n-button>
-          <n-button type="primary" :disabled="!f.dests.length || (f.kind !== 'panel' && !f.target)" @click="submit">{{ f.mode === 'now' ? t('bk.start') : t('common.save') }}</n-button>
+          <n-button type="primary" :disabled="!f.dests.length || (f.kind !== 'panel' && f.kind !== 'snapshot' && !f.target)" @click="submit">{{ f.mode === 'now' ? t('bk.start') : t('common.save') }}</n-button>
         </n-space>
       </template>
+    </n-card>
+  </n-modal>
+
+  <n-modal :show="!!migrate" @update:show="(v: boolean) => !v && (migrate = null)">
+    <n-card v-if="migrate" :title="`${t('bk.migrate')} · ${migrate.rec.name}`" style="width: min(680px, calc(100vw - 32px))" closable @close="migrate = null">
+      <ol class="steps">
+        <li>{{ t('bk.migrate_1') }}<pre class="cmd">curl -fsSL https://raw.githubusercontent.com/wilsonstar90/lmcwhm/main/deploy/install.sh | sudo bash</pre></li>
+        <li v-if="migrate.url">
+          {{ t('bk.migrate_2_link') }}
+          <pre class="cmd">sudo lmcwhm snapshot restore {{ migrate.url }}</pre>
+          <n-button size="tiny" @click="copy(`sudo lmcwhm snapshot restore ${migrate.url}`)">{{ t('common.copy') }}</n-button>
+          <span class="hint"> {{ t('bk.migrate_link_hint') }}</span>
+        </li>
+        <li v-else>{{ t('bk.migrate_2_file') }}<pre class="cmd">sudo lmcwhm snapshot restore /root/{{ migrate.rec.name }}</pre></li>
+        <li>{{ t('bk.migrate_3') }}</li>
+      </ol>
     </n-card>
   </n-modal>
 
@@ -395,5 +430,21 @@ const remoteCols = computed<DataTableColumns<Remote>>(() => [
   letter-spacing: 4px;
   text-align: center;
   font-family: monospace;
+}
+.steps li {
+  margin-bottom: 12px;
+}
+.cmd {
+  background: rgba(128, 128, 128, 0.12);
+  padding: 8px 10px;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: 12px;
+  margin: 6px 0;
+}
+.hint {
+  font-size: 12px;
+  opacity: 0.65;
 }
 </style>

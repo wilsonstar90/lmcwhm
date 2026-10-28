@@ -1,17 +1,34 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { NAlert, NButton, NCard, NCheckbox, NCode, NInput, NModal, NSpace, NTag, NText, useMessage } from 'naive-ui'
+import { NAlert, NButton, NCard, NCheckbox, NCode, NInput, NModal, NSelect, NSpace, NTag, NText, useMessage } from 'naive-ui'
 import { get, post, ApiError } from '../api/client'
 
-interface Release { current: string; latest: string; newer: boolean; notes: string; url: string; published_at: string; error?: string }
+interface Release { current: string; latest: string; newer: boolean; notes: string; url: string; published_at: string; error?: string; rollback?: string }
 interface Status { running: boolean; log: string; exit: number; version: string }
 
 const { t } = useI18n()
 const msg = useMessage()
 const rel = ref<Release | null>(null)
 const checking = ref(false)
-const confirm = ref<{ action: 'update' | 'repair'; password: string; rebuild: boolean } | null>(null)
+const confirm = ref<{ action: 'update' | 'repair' | 'rollback'; password: string; rebuild: boolean; withData: boolean } | null>(null)
+const readChannel = () => {
+  try {
+    return localStorage.getItem('lmcwhm.channel') === 'beta' ? 'beta' : 'stable'
+  } catch {
+    return 'stable'
+  }
+}
+const channel = ref<'stable' | 'beta'>(readChannel())
+function setChannel(v: 'stable' | 'beta') {
+  channel.value = v
+  try {
+    localStorage.setItem('lmcwhm.channel', v)
+  } catch {
+    /* private mode */
+  }
+  check(true)
+}
 const busy = ref(false)
 const progress = ref<Status | null>(null)
 const startedVersion = ref('')
@@ -20,7 +37,7 @@ let timer: number | undefined
 async function check(force = false) {
   checking.value = true
   try {
-    rel.value = await get<Release>(`/system/update${force ? '?force=1' : ''}`)
+    rel.value = await get<Release>(`/system/update?channel=${channel.value}${force ? '&force=1' : ''}`)
   } catch {
     /* offline: the bar still offers repair */
   } finally {
@@ -34,7 +51,7 @@ async function run() {
   const c = confirm.value!
   busy.value = true
   try {
-    await post(`/system/${c.action}`, { password: c.password, rebuild: c.rebuild })
+    await post(`/system/${c.action}`, { password: c.password, rebuild: c.rebuild, channel: channel.value, with_data: c.withData })
     startedVersion.value = rel.value?.current ?? ''
     confirm.value = null
     progress.value = { running: true, log: '', exit: -1, version: startedVersion.value }
@@ -73,10 +90,20 @@ const changed = computed(() => done.value && progress.value!.version !== started
         </template>
         <n-text v-else-if="rel?.error" depth="3" style="font-size: 12px">{{ t('maint.check_failed') }}</n-text>
       </n-space>
-      <n-space :size="8">
+      <n-space :size="8" align="center">
+        <n-select
+          size="small"
+          :value="channel"
+          :options="[{ label: t('maint.stable'), value: 'stable' }, { label: t('maint.beta'), value: 'beta' }]"
+          style="width: 110px"
+          @update:value="setChannel"
+        />
         <n-button size="small" quaternary :loading="checking" @click="check(true)">{{ t('maint.check') }}</n-button>
-        <n-button size="small" type="primary" :disabled="!rel?.newer" @click="confirm = { action: 'update', password: '', rebuild: false }">{{ t('maint.update') }}</n-button>
-        <n-button size="small" @click="confirm = { action: 'repair', password: '', rebuild: false }">{{ t('maint.repair') }}</n-button>
+        <n-button size="small" type="primary" :disabled="!rel?.newer" @click="confirm = { action: 'update', password: '', rebuild: false, withData: false }">{{ t('maint.update') }}</n-button>
+        <n-button size="small" @click="confirm = { action: 'repair', password: '', rebuild: false, withData: false }">{{ t('maint.repair') }}</n-button>
+        <n-button v-if="rel?.rollback" size="small" quaternary type="warning" @click="confirm = { action: 'rollback', password: '', rebuild: false, withData: false }">
+          {{ t('maint.rollback_to', { v: rel.rollback }) }}
+        </n-button>
       </n-space>
     </n-space>
   </n-card>
@@ -84,8 +111,10 @@ const changed = computed(() => done.value && progress.value!.version !== started
   <n-modal :show="!!confirm" @update:show="(v: boolean) => !v && (confirm = null)">
     <n-card v-if="confirm" :title="t(`maint.${confirm.action}`)" style="width: min(520px, calc(100vw - 32px))" closable @close="confirm = null">
       <p v-if="confirm.action === 'update'">{{ t('maint.update_desc', { from: rel?.current, to: rel?.latest }) }}</p>
+      <p v-else-if="confirm.action === 'rollback'">{{ t('maint.rollback_desc', { from: rel?.current, to: rel?.rollback }) }}</p>
       <p v-else>{{ t('maint.repair_desc') }}</p>
       <n-alert type="success" :show-icon="false" style="margin-bottom: 12px">{{ t('maint.kept') }}</n-alert>
+      <n-checkbox v-if="confirm.action === 'rollback'" v-model:checked="confirm.withData" style="margin-bottom: 12px">{{ t('maint.with_data') }}</n-checkbox>
       <n-checkbox v-if="confirm.action === 'repair'" v-model:checked="confirm.rebuild" style="margin-bottom: 12px">{{ t('maint.rebuild') }}</n-checkbox>
       <n-input v-model:value="confirm.password" type="password" show-password-on="click" :placeholder="t('maint.password')" @keyup.enter="run" />
       <template #footer>

@@ -3,7 +3,7 @@ import { computed, h, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   NAlert, NButton, NCard, NDataTable, NForm, NFormItem, NInput, NInputGroup, NModal, NPopconfirm, NRadioButton, NRadioGroup,
-  NSelect, NSpace, NTag, NText, NTooltip, useMessage, type DataTableColumns,
+  NSelect, NSpace, NTabPane, NTabs, NTag, NText, NTooltip, useMessage, type DataTableColumns,
 } from 'naive-ui'
 import { get, patch, ApiError } from '../api/client'
 import type { Container, Route, RouteResolution, Site, WebConfig, WebStatus } from '../api/types'
@@ -11,6 +11,7 @@ import { datetime } from '../format'
 import SiteCreate from '../components/SiteCreate.vue'
 import SiteDrawer from '../components/SiteDrawer.vue'
 import TaskModal from '../components/TaskModal.vue'
+import DnsZones from '../components/DnsZones.vue'
 
 const { t, locale } = useI18n()
 const msg = useMessage()
@@ -218,6 +219,8 @@ const columns: DataTableColumns<Route> = [
 </script>
 
 <template>
+  <n-tabs type="line" animated default-value="routes">
+    <n-tab-pane name="routes" :tab="t('dns.routes_tab')">
   <n-alert type="default" :show-icon="false" style="margin-bottom: 12px">{{ t('route.intro') }}</n-alert>
   <n-space justify="space-between" style="margin-bottom: 12px">
     <n-space>
@@ -243,6 +246,9 @@ const columns: DataTableColumns<Route> = [
   <n-alert v-if="warned" type="warning" :show-icon="false" style="margin-bottom: 12px">{{ t('route.warned', { n: warned }) }}</n-alert>
 
   <n-data-table size="small" :columns="columns" :data="filtered" :loading="loading" :row-key="(r: Route) => r.host" :scroll-x="1300" />
+    </n-tab-pane>
+    <n-tab-pane name="dns" :tab="t('dns.tab')" display-directive="show:lazy"><DnsZones /></n-tab-pane>
+  </n-tabs>
 
   <n-modal :show="!!add" @update:show="(v: boolean) => !v && (add = null)">
     <n-card v-if="add" :title="t('route.add')" style="width: min(560px, calc(100vw - 32px))" closable @close="add = null">

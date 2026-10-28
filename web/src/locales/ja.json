@@ -56,7 +56,9 @@
     "processes": "プロセス常駐",
     "uptime": "死活監視",
     "alerts": "アラート",
-    "ai": "AI / MCP"
+    "ai": "AI / MCP",
+    "mail": "メール",
+    "toolbox": "ツールボックス"
   },
   "home": {
     "system": "システム",
@@ -161,7 +163,13 @@
       "weak_password": "パスワードは8文字以上",
       "bad_username": "ユーザー名は3-32文字の英数字 _ - .",
       "bad_password": "パスワードが違います",
-      "totp_already_enabled": "二段階認証は既に有効です。先に無効化してください"
+      "totp_already_enabled": "二段階認証は既に有効です。先に無効化してください",
+      "forbidden": "このモジュールへのアクセス権がありません",
+      "disabled": "このアカウントは無効です",
+      "last_admin": "最後の管理者（または自分自身）は削除・降格できません",
+      "user_exists": "このユーザー名は使用中です",
+      "user_not_found": "ユーザーが見つかりません",
+      "invalid_permission": "不明なモジュール"
     },
     "settings": {
       "invalid_port": "ポートは 1-65535",
@@ -199,12 +207,14 @@
       "invalid_advanced": "詳細設定が無効です（IP・UA・ドメイン・リダイレクト）"
     },
     "cf": {
-      "no_token": "Cloudflare トークンを設定してください"
+      "no_token": "Cloudflare トークンを設定してください",
+      "api_error": "Cloudflare：{message}"
     },
     "web": {
       "invalid_email": "メール形式が不正",
       "invalid_directory": "ACME Directory URL は https:// で始めてください",
-      "invalid_ip": "IP 形式が不正"
+      "invalid_ip": "IP 形式が不正",
+      "varnish_invalid": "キャッシュメモリは 32〜65536 MB にしてください"
     },
     "docker": {
       "not_available": "Docker を利用できません",
@@ -245,7 +255,8 @@
       "invalid_mode": "パーミッション：8 進数（例 755）",
       "invalid_owner": "不明なユーザーまたはグループ",
       "invalid_format": "未対応のアーカイブ形式です",
-      "trash_cross_device": "ごみ箱は別のディスクにあります"
+      "trash_cross_device": "ごみ箱は別のディスクにあります",
+      "invalid_query": "2文字以上入力してください"
     },
     "terminal": {
       "invalid_target": "コンテナが無効です",
@@ -254,7 +265,8 @@
     "maint": {
       "running": "更新または修復が既に実行中です",
       "unsupported": "systemd と root が必要です（install.sh でインストール）",
-      "up_to_date": "既に最新バージョンです"
+      "up_to_date": "既に最新バージョンです",
+      "no_rollback": "戻せる以前のバージョンがありません"
     },
     "cron": {
       "not_found": "ジョブが見つかりません",
@@ -301,7 +313,8 @@
       "invalid_remote": "クラウド設定が無効です",
       "remote_unauthorized": "クラウドが承認を拒否しました：{value}",
       "auth_expired": "承認コードの期限切れ",
-      "remote_not_found": "クラウド上にファイルがありません"
+      "remote_not_found": "クラウド上にファイルがありません",
+      "invalid_snapshot": "パネルのスナップショットではありません"
     },
     "ai": {
       "no_key": "Anthropic API キーが未設定です",
@@ -350,6 +363,53 @@
       "invalid_input": "タイトル・管理者・パスワード（8 文字以上）・メールを確認してください",
       "no_mysql": "WordPress には MySQL か MariaDB が必要です",
       "invalid_action": "不明な操作"
+    },
+    "php": {
+      "invalid_config": "PHP 設定が無効です：{field}",
+      "unknown_extension": "このバージョンでは使えない拡張機能：{field}",
+      "unknown_version": "不明な PHP バージョン",
+      "in_use": "まだ {site} が使用中です"
+    },
+    "toolbox": {
+      "invalid": "無効な値",
+      "invalid_hostname": "無効なホスト名",
+      "invalid_timezone": "不明なタイムゾーン",
+      "invalid_dns": "DNS サーバーは IP アドレス（最大6件）",
+      "invalid_port": "無効なポート",
+      "invalid_key": "有効な SSH 公開鍵ではありません",
+      "ssh_lockout": "拒否：この設定では誰も SSH でログインできなくなります",
+      "protected_process": "このプロセスはここでは停止できません"
+    },
+    "secscan": {
+      "not_found": "レポートが見つかりません",
+      "unknown_fix": "この項目に自動修正はありません"
+    },
+    "malware": {
+      "not_found": "ファイルが見つかりません",
+      "invalid_path": "サイトのルート内のフォルダのみ検査できます"
+    },
+    "tamper": {
+      "not_found": "ルールが見つかりません",
+      "invalid_rule": "無効なルール",
+      "invalid_path": "サイトのルート内の既存フォルダを選んでください",
+      "path_exists": "このフォルダには既にルールがあります",
+      "watch_unsupported": "監視モードには Linux が必要です"
+    },
+    "share": {
+      "not_found": "リンクが見つかりません"
+    },
+    "dns": {
+      "invalid_record": "無効なレコード：{field}"
+    },
+    "mail": {
+      "invalid_hostname": "mail.example.com のような完全なホスト名を指定してください",
+      "invalid_domain": "無効なドメイン",
+      "invalid_address": "無効または使用中のアドレス：{field}",
+      "weak_password": "8文字以上にしてください",
+      "not_running": "メールサーバーが起動していません",
+      "unknown_domain": "先にドメインを追加してください",
+      "port_busy": "ポート {field} は使用中です",
+      "invalid_quota": "容量は 500M や 2G の形式"
     }
   },
   "task": {
@@ -707,7 +767,12 @@
     "done": "完了しました。",
     "done_version": "完了: {v} で稼働中です。",
     "failed": "失敗しました（exit {code}）。インストーラーは以前のバージョンに戻しました。ログを確認してください。",
-    "reload": "ページを再読み込み"
+    "reload": "ページを再読み込み",
+    "stable": "安定版",
+    "beta": "ベータ",
+    "rollback_to": "{v} に戻す",
+    "rollback_desc": "{from} から前回の更新前の {to} に戻します。",
+    "with_data": "更新前にバックアップしたパネルデータも復元（以降の変更は別に保存）"
   },
   "geo": {
     "lan": "LAN",
@@ -802,7 +867,10 @@
   "sec": {
     "firewall": "ファイアウォール",
     "ips": "IP リスト",
-    "cloud": "Linode / Cloudflare"
+    "cloud": "Linode / Cloudflare",
+    "scan": "セキュリティ診断",
+    "malware": "Webシェル検査",
+    "tamper": "改ざん防止"
   },
   "fw": {
     "title": "サーバーファイアウォール（nftables）",
@@ -960,7 +1028,8 @@
       "database": "データベース",
       "panel": "パネル設定",
       "volume": "Docker ボリューム",
-      "path": "ディレクトリ"
+      "path": "ディレクトリ",
+      "snapshot": "サーバースナップショット"
     },
     "target": "対象",
     "all": "すべて",
@@ -1018,7 +1087,14 @@
     "authorize_step2": "2. 次のコードを入力：",
     "authorize_wait": "承認するとこの画面は自動で閉じます。",
     "authorized": "接続しました：{account}",
-    "auth_expired": "コードの期限切れ、または拒否されました。もう一度お試しください。"
+    "auth_expired": "コードの期限切れ、または拒否されました。もう一度お試しください。",
+    "snapshot_hint": "スナップショットにはパネルのDBと設定、App Store のデータ（コピー中はDBを一時停止）、全サイトのファイルが含まれ、新しいサーバーへの移行に必要なものが揃います。独自 Compose プロジェクトの Docker 名前付きボリュームは含まれません。",
+    "migrate": "移行",
+    "migrate_1": "新しいサーバーに lmcwhm をインストール：",
+    "migrate_2_link": "続いてこのサーバーから直接復元します（ダウンロードリンクは24時間・3回まで有効）：",
+    "migrate_link_hint": "パネルに IP 制限がある場合は、先に新サーバーの IP を許可してください。",
+    "migrate_2_file": "スナップショットをダウンロードして新サーバーへコピーし、次を実行：",
+    "migrate_3": "パネルは元の設定・アドレス・パスワードで再起動し、サイトとアプリを再作成します。最後にドメインの DNS を新サーバーの IP に向けてください。"
   },
   "alert": {
     "tab_rules": "ルール",
@@ -1071,7 +1147,10 @@
       "cron_failed": "Cron・バックアップ失敗",
       "login_failed": "パネルログイン失敗",
       "panel_login": "パネルログイン通知",
-      "ssh_login": "SSH ログイン通知"
+      "ssh_login": "SSH ログイン通知",
+      "tamper": "保護ファイルの変更",
+      "malware": "Webシェル検査で検出",
+      "security_scan": "セキュリティ診断：重大リスク"
     },
     "rule_desc": {
       "cpu": "CPU の {minutes} 分平均が {threshold}% 以上",
@@ -1298,7 +1377,14 @@
     "error_pages": "カスタムエラーページ（サイトルートの /404.html・/50x.html）",
     "open_basedir": "サイト間アクセス防止（open_basedir）",
     "block_xmlrpc": "xmlrpc.php をブロック（WordPress）",
-    "redirects": "リダイレクト"
+    "redirects": "リダイレクト",
+    "varnish": "Varnish ページキャッシュ",
+    "varnish_on": "このサイトを Varnish 経由で配信",
+    "varnish_ttl": "キャッシュ時間",
+    "varnish_ttl_hint": "独自の Cache-Control がないページに適用。ログイン中のユーザー、POST、管理画面、Cookie を設定する応答はキャッシュしません。",
+    "varnish_exclude": "キャッシュしないパス",
+    "varnish_exclude_hint": "パスの接頭辞（例 /api）",
+    "varnish_purge": "このサイトのキャッシュを削除"
   },
   "stats": {
     "title": "アクセス解析",
@@ -1361,5 +1447,373 @@
     "update": "更新",
     "activate": "有効化",
     "deactivate": "無効化"
+  },
+  "php": {
+    "version": "バージョン",
+    "not_installed": "未インストール",
+    "sites": "サイト数",
+    "extensions": "拡張機能",
+    "install": "インストール",
+    "settings": "設定",
+    "reload": "リロード",
+    "remove_confirm": "この PHP コンテナを削除しますか？設定は保持されます。",
+    "hint": "PHP の各バージョンは独立した PHP-FPM コンテナで動作し、サイトが使うと自動で起動します。",
+    "ext_hint": "チェックした拡張機能はこのバージョンのイメージに組み込まれます（install-php-extensions）。保存すると再ビルドされ数分かかることがあります。新しい構成がテストに通るまで現行のものが動作し続けます。",
+    "loaded": "読込済",
+    "slow": "ビルド遅い",
+    "unsupported": "このバージョンでは利用不可",
+    "builtin": "組み込み",
+    "ini": "php.ini",
+    "panel_tz": "（パネルのタイムゾーン）",
+    "disable_functions": "無効化する関数",
+    "disable_hint": "PHP コードからこれらの関数を呼べなくします（disable_functions）。WP-CLI と Composer は CLI で動くため影響しません。",
+    "add_dangerous": "推奨リストを追加",
+    "clear": "クリア",
+    "custom": "カスタム ini",
+    "custom_hint": "上の設定の後に追加する php.ini の行（拡張機能のオプションなど）。適用前に php-fpm -t で全体をテストします。",
+    "fpm": "FPM プール",
+    "suggest": "{mem} MB の RAM 向け推奨値",
+    "slowlog": "スローログ",
+    "status": "ステータス",
+    "not_running": "このバージョンは実行されていません。",
+    "save": "テストして適用"
+  },
+  "varnish": {
+    "idle": "未使用",
+    "hit_rate": "ヒット率",
+    "objects": "オブジェクト",
+    "storage": "使用量",
+    "sites": "サイト",
+    "memory": "キャッシュメモリ",
+    "purge_all": "すべて削除",
+    "hint": "サイトごとに「ウェブサイト → 設定 → 詳細」でキャッシュを有効にします。使うサイトがある間だけ Varnish が動きます。"
+  },
+  "api": {
+    "docs": "API リファレンス",
+    "tokens": "API トークン",
+    "intro": "パネルが使う全 API。API トークンで呼び出します：Authorization: Bearer lmc_…（read は GET のみ、operate はパネル管理以外の全モジュール、admin はすべて）。長い処理は task_id を返すので GET /tasks/{id} で確認します。"
+  },
+  "scan": {
+    "run": "今すぐ診断",
+    "download": "レポートをダウンロード",
+    "none": "まだ診断していません",
+    "summary": "重大 {c} 件・警告 {w} 件・情報 {i} 件",
+    "clean": "リスクは見つかりませんでした。",
+    "weekly": "パネルは毎週自動診断し、重大な問題はアラートします（アラート → セキュリティ診断）。",
+    "level": "レベル",
+    "category": "区分",
+    "finding": "検出内容",
+    "fix": "修正",
+    "report": "セキュリティレポート",
+    "ai_prompt": "このサーバーのセキュリティ診断結果を説明し、優先して直すべきものを教えてください：",
+    "cat": {
+      "panel": "パネル",
+      "ssh": "SSH",
+      "accounts": "アカウント",
+      "system": "システム",
+      "network": "ネットワーク",
+      "web": "サイト"
+    },
+    "risks": {
+      "ssh_root_login": "root の SSH ログインが可能",
+      "ssh_password_auth": "SSH がパスワード認証を受け付けています（鍵の方が安全）",
+      "ssh_default_port": "SSH が既定ポート 22 で待受中",
+      "ssh_max_auth_tries": "SSH の接続あたり認証試行回数が多すぎます",
+      "ssh_empty_passwords": "SSH が空パスワードを受け付けます",
+      "ssh_x11": "SSH の X11 転送が有効",
+      "uid0_users": "root 権限（uid 0）を持つ他のアカウント",
+      "empty_passwords": "パスワードのないシステムアカウント",
+      "reboot_required": "更新完了に再起動が必要です（新カーネル）",
+      "security_updates": "未適用のセキュリティ更新が {n} 件",
+      "pending_updates": "{n} 件のパッケージ更新があります",
+      "no_auto_updates": "自動セキュリティ更新がオフ",
+      "sysctl": "カーネルのネットワーク・メモリ強化設定が未適用",
+      "docker_api_exposed": "Docker API がネットワークから到達可能",
+      "exposed_ports": "公開アドレスで待受中のサービス",
+      "php_eol": "セキュリティサポート終了の PHP を使うサイト",
+      "world_writable": "サイトフォルダに誰でも書き込めるファイル",
+      "php_in_uploads": "WordPress の uploads に PHP ファイル（多くは Web シェル）"
+    },
+    "fix_confirm": {
+      "ssh_root": "root のログインを SSH 鍵のみにしますか？",
+      "sysctl_harden": "カーネル強化設定を適用しますか（/etc/sysctl.d/90-lmcwhm.conf）？",
+      "apt_upgrade": "今すべてのパッケージ更新を適用しますか（apt-get upgrade）？",
+      "auto_updates": "unattended-upgrades を入れて自動セキュリティ更新を有効にしますか？",
+      "lock_empty": "パスワードのないアカウントをロックしますか？",
+      "chmod_web": "サイトフォルダ内の全ファイルから other の書き込み権限を外しますか？"
+    }
+  },
+  "mw": {
+    "scan": "Webシェルを検査",
+    "summary": "{files} ファイルを検査、疑わしいもの {n} 件",
+    "findings": "疑わしいファイル",
+    "quarantined": "隔離",
+    "clean": "疑わしいファイルはありません。",
+    "hint": "PHP / JSP / ASP の Web シェルや画像に隠したコードをルールで検出します。プラグインによっては正当に eval や base64 を使うので確認してから削除してください。「無視」は内容単位でホワイトリスト化します。",
+    "file": "ファイル",
+    "line": "{n} 行目",
+    "quarantine": "隔離",
+    "quarantine_confirm": "このファイルをサイト外へ移動しますか（復元可能）？",
+    "ignore": "無視",
+    "original": "元の場所",
+    "restore": "復元",
+    "paths_hint": "検査するフォルダ（{root} 内）",
+    "clamav": "ClamAV でも検査（初回は約300MBの定義をダウンロード、約1.5GBのメモリが必要）",
+    "rules": {
+      "eval_decode": "デコードしたデータの eval",
+      "eval_input": "リクエスト入力の eval",
+      "exec_input": "リクエスト入力でコマンド実行",
+      "callback_input": "リクエスト入力をコールバックに使用",
+      "variable_function": "リクエスト入力を関数名に使用",
+      "preg_e": "preg_replace /e によるコード実行",
+      "known_shell": "既知の Web シェル",
+      "jsp_exec": "JSP コマンド実行",
+      "asp_eval": "ASP のリクエスト eval",
+      "long_base64": "非常に長いエンコード文字列",
+      "chr_chain": "chr() による難読化",
+      "hex_escapes": "16進エスケープによる難読化",
+      "write_input": "リクエスト入力をファイルに書き込み",
+      "php_in_image": "画像内の PHP コード",
+      "php_in_uploads": "uploads 内の PHP ファイル",
+      "clamav": "ClamAV：{sig}"
+    }
+  },
+  "tp": {
+    "intro": "監視モードは保護ファイルの変更を記録し、元に戻せます（新規ファイルは隔離）。ロックモードは変更不可にし、ルールをオフにするまで PHP も root も変更できません。サイト更新前にオフにしてください。",
+    "new": "フォルダを保護",
+    "path": "フォルダ",
+    "mode": "モード",
+    "modes": {
+      "watch": "監視",
+      "lock": "ロック"
+    },
+    "mode_hint": {
+      "watch": "inotify でフォルダを監視し、復元が有効なら変更・削除されたファイルを今作成する基準コピーから戻します。",
+      "lock": "保護ファイルとフォルダに immutable 属性（chattr +i）を付けます。除外フォルダは書き込み可能なままです。"
+    },
+    "restore": "変更を自動で元に戻す",
+    "restore_short": "復元",
+    "exts": "保護するファイル種別",
+    "exclude": "除外フォルダ",
+    "exclude_hint": "フォルダからの相対パス（例 wp-content/uploads）",
+    "baseline": "現在のファイルを承認",
+    "events": "最近の変更",
+    "file": "ファイル",
+    "op": "変更",
+    "action": "結果",
+    "state": {
+      "locked": "ロック中",
+      "watching": "監視中",
+      "off": "オフ",
+      "error": "エラー"
+    },
+    "ops": {
+      "modify": "変更",
+      "create": "作成",
+      "delete": "削除",
+      "rename": "名前変更",
+      "attrib": "属性"
+    },
+    "actions": {
+      "logged": "記録",
+      "restored": "復元済",
+      "removed": "隔離済",
+      "failed": "失敗"
+    }
+  },
+  "users": {
+    "tab": "ユーザー",
+    "intro": "パネルのオペレーター用アカウント（顧客ではありません）。チェックしたモジュールだけ、必要なら一部サイトだけを扱えます。管理者は全権限を持ちます。",
+    "new": "ユーザーを追加",
+    "you": "あなた",
+    "role": "役割",
+    "admin": "管理者",
+    "operator": "オペレーター",
+    "perms": "モジュール",
+    "all": "すべて",
+    "sites_n": "{n} サイト",
+    "keep_password": "空欄なら現在のパスワードのまま",
+    "sites": "サイト",
+    "all_sites": "すべてのサイト",
+    "sites_hint": "設定するとこれらのサイトだけを管理でき、サーバー全体に及ぶモジュール（ファイル・ターミナル・Docker など）は使えなくなります。",
+    "root_warning": "ファイルとターミナルは root として動作します。root パスワードを渡せる人にだけ付与してください。"
+  },
+  "dns": {
+    "tab": "DNS ゾーン",
+    "routes_tab": "ドメインルート",
+    "no_token": "ここで DNS を編集するには Zone: DNS Edit 権限の Cloudflare API トークンを追加してください（ウェブサイト → 環境）。",
+    "add": "レコードを追加",
+    "templates": "テンプレート",
+    "template": "テンプレート",
+    "domain": "ドメイン",
+    "type": "種類",
+    "name": "名前",
+    "value": "値",
+    "auto": "自動",
+    "proxy": "プロキシ",
+    "dns_only": "DNS のみ",
+    "priority": "優先度",
+    "weight": "重み",
+    "port": "ポート",
+    "target": "ターゲット",
+    "name_hint": "空欄で {zone} 自体",
+    "applied": "{n} 件のレコードを追加・更新しました",
+    "apply": "レコードを追加",
+    "template_hint": "同一のレコードはスキップし、既存の SPF / DMARC は置き換えます（名前ごとに1つのみ）。",
+    "param": {
+      "mailhost": "メールサーバーのホスト名"
+    },
+    "ph": {
+      "A": "203.0.113.10",
+      "AAAA": "2001:db8::10",
+      "CNAME": "target.example.com",
+      "MX": "mail.example.com",
+      "TXT": "v=spf1 mx ~all",
+      "NS": "ns1.example.com",
+      "SRV": "",
+      "CAA": ""
+    }
+  },
+  "fx": {
+    "favorites": "お気に入り",
+    "fav": "このフォルダを追加",
+    "unfav": "お気に入りから削除",
+    "search": "検索",
+    "query": "名前またはテキスト",
+    "in_content": "ファイル内を検索",
+    "truncated": "一部の結果のみ表示しています。フォルダや検索語を絞ってください。",
+    "remote": "リモートダウンロード",
+    "save_as": "保存名",
+    "save_in": "{dir} に保存",
+    "download": "ダウンロード",
+    "share": "共有リンク",
+    "shares": "共有リンク",
+    "valid_for": "有効期間",
+    "hours": "時間",
+    "max_downloads": "最大ダウンロード回数",
+    "optional": "任意",
+    "share_hint": "0 は無制限。リンクを知っていれば誰でもダウンロードできます（パネルの IP 制限は有効）。",
+    "create_link": "リンクを作成",
+    "expires": "有効期限",
+    "expired": "期限切れ",
+    "never": "無期限",
+    "downloads": "ダウンロード数"
+  },
+  "tb": {
+    "system": "システム",
+    "swap_now": "使用中 {used} / {total}",
+    "swap_suggest": "推奨 {n} MB",
+    "swap_hint": "スワップファイルは /swapfile。0 で削除します。",
+    "hostname": "ホスト名",
+    "dns": "DNS サーバー",
+    "dns_resolved": "systemd-resolved で設定します。空にすると DHCP のサーバーに戻ります。",
+    "dns_plain": "/etc/resolv.conf に書き込みます。",
+    "time": "時刻",
+    "synced": "同期済み",
+    "not_synced": "未同期",
+    "ntp": "自動時刻同期（NTP）",
+    "sync_now": "今すぐ同期",
+    "tz_hint": "パネル自体のタイムゾーン（ログ・cron）は設定にあります。",
+    "ssh_settings": "SSH サーバー",
+    "running": "稼働中",
+    "stopped": "停止",
+    "ssh_port": "ポート",
+    "ssh_port_hint": "パネルのファイアウォールは先に新ポートを開けます。別管理のクラウドファイアウォールでも開けてください。",
+    "root_login": "root ログイン",
+    "root": {
+      "prohibit-password": "鍵のみ",
+      "yes": "許可",
+      "no": "禁止"
+    },
+    "password_auth": "パスワードログイン",
+    "pubkey_auth": "鍵ログイン",
+    "max_tries": "最大認証試行回数",
+    "keepalive": "キープアライブ間隔",
+    "lockout": "パスワードか鍵ログイン（下で鍵を追加）を有効にしないと誰もログインできません。",
+    "ssh_confirm": "この設定で SSH を再起動しますか？新しいログインを確認するまで今の接続を維持してください。",
+    "keys": "root の authorized_keys",
+    "no_keys": "鍵はまだありません。",
+    "add_key": "鍵を追加",
+    "processes": "プロセス",
+    "search": "検索",
+    "name": "名前",
+    "user": "ユーザー",
+    "memory": "メモリ",
+    "started": "開始",
+    "command": "コマンド",
+    "terminate": "停止",
+    "kill": "強制終了",
+    "kill_confirm": "{name} を停止しますか？",
+    "connections": "接続",
+    "listen_only": "待受ポートのみ",
+    "conn_count": "{n} ソケット",
+    "proto": "プロトコル",
+    "local": "ローカル",
+    "remote": "リモート",
+    "disks": "ディスク",
+    "free": "空き",
+    "usage": "フォルダ使用量",
+    "analyze": "分析",
+    "up": "上へ",
+    "cleanup": "クリーンアップ",
+    "rescan": "再スキャン",
+    "clean": "{n} を削除",
+    "clean_confirm": "選択したファイルを削除しますか？",
+    "freed": "{n} 解放しました",
+    "junk": {
+      "system_logs": "ローテート済みシステムログ",
+      "journal": "systemd ジャーナル",
+      "apt_cache": "パッケージキャッシュ",
+      "tmp": "古い一時ファイル",
+      "site_logs": "ローテート済みサイトログ",
+      "panel_tmp": "パネル一時ファイル",
+      "docker": "未使用の Docker イメージ"
+    },
+    "junk_hint": {
+      "system_logs": "/var/log/*.1, *.gz",
+      "journal": "100 MB に縮小",
+      "apt_cache": "ダウンロード済み .deb",
+      "tmp": "7日間未変更の /tmp ファイル",
+      "site_logs": "/www/wwwlogs のローテート済み",
+      "panel_tmp": "未完了のアップロード等",
+      "docker": "ダングリングイメージとビルドキャッシュ"
+    }
+  },
+  "mail": {
+    "off": "オフ",
+    "no_tls": "TLS 証明書なし",
+    "enable": "メールサーバーを有効化",
+    "reapply": "適用",
+    "disable": "無効化",
+    "disable_confirm": "メールサーバーを停止しますか？メールボックスと鍵は保持されます。",
+    "intro": "docker-mailserver（Postfix・Dovecot・OpenDKIM・Fail2ban）をポート {ports} で動かします。ホスト名は mail.example.com などにし、先にサイトとして追加して SSL を発行すると TLS が使えます。クラウドファイアウォールでこれらのポートを開けてください。多くの事業者は送信 25 番を申請するまで遮断しています。",
+    "domains": "ドメイン",
+    "domain": "ドメイン",
+    "add_domain": "ドメインを追加",
+    "domain_delete": "このドメインを削除しますか？先にメールボックスを削除してください。",
+    "mailboxes": "メールボックス",
+    "add_account": "メールボックスを追加",
+    "address": "アドレス",
+    "quota": "容量制限",
+    "quota_hint": "例：500M・2G、0 で無制限",
+    "account_delete": "このメールボックスとメールを削除しますか？",
+    "client_hint": "メールソフト：IMAP {host}:993（SSL）、SMTP {host}:465（SSL）または 587（STARTTLS）、ユーザー名はアドレス全体。",
+    "aliases": "エイリアス",
+    "alias_from": "転送元",
+    "alias_to": "転送先",
+    "add_alias": "エイリアスを追加",
+    "check": "チェック",
+    "dns_apply": "Cloudflare にこれらのレコードを追加",
+    "ptr_hint": "VPS 事業者でサーバー IP の逆引き DNS（PTR）をメールホスト名に設定してください（例 Linode → Network → Reverse DNS）。",
+    "checks": {
+      "mx": "MX がこのサーバーを指す",
+      "a": "ホスト名がこのサーバーに解決",
+      "ptr": "逆引き DNS（PTR）",
+      "spf": "SPF がこのサーバーを許可",
+      "dkim": "DKIM 公開鍵を公開済み",
+      "dmarc": "DMARC ポリシー",
+      "tls": "TLS 証明書",
+      "port25": "送信ポート 25 が開いている"
+    }
   }
 }

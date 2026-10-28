@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # End-to-end test of M2 (App Store, runtime projects, databases), M3
-# (Docker manager, domain binding, TLS passthrough, files) and M4–M8 on a
+# (Docker manager, domain binding, TLS passthrough, files) and M4–M10 on a
 # disposable Ubuntu host with Docker.
 # Expects lmcwhm installed with: --port 18888 --entry /console --username admin --password Passw0rd1
 # Usage: sudo bash deploy/test-apps.sh
@@ -449,6 +449,95 @@ task POST /ftp/enabled '{"on":false}'
 for a in $(api GET /ftp | python3 -c "import sys,json; print(' '.join(str(x['id']) for x in json.load(sys.stdin)['items']))"); do api POST "/ftp/accounts/$a/delete" >/dev/null; done
 ! id e2esftp >/dev/null 2>&1 || fail "sftp system user not removed"
 pass "SFTP chroot and Pure-FTPd accounts"
+
+
+# ---------- M9 / M10 ----------
+# PHP extensions, php.ini and FPM pool per version.
+task PUT /php/8.3 '{"extensions":["redis"],"ini":{"memory_limit":"384M"},"disable_functions":["exec"],"custom_ini":"","fpm":{"pm":"dynamic","max_children":8,"start_servers":2,"min_spare":1,"max_spare":4,"max_requests":500,"request_timeout":0,"slowlog_timeout":5}}'
+docker exec lmcwhm-php83 php -m | grep -qx redis || fail "redis extension not loaded"
+[[ "$(docker exec lmcwhm-php83 php -r 'echo ini_get("memory_limit");')" == 384M ]] || fail "php.ini not applied"
+api GET /php/8.3 | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['status']['pool']=='www' and 'redis' in d['modules'], d" || fail "php status"
+[[ "$(get80 db.test /index.php)" == "db-ok-42" ]] || fail "site broken by PHP settings"
+pass "PHP: redis extension built, php.ini and FPM pool applied, FPM status read"
+
+# Varnish page cache for one site.
+task PATCH "/sites/$DBSITE" '{"advanced":{"varnish":true,"varnish_ttl":300}}'
+curl -s -o /dev/null --resolve db.test:80:127.0.0.1 http://db.test/index.php
+hit="$(curl -s -D - -o /dev/null --resolve db.test:80:127.0.0.1 http://db.test/index.php | tr -d '\r' | grep -i '^x-cache:' || true)"
+[[ "$hit" == *HIT* ]] || fail "varnish did not cache: $hit"
+api GET /varnish | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['stats']['state']=='running' and d['stats']['hits']>=1, d" || fail "varnish stats"
+api POST /varnish/purge "{\"site_id\":$DBSITE}" >/dev/null
+task PATCH "/sites/$DBSITE" '{"advanced":{}}'
+for _ in $(seq 1 10); do [[ -z "$(docker ps -aq -f name=lmcwhm-varnish)" ]] && break; sleep 1; done
+[[ -z "$(docker ps -aq -f name=lmcwhm-varnish)" ]] || fail "varnish not removed when unused"
+pass "Varnish: second request is a cache HIT, removed when no site uses it"
+
+# Toolbox.
+api GET /toolbox/system | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['hostname'] and d['mem_total']>0, d" || fail "toolbox system"
+api GET /toolbox/processes | python3 -c "import sys,json; assert any(p['name']=='lmcwhm' for p in json.load(sys.stdin)['items'])" || fail "process list"
+grep -q LISTEN <<<"$(api GET /toolbox/connections)" || fail "connections"
+api GET /toolbox/ssh | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['port']>0, d" || fail "ssh settings"
+grep -q system_logs <<<"$(api GET /toolbox/junk)" || fail "junk scan"
+pass "toolbox: system, processes, connections, SSH, cleanup scan"
+
+# Security scan, webshell scan and quarantine.
+task POST /secscan/run
+api GET /secscan | python3 -c "import sys,json; r=json.load(sys.stdin)['items'][0]; assert 0<=r['score']<=100 and r['hostname'], r" || fail "security scan"
+printf '<?php @eval(base64_decode($_POST["x"]));' > /www/wwwroot/db.test/shell.php
+task POST /malware/scan '{"paths":["/www/wwwroot/db.test"]}'
+SCAN="$(api GET /malware/scans | jget "['items'][0]['id']")"
+api GET "/malware/scans/$SCAN" | python3 -c "import sys,json; f=json.load(sys.stdin)['findings']; assert [x for x in f if x['path'].endswith('/shell.php') and x['rule']=='eval_decode'], f" || fail "webshell not found"
+api POST "/malware/scans/$SCAN/quarantine" '{"path":"/www/wwwroot/db.test/shell.php"}' >/dev/null
+[[ ! -e /www/wwwroot/db.test/shell.php ]] || fail "not quarantined"
+pass "security scan report; webshell detected and quarantined"
+
+# Tamper protection: watch + restore, then lock.
+api POST /tamper '{"path":"/www/wwwroot/db.test","mode":"watch","restore":true,"enabled":true,"exclude":["uploads"]}' | grep -q '"watching"' || fail "tamper watch"
+echo '<?php echo "hacked";' > /www/wwwroot/db.test/index.php
+for _ in $(seq 1 20); do [[ "$(cat /www/wwwroot/db.test/index.php)" != *hacked* ]] && break; sleep 0.5; done
+[[ "$(get80 db.test /index.php)" == "db-ok-42" ]] || fail "tampered file not restored"
+TP="$(api GET /tamper | jget "['items'][0]['id']")"
+grep -q restored <<<"$(api GET /tamper/events)" || fail "tamper event"
+api PUT "/tamper/$TP" '{"path":"/www/wwwroot/db.test","mode":"lock","enabled":true}' | grep -q '"locked"' || fail "tamper lock"
+! (echo x >> /www/wwwroot/db.test/index.php) 2>/dev/null || fail "locked file was writable"
+api POST "/tamper/$TP/delete" >/dev/null
+echo -n >> /www/wwwroot/db.test/index.php || fail "file still locked after the rule was deleted"
+pass "tamper protection: changes undone in watch mode, immutable in lock mode"
+
+# Sub-user with module permissions; REST API token; OpenAPI.
+api POST /users '{"username":"ops","password":"Ops-pass-123","perms":["files"],"enabled":true}' | grep -q '"ops"' || fail "sub-user"
+J2="$(mktemp)"
+curl -sk -c "$J2" -o /dev/null "$P/console"
+curl -sk -b "$J2" -c "$J2" -o /dev/null -X POST "$P/api/v1/auth/login" -d '{"username":"ops","password":"Ops-pass-123"}'
+[[ "$(curl -sk -b "$J2" -o /dev/null -w '%{http_code}' "$P/api/v1/settings")" == 403 ]] || fail "sub-user reached settings"
+[[ "$(curl -sk -b "$J2" -o /dev/null -w '%{http_code}' "$P/api/v1/files/list?path=/www")" == 200 ]] || fail "sub-user files"
+RT="$(api POST /tokens '{"name":"rest","scope":"read","ips":[],"ttl_days":1}' | jget "['secret']")"
+grep -q db.test <<<"$(curl -sk -H "Authorization: Bearer $RT" "$P/api/v1/sites")" || fail "REST token GET"
+[[ "$(curl -sk -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer $RT" "$P/api/v1/sites")" == 401 ]] || fail "read token wrote"
+grep -q '"openapi"' <<<"$(curl -sk -H "Authorization: Bearer $RT" "$P/api/v1/openapi.json")" || fail "openapi"
+pass "sub-user permissions, REST API token scopes, OpenAPI description"
+
+# File search, share link, remote download.
+grep -q index.php <<<"$(api GET '/files/search?dir=/www/wwwroot/db.test&q=db-ok&content=1')" || fail "content search"
+SH="$(api POST /files/shares '{"path":"/www/wwwroot/db.test/index.php","hours":1}' | jget "['token']")"
+grep -q db-ok-42 <<<"$(curl -sk -X POST "$P/s/$SH")" || fail "share link download (without the security entry)"
+task POST /files/fetch '{"url":"https://raw.githubusercontent.com/wilsonstar90/lmcwhm/main/README.md","dir":"/tmp","name":"fetched.md"}'
+grep -q lmcwhm /tmp/fetched.md || fail "remote download"
+pass "file search, share link, remote download"
+
+# DNS templates (preview needs no Cloudflare call); panel snapshot.
+api POST /dns/zones/none/template '{"template":"self_mail","domain":"e2e.test","params":{"mailhost":"mail.e2e.test"},"preview":true}' | grep -q 'mail.e2e.test' || fail "dns template"
+task POST /backups/run '{"kind":"snapshot","dests":["local"],"keep":1}'
+SNAP="$(api GET '/backups?kind=snapshot' | jget "['items'][0]['id']")"
+SS="$(api POST "/backups/$SNAP/share" | jget "['token']")"
+curl -sk -X POST "$P/s/$SS" -o /tmp/snap.tar.gz
+tar -tzf /tmp/snap.tar.gz | grep -q '^home/data/panel.db$' || fail "snapshot lacks the panel database"
+tar -tzf /tmp/snap.tar.gz | grep -q '^www/db.test/index.php$' || fail "snapshot lacks website files"
+pass "DNS template preview; snapshot with panel, apps and websites, downloadable for migration"
+
+# Manifest for the installable app (PWA).
+grep -q '"start_url":"/console"' <<<"$(curl -sk -b "$JAR" "$P/manifest.webmanifest")" || fail "PWA manifest"
+pass "PWA manifest"
 
 api GET /system/summary | python3 -c "import sys,json; s=json.load(sys.stdin); assert 0 <= s['score'] <= 100 and s['backups'] > 0 and s['probes'] >= 1, s" || fail "dashboard summary"
 kill $HOOK

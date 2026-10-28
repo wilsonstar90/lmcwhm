@@ -3,6 +3,11 @@ export interface User {
   username: string
   totp_enabled: boolean
   is_admin: boolean
+  perms?: string[]
+  sites?: number[]
+  enabled?: boolean
+  remark?: string
+  created_at?: number
 }
 
 export type SSLMode = 'off' | 'selfsigned' | 'custom'

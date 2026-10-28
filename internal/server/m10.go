@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/wilsonstar90/lmcwhm/internal/backup"
 	"github.com/wilsonstar90/lmcwhm/internal/cfdns"
 	"github.com/wilsonstar90/lmcwhm/internal/mail"
 	"github.com/wilsonstar90/lmcwhm/internal/netinfo"
@@ -28,6 +29,9 @@ func (s *Server) m10Routes(r chi.Router) {
 		r.Post("/dns/zones/{zone}/records/{rid}/delete", s.handleDNSRecordDelete)
 		r.Get("/dns/templates", s.handleDNSTemplates)
 		r.Post("/dns/zones/{zone}/template", s.handleDNSTemplate)
+	}
+	if s.Backup != nil && s.Shares != nil {
+		r.Post("/backups/{id}/share", s.handleBackupShare)
 	}
 	if s.Mail != nil {
 		r.Get("/mail", s.handleMail)
@@ -169,6 +173,28 @@ func (s *Server) handleDNSTemplate(w http.ResponseWriter, r *http.Request) {
 	}
 	s.auditCat(r, "dns", "dns.template", tpl.Key+" "+vars["domain"])
 	writeJSON(w, http.StatusOK, map[string]any{"added": n})
+}
+
+// handleBackupShare makes a 24-hour download link for a local backup, so a
+// new server can fetch a snapshot with `lmcwhm snapshot restore <link>`.
+func (s *Server) handleBackupShare(w http.ResponseWriter, r *http.Request) {
+	rec, err := s.Backup.Get(r.Context(), idParam(r))
+	if err != nil {
+		writeBackupErr(w, err)
+		return
+	}
+	p, ok := s.Backup.LocalPath(rec)
+	if !ok {
+		writeErr(w, http.StatusBadRequest, backup.ErrBadDest)
+		return
+	}
+	sh, err := s.Shares.Create(r.Context(), p, "", 24*time.Hour, 3, sessionFrom(r).User.Username)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.auditCat(r, "backup", "backup.share", rec.Name)
+	writeJSON(w, http.StatusOK, sh)
 }
 
 // ---- mail ----

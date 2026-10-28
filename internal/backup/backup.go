@@ -365,6 +365,14 @@ func (sv *Service) prune(ctx context.Context, kind, target, dest string, keep in
 
 const recCols = `id, kind, target, target_id, name, size, dest, location, job_id, created_at`
 
+// LocalPath is where a local backup is stored (ok=false for remote copies).
+func (sv *Service) LocalPath(r Record) (string, bool) {
+	if r.Dest != DestLocal || r.Location == "" {
+		return "", false
+	}
+	return r.Location, true
+}
+
 func scanRecords(rows *sql.Rows) ([]Record, error) {
 	defer rows.Close()
 	out := []Record{}

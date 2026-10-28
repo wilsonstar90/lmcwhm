@@ -310,6 +310,15 @@ SNI 頁亦會檢查證書係咪涵蓋該域名、DNS 係咪指向本機、亦有
 - **WordPress**：WP-CLI 放喺 `/www/wwwroot/.lmcwhm/`（PHP 容器睇到但冇網站會公開），下載後核對官方 SHA-512，以 www-data 喺網站嘅 PHP 容器執行。Clone / Staging 未做。
 - **未驗證**：真實 Google Drive / OneDrive 帳戶（只有假 API 測試）、真實 Claude API 調用（只有假伺服器測試）、Email / Telegram 等實際送達（CI 只測 Webhook）。
 
+## 4F. M9 / M10 實作備註
+- **PHP 設定**：每版本 `web/php/<ver>/settings.json`；擴展用 `install-php-extensions` 喺基礎映像上加一層（tag `lmcwhm/php:<v>-2-x<hash>`），儲存時先 `php-fpm -t` 測試再換；配置改動用 SIGUSR2 平滑重載。FPM 狀態經內建 FastCGI client 讀 `/fpm-status?json`。
+- **Varnish**：`lmcwhm-varnish`（varnish:7.6，127.0.0.1:6081，malloc）只喺有網站開啟時運行；HAProxy 按 `cache_*.map` 將主機送去 `be_varnish`，Varnish 回源 nginx。VCL 由網站列表生成，`varnishreload` 熱換。
+- **權限**：`/api/v1/<首段>` 對應模組（`internal/server/perms.go`），未列出 = 只限管理員；限定網站嘅子用戶只可以用 `/sites/{id}`、`/wordpress/{id}`。REST API 同 MCP 共用 API Token。
+- **防篡改**：鎖定 = `chattr +i`（受保護檔案同目錄，排除目錄保持可寫）；監察 = inotify + `tamper/<id>/base` 基準副本。刪除網站前會自動解鎖。
+- **快照**：`home/`（面板 home，唔包 bin / backup / logs / geoip）+ `www/`（網站），`snapshot.json` 喺最前；App 容器喺複製 `apps/` 期間 `docker pause`。還原保留擁有者同權限，寫入 rebuild 標記令面板重建 web stack。
+- **郵件**：docker-mailserver 15（橋接網絡 + 發佈端口，因為 `--hostname` 唔可以配 host 網絡）；證書只複製郵件主機名嗰張入容器，每 6 小時同步並 reload。
+- **未驗證**：郵件伺服器實際收發（CI 未跑 docker-mailserver）、ClamAV、離線安裝包、PWA 安裝、beta 通道（未有 pre-release）。
+
 ## 5. 路線圖
 | 階段 | 內容 | 完成標準 |
 |---|---|---|
@@ -322,8 +331,8 @@ SNI 頁亦會檢查證書係咪涵蓋該域名、DNS 係咪指向本機、亦有
 | **M6** ✅ | 備份（本地/Google Drive/OneDrive） | 排程備份上傳 + 還原成功 |
 | **M7** ✅ | MCP + AI 一鍵分析 + Skills | Claude Code 經 MCP 操作 |
 | **M8** ✅ | 儀表板完善、WP Toolkit、Supervisor、FTP/SFTP、Composer/Tomcat、網站進階、網站報表、撥測、告警中心 | 3A #1–8、#15 |
-| **M9** | 防篡改、木馬掃描、安全風險掃描報告、工具箱、面板子用戶、API Token/OpenAPI | 3A #9–13、#16、#23 |
-| **M10** | 面板快照遷移、升級/回滾/離線安裝、PWA、郵件插件、Zone Editor 模板 | 3A #14、#17、#18、#22、#24 |
+| **M9** ✅ | 防篡改、木馬掃描、安全風險掃描報告、工具箱、面板子用戶、API Token/OpenAPI | 3A #9–13、#16、#23 |
+| **M10** ✅ | 面板快照遷移、升級/回滾/離線安裝、PWA、郵件插件、Zone Editor 模板 | 3A #14、#17、#18、#22、#24 |
 | **後期** | 多 Web Server、多機 Agent、寶塔遷移工具 | 3A #20、#21 |
 
 批准後由 **M0** 開始實作。

@@ -9,6 +9,7 @@ import {
 import { get, post, put, getCsrf, ApiError } from '../api/client'
 import type { FileEntry, TrashItem } from '../api/types'
 import { bytes, datetime } from '../format'
+import FilesExtras from '../components/FilesExtras.vue'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -17,6 +18,11 @@ const msg = useMessage()
 const fail = (e: unknown) => msg.error(e instanceof ApiError ? e.text : String(e))
 
 const cwd = ref('/www/wwwroot')
+const extras = ref<InstanceType<typeof FilesExtras> | null>(null)
+function openFromExtras(p: string, dir: boolean) {
+  if (dir) load(p)
+  else edit({ path: p, name: p.split('/').pop() ?? p, is_dir: false } as FileEntry)
+}
 const pathInput = ref('')
 const items = ref<FileEntry[]>([])
 const loading = ref(false)
@@ -251,7 +257,7 @@ function open(e: FileEntry) {
 }
 function menu(e: FileEntry) {
   return [
-    ...(e.is_dir ? [] : [{ label: t('files.edit'), key: 'edit' }, { label: t('files.download'), key: 'download' }]),
+    ...(e.is_dir ? [] : [{ label: t('files.edit'), key: 'edit' }, { label: t('files.download'), key: 'download' }, { label: t('fx.share'), key: 'share' }]),
     { label: t('files.rename'), key: 'rename' },
     { label: t('files.copy'), key: 'copy' },
     { label: t('files.move'), key: 'move' },
@@ -269,6 +275,8 @@ function onMenu(e: FileEntry, k: string) {
       return edit(e)
     case 'download':
       return window.open(`/api/v1/files/download?path=${encodeURIComponent(e.path)}`)
+    case 'share':
+      return extras.value?.share(e.path)
     case 'rename':
       return rename(e)
     case 'copy':
@@ -335,6 +343,7 @@ const columns: DataTableColumns<FileEntry> = [
         </template>
       </n-space>
       <n-space>
+        <FilesExtras ref="extras" :cwd="cwd" @open="openFromExtras" @changed="load()" />
         <n-input v-model:value="search" size="small" clearable :placeholder="t('files.filter')" style="width: 180px" />
         <n-button size="small" @click="openTrash">{{ t('files.trash') }}</n-button>
       </n-space>

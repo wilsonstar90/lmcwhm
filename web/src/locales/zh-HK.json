@@ -56,7 +56,9 @@
     "processes": "進程守護",
     "uptime": "網站撥測",
     "alerts": "告警中心",
-    "ai": "AI 助手"
+    "ai": "AI 助手",
+    "mail": "郵件",
+    "toolbox": "工具箱"
   },
   "home": {
     "system": "系統資料",
@@ -161,7 +163,13 @@
       "weak_password": "密碼至少需要 8 個字元",
       "bad_username": "用戶名需 3-32 位英數字、_ - .",
       "bad_password": "密碼錯誤",
-      "totp_already_enabled": "兩步驗證已開啟，請先關閉"
+      "totp_already_enabled": "兩步驗證已開啟，請先關閉",
+      "forbidden": "你冇權限使用呢個模組",
+      "disabled": "呢個帳戶已停用",
+      "last_admin": "唔可以移除或降級最後一個管理員（或者你自己）",
+      "user_exists": "用戶名已被使用",
+      "user_not_found": "搵唔到用戶",
+      "invalid_permission": "未知嘅模組"
     },
     "settings": {
       "invalid_port": "端口需介乎 1-65535",
@@ -199,12 +207,14 @@
       "invalid_advanced": "進階設定無效（IP、User-Agent、網域或重定向）"
     },
     "cf": {
-      "no_token": "請先設定 Cloudflare API Token"
+      "no_token": "請先設定 Cloudflare API Token",
+      "api_error": "Cloudflare：{message}"
     },
     "web": {
       "invalid_email": "電郵格式錯誤",
       "invalid_directory": "ACME Directory URL 必須係 https://",
-      "invalid_ip": "IP 格式錯誤"
+      "invalid_ip": "IP 格式錯誤",
+      "varnish_invalid": "緩存記憶體要喺 32–65536 MB"
     },
     "docker": {
       "not_available": "Docker 不可用",
@@ -245,7 +255,8 @@
       "invalid_mode": "權限：八進制，例如 755",
       "invalid_owner": "未知嘅用戶或群組",
       "invalid_format": "唔支援嘅壓縮格式",
-      "trash_cross_device": "回收站喺另一隻磁碟"
+      "trash_cross_device": "回收站喺另一隻磁碟",
+      "invalid_query": "請輸入最少 2 個字元"
     },
     "terminal": {
       "invalid_target": "容器無效",
@@ -254,7 +265,8 @@
     "maint": {
       "running": "已經有更新或修復進行緊",
       "unsupported": "需要 systemd 伺服器同 root（用 install.sh 安裝）",
-      "up_to_date": "已經係最新版本"
+      "up_to_date": "已經係最新版本",
+      "no_rollback": "冇舊版本可以回滾"
     },
     "cron": {
       "not_found": "搵唔到任務",
@@ -301,7 +313,8 @@
       "invalid_remote": "雲端儲存設定無效",
       "remote_unauthorized": "雲端儲存拒絕授權：{value}",
       "auth_expired": "授權代碼已過期",
-      "remote_not_found": "雲端上已經冇呢個檔案"
+      "remote_not_found": "雲端上已經冇呢個檔案",
+      "invalid_snapshot": "呢個唔係面板快照"
     },
     "ai": {
       "no_key": "未設定 Anthropic API key",
@@ -350,6 +363,53 @@
       "invalid_input": "請檢查標題、管理員、密碼（最少 8 位）同電郵",
       "no_mysql": "WordPress 需要 MySQL 或 MariaDB",
       "invalid_action": "未知操作"
+    },
+    "php": {
+      "invalid_config": "PHP 設定無效：{field}",
+      "unknown_extension": "呢個版本冇呢個擴展：{field}",
+      "unknown_version": "未知嘅 PHP 版本",
+      "in_use": "仲有網站用緊：{site}"
+    },
+    "toolbox": {
+      "invalid": "數值無效",
+      "invalid_hostname": "主機名無效",
+      "invalid_timezone": "未知時區",
+      "invalid_dns": "DNS 伺服器要係 IP 地址（最多 6 個）",
+      "invalid_port": "端口無效",
+      "invalid_key": "唔係有效嘅 SSH 公鑰",
+      "ssh_lockout": "已拒絕：咁樣之後冇人可以經 SSH 登入",
+      "protected_process": "呢個進程唔可以喺度結束"
+    },
+    "secscan": {
+      "not_found": "搵唔到報告",
+      "unknown_fix": "呢個問題冇自動修復"
+    },
+    "malware": {
+      "not_found": "搵唔到檔案",
+      "invalid_path": "只可以掃描網站根目錄內嘅目錄"
+    },
+    "tamper": {
+      "not_found": "搵唔到規則",
+      "invalid_rule": "規則無效",
+      "invalid_path": "請揀網站根目錄內現有嘅目錄",
+      "path_exists": "呢個目錄已經有規則",
+      "watch_unsupported": "監察模式需要 Linux"
+    },
+    "share": {
+      "not_found": "搵唔到連結"
+    },
+    "dns": {
+      "invalid_record": "記錄無效：{field}"
+    },
+    "mail": {
+      "invalid_hostname": "請用完整主機名，例如 mail.example.com",
+      "invalid_domain": "網域無效",
+      "invalid_address": "地址無效或仲用緊：{field}",
+      "weak_password": "最少要 8 個字元",
+      "not_running": "郵件伺服器未運行",
+      "unknown_domain": "請先加入網域",
+      "port_busy": "端口 {field} 已被佔用",
+      "invalid_quota": "容量格式例如 500M 或 2G"
     }
   },
   "task": {
@@ -707,7 +767,12 @@
     "done": "完成。",
     "done_version": "完成：而家運行緊 {v}。",
     "failed": "失敗（exit {code}）；安裝程式已回滾到之前版本，詳情睇日誌。",
-    "reload": "重新載入頁面"
+    "reload": "重新載入頁面",
+    "stable": "穩定版",
+    "beta": "測試版",
+    "rollback_to": "回滾到 {v}",
+    "rollback_desc": "由 {from} 返回上次更新前嘅 {to}。",
+    "with_data": "同時還原更新前備份嘅面板數據（之後嘅改動會另存）"
   },
   "geo": {
     "lan": "內網",
@@ -802,7 +867,10 @@
   "sec": {
     "firewall": "防火牆",
     "ips": "IP 名單",
-    "cloud": "Linode / Cloudflare"
+    "cloud": "Linode / Cloudflare",
+    "scan": "安全掃描",
+    "malware": "木馬掃描",
+    "tamper": "防篡改"
   },
   "fw": {
     "title": "伺服器防火牆（nftables）",
@@ -960,7 +1028,8 @@
       "database": "資料庫",
       "panel": "面板設定",
       "volume": "Docker 卷",
-      "path": "目錄"
+      "path": "目錄",
+      "snapshot": "整機快照"
     },
     "target": "對象",
     "all": "全部",
@@ -1018,7 +1087,14 @@
     "authorize_step2": "2. 輸入呢個代碼：",
     "authorize_wait": "授權完成後呢個視窗會自動關閉。",
     "authorized": "已連接：{account}",
-    "auth_expired": "代碼過期或者被拒絕，請再試。"
+    "auth_expired": "代碼過期或者被拒絕，請再試。",
+    "snapshot_hint": "快照包括面板資料庫同設定、App Store 數據（複製時會短暫暫停資料庫）同所有網站檔案，即係搬去新機器所需嘅一切。你自己 Compose 項目嘅 Docker 具名卷唔包括在內。",
+    "migrate": "遷移",
+    "migrate_1": "喺新伺服器安裝 lmcwhm：",
+    "migrate_2_link": "然後直接由呢部伺服器還原快照（下載連結 24 小時內有效，最多 3 次）：",
+    "migrate_link_hint": "如果面板有限制授權 IP，先加入新伺服器嘅 IP。",
+    "migrate_2_file": "下載快照，複製到新伺服器，然後執行：",
+    "migrate_3": "面板會用原本嘅設定、地址同密碼重新啟動，並重建網站同軟件。最後將域名 DNS 指向新伺服器 IP。"
   },
   "alert": {
     "tab_rules": "告警規則",
@@ -1071,7 +1147,10 @@
       "cron_failed": "計劃任務／備份失敗",
       "login_failed": "面板登入失敗",
       "panel_login": "面板登入通知",
-      "ssh_login": "SSH 登入通知"
+      "ssh_login": "SSH 登入通知",
+      "tamper": "受保護檔案被改動",
+      "malware": "木馬掃描發現可疑檔案",
+      "security_scan": "安全掃描：嚴重風險"
     },
     "rule_desc": {
       "cpu": "CPU {minutes} 分鐘平均 ≥ {threshold}%",
@@ -1298,7 +1377,14 @@
     "error_pages": "自訂錯誤頁（網站目錄嘅 /404.html、/50x.html）",
     "open_basedir": "防跨站 (open_basedir)",
     "block_xmlrpc": "封鎖 xmlrpc.php（WordPress）",
-    "redirects": "重定向"
+    "redirects": "重定向",
+    "varnish": "Varnish 頁面緩存",
+    "varnish_on": "經 Varnish 緩存呢個網站",
+    "varnish_ttl": "緩存時間",
+    "varnish_ttl_hint": "用於冇自己 Cache-Control 嘅頁面。已登入用戶、POST、後台頁面同設定 Cookie 嘅回應永遠唔會緩存。",
+    "varnish_exclude": "唔緩存路徑",
+    "varnish_exclude_hint": "路徑前綴，例如 /api",
+    "varnish_purge": "清除呢個網站嘅緩存"
   },
   "stats": {
     "title": "訪問報表",
@@ -1361,5 +1447,373 @@
     "update": "更新",
     "activate": "啟用",
     "deactivate": "停用"
+  },
+  "php": {
+    "version": "版本",
+    "not_installed": "未安裝",
+    "sites": "網站數",
+    "extensions": "擴展",
+    "install": "安裝",
+    "settings": "設定",
+    "reload": "重載",
+    "remove_confirm": "刪除呢個 PHP 容器？設定會保留。",
+    "hint": "每個 PHP 版本係獨立嘅 PHP-FPM 容器；有網站用到時會自動啟動。",
+    "ext_hint": "剔咗嘅擴展會編譯入呢個版本嘅映像（install-php-extensions）。儲存時會重建，可能要幾分鐘；新版本測試通過前，舊嘅照常運行。",
+    "loaded": "已載入",
+    "slow": "編譯較慢",
+    "unsupported": "呢個版本唔支援",
+    "builtin": "內建",
+    "ini": "php.ini",
+    "panel_tz": "（面板時區）",
+    "disable_functions": "禁用函數",
+    "disable_hint": "PHP 程式唔可以呼叫呢啲函數（disable_functions）。WP-CLI 同 Composer 經 CLI 執行，唔受影響。",
+    "add_dangerous": "加入建議清單",
+    "clear": "清空",
+    "custom": "自訂 ini",
+    "custom_hint": "加喺上面設定之後嘅額外 php.ini 行，例如擴展選項。套用前會用 php-fpm -t 測試整個配置。",
+    "fpm": "FPM 性能",
+    "suggest": "按 {mem} MB 記憶體建議",
+    "slowlog": "慢日誌",
+    "status": "負載狀態",
+    "not_running": "呢個版本未運行。",
+    "save": "測試並套用"
+  },
+  "varnish": {
+    "idle": "未使用",
+    "hit_rate": "命中率",
+    "objects": "緩存物件",
+    "storage": "已用容量",
+    "sites": "網站",
+    "memory": "緩存記憶體",
+    "purge_all": "清除全部",
+    "hint": "喺 網站 → 設定 → 進階 逐個網站開啟緩存。有網站用先會運行 Varnish。"
+  },
+  "api": {
+    "docs": "API 文檔",
+    "tokens": "API Token",
+    "intro": "面板用到嘅所有接口。用 API Token 呼叫：Authorization: Bearer lmc_…（read 只可 GET；operate 可用所有模組但唔包括面板管理；admin 全部）。長時間操作會回傳 task_id，用 GET /tasks/{id} 查詢。"
+  },
+  "scan": {
+    "run": "立即掃描",
+    "download": "下載報告",
+    "none": "未有掃描記錄",
+    "summary": "{c} 個嚴重、{w} 個警告、{i} 個提示",
+    "clean": "冇發現風險。",
+    "weekly": "面板每星期亦會自動掃描，有嚴重問題會告警（告警中心 → 安全掃描）。",
+    "level": "級別",
+    "category": "範疇",
+    "finding": "問題",
+    "fix": "一鍵修復",
+    "report": "安全報告",
+    "ai_prompt": "解釋以下伺服器安全掃描結果，並話我應該優先修復邊啲：",
+    "cat": {
+      "panel": "面板",
+      "ssh": "SSH",
+      "accounts": "系統帳戶",
+      "system": "系統",
+      "network": "網絡",
+      "web": "網站"
+    },
+    "risks": {
+      "ssh_root_login": "容許 root 經 SSH 登入",
+      "ssh_password_auth": "SSH 接受密碼登入（金鑰更安全）",
+      "ssh_default_port": "SSH 用緊預設端口 22",
+      "ssh_max_auth_tries": "SSH 每次連線容許太多次密碼嘗試",
+      "ssh_empty_passwords": "SSH 接受空密碼",
+      "ssh_x11": "SSH X11 轉發已開啟",
+      "uid0_users": "有其他擁有 root 權限（uid 0）嘅帳戶",
+      "empty_passwords": "有系統帳戶冇設密碼",
+      "reboot_required": "需要重新開機先完成更新（新內核）",
+      "security_updates": "有 {n} 個安全更新未安裝",
+      "pending_updates": "有 {n} 個套件可以更新",
+      "no_auto_updates": "未開啟自動安全更新",
+      "sysctl": "未套用內核網絡同記憶體加固設定",
+      "docker_api_exposed": "Docker API 可以由網絡存取",
+      "exposed_ports": "有服務喺公網地址監聽",
+      "php_eol": "有網站用緊已停止安全支援嘅 PHP 版本",
+      "world_writable": "網站目錄有人人可寫嘅檔案",
+      "php_in_uploads": "WordPress 上傳目錄有 PHP 檔（通常係木馬）"
+    },
+    "fix_confirm": {
+      "ssh_root": "改為 root 只可以用 SSH 金鑰登入？",
+      "sysctl_harden": "套用內核加固設定（/etc/sysctl.d/90-lmcwhm.conf）？",
+      "apt_upgrade": "立即安裝所有套件更新（apt-get upgrade）？",
+      "auto_updates": "安裝 unattended-upgrades 並開啟自動安全更新？",
+      "lock_empty": "鎖定冇密碼嘅帳戶？",
+      "chmod_web": "移除網站目錄所有檔案嘅「其他人可寫」權限？"
+    }
+  },
+  "mw": {
+    "scan": "掃描木馬",
+    "summary": "已掃描 {files} 個檔案，{n} 個可疑",
+    "findings": "可疑檔案",
+    "quarantined": "隔離區",
+    "clean": "冇發現可疑檔案。",
+    "hint": "以規則偵測 PHP / JSP / ASP 木馬同藏喺圖片入面嘅程式碼。刪除前請先檢查：部分插件會正當地用 eval 或 base64。「忽略」會按檔案內容加入白名單。",
+    "file": "檔案",
+    "line": "第 {n} 行",
+    "quarantine": "隔離",
+    "quarantine_confirm": "將檔案移出網站（之後可以還原）？",
+    "ignore": "忽略",
+    "original": "原位置",
+    "restore": "還原",
+    "paths_hint": "要掃描嘅目錄（{root} 之內）",
+    "clamav": "同時用 ClamAV 掃描（第一次要下載約 300 MB 病毒庫，需要約 1.5 GB 記憶體）",
+    "rules": {
+      "eval_decode": "eval 解碼後嘅數據",
+      "eval_input": "eval 請求輸入",
+      "exec_input": "用請求輸入執行指令",
+      "callback_input": "請求輸入作回呼函數",
+      "variable_function": "請求輸入作函數名",
+      "preg_e": "preg_replace /e 執行程式碼",
+      "known_shell": "已知木馬",
+      "jsp_exec": "JSP 指令執行",
+      "asp_eval": "ASP eval 請求",
+      "long_base64": "超長編碼字串",
+      "chr_chain": "chr() 混淆",
+      "hex_escapes": "十六進制轉義混淆",
+      "write_input": "將請求輸入寫入檔案",
+      "php_in_image": "圖片入面有 PHP 程式碼",
+      "php_in_uploads": "上傳目錄嘅 PHP 檔",
+      "clamav": "ClamAV：{sig}"
+    }
+  },
+  "tp": {
+    "intro": "監察模式會記錄受保護檔案嘅每次改動，亦可以自動還原（新檔案會被移走）。鎖定模式令檔案不可修改：PHP 甚至 root 都改唔到，直至規則關閉——更新網站前請先關閉。",
+    "new": "保護目錄",
+    "path": "目錄",
+    "mode": "模式",
+    "modes": {
+      "watch": "監察",
+      "lock": "鎖定"
+    },
+    "mode_hint": {
+      "watch": "用 inotify 監察目錄；開啟還原後，被改或刪除嘅檔案會由而家建立嘅基準副本還原。",
+      "lock": "為受保護檔案同目錄設定不可變屬性（chattr +i）。排除嘅目錄仍然可寫。"
+    },
+    "restore": "自動還原改動",
+    "restore_short": "還原",
+    "exts": "受保護檔案類型",
+    "exclude": "排除目錄",
+    "exclude_hint": "相對於目錄，例如 wp-content/uploads",
+    "baseline": "接受目前檔案",
+    "events": "最近改動",
+    "file": "檔案",
+    "op": "改動",
+    "action": "處理",
+    "state": {
+      "locked": "已鎖定",
+      "watching": "監察中",
+      "off": "已關閉",
+      "error": "錯誤"
+    },
+    "ops": {
+      "modify": "修改",
+      "create": "新增",
+      "delete": "刪除",
+      "rename": "改名",
+      "attrib": "權限"
+    },
+    "actions": {
+      "logged": "已記錄",
+      "restored": "已還原",
+      "removed": "已移走",
+      "failed": "失敗"
+    }
+  },
+  "users": {
+    "tab": "子用戶",
+    "intro": "面板操作員帳號（唔係租戶）：每個帳號只可以用剔選咗嘅模組，亦可以只管指定網站。管理員有全部權限。",
+    "new": "新增用戶",
+    "you": "你",
+    "role": "角色",
+    "admin": "管理員",
+    "operator": "操作員",
+    "perms": "模組權限",
+    "all": "全部",
+    "sites_n": "{n} 個網站",
+    "keep_password": "留空即保留原密碼",
+    "sites": "網站",
+    "all_sites": "所有網站",
+    "sites_hint": "設定後用戶只可以管理呢啲網站；可存取整部伺服器嘅模組（檔案、終端、Docker 等）會停用。",
+    "root_warning": "檔案同終端係以 root 身份操作伺服器：只應該俾你會交出 root 密碼嘅人。"
+  },
+  "dns": {
+    "tab": "DNS 記錄",
+    "routes_tab": "域名路由",
+    "no_token": "請先加入 Cloudflare API Token（網站 → 環境），需要 Zone: DNS Edit 權限，先可以喺度編輯 DNS。",
+    "add": "新增記錄",
+    "templates": "模板",
+    "template": "模板",
+    "domain": "域名",
+    "type": "類型",
+    "name": "名稱",
+    "value": "值",
+    "auto": "自動",
+    "proxy": "橙雲代理",
+    "dns_only": "僅 DNS",
+    "priority": "優先級",
+    "weight": "權重",
+    "port": "端口",
+    "target": "目標",
+    "name_hint": "留空代表 {zone} 本身",
+    "applied": "已新增或更新 {n} 條記錄",
+    "apply": "加入記錄",
+    "template_hint": "相同嘅記錄會略過；現有 SPF 或 DMARC 記錄會被取代（每個名稱只可以有一條）。",
+    "param": {
+      "mailhost": "郵件伺服器主機名"
+    },
+    "ph": {
+      "A": "203.0.113.10",
+      "AAAA": "2001:db8::10",
+      "CNAME": "target.example.com",
+      "MX": "mail.example.com",
+      "TXT": "v=spf1 mx ~all",
+      "NS": "ns1.example.com",
+      "SRV": "",
+      "CAA": ""
+    }
+  },
+  "fx": {
+    "favorites": "收藏夾",
+    "fav": "收藏呢個目錄",
+    "unfav": "取消收藏",
+    "search": "搜尋",
+    "query": "檔名或內容",
+    "in_content": "搜尋檔案內容",
+    "truncated": "只顯示部分結果；請縮窄目錄或關鍵字。",
+    "remote": "遠程下載",
+    "save_as": "儲存為",
+    "save_in": "存放於 {dir}",
+    "download": "下載",
+    "share": "分享連結",
+    "shares": "分享連結",
+    "valid_for": "有效期",
+    "hours": "小時",
+    "max_downloads": "最多下載次數",
+    "optional": "選填",
+    "share_hint": "0 即無限制。任何人有連結都可以下載（面板嘅授權 IP 仍然生效）。",
+    "create_link": "建立連結",
+    "expires": "到期",
+    "expired": "已過期",
+    "never": "永不",
+    "downloads": "下載次數"
+  },
+  "tb": {
+    "system": "系統",
+    "swap_now": "已用 {used} / {total}",
+    "swap_suggest": "建議 {n} MB",
+    "swap_hint": "Swap 檔案係 /swapfile；設為 0 即刪除。",
+    "hostname": "主機名",
+    "dns": "DNS 伺服器",
+    "dns_resolved": "經 systemd-resolved 設定；留空即恢復 DHCP 提供嘅伺服器。",
+    "dns_plain": "寫入 /etc/resolv.conf。",
+    "time": "時間",
+    "synced": "已同步",
+    "not_synced": "未同步",
+    "ntp": "自動校時（NTP）",
+    "sync_now": "立即校時",
+    "tz_hint": "面板自己嘅時區（日誌、計劃任務）喺設定入面。",
+    "ssh_settings": "SSH 服務",
+    "running": "運行中",
+    "stopped": "已停止",
+    "ssh_port": "端口",
+    "ssh_port_hint": "面板防火牆會先放行新端口；如果有其他雲端防火牆，都要記得放行。",
+    "root_login": "root 登入",
+    "root": {
+      "prohibit-password": "只限金鑰",
+      "yes": "容許",
+      "no": "禁止"
+    },
+    "password_auth": "密碼登入",
+    "pubkey_auth": "金鑰登入",
+    "max_tries": "最多驗證次數",
+    "keepalive": "保持連線間隔",
+    "lockout": "請開啟密碼或金鑰登入（並喺下面加金鑰），否則冇人登入到。",
+    "ssh_confirm": "用呢啲設定重啟 SSH？測試新登入成功之前請保持而家嘅連線。",
+    "keys": "root 嘅授權金鑰",
+    "no_keys": "未有金鑰。",
+    "add_key": "加入金鑰",
+    "processes": "進程",
+    "search": "搜尋",
+    "name": "名稱",
+    "user": "用戶",
+    "memory": "記憶體",
+    "started": "啟動時間",
+    "command": "指令",
+    "terminate": "結束",
+    "kill": "強制結束",
+    "kill_confirm": "結束 {name}？",
+    "connections": "網絡連接",
+    "listen_only": "只顯示監聽端口",
+    "conn_count": "共 {n} 個連接",
+    "proto": "協議",
+    "local": "本地",
+    "remote": "遠端",
+    "disks": "磁碟",
+    "free": "可用",
+    "usage": "目錄佔用分析",
+    "analyze": "分析",
+    "up": "上層",
+    "cleanup": "垃圾清理",
+    "rescan": "重新掃描",
+    "clean": "清理 {n}",
+    "clean_confirm": "刪除所選檔案？",
+    "freed": "已釋放 {n}",
+    "junk": {
+      "system_logs": "系統舊日誌",
+      "journal": "systemd 日誌",
+      "apt_cache": "套件快取",
+      "tmp": "舊暫存檔",
+      "site_logs": "網站舊日誌",
+      "panel_tmp": "面板暫存檔",
+      "docker": "未使用 Docker 映像"
+    },
+    "junk_hint": {
+      "system_logs": "/var/log/*.1、*.gz",
+      "journal": "縮減到 100 MB",
+      "apt_cache": "已下載嘅 .deb 檔",
+      "tmp": "/tmp 入面 7 日冇改過嘅檔案",
+      "site_logs": "/www/wwwlogs 舊日誌",
+      "panel_tmp": "未完成嘅上傳同下載",
+      "docker": "懸空映像同建置快取"
+    }
+  },
+  "mail": {
+    "off": "未啟用",
+    "no_tls": "冇 TLS 證書",
+    "enable": "啟用郵件伺服器",
+    "reapply": "套用",
+    "disable": "停用",
+    "disable_confirm": "停止郵件伺服器？信箱同金鑰會保留。",
+    "intro": "docker-mailserver（Postfix、Dovecot、OpenDKIM、Fail2ban），使用端口 {ports}。主機名請用例如 mail.example.com：先將佢加做網站並申請 SSL，郵件先會用 TLS。記得喺雲端防火牆放行呢啲端口；好多供應商預設封鎖外發 25 端口，要申請先開。",
+    "domains": "網域",
+    "domain": "網域",
+    "add_domain": "加入網域",
+    "domain_delete": "移除呢個網域？請先刪除佢嘅信箱。",
+    "mailboxes": "信箱",
+    "add_account": "新增信箱",
+    "address": "地址",
+    "quota": "容量限制",
+    "quota_hint": "例如 500M 或 2G；0 即無限",
+    "account_delete": "刪除呢個信箱同入面嘅郵件？",
+    "client_hint": "郵件客戶端：IMAP {host}:993（SSL），SMTP {host}:465（SSL）或 587（STARTTLS）；用戶名 = 完整地址。",
+    "aliases": "別名轉發",
+    "alias_from": "來源",
+    "alias_to": "轉發到",
+    "add_alias": "加入別名",
+    "check": "檢測",
+    "dns_apply": "經 Cloudflare 加入呢啲記錄",
+    "ptr_hint": "另外要喺 VPS 供應商將伺服器 IP 嘅反向 DNS（PTR）設成郵件主機名（例如 Linode → Network → Reverse DNS）。",
+    "checks": {
+      "mx": "MX 指向本機",
+      "a": "主機名解析到本機",
+      "ptr": "反向 DNS（PTR）",
+      "spf": "SPF 包括本機",
+      "dkim": "DKIM 公鑰已發佈",
+      "dmarc": "DMARC 政策",
+      "tls": "TLS 證書",
+      "port25": "外發 25 端口暢通"
+    }
   }
 }

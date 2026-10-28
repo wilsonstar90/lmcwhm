@@ -6,6 +6,7 @@ import { get } from '../api/client'
 import type { Overview } from '../api/types'
 import { bytes } from '../format'
 import MaintenanceBar from '../components/MaintenanceBar.vue'
+import { useSession } from '../stores/session'
 import DashSummary from '../components/DashSummary.vue'
 
 const { t } = useI18n()
@@ -37,10 +38,11 @@ onBeforeUnmount(() => clearInterval(timer))
 const pct = (used: number, total: number) => (total ? Math.round((used / total) * 100) : 0)
 const status = (p: number) => (p >= 90 ? 'error' : p >= 70 ? 'warning' : 'success')
 const uptime = (s: number) => t('home.days', { d: Math.floor(s / 86400), h: Math.floor((s % 86400) / 3600) })
+const session = useSession()
 </script>
 
 <template>
-  <MaintenanceBar />
+  <MaintenanceBar v-if="session.user?.is_admin" />
   <DashSummary />
   <div v-if="o">
     <n-grid cols="1 s:2 m:4" responsive="screen" :x-gap="16" :y-gap="16">
