@@ -7,8 +7,9 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { post, ApiError } from '../api/client'
 
-// container: "" opens a host shell, otherwise `docker exec` into it.
-const props = defineProps<{ container?: string }>()
+// container: "" opens a host shell, otherwise `docker exec` into it
+// (with shell "bash" / "sh", optionally as root).
+const props = defineProps<{ container?: string; shell?: string; root?: boolean }>()
 const { t } = useI18n()
 
 const password = ref('')
@@ -29,7 +30,7 @@ async function connect() {
   busy.value = true
   error.value = ''
   try {
-    const r = await post<{ ticket: string }>('/terminal/ticket', { password: password.value, container: props.container ?? '' })
+    const r = await post<{ ticket: string }>('/terminal/ticket', { password: password.value, container: props.container ?? '', shell: props.shell ?? '', root: !!props.root })
     password.value = ''
     open(r.ticket)
   } catch (e) {

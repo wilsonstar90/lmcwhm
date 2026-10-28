@@ -197,6 +197,69 @@ export interface Container {
   net_io: string
   block_io: string
   host_ports: number[]
+  created_at: number
+  usage: DockerUsage | null
+}
+
+export interface DockerUsage {
+  cpu: number
+  mem_used: number
+  mem_limit: number
+  net_rx: number
+  net_tx: number
+  blk_read: number
+  blk_write: number
+  pids: number
+  at: number
+}
+
+export interface DockerOverview {
+  containers: { total: number; running: number; size: string }
+  compose: { total: number; running: number }
+  images: { total: number; size: string }
+  volumes: { total: number; size: string }
+  networks: { total: number }
+  registries: { total: number }
+}
+
+export interface ContainerInfo {
+  id: string
+  name: string
+  image: string
+  image_id: string
+  digests: string[]
+  state: string
+  created: number
+  started_at: number
+  finished_at: number
+  ports: { host_ip: string; host_port: number; container_port: string }[]
+  host_ports: number[]
+  networks: { name: string; ip: string; ipv6: string; gateway: string; mac: string }[]
+  cmd: string[]
+  entrypoint: string[]
+  env: string[]
+  mounts: { type: string; name: string; source: string; destination: string; rw: boolean }[]
+  restart: string
+  max_retry: number
+  working_dir: string
+  user: string
+  hostname: string
+  managed: boolean
+  project: string
+  has_log_file: boolean
+}
+
+export interface ContainerSpec {
+  name: string
+  image: string
+  ports: string[]
+  env: string[]
+  volumes: string[]
+  restart: string
+  network: string
+  command: string
+  cpus: string
+  memory: string
 }
 
 export interface DockerImage {
