@@ -184,7 +184,8 @@
       "invalid_target": "目標無效",
       "invalid_command": "啟動指令無效",
       "passthrough_no_ssl": "TLS 直通網站的憑證由後端提供",
-      "not_project": "不是 Runtime 專案"
+      "not_project": "不是 Runtime 專案",
+      "invalid_waf_rule": "規則 ID 必須是數字"
     },
     "cf": {
       "no_token": "請先設定 Cloudflare API Token"
@@ -259,6 +260,24 @@
     },
     "geoip": {
       "invalid_edition": "未知 IP 資料庫"
+    },
+    "fw": {
+      "no_nft": "未安裝 nftables",
+      "invalid_rule": "規則無效：請檢查動作、協定、埠與來源",
+      "invalid_ip": "IP 或 CIDR 無效",
+      "invalid_policy": "原則無效",
+      "not_found": "找不到",
+      "self_block": "這會封鎖您自己的位址",
+      "nothing_to_confirm": "沒有等待確認的變更",
+      "confirm_old_connection": "確認必須使用新連線",
+      "ruleset_rejected": "nftables 拒絕規則：{detail}"
+    },
+    "waf": {
+      "invalid_settings": "WAF 設定無效"
+    },
+    "crowdsec": {
+      "not_installed": "CrowdSec 未執行",
+      "invalid_ip": "IP 或 CIDR 無效"
     }
   },
   "task": {
@@ -704,5 +723,152 @@
       "docker_prune": "清理 Docker 映像",
       "apt": "系統更新"
     }
+  },
+  "sec": {
+    "firewall": "防火牆",
+    "ips": "IP 名單",
+    "cloud": "Linode / Cloudflare"
+  },
+  "fw": {
+    "title": "伺服器防火牆（nftables）",
+    "on": "已開啟",
+    "off": "已關閉",
+    "enable": "啟用",
+    "enable_hint": "使用獨立 nftables 表（inet lmcwhm），不會變更 ufw 與 Docker 規則。SSH 救援：lmcwhm firewall-off",
+    "policy": "入站預設",
+    "policies": {
+      "accept": "允許",
+      "drop": "拒絕"
+    },
+    "policy_hint": {
+      "accept": "除規則與黑名單拒絕者外，全部可以連入。",
+      "drop": "只有受保護埠與允許規則可以連入。套用時會進行 60 秒安全確認。"
+    },
+    "protect": "受保護埠",
+    "protect_hint": "任何規則之前一律放行 TCP {ports}（SSH、面板、網站）。",
+    "ping": "回應 Ping",
+    "drop_unprotected": "預設拒絕且無受保護埠，容易將自己鎖在外面；請保留 SSH 與面板埠的允許規則。",
+    "confirming": "正在檢查經新規則是否仍可連到面板… 若不行，{n} 秒後自動還原。",
+    "confirmed": "可以連到面板：已保留新規則。",
+    "confirm_failed": "經新規則無法連到面板：將於 {n} 秒內自動還原為允許。",
+    "rules": "埠規則",
+    "add_rule": "新增規則",
+    "rules_hint": "在黑名單之後依序比對。預設拒絕時以允許規則開放埠；預設允許時以拒絕規則關閉埠。",
+    "action": "動作",
+    "actions": {
+      "accept": "允許",
+      "drop": "拒絕"
+    },
+    "proto": "協定",
+    "ports": "埠",
+    "ports_hint": "例如 22、80,443 或 8000-9000（最多 30 項）",
+    "source": "來源",
+    "source_hint": "留空 = 任何位置；或 IP / CIDR（v4 或 v6）",
+    "anywhere": "任何位置",
+    "delete_rule": "刪除這條規則？",
+    "live": "目前生效規則（nft list table inet lmcwhm）",
+    "no_table": "未安裝（防火牆已關閉）。",
+    "no_nft": "未安裝 nftables（nft）：請重新執行 install.sh 或 apt install nftables。",
+    "add_ip": "封鎖 / 放行位址",
+    "ip_placeholder": "IP 或 CIDR",
+    "add": "新增",
+    "list": "名單",
+    "lists": {
+      "block": "黑名單",
+      "allow": "白名單"
+    },
+    "origin": "來源",
+    "sources": {
+      "manual": "手動",
+      "crowdsec": "CrowdSec",
+      "waf": "WAF"
+    },
+    "expires": "到期",
+    "permanent": "永久",
+    "remove": "移除",
+    "remove_confirm": "移除 {ip}？",
+    "dur": {
+      "h1": "1 小時",
+      "h24": "24 小時",
+      "d7": "7 天",
+      "d30": "30 天"
+    },
+    "lists_hint": "白名單位址不受任何規則限制；黑名單位址所有埠都會被丟棄，包括 Docker 發佈的埠。無法封鎖您自己的位址。",
+    "lists_inactive": "防火牆未開啟：名單已儲存，但本機未生效。",
+    "sync": "同步到 Cloudflare / Linode",
+    "sync_now": "立即同步",
+    "sync_hint": "永久封鎖會推送到 Linode / Cloudflare 分頁中已啟用的邊緣（變更後自動同步）。臨時封鎖只在本機生效。",
+    "linode_intro": "Linode 雲端防火牆會在流量抵達本機前過濾。請建立 Personal Access Token，權限需 Firewalls：讀寫，以及 Linodes：讀寫。",
+    "linode_token": "Linode API Token",
+    "token_saved": "已儲存 Token（輸入新的會取代）",
+    "verify": "驗證",
+    "forget": "移除 Token",
+    "choose_fw": "選擇雲端防火牆",
+    "attached": "已綁定 {name}",
+    "attach": "綁定到 {name}",
+    "linode_sync": "推送黑名單（標籤 lmcwhm-block 的 DROP 規則，排第一）",
+    "linode_ports": "保留受保護埠 {ports} 的 ACCEPT 規則（lmcwhm-ports）",
+    "linode_rules": "{n} 條入站規則，入站預設 {policy}。非 lmcwhm 建立的規則不會變更。",
+    "cf_no_token": "請先在「網站 → 網站環境」新增 Cloudflare API Token。",
+    "cf_sync": "以 IP Access Rules（備註 \"lmcwhm\"）推送黑名單到所有 Zone",
+    "cf_hint": "Cloudflare 只接受單一位址、IPv4 /16 與 /24、IPv6 /32、/48 與 /64。Token 需要 Zone → Firewall Services：Edit。",
+    "zone": "Zone",
+    "cf_level": "安全等級",
+    "cf_blocks": "lmcwhm 封鎖",
+    "cf_levels": {
+      "essentially_off": "基本關閉",
+      "low": "低",
+      "medium": "中",
+      "high": "高",
+      "under_attack": "我正遭受攻擊"
+    }
+  },
+  "waf": {
+    "title": "網站應用程式防火牆（WAF）",
+    "enable": "啟用 WAF",
+    "enable_hint": "nginx 內的 ModSecurity v3 + OWASP Core Rule Set（{image}）。",
+    "engine": "模式",
+    "engines": {
+      "On": "攔截",
+      "DetectionOnly": "僅偵測（記錄）"
+    },
+    "paranoia": "偏執等級",
+    "pl": {
+      "1": "1 — 預設，誤判少",
+      "2": "2 — 更多規則",
+      "3": "3 — 嚴格，需要調校",
+      "4": "4 — 極嚴格"
+    },
+    "anomaly": "異常分數門檻",
+    "anomaly_hint": "請求分數達到即攔截（CRS 預設 5；越高越寬鬆）。",
+    "save_apply": "儲存並套用",
+    "apply": "套用 WAF 設定",
+    "sites": "各網站",
+    "sites_off": "在上方開啟 WAF 後，這裡的設定才會生效。",
+    "excluded": "排除規則 ID（誤判）",
+    "events": "偵測紀錄",
+    "blocked": "已攔截",
+    "detected": "已偵測",
+    "rules": "規則",
+    "exclude": "排除",
+    "no_site": "沒有網站處理 {host}"
+  },
+  "cs": {
+    "intro": "CrowdSec 讀取網站與 SSH 日誌，偵測攻擊（暴力破解、掃描、CVE 探測）並發出封鎖，由面板防火牆執行。",
+    "community": "加入社群：分享訊號並接收社群黑名單",
+    "community_short": "社群黑名單",
+    "install": "安裝 CrowdSec",
+    "uninstall": "解除安裝",
+    "uninstall_confirm": "移除 CrowdSec 並解除其封鎖？",
+    "fw_off": "防火牆未開啟：CrowdSec 封鎖只會記錄，尚未執行。請在「防火牆」開啟。",
+    "active_bans": "生效中封鎖",
+    "last_poll": "上次同步",
+    "bans": "封鎖",
+    "ban": "封鎖",
+    "unban": "解除",
+    "scenario": "情境 / 原因",
+    "alerts": "警報",
+    "events": "事件數",
+    "decision": "決定"
   }
 }

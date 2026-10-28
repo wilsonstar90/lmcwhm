@@ -184,7 +184,8 @@
       "invalid_target": "転送先が無効です",
       "invalid_command": "起動コマンドが無効です",
       "passthrough_no_ssl": "TLS パススルーのサイトはバックエンドが証明書を持ちます",
-      "not_project": "ランタイムプロジェクトではありません"
+      "not_project": "ランタイムプロジェクトではありません",
+      "invalid_waf_rule": "ルール ID は数字です"
     },
     "cf": {
       "no_token": "Cloudflare トークンを設定してください"
@@ -259,6 +260,24 @@
     },
     "geoip": {
       "invalid_edition": "不明な IP データベース"
+    },
+    "fw": {
+      "no_nft": "nftables がインストールされていません",
+      "invalid_rule": "ルールが無効です（動作・プロトコル・ポート・送信元を確認）",
+      "invalid_ip": "IP または CIDR が無効です",
+      "invalid_policy": "ポリシーが無効です",
+      "not_found": "見つかりません",
+      "self_block": "自分のアドレスをブロックすることになります",
+      "nothing_to_confirm": "確認待ちの変更はありません",
+      "confirm_old_connection": "確認には新しい接続が必要です",
+      "ruleset_rejected": "nftables がルールを拒否しました: {detail}"
+    },
+    "waf": {
+      "invalid_settings": "WAF 設定が無効です"
+    },
+    "crowdsec": {
+      "not_installed": "CrowdSec が動作していません",
+      "invalid_ip": "IP または CIDR が無効です"
     }
   },
   "task": {
@@ -704,5 +723,152 @@
       "docker_prune": "Docker イメージの整理",
       "apt": "システム更新"
     }
+  },
+  "sec": {
+    "firewall": "ファイアウォール",
+    "ips": "IP リスト",
+    "cloud": "Linode / Cloudflare"
+  },
+  "fw": {
+    "title": "サーバーファイアウォール（nftables）",
+    "on": "有効",
+    "off": "無効",
+    "enable": "有効化",
+    "enable_hint": "専用の nftables テーブル（inet lmcwhm）を使い、ufw と Docker のルールには触れません。SSH での復旧: lmcwhm firewall-off",
+    "policy": "受信の既定",
+    "policies": {
+      "accept": "許可",
+      "drop": "拒否"
+    },
+    "policy_hint": {
+      "accept": "ルールとブロックリストで拒否したもの以外はすべて到達できます。",
+      "drop": "保護ポートと許可ルールのみ到達できます。適用時に 60 秒の安全確認を行います。"
+    },
+    "protect": "保護ポート",
+    "protect_hint": "どのルールよりも先に TCP {ports}（SSH・パネル・Web）を常に許可します。",
+    "ping": "Ping に応答",
+    "drop_unprotected": "既定が拒否で保護ポートがないと締め出される恐れがあります。SSH とパネルのポートを許可するルールを残してください。",
+    "confirming": "新しいルールでパネルに到達できるか確認中… できなければ {n} 秒後に元に戻します。",
+    "confirmed": "パネルに到達できました。新しいルールを維持します。",
+    "confirm_failed": "新しいルールではパネルに到達できません。{n} 秒以内に許可へ戻ります。",
+    "rules": "ポートルール",
+    "add_rule": "ルールを追加",
+    "rules_hint": "ブロックリストの後に順番に評価します。既定が拒否なら許可ルールでポートを開け、既定が許可なら拒否ルールでポートを閉じます。",
+    "action": "動作",
+    "actions": {
+      "accept": "許可",
+      "drop": "拒否"
+    },
+    "proto": "プロトコル",
+    "ports": "ポート",
+    "ports_hint": "例: 22、80,443、8000-9000（最大 30 項目）",
+    "source": "送信元",
+    "source_hint": "空欄 = どこからでも。または IP / CIDR（v4・v6）",
+    "anywhere": "どこからでも",
+    "delete_rule": "このルールを削除しますか？",
+    "live": "現在のルールセット（nft list table inet lmcwhm）",
+    "no_table": "未適用（ファイアウォール無効）。",
+    "no_nft": "nftables（nft）がありません。install.sh を再実行するか apt install nftables を実行してください。",
+    "add_ip": "アドレスをブロック / 許可",
+    "ip_placeholder": "IP または CIDR",
+    "add": "追加",
+    "list": "リスト",
+    "lists": {
+      "block": "ブロック",
+      "allow": "許可"
+    },
+    "origin": "出所",
+    "sources": {
+      "manual": "手動",
+      "crowdsec": "CrowdSec",
+      "waf": "WAF"
+    },
+    "expires": "期限",
+    "permanent": "無期限",
+    "remove": "削除",
+    "remove_confirm": "{ip} を削除しますか？",
+    "dur": {
+      "h1": "1 時間",
+      "h24": "24 時間",
+      "d7": "7 日",
+      "d30": "30 日"
+    },
+    "lists_hint": "許可アドレスはすべてのルールを通過し、ブロックアドレスは Docker 公開ポートを含む全ポートで破棄されます。自分のアドレスはブロックできません。",
+    "lists_inactive": "ファイアウォールが無効です。リストは保存されますがこのサーバーでは適用されません。",
+    "sync": "Cloudflare / Linode に同期",
+    "sync_now": "今すぐ同期",
+    "sync_hint": "無期限ブロックは Linode / Cloudflare タブで有効にしたエッジへ送られます（変更後に自動）。一時ブロックはサーバー内のみです。",
+    "linode_intro": "Linode Cloud Firewall はトラフィックがこのサーバーに届く前にフィルタします。Firewalls: 読み書き と Linodes: 読み書き の Personal Access Token を作成してください。",
+    "linode_token": "Linode API トークン",
+    "token_saved": "トークン保存済み（新しいものを入力すると置き換え）",
+    "verify": "確認",
+    "forget": "トークンを削除",
+    "choose_fw": "Cloud Firewall を選択",
+    "attached": "{name} に適用済み",
+    "attach": "{name} に適用",
+    "linode_sync": "ブロックリストを送る（ラベル lmcwhm-block の DROP ルールを先頭に）",
+    "linode_ports": "保護ポート {ports} の ACCEPT ルールを維持（lmcwhm-ports）",
+    "linode_rules": "受信ルール {n} 件、受信の既定 {policy}。lmcwhm が作成していないルールは変更しません。",
+    "cf_no_token": "Cloudflare を使うには「サイト → Web 環境」で API トークンを追加してください。",
+    "cf_sync": "ブロックリストを全ゾーンの IP Access Rules（メモ \"lmcwhm\"）として送る",
+    "cf_hint": "Cloudflare は単一アドレス、IPv4 /16・/24、IPv6 /32・/48・/64 のみ受け付けます。トークンには Zone → Firewall Services: Edit が必要です。",
+    "zone": "ゾーン",
+    "cf_level": "セキュリティレベル",
+    "cf_blocks": "lmcwhm のブロック",
+    "cf_levels": {
+      "essentially_off": "ほぼオフ",
+      "low": "低",
+      "medium": "中",
+      "high": "高",
+      "under_attack": "Under Attack モード"
+    }
+  },
+  "waf": {
+    "title": "Web アプリケーションファイアウォール",
+    "enable": "WAF を有効化",
+    "enable_hint": "nginx の ModSecurity v3 + OWASP Core Rule Set（{image}）。",
+    "engine": "モード",
+    "engines": {
+      "On": "ブロック",
+      "DetectionOnly": "検知のみ（記録）"
+    },
+    "paranoia": "パラノイアレベル",
+    "pl": {
+      "1": "1 — 既定、誤検知が少ない",
+      "2": "2 — ルール追加",
+      "3": "3 — 厳格、調整が必要",
+      "4": "4 — 最も厳格"
+    },
+    "anomaly": "異常スコアのしきい値",
+    "anomaly_hint": "このスコアでリクエストをブロックします（CRS 既定 5、高いほど緩い）。",
+    "save_apply": "保存して適用",
+    "apply": "WAF 設定を適用",
+    "sites": "サイトごと",
+    "sites_off": "上で WAF を有効にするとこれらの設定が反映されます。",
+    "excluded": "除外ルール ID（誤検知）",
+    "events": "検知履歴",
+    "blocked": "ブロック",
+    "detected": "検知",
+    "rules": "ルール",
+    "exclude": "除外",
+    "no_site": "{host} を処理するサイトがありません"
+  },
+  "cs": {
+    "intro": "CrowdSec はサイトと SSH のログを読み、攻撃（総当たり、スキャン、CVE 探索）を検知してブロックを発行し、パネルのファイアウォールが実施します。",
+    "community": "コミュニティに参加（シグナル共有とコミュニティブロックリスト受信）",
+    "community_short": "コミュニティブロックリスト",
+    "install": "CrowdSec をインストール",
+    "uninstall": "アンインストール",
+    "uninstall_confirm": "CrowdSec を削除し、そのブロックを解除しますか？",
+    "fw_off": "ファイアウォールが無効です。CrowdSec のブロックは記録のみで適用されません。「ファイアウォール」で有効にしてください。",
+    "active_bans": "有効なブロック",
+    "last_poll": "前回同期",
+    "bans": "ブロック",
+    "ban": "ブロック",
+    "unban": "解除",
+    "scenario": "シナリオ / 理由",
+    "alerts": "アラート",
+    "events": "イベント数",
+    "decision": "判定"
   }
 }

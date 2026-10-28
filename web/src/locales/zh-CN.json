@@ -184,7 +184,8 @@
       "invalid_target": "目标无效",
       "invalid_command": "启动命令无效",
       "passthrough_no_ssl": "TLS 直通网站的证书由后端提供",
-      "not_project": "不是运行环境项目"
+      "not_project": "不是运行环境项目",
+      "invalid_waf_rule": "规则 ID 必须是数字"
     },
     "cf": {
       "no_token": "请先设置 Cloudflare API Token"
@@ -259,6 +260,24 @@
     },
     "geoip": {
       "invalid_edition": "未知 IP 库"
+    },
+    "fw": {
+      "no_nft": "未安装 nftables",
+      "invalid_rule": "规则无效：请检查动作、协议、端口和来源",
+      "invalid_ip": "IP 或 CIDR 无效",
+      "invalid_policy": "策略无效",
+      "not_found": "找不到",
+      "self_block": "这会封禁你自己的地址",
+      "nothing_to_confirm": "没有等待确认的改动",
+      "confirm_old_connection": "确认必须使用新连接",
+      "ruleset_rejected": "nftables 拒绝规则：{detail}"
+    },
+    "waf": {
+      "invalid_settings": "WAF 设置无效"
+    },
+    "crowdsec": {
+      "not_installed": "CrowdSec 未运行",
+      "invalid_ip": "IP 或 CIDR 无效"
     }
   },
   "task": {
@@ -704,5 +723,152 @@
       "docker_prune": "清理 Docker 镜像",
       "apt": "系统更新"
     }
+  },
+  "sec": {
+    "firewall": "防火墙",
+    "ips": "IP 名单",
+    "cloud": "Linode / Cloudflare"
+  },
+  "fw": {
+    "title": "服务器防火墙（nftables）",
+    "on": "已开启",
+    "off": "已关闭",
+    "enable": "启用",
+    "enable_hint": "使用独立 nftables 表（inet lmcwhm），不会改动 ufw 和 Docker 规则。SSH 救援：lmcwhm firewall-off",
+    "policy": "入站默认",
+    "policies": {
+      "accept": "允许",
+      "drop": "拒绝"
+    },
+    "policy_hint": {
+      "accept": "除规则和黑名单拒绝的以外，全部可以连入。",
+      "drop": "只有受保护端口和允许规则可以连入。应用时会进行 60 秒安全确认。"
+    },
+    "protect": "受保护端口",
+    "protect_hint": "在任何规则之前始终放行 TCP {ports}（SSH、面板、网站）。",
+    "ping": "响应 Ping",
+    "drop_unprotected": "默认拒绝且没有受保护端口，容易把自己锁在外面；请保留 SSH 和面板端口的允许规则。",
+    "confirming": "正在检查经新规则是否仍能连到面板… 若不行，{n} 秒后自动还原。",
+    "confirmed": "可以连到面板：已保留新规则。",
+    "confirm_failed": "经新规则无法连到面板：将在 {n} 秒内自动还原为允许。",
+    "rules": "端口规则",
+    "add_rule": "添加规则",
+    "rules_hint": "在黑名单之后按顺序匹配。默认拒绝时用允许规则开放端口；默认允许时用拒绝规则关闭端口。",
+    "action": "动作",
+    "actions": {
+      "accept": "允许",
+      "drop": "拒绝"
+    },
+    "proto": "协议",
+    "ports": "端口",
+    "ports_hint": "例如 22、80,443 或 8000-9000（最多 30 项）",
+    "source": "来源",
+    "source_hint": "留空 = 任何地方；或 IP / CIDR（v4 或 v6）",
+    "anywhere": "任何地方",
+    "delete_rule": "删除这条规则？",
+    "live": "当前生效规则（nft list table inet lmcwhm）",
+    "no_table": "未安装（防火墙已关闭）。",
+    "no_nft": "未安装 nftables（nft）：请重新运行 install.sh 或 apt install nftables。",
+    "add_ip": "封禁 / 放行地址",
+    "ip_placeholder": "IP 或 CIDR",
+    "add": "添加",
+    "list": "名单",
+    "lists": {
+      "block": "黑名单",
+      "allow": "白名单"
+    },
+    "origin": "来源",
+    "sources": {
+      "manual": "手动",
+      "crowdsec": "CrowdSec",
+      "waf": "WAF"
+    },
+    "expires": "到期",
+    "permanent": "永久",
+    "remove": "移除",
+    "remove_confirm": "移除 {ip}？",
+    "dur": {
+      "h1": "1 小时",
+      "h24": "24 小时",
+      "d7": "7 天",
+      "d30": "30 天"
+    },
+    "lists_hint": "白名单地址不受任何规则限制；黑名单地址所有端口都会被丢弃，包括 Docker 发布的端口。不能封禁你自己的地址。",
+    "lists_inactive": "防火墙未开启：名单已保存，但本机未生效。",
+    "sync": "同步到 Cloudflare / Linode",
+    "sync_now": "立即同步",
+    "sync_hint": "永久封禁会推送到 Linode / Cloudflare 页中已启用的边缘（改动后自动同步）。临时封禁只在本机生效。",
+    "linode_intro": "Linode 云防火墙会在流量到达本机前过滤。请创建 Personal Access Token，权限需 Firewalls：读写，以及 Linodes：读写。",
+    "linode_token": "Linode API Token",
+    "token_saved": "已保存 Token（输入新的会替换）",
+    "verify": "验证",
+    "forget": "移除 Token",
+    "choose_fw": "选择云防火墙",
+    "attached": "已绑定 {name}",
+    "attach": "绑定到 {name}",
+    "linode_sync": "推送黑名单（标签 lmcwhm-block 的 DROP 规则，排第一）",
+    "linode_ports": "保留受保护端口 {ports} 的 ACCEPT 规则（lmcwhm-ports）",
+    "linode_rules": "{n} 条入站规则，入站默认 {policy}。非 lmcwhm 创建的规则不会改动。",
+    "cf_no_token": "请先在“网站 → 网站环境”添加 Cloudflare API Token。",
+    "cf_sync": "以 IP Access Rules（备注 \"lmcwhm\"）推送黑名单到所有 Zone",
+    "cf_hint": "Cloudflare 只接受单个地址、IPv4 /16 和 /24、IPv6 /32、/48 和 /64。Token 需要 Zone → Firewall Services：Edit。",
+    "zone": "Zone",
+    "cf_level": "安全级别",
+    "cf_blocks": "lmcwhm 封禁",
+    "cf_levels": {
+      "essentially_off": "基本关闭",
+      "low": "低",
+      "medium": "中",
+      "high": "高",
+      "under_attack": "我正遭受攻击"
+    }
+  },
+  "waf": {
+    "title": "网站应用防火墙（WAF）",
+    "enable": "启用 WAF",
+    "enable_hint": "nginx 内的 ModSecurity v3 + OWASP Core Rule Set（{image}）。",
+    "engine": "模式",
+    "engines": {
+      "On": "拦截",
+      "DetectionOnly": "仅检测（记录）"
+    },
+    "paranoia": "偏执级别",
+    "pl": {
+      "1": "1 — 默认，误报少",
+      "2": "2 — 更多规则",
+      "3": "3 — 严格，需要调优",
+      "4": "4 — 极严格"
+    },
+    "anomaly": "异常分数阈值",
+    "anomaly_hint": "请求分数达到即拦截（CRS 默认 5；越高越宽松）。",
+    "save_apply": "保存并应用",
+    "apply": "应用 WAF 设置",
+    "sites": "按网站",
+    "sites_off": "在上方开启 WAF 后，这里的设置才会生效。",
+    "excluded": "排除规则 ID（误报）",
+    "events": "检测记录",
+    "blocked": "已拦截",
+    "detected": "已检测",
+    "rules": "规则",
+    "exclude": "排除",
+    "no_site": "没有网站处理 {host}"
+  },
+  "cs": {
+    "intro": "CrowdSec 读取网站和 SSH 日志，检测攻击（暴力破解、扫描、CVE 探测）并发出封禁，由面板防火墙执行。",
+    "community": "加入社区：共享信号并接收社区黑名单",
+    "community_short": "社区黑名单",
+    "install": "安装 CrowdSec",
+    "uninstall": "卸载",
+    "uninstall_confirm": "移除 CrowdSec 并解除其封禁？",
+    "fw_off": "防火墙未开启：CrowdSec 封禁只会记录，尚未执行。请在“防火墙”开启。",
+    "active_bans": "生效中封禁",
+    "last_poll": "上次同步",
+    "bans": "封禁",
+    "ban": "封禁",
+    "unban": "解除",
+    "scenario": "场景 / 原因",
+    "alerts": "告警",
+    "events": "事件数",
+    "decision": "决策"
   }
 }

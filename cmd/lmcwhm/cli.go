@@ -19,6 +19,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/wilsonstar90/lmcwhm/internal/auth"
+	"github.com/wilsonstar90/lmcwhm/internal/firewall"
+	"github.com/wilsonstar90/lmcwhm/internal/secrets"
 	"github.com/wilsonstar90/lmcwhm/internal/settings"
 	"github.com/wilsonstar90/lmcwhm/internal/tlsutil"
 )
@@ -138,6 +140,7 @@ func cliCommands() []*cobra.Command {
 		simple("ssl-off", "Disable panel SSL (serve plain http)", func(ctx context.Context, a *app) error {
 			return a.changeSettings(ctx, func(s *settings.Settings) { s.SSLMode = settings.SSLOff }, a.tr.T("ok.ssl_off"))
 		}),
+		simple("firewall-off", "Turn off the panel firewall (lock-out recovery)", firewallOff),
 		simple("2fa-off", "Disable two-factor authentication for the admin", func(ctx context.Context, a *app) error {
 			u, err := a.auth.PrimaryAdmin(ctx)
 			if err != nil {
@@ -441,4 +444,19 @@ func purgeLoop(ctx context.Context, s *auth.Service) {
 			s.PurgeExpired(ctx)
 		}
 	}
+}
+
+// firewallOff removes the nftables table and disables the panel firewall;
+// a running panel reads the configuration on every change, so no reload.
+func firewallOff(ctx context.Context, a *app) error {
+	box, err := secrets.Open(a.paths.DataDir)
+	if err != nil {
+		return err
+	}
+	fw := firewall.New(a.st, box, nil)
+	if _, _, err := fw.Update(ctx, func(c *firewall.Config) { c.Enabled, c.Policy, c.Unconfirmed = false, "accept", false }); err != nil {
+		return err
+	}
+	fmt.Println(a.tr.T("ok.firewall_off"))
+	return nil
 }

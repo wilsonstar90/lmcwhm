@@ -1,11 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useSession } from './stores/session'
 
-const soon = (milestone: string) => ({
-  component: () => import('./views/Placeholder.vue'),
-  props: { milestone },
-})
-
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -23,7 +18,7 @@ export const router = createRouter({
         { path: 'files', name: 'files', component: () => import('./views/Files.vue') },
         { path: 'terminal', name: 'terminal', component: () => import('./views/Terminal.vue') },
         { path: 'cron', name: 'cron', component: () => import('./views/Cron.vue') },
-        { path: 'security', name: 'security', ...soon('M5') },
+        { path: 'security', name: 'security', component: () => import('./views/Security.vue') },
         { path: 'monitor', name: 'monitor', component: () => import('./views/Monitor.vue') },
         { path: 'logs', name: 'logs', component: () => import('./views/Logs.vue') },
         { path: 'settings', name: 'settings', component: () => import('./views/Settings.vue') },

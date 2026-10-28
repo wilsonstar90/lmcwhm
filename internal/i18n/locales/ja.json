@@ -47,5 +47,6 @@
   "err.need_root": "root で実行してください",
   "err.not_init": "未初期化です。lmcwhm init を実行してください",
   "warn.reload_failed": "保存しましたが通知に失敗：%v（lmcwhm restart を実行）",
-  "ok.reset_panel": "パネルのアクセス設定をリセットしました（サイト・DB・ファイアウォール・他の設定は変更なし）"
+  "ok.reset_panel": "パネルのアクセス設定をリセットしました（サイト・DB・ファイアウォール・他の設定は変更なし）",
+  "ok.firewall_off": "パネルのファイアウォール（nftables テーブル inet lmcwhm）を無効化しました。ufw と Docker のルールはそのままです"
 }

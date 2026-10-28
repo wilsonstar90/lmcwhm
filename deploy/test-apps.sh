@@ -241,6 +241,86 @@ api GET /geoip/status | grep -q '"edition":"country"' || fail "geoip database: $
 api POST /geoip/lookup '{"ips":["8.8.8.8","10.0.0.1"]}' | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['8.8.8.8']['country']=='US' and d['8.8.8.8']['asn']==15169 and d['10.0.0.1']['private'], d" || fail "geoip lookup"
 pass "M4: monitor, cron (shell + log rotation), site / SSH / journal logs, IP geolocation"
 
+# ---------- M5: firewall (nftables), WAF, CrowdSec ----------
+# A container on the default bridge is the "outside" client: its traffic to
+# the host (172.17.0.1) goes through the input chain like remote traffic.
+docker pull -q busybox >/dev/null
+probe() { docker run --rm busybox wget -T 4 -qO- "http://172.17.0.1:$1/" 2>&1 || true; }
+fwput() { # json patch over the current config
+  cur="$(api GET /firewall)"
+  body="$(python3 -c "import sys,json; c=json.loads(sys.argv[1]); c.update(json.loads(sys.argv[2])); print(json.dumps(c))" "$cur" "$1")"
+  api PUT /firewall "$body"
+}
+api GET /firewall | grep -q '"available":true' || fail "nft not available"
+fwput '{"enabled":true,"policy":"accept","ping":true,"protect":true}' | grep -q '"confirm":false' || fail "enable firewall"
+nft list table inet lmcwhm >/dev/null || fail "nft table missing"
+python3 -m http.server 18190 --bind 0.0.0.0 >/dev/null 2>&1 &
+HTTPD=$!
+sleep 1
+[[ "$(probe 18190)" == *"Directory listing"* ]] || fail "test service not reachable from a container: $(probe 18190)"
+BID="$(api POST /firewall/ips '{"ip":"172.17.0.0/16","list":"block"}' | jget "['id']")"
+[[ "$(probe 18190)" != *"Directory listing"* ]] || fail "blocked range still reaches the host"
+[[ "$(probe 80)" != *"404"* ]] || fail "blocked range reaches the web edge"
+api POST "/firewall/ips/$BID/delete" >/dev/null
+[[ "$(probe 18190)" == *"Directory listing"* ]] || fail "unblocked range cannot reach the host"
+code="$(api POST /firewall/ips '{"ip":"127.0.0.1","list":"block"}' | jget "['code']")"
+[[ "$code" == fw.self_block ]] || fail "own address could be blocked: $code"
+RLID="$(api POST /firewall/rules '{"action":"drop","proto":"tcp","ports":"18190","enabled":true}' | jget "['rule']['id']")"
+[[ "$(probe 18190)" != *"Directory listing"* ]] || fail "port drop rule not enforced"
+[[ "$(probe 80)" == *"404"* ]] || fail "protected port 80 affected by a rule"
+api POST "/firewall/rules/$RLID/delete" >/dev/null
+[[ "$(probe 18190)" == *"Directory listing"* ]] || fail "deleted rule still enforced"
+# Deny default without confirmation reverts to allow.
+fwput '{"policy":"drop"}' | grep -q '"confirm":true' || fail "drop policy not guarded"
+nft list chain inet lmcwhm input | grep -q "policy drop" || fail "drop policy not installed"
+sleep 65
+api GET /firewall | grep -q '"policy":"accept"' || fail "unconfirmed drop policy not reverted"
+nft list chain inet lmcwhm input | grep -q "policy accept" || fail "revert not installed"
+# Confirmed from a new connection: kept.
+fwput '{"policy":"drop"}' >/dev/null
+sleep 1
+[[ "$(api POST /firewall/confirm | jget "['ok']")" == True ]] || fail "confirm"
+sleep 2
+api GET /firewall | grep -q '"policy":"drop"' || fail "confirmed drop policy lost"
+fwput '{"policy":"accept"}' >/dev/null
+kill $HTTPD
+pass "firewall: block list, port rules, protected ports, drop policy confirm / revert"
+
+# WAF: OWASP CRS blocks an SQL injection; a site can opt out.
+task PUT /waf '{"enabled":true,"engine":"On","paranoia":1,"anomaly":5}'
+[[ "$(docker inspect -f '{{.Config.Image}}' lmcwhm-nginx)" == owasp/modsecurity-crs:* ]] || fail "nginx not switched to the WAF image"
+[[ "$(get80 db.test /index.php)" == "db-ok-42" ]] || fail "WAF blocks a normal request: $(get80 db.test /index.php)"
+code="$(curl -s -o /dev/null -w '%{http_code}' --resolve db.test:80:127.0.0.1 "http://db.test/index.php?id=1%27%20OR%20%271%27=%271")"
+[[ "$code" == 403 ]] || fail "SQL injection not blocked: $code"
+sleep 1
+api GET '/waf/events?lines=50' | python3 -c "import sys,json; e=json.load(sys.stdin)['items']; assert any(x['blocked'] and any(m['id'].startswith('942') for m in x['messages']) for x in e), e[:2]" || fail "WAF event not recorded"
+DBSITE="$(site_id db.test)"
+task PATCH "/sites/$DBSITE" '{"waf_off":true}'
+code="$(curl -s -o /dev/null -w '%{http_code}' --resolve db.test:80:127.0.0.1 "http://db.test/index.php?id=1%27%20OR%20%271%27=%271")"
+[[ "$code" == 200 ]] || fail "per-site WAF off ignored: $code"
+task PATCH "/sites/$DBSITE" '{"waf_off":false}'
+task PUT /waf '{"enabled":false,"engine":"On","paranoia":1,"anomaly":5}'
+[[ "$(docker inspect -f '{{.Config.Image}}' lmcwhm-nginx)" == nginx:stable ]] || fail "nginx not switched back"
+[[ "$(get80 db.test /index.php)" == "db-ok-42" ]] || fail "site down after WAF off"
+pass "WAF: CRS blocks SQL injection, events, per-site opt-out, switch back"
+
+# CrowdSec: decisions are enforced in the firewall's ban sets.
+task POST /crowdsec/install '{"community":false}'
+api GET /crowdsec | grep -q '"state":"running"' || fail "crowdsec not running"
+[[ "$(api POST /crowdsec/decisions '{"ip":"203.0.113.77","hours":1}' | jget "['ok']")" == True ]] || fail "crowdsec ban"
+api GET '/firewall/ips?list=block' | python3 -c "import sys,json; assert any(x['ip']=='203.0.113.77' and x['source']=='crowdsec' for x in json.load(sys.stdin)['items'])" || fail "crowdsec ban not in the firewall"
+nft list set inet lmcwhm ban4 | grep -q 203.0.113.77 || fail "crowdsec ban not in nft"
+[[ "$(api POST /crowdsec/decisions/delete '{"ip":"203.0.113.77"}' | jget "['ok']")" == True ]] || fail "crowdsec unban"
+! nft list set inet lmcwhm ban4 | grep -q 203.0.113.77 || fail "crowdsec unban not applied"
+api GET '/crowdsec/alerts?limit=5' | grep -q '"items"' || fail "crowdsec alerts"
+pass "CrowdSec: local API, decisions mirrored into nftables"
+
+# SSH rescue: the CLI turns the firewall off.
+lmcwhm firewall-off >/dev/null
+! nft list table inet lmcwhm >/dev/null 2>&1 || fail "firewall-off left the table"
+api GET /firewall | grep -q '"enabled":false' || fail "firewall-off not saved"
+pass "lmcwhm firewall-off"
+
 # ---------- panel restart keeps projects and services ----------
 systemctl restart lmcwhm
 for _ in $(seq 1 30); do curl -sk -o /dev/null "$P/" && break; sleep 1; done

@@ -7,6 +7,11 @@ server {
 
     access_log {{.LogDir}}/{{.Domain}}.log main;
     error_log  {{.LogDir}}/{{.Domain}}.error.log;
+{{- if .WAFOff}}
+    modsecurity off;
+{{- else if .WAFExclude}}
+    modsecurity_rules 'SecRuleRemoveById {{.WAFExclude}}';
+{{- end}}
 {{if .Stopped}}
     location / {
         default_type text/html;

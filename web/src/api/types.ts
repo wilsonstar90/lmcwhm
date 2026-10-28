@@ -252,3 +252,52 @@ export interface RouteResolution {
   match: 'exact' | 'wildcard' | 'default'
   route?: Route
 }
+
+export interface FirewallRule {
+  id: number
+  action: 'accept' | 'drop'
+  proto: 'tcp' | 'udp' | 'both'
+  ports: string
+  source: string
+  remark: string
+  enabled: boolean
+  created_at: number
+}
+
+export interface FirewallIP {
+  id: number
+  ip: string
+  list: 'block' | 'allow'
+  source: 'manual' | 'crowdsec' | 'waf'
+  remark: string
+  expires_at: number
+  created_at: number
+}
+
+export interface SyncReport {
+  at: number
+  cloudflare?: string[]
+  linode?: string
+  errors?: string[]
+}
+
+export interface FirewallView {
+  enabled: boolean
+  policy: 'accept' | 'drop'
+  ping: boolean
+  protect: boolean
+  linode_token?: string
+  linode_firewall: number
+  linode_sync: boolean
+  linode_ports: boolean
+  cf_sync: boolean
+  has_linode_token: boolean
+  available: boolean
+  pending: boolean
+  confirm_secs: number
+  protected_ports: number[]
+  live: string
+  last_sync: SyncReport
+  has_cf_token: boolean
+  rules: FirewallRule[]
+}

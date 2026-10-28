@@ -23,10 +23,12 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/database"
 	"github.com/wilsonstar90/lmcwhm/internal/dockermgr"
 	"github.com/wilsonstar90/lmcwhm/internal/files"
+	"github.com/wilsonstar90/lmcwhm/internal/firewall"
 	"github.com/wilsonstar90/lmcwhm/internal/geoip"
 	"github.com/wilsonstar90/lmcwhm/internal/i18n"
 	"github.com/wilsonstar90/lmcwhm/internal/monitor"
 	"github.com/wilsonstar90/lmcwhm/internal/secrets"
+	"github.com/wilsonstar90/lmcwhm/internal/security"
 	"github.com/wilsonstar90/lmcwhm/internal/server"
 	"github.com/wilsonstar90/lmcwhm/internal/settings"
 	"github.com/wilsonstar90/lmcwhm/internal/site"
@@ -140,6 +142,11 @@ func serveCmd() *cobra.Command {
 			tm := tasks.NewManager()
 			sites := site.NewService(a.st, env, webCfg, &acme.Issuer{Cfg: webCfg, HTTP: responder}, tm)
 			sites.RebuildMarker = server.RebuildMarker(a.paths)
+			waf := security.NewWAF(a.st, env) // before the stack boots: it picks the nginx image
+			fw := firewall.New(a.st, box, log.Error)
+			fw.PanelPort = func() int { return a.settings.Get().PanelPort }
+			fw.Boot(ctx)
+			crowdsec := security.NewCrowdSec(a.st, box, env, tm, fw, a.paths.Home)
 			apps := appstore.New(a.st, box, tm, a.paths.Home)
 			apps.InUse = sites.UsesRuntime
 			sites.Runtimes = apps
@@ -150,6 +157,7 @@ func serveCmd() *cobra.Command {
 				if err := sites.Boot(ctx); err != nil {
 					log.Error("web stack boot", "err", err)
 				}
+				crowdsec.Boot(ctx)
 			}()
 			go sites.RenewLoop(ctx, log.Info)
 
@@ -170,11 +178,13 @@ func serveCmd() *cobra.Command {
 				WebFS: web.FS(), Log: log, Sites: sites, Web: webCfg, Tasks: tm,
 				Apps: apps, DBs: database.New(a.st, box, apps, tm), Docker: dockermgr.New(tm, a.paths.Home),
 				Files: files.New(os.Getenv("LMCWHM_FILES_ROOT")), Term: terminal.New(),
-				Monitor: mon, Cron: jobs, GeoIP: geo,
+				Monitor: mon, Cron: jobs, GeoIP: geo, Firewall: fw, WAF: waf, CrowdSec: crowdsec,
 			})
 			if err != nil {
 				return err
 			}
+			fw.OnBlocksChanged = srv.SyncFirewall
+			go crowdsec.Run(ctx, log.Error)
 			if err := server.WritePID(a.paths.PIDFile); err != nil {
 				return err
 			}

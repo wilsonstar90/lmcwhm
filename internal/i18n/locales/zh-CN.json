@@ -47,5 +47,6 @@
   "err.need_root": "请以 root 执行",
   "err.not_init": "面板未初始化，请先执行 lmcwhm init",
   "warn.reload_failed": "设置已保存，但通知运行中面板失败：%v（请执行 lmcwhm restart）",
-  "ok.reset_panel": "面板访问设置已重置（网站、数据库、防火墙和其他设置保持不变）"
+  "ok.reset_panel": "面板访问设置已重置（网站、数据库、防火墙和其他设置保持不变）",
+  "ok.firewall_off": "已关闭面板防火墙（nftables 表 inet lmcwhm）；ufw 和 Docker 规则未改动"
 }

@@ -107,7 +107,7 @@ fi
 step "Checking base packages"
 export DEBIAN_FRONTEND=noninteractive
 need_pkgs=()
-for p in curl ca-certificates tar gnupg; do dpkg -s "$p" >/dev/null 2>&1 || need_pkgs+=("$p"); done
+for p in curl ca-certificates tar gnupg nftables; do dpkg -s "$p" >/dev/null 2>&1 || need_pkgs+=("$p"); done
 if [[ ${#need_pkgs[@]} -gt 0 ]]; then
   apt-get update -qq
   apt-get install -y -qq "${need_pkgs[@]}" >/dev/null

@@ -22,8 +22,10 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/database"
 	"github.com/wilsonstar90/lmcwhm/internal/dockermgr"
 	"github.com/wilsonstar90/lmcwhm/internal/files"
+	"github.com/wilsonstar90/lmcwhm/internal/firewall"
 	"github.com/wilsonstar90/lmcwhm/internal/geoip"
 	"github.com/wilsonstar90/lmcwhm/internal/monitor"
+	"github.com/wilsonstar90/lmcwhm/internal/security"
 	"github.com/wilsonstar90/lmcwhm/internal/settings"
 	"github.com/wilsonstar90/lmcwhm/internal/site"
 	"github.com/wilsonstar90/lmcwhm/internal/tasks"
@@ -50,6 +52,9 @@ type Deps struct {
 	Monitor  *monitor.Monitor
 	Cron     *cron.Service
 	GeoIP    *geoip.DB
+	Firewall *firewall.Service
+	WAF      *security.WAF
+	CrowdSec *security.CrowdSec
 }
 
 type Server struct {
@@ -124,6 +129,10 @@ func (s *Server) listen(cfg settings.Settings) (*http.Server, net.Listener, erro
 		return nil, nil, fmt.Errorf("listen %s: %w", addr, err)
 	}
 	srv := &http.Server{
+		// Remember when each connection was accepted (firewall confirmation).
+		ConnContext: func(ctx context.Context, _ net.Conn) context.Context {
+			return context.WithValue(ctx, connStartKey{}, time.Now())
+		},
 		Handler:           s.handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
@@ -153,6 +162,14 @@ func (s *Server) listen(cfg settings.Settings) (*http.Server, net.Listener, erro
 	}
 	srv.TLSConfig = &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
 	return srv, tls.NewListener(ln, srv.TLSConfig), nil
+}
+
+type connStartKey struct{}
+
+// connStart is when the request's connection was accepted.
+func connStart(r *http.Request) time.Time {
+	t, _ := r.Context().Value(connStartKey{}).(time.Time)
+	return t
 }
 
 // WritePID records the running process so the CLI can signal a reload.

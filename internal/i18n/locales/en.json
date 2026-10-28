@@ -47,5 +47,6 @@
   "err.need_root": "Please run as root",
   "err.not_init": "Panel not initialised; run `lmcwhm init` first",
   "warn.reload_failed": "Saved, but could not signal the running panel: %v (run `lmcwhm restart`)",
-  "ok.reset_panel": "Panel access has been reset (websites, databases, firewall and other settings are unchanged)"
+  "ok.reset_panel": "Panel access has been reset (websites, databases, firewall and other settings are unchanged)",
+  "ok.firewall_off": "Panel firewall (nftables table inet lmcwhm) turned off; ufw and Docker rules are untouched"
 }

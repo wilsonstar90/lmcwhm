@@ -54,6 +54,9 @@ type Site struct {
 	// host:port when Passthrough hands the raw TLS stream to the backend.
 	ProxyTarget string `json:"proxy_target"`
 	Passthrough bool   `json:"passthrough"`
+	// WAF (when enabled globally): off for this site, or CRS rules removed by ID.
+	WAFOff     bool     `json:"waf_off"`
+	WAFExclude []string `json:"waf_exclude"`
 }
 
 // IsProject reports a runtime project type.
@@ -80,9 +83,11 @@ var (
 	ErrBadCommand  = errors.New("site.invalid_command")
 	ErrPassSSL     = errors.New("site.passthrough_no_ssl")
 	ErrNotProject  = errors.New("site.not_project")
+	ErrBadWAFRule  = errors.New("site.invalid_waf_rule")
 )
 
 var (
+	wafRuleRe    = regexp.MustCompile(`^\d{1,7}$`)
 	urlTargetRe  = regexp.MustCompile(`^https?://[A-Za-z0-9.\-]+(:[0-9]{1,5})?$|^https?://\[[0-9a-fA-F:]+\](:[0-9]{1,5})?$`)
 	passTargetRe = regexp.MustCompile(`^([A-Za-z0-9.\-]+|\[[0-9a-fA-F:]+\]):[0-9]{1,5}$`)
 )
@@ -124,18 +129,19 @@ func NewService(st *store.Store, env *webenv.Env, cfg *webcfg.Store, issuer *acm
 
 const cols = `id, domain, aliases, type, php_version, root, stopped, force_https, hsts, ssl_mode, ssl_challenge,
 	ssl_wildcard, cert_issuer, cert_not_after, cert_error, dns_managed, dns_proxied, remark, created_at, updated_at,
-	runtime_version, command, app_port, proxy_target, passthrough`
+	runtime_version, command, app_port, proxy_target, passthrough, waf_off, waf_exclude`
 
 func scan(row interface{ Scan(...any) error }) (Site, error) {
 	var s Site
-	var aliases string
+	var aliases, wafEx string
 	err := row.Scan(&s.ID, &s.Domain, &aliases, &s.Type, &s.PHPVersion, &s.Root, &s.Stopped, &s.ForceHTTPS, &s.HSTS,
 		&s.SSLMode, &s.SSLChallenge, &s.SSLWildcard, &s.CertIssuer, &s.CertNotAfter, &s.CertError,
 		&s.DNSManaged, &s.DNSProxied, &s.Remark, &s.CreatedAt, &s.UpdatedAt,
-		&s.RuntimeVersion, &s.Command, &s.AppPort, &s.ProxyTarget, &s.Passthrough)
+		&s.RuntimeVersion, &s.Command, &s.AppPort, &s.ProxyTarget, &s.Passthrough, &s.WAFOff, &wafEx)
 	if err != nil {
 		return s, err
 	}
+	s.WAFExclude = strings.Fields(wafEx)
 	json.Unmarshal([]byte(aliases), &s.Aliases)
 	if s.Aliases == nil {
 		s.Aliases = []string{}
@@ -176,11 +182,11 @@ func (sv *Service) save(ctx context.Context, s *Site) error {
 		s.CreatedAt = now
 		res, err := sv.st.DB.ExecContext(ctx, `INSERT INTO sites(domain, aliases, type, php_version, root, stopped, force_https, hsts,
 			ssl_mode, ssl_challenge, ssl_wildcard, cert_issuer, cert_not_after, cert_error, dns_managed, dns_proxied, remark, created_at, updated_at,
-			runtime_version, command, app_port, proxy_target, passthrough)
-			VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			runtime_version, command, app_port, proxy_target, passthrough, waf_off, waf_exclude)
+			VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			s.Domain, string(aliases), s.Type, s.PHPVersion, s.Root, s.Stopped, s.ForceHTTPS, s.HSTS, s.SSLMode, s.SSLChallenge,
 			s.SSLWildcard, s.CertIssuer, s.CertNotAfter, s.CertError, s.DNSManaged, s.DNSProxied, s.Remark, s.CreatedAt, s.UpdatedAt,
-			s.RuntimeVersion, s.Command, s.AppPort, s.ProxyTarget, s.Passthrough)
+			s.RuntimeVersion, s.Command, s.AppPort, s.ProxyTarget, s.Passthrough, s.WAFOff, strings.Join(s.WAFExclude, " "))
 		if err != nil {
 			return err
 		}
@@ -189,10 +195,10 @@ func (sv *Service) save(ctx context.Context, s *Site) error {
 	}
 	_, err := sv.st.DB.ExecContext(ctx, `UPDATE sites SET aliases=?, type=?, php_version=?, root=?, stopped=?, force_https=?, hsts=?,
 		ssl_mode=?, ssl_challenge=?, ssl_wildcard=?, cert_issuer=?, cert_not_after=?, cert_error=?, dns_managed=?, dns_proxied=?,
-		remark=?, updated_at=?, runtime_version=?, command=?, app_port=?, proxy_target=?, passthrough=? WHERE id=?`,
+		remark=?, updated_at=?, runtime_version=?, command=?, app_port=?, proxy_target=?, passthrough=?, waf_off=?, waf_exclude=? WHERE id=?`,
 		string(aliases), s.Type, s.PHPVersion, s.Root, s.Stopped, s.ForceHTTPS, s.HSTS, s.SSLMode, s.SSLChallenge, s.SSLWildcard,
 		s.CertIssuer, s.CertNotAfter, s.CertError, s.DNSManaged, s.DNSProxied, s.Remark, s.UpdatedAt,
-		s.RuntimeVersion, s.Command, s.AppPort, s.ProxyTarget, s.Passthrough, s.ID)
+		s.RuntimeVersion, s.Command, s.AppPort, s.ProxyTarget, s.Passthrough, s.WAFOff, strings.Join(s.WAFExclude, " "), s.ID)
 	return err
 }
 
@@ -304,7 +310,7 @@ func (sv *Service) spec(s Site) webenv.Site {
 	}
 	ws := webenv.Site{
 		Domain: s.Domain, Aliases: s.Aliases, Type: s.Type, PHPVersion: s.PHPVersion, Root: s.Root,
-		Stopped: s.Stopped, ForceHTTPS: s.ForceHTTPS, HSTS: s.HSTS, HasCert: has,
+		Stopped: s.Stopped, ForceHTTPS: s.ForceHTTPS, HSTS: s.HSTS, HasCert: has, WAFOff: s.WAFOff, WAFExclude: s.WAFExclude,
 	}
 	switch {
 	case IsProject(s.Type):
@@ -386,6 +392,22 @@ func (sv *Service) ensureProject(ctx context.Context, s Site, log tasks.Logf) er
 		image, "sh", "-c", s.Command,
 	}
 	return webenv.EnsureContainer(ctx, log, name, args, nil, false)
+}
+
+// Reapply rebuilds the stack containers whose settings changed (e.g. the WAF
+// switches the nginx image) and reloads every config (task).
+func (sv *Service) Reapply(title string) string {
+	return sv.tasks.Start(title, func(ctx context.Context, log tasks.Logf) error {
+		if !sv.Env.Installed(ctx) {
+			log("web stack not installed: settings saved, applied when it is installed")
+			return nil
+		}
+		if err := sv.ensureStack(ctx, "", log); err != nil {
+			return err
+		}
+		log("applying configuration")
+		return sv.Apply(ctx)
+	})
 }
 
 // InstallEnv installs / repairs the web stack (task).
@@ -840,6 +862,9 @@ type UpdateInput struct {
 	AppPort        *int    `json:"app_port"`
 	// Reverse proxies.
 	ProxyTarget *string `json:"proxy_target"`
+	// WAF.
+	WAFOff     *bool     `json:"waf_off"`
+	WAFExclude *[]string `json:"waf_exclude"`
 }
 
 // Update changes settings; it returns a task id because a new PHP version may
@@ -893,6 +918,21 @@ func (sv *Service) Update(ctx context.Context, id int64, in UpdateInput) (string
 			return "", err
 		}
 		s.AppPort = *in.AppPort
+	}
+	if in.WAFOff != nil {
+		s.WAFOff = *in.WAFOff
+	}
+	if in.WAFExclude != nil {
+		ids := []string{}
+		for _, id := range *in.WAFExclude {
+			if id = strings.TrimSpace(id); id != "" {
+				if !wafRuleRe.MatchString(id) {
+					return "", ErrBadWAFRule
+				}
+				ids = append(ids, id)
+			}
+		}
+		s.WAFExclude = ids
 	}
 	if in.ProxyTarget != nil {
 		target := strings.TrimRight(strings.TrimSpace(*in.ProxyTarget), "/")

@@ -14,6 +14,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"text/template"
@@ -32,6 +33,9 @@ const (
 	HAProxyImage = "haproxy:3.0"
 	NginxImage   = "nginx:stable"
 
+	// WAFImage is nginx with ModSecurity v3 and the OWASP Core Rule Set (LTS),
+	// used instead of NginxImage while the WAF is on.
+	WAFImage    = "owasp/modsecurity-crs:4.25.2-nginx-202610180210-lts"
 	HAProxyName = "lmcwhm-haproxy"
 	NginxName   = "lmcwhm-nginx"
 
@@ -70,6 +74,9 @@ type Site struct {
 	ForceHTTPS bool
 	HSTS       bool
 	HasCert    bool
+	// WAFOff turns ModSecurity off for this site; WAFExclude removes CRS rules by ID.
+	WAFOff     bool
+	WAFExclude []string
 	// Upstream is the URL nginx proxies to (runtime projects and proxies).
 	Upstream string
 	// Passthrough sends the raw TLS stream for every host to Upstream
@@ -91,6 +98,67 @@ type Env struct {
 	WWWRoot  string // /www/wwwroot
 	WWWLogs  string // /www/wwwlogs
 	Timezone string
+	// WAF returns the current WAF settings (nil = off).
+	WAF func() WAFSettings
+}
+
+// WAFSettings drive ModSecurity + OWASP CRS in the nginx container.
+type WAFSettings struct {
+	Enabled  bool   `json:"enabled"`
+	Engine   string `json:"engine"`   // On | DetectionOnly
+	Paranoia int    `json:"paranoia"` // 1-4
+	Anomaly  int    `json:"anomaly"`  // inbound anomaly score threshold (CRS default 5)
+}
+
+func (e *Env) waf() WAFSettings {
+	if e.WAF == nil {
+		return WAFSettings{}
+	}
+	w := e.WAF()
+	if w.Engine != "DetectionOnly" {
+		w.Engine = "On"
+	}
+	w.Paranoia = min(max(w.Paranoia, 1), 4)
+	if w.Anomaly <= 0 {
+		w.Anomaly = 5
+	}
+	return w
+}
+
+// WAFLog is ModSecurity's JSON audit log (one transaction per line).
+func (e *Env) WAFLog() string { return filepath.Join(e.WWWLogs, "waf", "audit.log") }
+
+// nginxConfDir is where the generated nginx.conf and conf.d are mounted in
+// the container (both images), started with -c so the image's own config and
+// templates are left alone.
+const nginxConfDir = "/etc/nginx/lmcwhm"
+
+var nginxConf = []string{"-c", nginxConfDir + "/nginx.conf"}
+
+// nginxArgs is the `docker run` tail of the nginx container.
+func (e *Env) nginxArgs() []string {
+	a := []string{
+		"--network", "host",
+		"-v", e.NginxDir() + ":" + nginxConfDir + ":ro",
+		"-v", e.WWWRoot + ":" + e.WWWRoot,
+		"-v", e.WWWLogs + ":" + e.WWWLogs,
+	}
+	image := NginxImage
+	if w := e.waf(); w.Enabled {
+		image = WAFImage
+		// The CRS image's entrypoint writes ModSecurity / CRS settings from these.
+		a = append(a, "--user", "0",
+			"-e", "MODSEC_RULE_ENGINE="+w.Engine,
+			"-e", fmt.Sprintf("PARANOIA=%d", w.Paranoia), "-e", fmt.Sprintf("BLOCKING_PARANOIA=%d", w.Paranoia),
+			"-e", fmt.Sprintf("ANOMALY_INBOUND=%d", w.Anomaly), "-e", "ANOMALY_OUTBOUND=4",
+			"-e", "MODSEC_AUDIT_ENGINE=RelevantOnly", "-e", "MODSEC_AUDIT_LOG_FORMAT=JSON", "-e", "MODSEC_AUDIT_LOG_TYPE=Serial",
+			"-e", "MODSEC_AUDIT_LOG="+e.WAFLog(),
+			// Match nginx's client_max_body_size instead of rejecting uploads over 13 MB.
+			"-e", "MODSEC_REQ_BODY_LIMIT=134217728", "-e", "MODSEC_REQ_BODY_LIMIT_ACTION=ProcessPartial",
+			"-e", "PORT=8081", "-e", "SSL_PORT=8444", // the image's own (unused) server blocks
+		)
+	}
+	return append(append(a, image, "nginx"), append(nginxConf, "-g", "daemon off;")...)
 }
 
 func New(home string) *Env {
@@ -194,7 +262,7 @@ func (e *Env) Ensure(ctx context.Context, sites []Site, pass []Passthrough, log 
 		return dockerx.ErrNoDocker
 	}
 	for _, d := range []string{e.CertDir(), filepath.Join(e.EdgeDir(), "maps"), filepath.Join(e.EdgeDir(), "run"),
-		filepath.Join(e.NginxDir(), "conf.d"), e.WWWRoot, e.WWWLogs} {
+		filepath.Join(e.NginxDir(), "conf.d"), e.WWWRoot, e.WWWLogs, filepath.Dir(e.WAFLog())} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			return err
 		}
@@ -210,7 +278,11 @@ func (e *Env) Ensure(ctx context.Context, sites []Site, pass []Passthrough, log 
 		return err
 	}
 
-	for _, img := range []string{HAProxyImage, NginxImage} {
+	nginxImage := NginxImage
+	if e.waf().Enabled {
+		nginxImage = WAFImage
+	}
+	for _, img := range []string{HAProxyImage, nginxImage} {
 		if !dockerx.ImageExists(ctx, img) {
 			log("pulling %s", img)
 			if _, err := dockerx.Run(ctx, "pull", "-q", img); err != nil {
@@ -219,14 +291,7 @@ func (e *Env) Ensure(ctx context.Context, sites []Site, pass []Passthrough, log 
 		}
 	}
 
-	if err := EnsureContainer(ctx, log, NginxName, []string{
-		"--network", "host",
-		"-v", filepath.Join(e.NginxDir(), "nginx.conf") + ":/etc/nginx/nginx.conf:ro",
-		"-v", filepath.Join(e.NginxDir(), "conf.d") + ":/etc/nginx/conf.d:ro",
-		"-v", e.WWWRoot + ":" + e.WWWRoot,
-		"-v", e.WWWLogs + ":" + e.WWWLogs,
-		NginxImage,
-	}, nil, true); err != nil {
+	if err := EnsureContainer(ctx, log, NginxName, e.nginxArgs(), nil, true); err != nil {
 		return err
 	}
 	return EnsureContainer(ctx, log, HAProxyName, []string{
@@ -500,7 +565,8 @@ func (e *Env) writeEdge(sites []Site, pass []Passthrough) error {
 
 func (e *Env) nginxFiles(sites []Site) (map[string][]byte, error) {
 	files := map[string][]byte{}
-	main, err := render("nginx.conf.tmpl", map[string]any{"NginxPort": NginxPort})
+	w := e.waf()
+	main, err := render("nginx.conf.tmpl", map[string]any{"NginxPort": NginxPort, "WAF": w.Enabled, "ConfDir": nginxConfDir})
 	if err != nil {
 		return nil, err
 	}
@@ -516,7 +582,7 @@ func (e *Env) nginxFiles(sites []Site) (map[string][]byte, error) {
 		v, err := render("vhost.conf.tmpl", map[string]any{
 			"Domain": s.Domain, "ServerNames": strings.Join(s.Hosts(), " "), "Root": s.Root,
 			"LogDir": e.WWWLogs, "NginxPort": NginxPort, "PHPPort": port, "Stopped": s.Stopped,
-			"Upstream": s.Upstream,
+			"Upstream": s.Upstream, "WAFOff": w.Enabled && s.WAFOff, "WAFExclude": wafExclusions(w.Enabled, s.WAFExclude),
 		})
 		if err != nil {
 			return nil, err
@@ -524,6 +590,23 @@ func (e *Env) nginxFiles(sites []Site) (map[string][]byte, error) {
 		files[filepath.Join("conf.d", s.Domain+".conf")] = v
 	}
 	return files, nil
+}
+
+var ruleIDRe = regexp.MustCompile(`^\d{1,7}$`)
+
+// wafExclusions renders per-site rule removals (IDs only, so nothing else can
+// reach the ModSecurity directive).
+func wafExclusions(on bool, ids []string) string {
+	if !on {
+		return ""
+	}
+	var ok []string
+	for _, id := range ids {
+		if ruleIDRe.MatchString(id) {
+			ok = append(ok, id)
+		}
+	}
+	return strings.Join(ok, " ")
 }
 
 func (e *Env) writeNginx(sites []Site) error {
@@ -573,11 +656,11 @@ func (e *Env) Apply(ctx context.Context, sites []Site, pass []Passthrough) error
 	if err := e.writeNginx(sites); err != nil {
 		return err
 	}
-	if out, err := dockerx.Run(ctx, "exec", NginxName, "nginx", "-t"); err != nil {
+	if out, err := dockerx.Run(ctx, append([]string{"exec", NginxName, "nginx", "-t"}, nginxConf...)...); err != nil {
 		restore(e.NginxDir(), snap)
 		return fmt.Errorf("nginx config test failed: %v %s", err, out)
 	}
-	if _, err := dockerx.Run(ctx, "exec", NginxName, "nginx", "-s", "reload"); err != nil {
+	if _, err := dockerx.Run(ctx, append([]string{"exec", NginxName, "nginx", "-s", "reload"}, nginxConf...)...); err != nil {
 		return err
 	}
 

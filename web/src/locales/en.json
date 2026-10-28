@@ -184,7 +184,8 @@
       "invalid_target": "Invalid target",
       "invalid_command": "Invalid start command",
       "passthrough_no_ssl": "TLS passthrough sites get their certificate from the backend",
-      "not_project": "Not a runtime project"
+      "not_project": "Not a runtime project",
+      "invalid_waf_rule": "Rule IDs are numbers"
     },
     "cf": {
       "no_token": "Set a Cloudflare API token first"
@@ -259,6 +260,24 @@
     },
     "geoip": {
       "invalid_edition": "Unknown IP database"
+    },
+    "fw": {
+      "no_nft": "nftables is not installed",
+      "invalid_rule": "Invalid rule: check action, protocol, ports and source",
+      "invalid_ip": "Invalid IP or CIDR",
+      "invalid_policy": "Invalid policy",
+      "not_found": "Not found",
+      "self_block": "That would block your own address",
+      "nothing_to_confirm": "Nothing waiting for confirmation",
+      "confirm_old_connection": "Confirmation must use a new connection",
+      "ruleset_rejected": "nftables rejected the ruleset: {detail}"
+    },
+    "waf": {
+      "invalid_settings": "Invalid WAF settings"
+    },
+    "crowdsec": {
+      "not_installed": "CrowdSec is not running",
+      "invalid_ip": "Invalid IP or CIDR"
     }
   },
   "task": {
@@ -704,5 +723,152 @@
       "docker_prune": "Prune Docker images",
       "apt": "System updates"
     }
+  },
+  "sec": {
+    "firewall": "Firewall",
+    "ips": "IP lists",
+    "cloud": "Linode / Cloudflare"
+  },
+  "fw": {
+    "title": "Server firewall (nftables)",
+    "on": "On",
+    "off": "Off",
+    "enable": "Enable",
+    "enable_hint": "Its own nftables table (inet lmcwhm); ufw and Docker rules are left alone. Rescue over SSH: lmcwhm firewall-off",
+    "policy": "Incoming default",
+    "policies": {
+      "accept": "Allow",
+      "drop": "Deny"
+    },
+    "policy_hint": {
+      "accept": "Everything is reachable except what rules and the block list deny.",
+      "drop": "Only protected ports and allow rules are reachable. Applied with a 60 s safety check."
+    },
+    "protect": "Protected ports",
+    "protect_hint": "Always allow TCP {ports} (SSH, panel, web) before any rule.",
+    "ping": "Answer ping",
+    "drop_unprotected": "Deny with unprotected ports can lock you out; keep an allow rule for SSH and the panel port.",
+    "confirming": "Checking that the panel is still reachable through the new rules… reverts in {n} s if not.",
+    "confirmed": "The panel is reachable: new rules kept.",
+    "confirm_failed": "Could not reach the panel through the new rules: they are rolled back to Allow within {n} seconds.",
+    "rules": "Port rules",
+    "add_rule": "Add rule",
+    "rules_hint": "Evaluated in order after the block list. Allow rules matter with the Deny default; deny rules close a port with the Allow default.",
+    "action": "Action",
+    "actions": {
+      "accept": "Allow",
+      "drop": "Deny"
+    },
+    "proto": "Protocol",
+    "ports": "Ports",
+    "ports_hint": "e.g. 22, 80,443 or 8000-9000 (up to 30 items)",
+    "source": "Source",
+    "source_hint": "Empty = anywhere; or an IP / CIDR (v4 or v6)",
+    "anywhere": "Anywhere",
+    "delete_rule": "Delete this rule?",
+    "live": "Live ruleset (nft list table inet lmcwhm)",
+    "no_table": "Not installed (firewall off).",
+    "no_nft": "nftables (nft) is not installed: run install.sh again or apt install nftables.",
+    "add_ip": "Block / allow an address",
+    "ip_placeholder": "IP or CIDR",
+    "add": "Add",
+    "list": "List",
+    "lists": {
+      "block": "Blocked",
+      "allow": "Allowed"
+    },
+    "origin": "Source",
+    "sources": {
+      "manual": "Manual",
+      "crowdsec": "CrowdSec",
+      "waf": "WAF"
+    },
+    "expires": "Expires",
+    "permanent": "Permanent",
+    "remove": "Remove",
+    "remove_confirm": "Remove {ip}?",
+    "dur": {
+      "h1": "1 hour",
+      "h24": "24 hours",
+      "d7": "7 days",
+      "d30": "30 days"
+    },
+    "lists_hint": "Allowed addresses skip every rule; blocked ones are dropped for all ports, also for Docker-published ports. Your own address cannot be blocked.",
+    "lists_inactive": "The firewall is off: lists are saved but not enforced on this server.",
+    "sync": "Sync to Cloudflare / Linode",
+    "sync_now": "Sync now",
+    "sync_hint": "Permanent blocks are pushed to the edges enabled under Linode / Cloudflare (automatically after changes). Temporary bans stay on the server.",
+    "linode_intro": "A Linode Cloud Firewall filters traffic before it reaches this server. Create a personal access token with Firewalls: Read/Write and Linodes: Read/Write.",
+    "linode_token": "Linode API token",
+    "token_saved": "Token saved (enter a new one to replace)",
+    "verify": "Verify",
+    "forget": "Remove token",
+    "choose_fw": "Choose a Cloud Firewall",
+    "attached": "Attached to {name}",
+    "attach": "Attach to {name}",
+    "linode_sync": "Push the block list (a DROP rule labelled lmcwhm-block, first in order)",
+    "linode_ports": "Keep an ACCEPT rule for protected ports {ports} (lmcwhm-ports)",
+    "linode_rules": "{n} inbound rules, inbound default {policy}. Rules lmcwhm did not create are never changed.",
+    "cf_no_token": "Add a Cloudflare API token under Websites → Web stack to use Cloudflare.",
+    "cf_sync": "Push the block list to every zone as IP Access Rules (notes \"lmcwhm\")",
+    "cf_hint": "Cloudflare accepts single addresses, IPv4 /16 and /24 and IPv6 /32, /48 and /64. The token needs Zone → Firewall Services: Edit.",
+    "zone": "Zone",
+    "cf_level": "Security level",
+    "cf_blocks": "lmcwhm blocks",
+    "cf_levels": {
+      "essentially_off": "Essentially off",
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "under_attack": "I'm Under Attack!"
+    }
+  },
+  "waf": {
+    "title": "Web application firewall",
+    "enable": "Enable WAF",
+    "enable_hint": "ModSecurity v3 + OWASP Core Rule Set in nginx ({image}).",
+    "engine": "Mode",
+    "engines": {
+      "On": "Block",
+      "DetectionOnly": "Detect only (log)"
+    },
+    "paranoia": "Paranoia level",
+    "pl": {
+      "1": "1 — default, few false positives",
+      "2": "2 — more rules",
+      "3": "3 — strict, expect tuning",
+      "4": "4 — paranoid"
+    },
+    "anomaly": "Anomaly threshold",
+    "anomaly_hint": "Score at which a request is blocked (CRS default 5; higher = more permissive).",
+    "save_apply": "Save and apply",
+    "apply": "Apply WAF settings",
+    "sites": "Per website",
+    "sites_off": "Turn the WAF on above for these settings to take effect.",
+    "excluded": "Excluded rule IDs (false positives)",
+    "events": "Detections",
+    "blocked": "Blocked",
+    "detected": "Detected",
+    "rules": "Rules",
+    "exclude": "Exclude",
+    "no_site": "No website serves {host}"
+  },
+  "cs": {
+    "intro": "CrowdSec reads website and SSH logs, detects attacks (brute force, scans, CVE probes) and issues bans, which the panel enforces in its firewall.",
+    "community": "Join the community: share signals and receive the community blocklist",
+    "community_short": "Community blocklist",
+    "install": "Install CrowdSec",
+    "uninstall": "Uninstall",
+    "uninstall_confirm": "Remove CrowdSec and lift its bans?",
+    "fw_off": "The firewall is off: CrowdSec bans are recorded but not enforced. Enable it under Firewall.",
+    "active_bans": "Active bans",
+    "last_poll": "Last sync",
+    "bans": "Bans",
+    "ban": "Ban",
+    "unban": "Unban",
+    "scenario": "Scenario / reason",
+    "alerts": "Alerts",
+    "events": "Events",
+    "decision": "Decision"
   }
 }
