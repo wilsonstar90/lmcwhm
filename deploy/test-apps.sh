@@ -293,6 +293,24 @@ api GET /geoip/status | grep -q '"edition":"country"' || fail "geoip database: $
 api POST /geoip/lookup '{"ips":["8.8.8.8","10.0.0.1"]}' | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['8.8.8.8']['country']=='US' and d['8.8.8.8']['asn']==15169 and d['10.0.0.1']['private'], d" || fail "geoip lookup"
 pass "M4: monitor, cron (shell + log rotation), site / SSH / journal logs, IP geolocation"
 
+# ---------- Built-in scheduled tasks ----------
+cron_job() { api GET /cron | python3 -c "import sys,json; print([j['id'] for j in json.load(sys.stdin)['items'] if j['type']==sys.argv[1] and j['command'].startswith(sys.argv[2])][0])" "$1" "$2"; }
+cron_run() { # job id -> waits for the run, prints status and output
+  api POST "/cron/$1/run" >/dev/null
+  for _ in $(seq 1 120); do
+    rid="$(api GET "/cron/$1/runs?limit=1" | python3 -c "import sys,json; r=json.load(sys.stdin)['items']; print(r[0]['id'] if r and r[0]['status']!='running' else '')")"
+    [[ -n "$rid" ]] && break; sleep 1
+  done
+  api GET "/cron/runs/$rid" | python3 -c "import sys,json; r=json.load(sys.stdin); print(r['status']); print(r.get('output',''))"
+}
+for c in ssl_renew time_sync release_memory security_scan; do
+  out="$(cron_run "$(cron_job system "$c")")"
+  [[ "$(head -1 <<<"$out")" == success ]] || fail "built-in task $c: $out"
+done
+out="$(cron_run "$(cron_job malware_scan '{')")"
+[[ "$(head -1 <<<"$out")" == success && "$out" == *"files scanned"* ]] || fail "malware scan task: $out"
+pass "built-in scheduled tasks: certificates, time sync, memory, security and webshell scans"
+
 # ---------- M5: firewall (nftables), WAF, CrowdSec ----------
 # A container on the default bridge is the "outside" client: its traffic to
 # the host (172.17.0.1) goes through the input chain like remote traffic.

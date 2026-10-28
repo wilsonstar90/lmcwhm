@@ -77,7 +77,7 @@ func accessTarget(v string) (string, string, bool) {
 	return "", "", false
 }
 
-// AccessRules lists the block rules lmcwhm created in a zone.
+// AccessRules lists the access rules lmcwhm created in a zone.
 func (c *Client) AccessRules(ctx context.Context, zoneID string) ([]AccessRule, error) {
 	var out []AccessRule
 	for page := 1; page <= 50; page++ {
@@ -101,21 +101,34 @@ func (c *Client) AccessRules(ctx context.Context, zoneID string) ([]AccessRule, 
 // SyncBlocks makes the zone's lmcwhm block rules match ips exactly; addresses
 // Cloudflare cannot express (e.g. a /20) are returned as skipped.
 func (c *Client) SyncBlocks(ctx context.Context, zoneID string, ips []string) (added, removed int, skipped []string, err error) {
+	return c.SyncAccess(ctx, zoneID, ips, nil)
+}
+
+// SyncAccess makes the zone's lmcwhm access rules exactly: "block" for
+// blocks and "whitelist" (allow) for allows. An address on both lists is
+// allowed, as on the server, where the allow list is matched first.
+func (c *Client) SyncAccess(ctx context.Context, zoneID string, blocks, allows []string) (added, removed int, skipped []string, err error) {
 	have, err := c.AccessRules(ctx, zoneID)
 	if err != nil {
 		return 0, 0, nil, err
 	}
-	want := map[string]string{}
-	for _, ip := range ips {
-		if t, v, ok := accessTarget(strings.TrimSpace(ip)); ok {
-			want[v] = t
-		} else {
-			skipped = append(skipped, ip)
+	type want struct{ target, mode string }
+	wanted := map[string]want{} // value -> rule
+	for _, l := range []struct {
+		ips  []string
+		mode string
+	}{{blocks, "block"}, {allows, "whitelist"}} {
+		for _, ip := range l.ips {
+			if t, v, ok := accessTarget(strings.TrimSpace(ip)); ok {
+				wanted[v] = want{t, l.mode}
+			} else {
+				skipped = append(skipped, ip)
+			}
 		}
 	}
 	for _, r := range have {
-		if _, ok := want[r.Configuration.Value]; ok {
-			delete(want, r.Configuration.Value)
+		if w, ok := wanted[r.Configuration.Value]; ok && w.mode == r.Mode {
+			delete(wanted, r.Configuration.Value)
 			continue
 		}
 		if err := c.do(ctx, http.MethodDelete, "/zones/"+zoneID+"/firewall/access_rules/rules/"+r.ID, nil, nil); err != nil {
@@ -123,8 +136,8 @@ func (c *Client) SyncBlocks(ctx context.Context, zoneID string, ips []string) (a
 		}
 		removed++
 	}
-	for v, t := range want {
-		body := map[string]any{"mode": "block", "notes": AccessNote, "configuration": map[string]string{"target": t, "value": v}}
+	for v, w := range wanted {
+		body := map[string]any{"mode": w.mode, "notes": AccessNote, "configuration": map[string]string{"target": w.target, "value": v}}
 		if err := c.do(ctx, http.MethodPost, "/zones/"+zoneID+"/firewall/access_rules/rules", body, nil); err != nil {
 			return added, removed, skipped, err
 		}

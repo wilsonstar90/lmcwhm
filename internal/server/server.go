@@ -42,6 +42,7 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/settings"
 	"github.com/wilsonstar90/lmcwhm/internal/site"
 	"github.com/wilsonstar90/lmcwhm/internal/sitestats"
+	"github.com/wilsonstar90/lmcwhm/internal/store"
 	"github.com/wilsonstar90/lmcwhm/internal/supervisor"
 	"github.com/wilsonstar90/lmcwhm/internal/tamper"
 	"github.com/wilsonstar90/lmcwhm/internal/tasks"
@@ -55,6 +56,7 @@ import (
 type Deps struct {
 	Paths    config.Paths
 	Settings *settings.Manager
+	Store    *store.Store // panel database (built-in task bookkeeping)
 	Auth     *auth.Service
 	Audit    *audit.Logger
 	WebFS    fs.FS // built Vue SPA (may be empty in dev)

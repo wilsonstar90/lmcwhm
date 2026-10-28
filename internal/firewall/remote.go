@@ -11,7 +11,7 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/linode"
 )
 
-// SyncReport is the result of pushing the permanent block list outwards.
+// SyncReport is the result of pushing the manual lists outwards.
 type SyncReport struct {
 	At         int64    `json:"at"`
 	Cloudflare []string `json:"cloudflare,omitempty"` // per-zone results
@@ -30,10 +30,11 @@ func LastSync() SyncReport {
 	return lastReport
 }
 
-// SyncRemote pushes the permanent block list to every Cloudflare zone the
-// token can see (when CFSync) and to the chosen Linode Cloud Firewall (when
-// LinodeSync / LinodePorts). Temporary bans stay local: they churn too fast
-// for the APIs' rate limits.
+// SyncRemote pushes the manually added, permanent block and allow entries to
+// every Cloudflare zone the token can see (when CFSync) and to the chosen
+// Linode Cloud Firewall (when LinodeSync / LinodePorts). Bans from CrowdSec,
+// MCP and the public lists stay on the server: they churn too fast for the
+// APIs' rate limits.
 func (sv *Service) SyncRemote(ctx context.Context, cfToken string) SyncReport {
 	rep := SyncReport{At: time.Now().Unix()}
 	defer func() {
@@ -46,7 +47,12 @@ func (sv *Service) SyncRemote(ctx context.Context, cfToken string) SyncReport {
 		rep.Errors = append(rep.Errors, err.Error())
 		return rep
 	}
-	blocks, err := sv.PermanentBlocks(ctx)
+	blocks, err := sv.ManualIPs(ctx, "block")
+	if err != nil {
+		rep.Errors = append(rep.Errors, err.Error())
+		return rep
+	}
+	allows, err := sv.ManualIPs(ctx, "allow")
 	if err != nil {
 		rep.Errors = append(rep.Errors, err.Error())
 		return rep
@@ -58,7 +64,7 @@ func (sv *Service) SyncRemote(ctx context.Context, cfToken string) SyncReport {
 			rep.Errors = append(rep.Errors, "cloudflare: "+err.Error())
 		}
 		for _, z := range zones {
-			add, del, skipped, err := cf.SyncBlocks(ctx, z.ID, blocks)
+			add, del, skipped, err := cf.SyncAccess(ctx, z.ID, blocks, allows)
 			if err != nil {
 				rep.Errors = append(rep.Errors, z.Name+": "+err.Error())
 				continue
@@ -77,20 +83,20 @@ func (sv *Service) SyncRemote(ctx context.Context, cfToken string) SyncReport {
 			rep.Errors = append(rep.Errors, err.Error())
 			return rep
 		}
-		var lb []string
+		var lb, la []string
 		if c.LinodeSync {
-			lb = blocks
+			lb, la = blocks, allows
 		}
 		ports := ""
 		if c.LinodePorts {
 			ports = strings.ReplaceAll(joinInts(sv.ProtectedPorts()), " ", "")
 		}
-		next, overflow := linode.ApplyManaged(rules, lb, ports)
+		next, overflow := linode.ApplyManaged(rules, lb, la, ports)
 		if err := cl.PutRules(ctx, c.LinodeFirewall, next); err != nil {
 			rep.Errors = append(rep.Errors, err.Error())
 			return rep
 		}
-		rep.Linode = "blocked " + strconv.Itoa(len(lb)-len(overflow))
+		rep.Linode = "blocked " + strconv.Itoa(min(len(lb), linode.MaxAddresses)) + ", allowed " + strconv.Itoa(min(len(la), linode.MaxAddresses))
 		if len(overflow) > 0 {
 			rep.Linode += ", " + strconv.Itoa(len(overflow)) + " over Linode's per-rule limit (kept on the server only)"
 		}

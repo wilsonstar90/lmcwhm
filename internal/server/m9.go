@@ -344,40 +344,6 @@ func (s *Server) handleSecScanFix(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]any{"task_id": id})
 }
 
-// SecScanLoop runs the scan weekly and alerts on critical findings.
-func (s *Server) SecScanLoop(ctx context.Context) {
-	if s.SecScan == nil {
-		return
-	}
-	t := time.NewTimer(10 * time.Minute)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-		}
-		t.Reset(6 * time.Hour)
-		if last, ok := s.SecScan.Latest(ctx); ok && time.Since(time.Unix(last.CreatedAt, 0)) < 7*24*time.Hour {
-			continue
-		}
-		rep, err := s.SecScan.Scan(ctx, s.secscanInput(ctx))
-		if err != nil || s.Alerts == nil {
-			continue
-		}
-		var crit []string
-		for _, f := range rep.Findings {
-			if f.Level == "critical" {
-				crit = append(crit, f.Code)
-			}
-		}
-		if len(crit) > 0 {
-			s.Alerts.Emit(ctx, alert.KindSecurityScan, "weekly", "critical",
-				fmt.Sprintf("Security scan: score %d, %d critical", rep.Score, len(crit)), strings.Join(crit, ", "), false)
-		}
-	}
-}
-
 // ---- malware ----
 
 func (s *Server) handleMalwareScans(w http.ResponseWriter, r *http.Request) {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { h, onMounted, ref } from 'vue'
+import { computed, h, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { NAlert, NButton, NCard, NCheckbox, NDataTable, NInput, NInputNumber, NPopconfirm, NSpace, NStatistic, NTag, useMessage, type DataTableColumns } from 'naive-ui'
 import { get, post, ApiError } from '../api/client'
@@ -7,10 +7,10 @@ import type { FirewallIP } from '../api/types'
 import { datetime } from '../format'
 import IpGeo from './IpGeo.vue'
 import TaskModal from './TaskModal.vue'
-import SecFeeds from './SecFeeds.vue'
+import DetailDrawer, { type DetailRow } from './DetailDrawer.vue'
 
 interface Status { installed: boolean; state: string; community: boolean; last_poll: number; poll_error?: string; bans: number; community_bans: number }
-interface Alert { id: number; scenario: string; created_at: string; events_count: number; source: { ip?: string; range?: string; cn?: string; as_name?: string; scope: string; value: string }; decisions?: { duration: string; type: string }[] | null }
+interface Alert { id: number; scenario: string; message?: string; created_at: string; events_count: number; source: { ip?: string; range?: string; cn?: string; as_name?: string; as_number?: string; scope: string; value: string }; decisions?: { duration: string; type: string; origin?: string }[] | null }
 
 const { t, locale } = useI18n()
 const msg = useMessage()
@@ -22,6 +22,9 @@ const community = ref(false)
 const fwEnabled = ref(true)
 const task = ref<{ id: string; title: string } | null>(null)
 const ban = ref({ ip: '', hours: 4, reason: '' })
+const banDetail = ref<FirewallIP | null>(null)
+const alertDetail = ref<Alert | null>(null)
+const emit = defineEmits<{ changed: [] }>()
 
 async function load() {
   try {
@@ -58,6 +61,8 @@ async function addBan() {
 async function unban(ip: string) {
   try {
     await post('/crowdsec/decisions/delete', { ip })
+    banDetail.value = null
+    emit('changed')
     load()
   } catch (e) {
     fail(e)
@@ -68,8 +73,33 @@ const banCols: DataTableColumns<FirewallIP> = [
   { title: () => t('common.ip'), key: 'ip', width: 320, render: (x) => h(IpGeo, { ip: x.ip }) },
   { title: () => t('cs.scenario'), key: 'remark', ellipsis: { tooltip: true } },
   { title: () => t('fw.expires'), key: 'expires_at', width: 180, render: (x) => datetime(x.expires_at, locale.value) },
-  { title: '', key: 'a', width: 90, render: (x) => h(NPopconfirm, { onPositiveClick: () => unban(x.ip) }, { trigger: () => h(NButton, { size: 'tiny', ghost: true, type: 'error' }, () => t('cs.unban')), default: () => t('fw.remove_confirm', { ip: x.ip }) }) },
+  { title: () => t('cs.origin'), key: 'origin', width: 110, render: (x) => h(NTag, { size: 'small', bordered: false }, () => (x.remark.startsWith('community: ') ? t('cs.community_short') : t('cs.local'))) },
 ]
+const banRows = computed<DetailRow[]>(() => {
+  const x = banDetail.value
+  if (!x) return []
+  return [
+    { label: t('common.ip'), value: () => h(IpGeo, { ip: x.ip }) },
+    { label: t('cs.scenario'), value: x.remark.replace(/^community: /, ''), mono: true },
+    { label: t('cs.origin'), value: x.remark.startsWith('community: ') ? t('cs.community_short') : t('cs.local') },
+    { label: t('fw.added'), value: datetime(x.created_at, locale.value) },
+    { label: t('fw.expires'), value: datetime(x.expires_at, locale.value) },
+  ]
+})
+const alertRows = computed<DetailRow[]>(() => {
+  const a = alertDetail.value
+  if (!a) return []
+  const d = a.decisions?.[0]
+  return [
+    { label: t('common.time'), value: datetime(Date.parse(a.created_at) / 1000, locale.value) },
+    { label: t('cs.scenario'), value: a.scenario, mono: true },
+    { label: t('cs.message'), value: a.message },
+    { label: t('common.ip'), value: () => (a.source.ip ? h(IpGeo, { ip: a.source.ip }) : a.source.value) },
+    { label: t('cs.network'), value: [a.source.as_name, a.source.as_number && `AS${a.source.as_number}`, a.source.cn].filter(Boolean).join(' · ') },
+    { label: t('cs.events'), value: a.events_count },
+    { label: t('cs.decision'), value: d ? `${d.type} ${d.duration}` : t('cs.no_decision') },
+  ]
+})
 const alertCols: DataTableColumns<Alert> = [
   { title: () => t('common.time'), key: 'created_at', width: 170, render: (a) => datetime(Date.parse(a.created_at) / 1000, locale.value) },
   { title: () => t('cs.scenario'), key: 'scenario', ellipsis: { tooltip: true } },
@@ -108,7 +138,6 @@ const alertCols: DataTableColumns<Alert> = [
       <n-alert v-if="st.community && !st.community_bans" type="info" :show-icon="false" style="margin-top: 12px">{{ t('cs.community_empty') }}</n-alert>
     </template>
   </n-card>
-  <SecFeeds kind="block" />
 
   <template v-if="st?.installed">
     <n-card size="small" :title="t('cs.bans')" style="margin-top: 16px">
@@ -119,13 +148,22 @@ const alertCols: DataTableColumns<Alert> = [
           <n-button size="small" type="primary" :disabled="!ban.ip" @click="addBan">{{ t('cs.ban') }}</n-button>
         </n-space>
       </template>
-      <n-data-table size="small" :columns="banCols" :data="bans" :pagination="{ pageSize: 20 }" :row-key="(x: FirewallIP) => x.id" :scroll-x="900" />
+      <n-data-table size="small" :columns="banCols" :data="bans" :pagination="{ pageSize: 20 }" :row-key="(x: FirewallIP) => x.id" :row-props="(x: FirewallIP) => ({ style: 'cursor: pointer', onClick: () => (banDetail = x) })" :scroll-x="900" />
     </n-card>
     <n-card size="small" :title="t('cs.alerts')" style="margin-top: 16px">
       <template #header-extra><n-button size="small" @click="load">{{ t('common.refresh') }}</n-button></template>
-      <n-data-table size="small" :columns="alertCols" :data="alerts" :pagination="{ pageSize: 20 }" :row-key="(a: Alert) => a.id" :scroll-x="1000" />
+      <n-data-table size="small" :columns="alertCols" :data="alerts" :pagination="{ pageSize: 20 }" :row-key="(a: Alert) => a.id" :row-props="(a: Alert) => ({ style: 'cursor: pointer', onClick: () => (alertDetail = a) })" :scroll-x="1000" />
     </n-card>
   </template>
+  <DetailDrawer :show="!!banDetail" :title="banDetail?.ip ?? ''" :rows="banRows" @close="banDetail = null">
+    <template v-if="banDetail" #actions>
+      <n-popconfirm @positive-click="unban(banDetail!.ip)">
+        <template #trigger><n-button type="error" ghost>{{ t('cs.unban') }}</n-button></template>
+        {{ t('fw.remove_confirm', { ip: banDetail.ip }) }}
+      </n-popconfirm>
+    </template>
+  </DetailDrawer>
+  <DetailDrawer :show="!!alertDetail" :title="alertDetail?.scenario ?? ''" :rows="alertRows" @close="alertDetail = null" />
   <TaskModal :task-id="task?.id ?? null" :title="task?.title ?? ''" @close="task = null; load()" @done="load" />
 </template>
 

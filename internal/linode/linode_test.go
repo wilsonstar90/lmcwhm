@@ -15,7 +15,7 @@ func TestApplyManaged(t *testing.T) {
 		{Action: "ACCEPT", Protocol: "TCP", Ports: "22", Label: "ssh"},
 		{Action: "DROP", Protocol: "TCP", Label: BlockLabel, Addresses: Addresses{IPv4: []string{"9.9.9.9/32"}}},
 	}, InboundPolicy: "DROP"}
-	out, over := ApplyManaged(in, []string{"1.2.3.4", "2001:db8::1", "10.0.0.0/8"}, "80,443,8888")
+	out, over := ApplyManaged(in, []string{"1.2.3.4", "2001:db8::1", "10.0.0.0/8"}, nil, "80,443,8888")
 	if len(over) != 0 || len(out.Inbound) != 3 || out.InboundPolicy != "DROP" || out.OutboundPolicy != "ACCEPT" {
 		t.Fatalf("%+v %v", out, over)
 	}
@@ -30,8 +30,15 @@ func TestApplyManaged(t *testing.T) {
 	for i := range many {
 		many[i] = fmt.Sprintf("10.0.%d.%d", i/250, i%250)
 	}
-	if _, over := ApplyManaged(Rules{}, many, ""); len(over) != 45 {
+	if _, over := ApplyManaged(Rules{}, many, nil, ""); len(over) != 45 {
 		t.Fatalf("overflow %d", len(over))
+	}
+	// Allowed addresses come first (and replace the previous allow rule).
+	in.Inbound = append(in.Inbound, Rule{Action: "ACCEPT", Label: AllowLabel, Addresses: Addresses{IPv4: []string{"7.7.7.7/32"}}})
+	out, _ = ApplyManaged(in, []string{"1.2.3.4"}, []string{"203.0.113.5"}, "")
+	if len(out.Inbound) != 3 || out.Inbound[0].Label != AllowLabel || out.Inbound[0].Action != "ACCEPT" ||
+		fmt.Sprint(out.Inbound[0].Addresses.IPv4) != "[203.0.113.5/32]" || out.Inbound[1].Label != BlockLabel || out.Inbound[2].Label != "ssh" {
+		t.Fatalf("allow rule %+v", out.Inbound)
 	}
 }
 

@@ -837,7 +837,10 @@
       "shell": "シェルスクリプト",
       "url": "URL アクセス",
       "logrotate": "ログローテーション",
-      "backup": "バックアップ"
+      "backup": "バックアップ",
+      "system": "組み込みタスク",
+      "ip_feeds": "IP リスト更新",
+      "malware_scan": "Webshell スキャン"
     },
     "status": {
       "running": "実行中",
@@ -871,7 +874,28 @@
       "docker_prune": "Docker イメージの整理",
       "apt": "システム更新"
     },
-    "run": "実行"
+    "run": "実行",
+    "task": "タスク",
+    "sys": {
+      "ssl_renew": "SSL 証明書の更新（Let's Encrypt / LiteSSL）",
+      "time_sync": "サーバー時刻の同期",
+      "release_memory": "メモリ解放",
+      "security_scan": "セキュリティスキャン"
+    },
+    "sys_hint": {
+      "ssl_renew": "30 日以内に期限が切れるサイト証明書をすべて更新します。",
+      "time_sync": "NTP クライアント（systemd-timesyncd）を再起動して時刻を補正します。",
+      "release_memory": "キャッシュを書き出してページキャッシュを解放します。読み込み時に再びキャッシュされます。",
+      "security_scan": "セキュリティスキャンを実行し、重大な問題を通知します。"
+    },
+    "feeds": {
+      "block": "悪性 IP ブロックリスト",
+      "trust": "信頼 IP リスト"
+    },
+    "feeds_hint": "「セキュリティ → 自動更新リスト」で選んだリストを取得します。タスクが止まると 2 間隔後に期限切れになります。",
+    "mw_paths": "パス",
+    "mw_paths_hint": "サイトルート以下。空ですべてのサイト",
+    "mw_clam": "ClamAV でもスキャン（遅い）"
   },
   "sec": {
     "firewall": "ファイアウォール",
@@ -879,7 +903,71 @@
     "cloud": "Linode / Cloudflare",
     "scan": "セキュリティ診断",
     "malware": "Webシェル検査",
-    "tamper": "改ざん防止"
+    "tamper": "改ざん防止",
+    "on": "有効",
+    "off": "無効",
+    "never": "未実行",
+    "not_installed": "未インストール",
+    "policy": {
+      "accept": "既定で許可",
+      "drop": "既定で拒否"
+    },
+    "ov": {
+      "rules": "ポートルール {n}",
+      "manual": "手動ブロック",
+      "ips": "許可 {allow} · 一時ブロック {bans}",
+      "lists_on": "{n} リスト",
+      "trusted": "信頼範囲 {n}",
+      "synced": "同期 {at}",
+      "blocked_24h": "24 時間のブロック",
+      "bans": "有効なブロック",
+      "score": "スコア",
+      "suspicious": "不審ファイル",
+      "tamper": "24 時間の変更 {n}"
+    },
+    "groups": {
+      "network": "ネットワーク",
+      "intrusion": "侵入防御",
+      "checks": "チェック"
+    },
+    "s": {
+      "firewall": {
+        "title": "ファイアウォール",
+        "desc": "このサーバーの nftables：既定ポリシー、Ping、ポートルール。"
+      },
+      "ips": {
+        "title": "IP リスト",
+        "desc": "手動で許可 / ブロックしたアドレスと一時ブロック。行をクリックで詳細。"
+      },
+      "lists": {
+        "title": "自動更新リスト",
+        "desc": "公開悪性 IP リストと信頼範囲（Cloudflare・クローラー）。スケジュールで更新します。"
+      },
+      "cloud": {
+        "title": "クラウド同期",
+        "desc": "手動のブロック / 許可リストを Linode Cloud Firewall と Cloudflare へ送信します。"
+      },
+      "waf": {
+        "title": "WAF",
+        "desc": "すべてのサイトの前段で ModSecurity と OWASP CRS を実行します。"
+      },
+      "crowdsec": {
+        "title": "CrowdSec",
+        "desc": "サイトと SSH のログから攻撃を検知し、攻撃元をブロックします。"
+      },
+      "scan": {
+        "title": "セキュリティスキャン",
+        "desc": "SSH・アカウント・更新・カーネル設定・公開ポート・サイト権限を確認します。"
+      },
+      "malware": {
+        "title": "Webshell スキャン",
+        "desc": "サイト内の Webshell や不審なコードを検出し、ファイルごとに隔離 / 無視します。"
+      },
+      "tamper": {
+        "title": "改ざん防止",
+        "desc": "サイトのディレクトリをロックするか、監視して変更を元に戻します。"
+      }
+    }
   },
   "fw": {
     "title": "サーバーファイアウォール（nftables）",
@@ -934,7 +1022,8 @@
     "sources": {
       "manual": "手動",
       "crowdsec": "CrowdSec",
-      "waf": "WAF"
+      "waf": "WAF",
+      "mcp": "MCP / AI"
     },
     "expires": "期限",
     "permanent": "無期限",
@@ -974,7 +1063,18 @@
       "medium": "中",
       "high": "高",
       "under_attack": "Under Attack モード"
-    }
+    },
+    "added": "追加日時",
+    "cloud_sync": "クラウド同期",
+    "synced_yes": "同期が有効なら Linode / Cloudflare に送信",
+    "synced_no": "このサーバーのみ（同期は手動の無期限エントリーだけ）",
+    "lists_hint2": "許可アドレスはすべてのルールを通過し、ブロックしたアドレスは Docker を含む全ポートで破棄します。自分のアドレスはブロックできません。ここで手動追加した無期限エントリーだけが Linode / Cloudflare に同期されます。",
+    "sync_scope": "手動で追加したブロック / 許可エントリー（無期限）だけを送信します。CrowdSec・MCP・公開リストによるブロックは変化が速すぎるため、このサーバー内だけで適用します。",
+    "linode_sync2": "手動のブロック / 許可リストを送信（lmcwhm-allow / lmcwhm-block ルールを先頭に）",
+    "cf_sync2": "手動のブロック / 許可リストを IP Access Rules（メモ \"lmcwhm\"）として全ゾーンへ送信",
+    "cf_rules": "lmcwhm ルール",
+    "last_sync": "最終同期 {at}",
+    "never_synced": "未同期です。下で Linode か Cloudflare の同期を有効にすると、手動リストの変更が数秒で送信されます。"
   },
   "waf": {
     "title": "Web アプリケーションファイアウォール",
@@ -1004,7 +1104,10 @@
     "detected": "検知",
     "rules": "ルール",
     "exclude": "除外",
-    "no_site": "{host} を処理するサイトがありません"
+    "no_site": "{host} を処理するサイトがありません",
+    "host": "ホスト",
+    "http_status": "HTTP ステータス",
+    "rule": "ルール"
   },
   "cs": {
     "intro": "CrowdSec はサイトと SSH のログを読み、攻撃（総当たり、スキャン、CVE 探索）を検知してブロックを発行し、パネルのファイアウォールが実施します。",
@@ -1023,7 +1126,12 @@
     "alerts": "アラート",
     "events": "イベント数",
     "decision": "判定",
-    "community_empty": "コミュニティブロックリストはまだ空です。CrowdSec はシグナルを共有するエンジンにのみ配信しますが、このサーバーはまだ攻撃を検知しておらず共有するものがありません。攻撃を検知すると届き始めます。それまでは下の公開ブロックリストを購読してください。"
+    "community_empty": "コミュニティブロックリストはまだ空です。CrowdSec はシグナルを共有するエンジンにのみ配信しますが、このサーバーはまだ攻撃を検知しておらず共有するものがありません。攻撃を検知すると届き始めます。それまでは下の公開ブロックリストを購読してください。",
+    "local": "このサーバー",
+    "origin": "出所",
+    "message": "メッセージ",
+    "network": "ネットワーク",
+    "no_decision": "ブロックなし"
   },
   "bk": {
     "tab_list": "バックアップ",
@@ -1552,7 +1660,11 @@
       "auto_updates": "unattended-upgrades を入れて自動セキュリティ更新を有効にしますか？",
       "lock_empty": "パスワードのないアカウントをロックしますか？",
       "chmod_web": "サイトフォルダ内の全ファイルから other の書き込み権限を外しますか？"
-    }
+    },
+    "detail": "詳細",
+    "how": "対処",
+    "how_route": "関連ページを開いて設定を変更してください。",
+    "how_manual": "サーバー上で確認してください。"
   },
   "mw": {
     "scan": "Webシェルを検査",
@@ -1587,7 +1699,11 @@
       "php_in_image": "画像内の PHP コード",
       "php_in_uploads": "uploads 内の PHP ファイル",
       "clamav": "ClamAV：{sig}"
-    }
+    },
+    "rule": "ルール",
+    "line_label": "行",
+    "modified": "更新日時",
+    "snippet": "一致したコード"
   },
   "tp": {
     "intro": "監視モードは保護ファイルの変更を記録し、元に戻せます（新規ファイルは隔離）。ロックモードは変更不可にし、ルールをオフにするまで PHP も root も変更できません。サイト更新前にオフにしてください。",
@@ -1630,7 +1746,8 @@
       "restored": "復元済",
       "removed": "隔離済",
       "failed": "失敗"
-    }
+    },
+    "rule": "保護パス"
   },
   "users": {
     "tab": "ユーザー",
@@ -1842,7 +1959,22 @@
     "custom": "カスタムリスト（1 行に IP か CIDR 1 つ・常に有効）",
     "name": "名前",
     "add_custom": "リスト URL を追加",
-    "count": "ブロック中のエントリー"
+    "count": "ブロック中のエントリー",
+    "schedule": "スケジュール",
+    "next": "次回 {at}",
+    "job_off": "無効",
+    "no_job": "リストを選ぶと作成されます",
+    "job_disabled": "スケジュールが無効です。リストは更新されず、エントリーは期限切れになります。",
+    "selected_n": "選択中",
+    "selected": "選択",
+    "not_selected": "未選択",
+    "pending": "更新待ち",
+    "failed": "失敗",
+    "about": "説明",
+    "state": "状態",
+    "skipped_label": "スキップ（保護対象）",
+    "error": "直近のエラー",
+    "custom_short": "カスタム"
   },
   "fwtrust": {
     "title": "信頼 IP（自動更新）",
@@ -2016,5 +2148,19 @@
     "score": "スコア",
     "ttl_sec": "有効期限（秒）",
     "ttl_hint": "0 で無期限"
+  },
+  "apis": {
+    "tab": "API 認証情報",
+    "intro": "パネルが使うサードパーティ API キーをここでまとめて管理します。キーは暗号化保存され、再表示されません。",
+    "set": "設定済み",
+    "not_set": "未設定",
+    "open": "パネル設定 · API 認証情報",
+    "moved": "Cloudflare API トークンは「パネル設定 → API 認証情報」で管理します。",
+    "need_token": "先に {name} API トークンを追加してください。",
+    "cf_used": "DNS レコード、DNS-01 証明書（ワイルドカード）、Cloudflare ファイアウォール同期に使います。",
+    "linode_used": "Linode Cloud Firewall（セキュリティ → クラウド同期）に使います。",
+    "linode_hint": "Personal Access Token（Firewalls 読み書き、Linodes 読み取り）。保存前に確認します。",
+    "linode_ok": "トークン有効。このサーバーは Linode {name}",
+    "ai_used": "AI アシスタントと各ページの AI 分析ボタンで使います。"
   }
 }

@@ -837,7 +837,10 @@
       "shell": "Shell 指令碼",
       "url": "存取 URL",
       "logrotate": "日誌切割",
-      "backup": "備份"
+      "backup": "備份",
+      "system": "內建任務",
+      "ip_feeds": "IP 名單更新",
+      "malware_scan": "木馬掃描"
     },
     "status": {
       "running": "執行中",
@@ -871,7 +874,28 @@
       "docker_prune": "清理 Docker 映像",
       "apt": "系統更新"
     },
-    "run": "執行"
+    "run": "執行",
+    "task": "任務",
+    "sys": {
+      "ssl_renew": "續簽 SSL 憑證（Let's Encrypt / LiteSSL）",
+      "time_sync": "伺服器時間同步",
+      "release_memory": "釋放記憶體",
+      "security_scan": "安全掃描"
+    },
+    "sys_hint": {
+      "ssl_renew": "續簽 30 天內到期的所有網站憑證。",
+      "time_sync": "重新啟動 NTP 用戶端（systemd-timesyncd）校正時間。",
+      "release_memory": "將快取寫入磁碟並清空頁面快取；之後讀檔時 Linux 會自動重新快取。",
+      "security_scan": "執行安全掃描，發現嚴重問題時告警。"
+    },
+    "feeds": {
+      "block": "公共惡意 IP 黑名單",
+      "trust": "信任 IP 白名單"
+    },
+    "feeds_hint": "下載「安全 → 自動更新名單」選取的名單。任務停止時條目於兩個間隔後過期。",
+    "mw_paths": "掃描目錄",
+    "mw_paths_hint": "須位於網站根目錄下；留空即掃描所有網站",
+    "mw_clam": "同時使用 ClamAV 掃描（較慢）"
   },
   "sec": {
     "firewall": "防火牆",
@@ -879,7 +903,71 @@
     "cloud": "Linode / Cloudflare",
     "scan": "安全掃描",
     "malware": "木馬掃描",
-    "tamper": "防竄改"
+    "tamper": "防竄改",
+    "on": "已開啟",
+    "off": "未開啟",
+    "never": "未執行過",
+    "not_installed": "未安裝",
+    "policy": {
+      "accept": "預設允許",
+      "drop": "預設拒絕"
+    },
+    "ov": {
+      "rules": "{n} 條連接埠規則",
+      "manual": "手動封鎖",
+      "ips": "白名單 {allow} · 臨時封鎖 {bans}",
+      "lists_on": "{n} 個名單",
+      "trusted": "信任 IP 段 {n}",
+      "synced": "同步於 {at}",
+      "blocked_24h": "24 小時內攔截",
+      "bans": "生效中封鎖",
+      "score": "評分",
+      "suspicious": "可疑檔案",
+      "tamper": "24 小時內 {n} 次變更"
+    },
+    "groups": {
+      "network": "網路防護",
+      "intrusion": "入侵防護",
+      "checks": "安全檢查"
+    },
+    "s": {
+      "firewall": {
+        "title": "防火牆",
+        "desc": "本機 nftables：預設策略、Ping 與連接埠規則。"
+      },
+      "ips": {
+        "title": "IP 名單",
+        "desc": "你手動放行或封鎖的位址，以及臨時封鎖。點擊一列查看詳情。"
+      },
+      "lists": {
+        "title": "自動更新名單",
+        "desc": "公共惡意 IP 黑名單與信任 IP 段（Cloudflare、爬蟲），由排程任務定時更新。"
+      },
+      "cloud": {
+        "title": "雲端同步",
+        "desc": "將手動黑白名單推送至 Linode Cloud Firewall 與 Cloudflare。"
+      },
+      "waf": {
+        "title": "WAF",
+        "desc": "於所有網站前執行 ModSecurity 與 OWASP 核心規則集。"
+      },
+      "crowdsec": {
+        "title": "CrowdSec",
+        "desc": "讀取網站與 SSH 日誌，偵測攻擊並封鎖攻擊者。"
+      },
+      "scan": {
+        "title": "安全掃描",
+        "desc": "檢查 SSH、帳戶、更新、核心設定、開放連接埠與網站權限。"
+      },
+      "malware": {
+        "title": "木馬掃描",
+        "desc": "找出網站中的 webshell 與可疑程式碼；逐一隔離或忽略。"
+      },
+      "tamper": {
+        "title": "防篡改",
+        "desc": "鎖定網站目錄，或監控目錄並還原變更。"
+      }
+    }
   },
   "fw": {
     "title": "伺服器防火牆（nftables）",
@@ -934,7 +1022,8 @@
     "sources": {
       "manual": "手動",
       "crowdsec": "CrowdSec",
-      "waf": "WAF"
+      "waf": "WAF",
+      "mcp": "MCP / AI"
     },
     "expires": "到期",
     "permanent": "永久",
@@ -974,7 +1063,18 @@
       "medium": "中",
       "high": "高",
       "under_attack": "我正遭受攻擊"
-    }
+    },
+    "added": "加入時間",
+    "cloud_sync": "雲端同步",
+    "synced_yes": "開啟同步時會推送至 Linode / Cloudflare",
+    "synced_no": "僅在本機生效（只有手動加入的永久條目才同步）",
+    "lists_hint2": "白名單位址不受任何規則限制；黑名單位址所有連接埠都會被丟棄，包括 Docker 連接埠。無法封鎖自己的位址。只有在此手動加入的永久條目才會同步至 Linode / Cloudflare。",
+    "sync_scope": "只會推送你手動加入的黑名單與白名單（永久條目）。CrowdSec、MCP 與公共名單的封鎖僅在本機生效，因其變動過於頻繁，不適合 Linode 與 Cloudflare API。",
+    "linode_sync2": "推送手動黑白名單（lmcwhm-allow / lmcwhm-block 規則，排在最前）",
+    "cf_sync2": "以 IP Access Rules（備註 \"lmcwhm\"）推送手動黑白名單至所有 Zone",
+    "cf_rules": "lmcwhm 規則",
+    "last_sync": "上次同步 {at}",
+    "never_synced": "尚未同步。於下方開啟 Linode 或 Cloudflare 同步；手動名單變更後數秒內推送。"
   },
   "waf": {
     "title": "網站應用程式防火牆（WAF）",
@@ -1004,7 +1104,10 @@
     "detected": "已偵測",
     "rules": "規則",
     "exclude": "排除",
-    "no_site": "沒有網站處理 {host}"
+    "no_site": "沒有網站處理 {host}",
+    "host": "主機",
+    "http_status": "HTTP 狀態碼",
+    "rule": "規則"
   },
   "cs": {
     "intro": "CrowdSec 讀取網站與 SSH 日誌，偵測攻擊（暴力破解、掃描、CVE 探測）並發出封鎖，由面板防火牆執行。",
@@ -1023,7 +1126,12 @@
     "alerts": "警報",
     "events": "事件數",
     "decision": "決定",
-    "community_empty": "社群黑名單目前是空的。CrowdSec 只會派發給有分享攻擊訊號的引擎，而本機尚未偵測到攻擊，沒有可分享的內容；偵測到攻擊後才會陸續收到。在此之前，可訂閱下方的公共惡意 IP 黑名單。"
+    "community_empty": "社群黑名單目前是空的。CrowdSec 只會派發給有分享攻擊訊號的引擎，而本機尚未偵測到攻擊，沒有可分享的內容；偵測到攻擊後才會陸續收到。在此之前，可訂閱下方的公共惡意 IP 黑名單。",
+    "local": "本機偵測",
+    "origin": "來源",
+    "message": "訊息",
+    "network": "網路",
+    "no_decision": "未封鎖"
   },
   "bk": {
     "tab_list": "備份檔",
@@ -1552,7 +1660,11 @@
       "auto_updates": "安裝 unattended-upgrades 並開啟自動安全更新？",
       "lock_empty": "鎖定沒有密碼的帳戶？",
       "chmod_web": "移除網站目錄所有檔案的「其他人可寫」權限？"
-    }
+    },
+    "detail": "詳情",
+    "how": "處理方法",
+    "how_route": "開啟相關頁面修改設定。",
+    "how_manual": "請在伺服器上檢查處理。"
   },
   "mw": {
     "scan": "掃描木馬",
@@ -1587,7 +1699,11 @@
       "php_in_image": "圖片內含 PHP 程式碼",
       "php_in_uploads": "上傳目錄的 PHP 檔",
       "clamav": "ClamAV：{sig}"
-    }
+    },
+    "rule": "規則",
+    "line_label": "行號",
+    "modified": "修改時間",
+    "snippet": "命中程式碼"
   },
   "tp": {
     "intro": "監看模式會記錄受保護檔案的每次變更，並可自動還原（新檔案會被移走）。鎖定模式讓檔案不可修改：PHP 甚至 root 都無法變更，直到規則關閉——更新網站前請先關閉。",
@@ -1630,7 +1746,8 @@
       "restored": "已還原",
       "removed": "已移走",
       "failed": "失敗"
-    }
+    },
+    "rule": "保護路徑"
   },
   "users": {
     "tab": "子使用者",
@@ -1842,7 +1959,22 @@
     "custom": "自訂名單（每行一個 IP 或 CIDR；一律啟用）",
     "name": "名稱",
     "add_custom": "加入名單網址",
-    "count": "封鎖中條目"
+    "count": "封鎖中條目",
+    "schedule": "排程任務",
+    "next": "下次 {at}",
+    "job_off": "已停用",
+    "no_job": "選取名單後自動建立",
+    "job_disabled": "排程任務已停用：名單不會更新，條目將過期。",
+    "selected_n": "已選",
+    "selected": "已選用",
+    "not_selected": "未選用",
+    "pending": "等待更新",
+    "failed": "失敗",
+    "about": "說明",
+    "state": "狀態",
+    "skipped_label": "略過（受保護）",
+    "error": "最近錯誤",
+    "custom_short": "自訂"
   },
   "fwtrust": {
     "title": "信任 IP 白名單（自動更新）",
@@ -2016,5 +2148,19 @@
     "score": "分數",
     "ttl_sec": "有效期（秒）",
     "ttl_hint": "0 即永久"
+  },
+  "apis": {
+    "tab": "API 憑證",
+    "intro": "面板使用的所有第三方 API 金鑰集中於此管理。金鑰加密儲存，儲存後不會再顯示。",
+    "set": "已設定",
+    "not_set": "未設定",
+    "open": "面板設定 · API 憑證",
+    "moved": "Cloudflare API Token 現在於「面板設定 → API 憑證」管理。",
+    "need_token": "請先加入 {name} API Token。",
+    "cf_used": "用於 DNS 記錄、DNS-01 憑證（萬用字元）與 Cloudflare 防火牆同步。",
+    "linode_used": "用於 Linode Cloud Firewall（安全 → 雲端同步）。",
+    "linode_hint": "Personal Access Token，權限：Firewalls 讀寫、Linodes 唯讀。儲存前會先驗證。",
+    "linode_ok": "Token 有效；本機為 Linode {name}",
+    "ai_used": "用於 AI 助手與各頁面的 AI 分析按鈕。"
   }
 }

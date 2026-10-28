@@ -2,14 +2,14 @@
 import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-  NButton, NCard, NCode, NDataTable, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NInputNumber, NModal, NPopconfirm,
+  NButton, NCard, NCheckbox, NCode, NDataTable, NDrawer, NDrawerContent, NDynamicTags, NForm, NFormItem, NInput, NInputNumber, NModal, NPopconfirm,
   NSelect, NSpace, NSwitch, NTag, NTimePicker, useMessage, type DataTableColumns,
 } from 'naive-ui'
 import { get, post, put, ApiError } from '../api/client'
 import { datetime } from '../format'
 
 interface Run { id: number; job_id: number; started_at: number; duration_ms: number; status: string; exit_code: number; output?: string; manual: boolean }
-interface Job { id: number; name: string; type: 'shell' | 'url' | 'logrotate' | 'backup'; schedule: string; command: string; enabled: boolean; timeout: number; next: number; running: boolean; last?: Run }
+interface Job { id: number; name: string; type: 'shell' | 'url' | 'logrotate' | 'backup' | 'system' | 'ip_feeds' | 'malware_scan'; schedule: string; command: string; enabled: boolean; timeout: number; next: number; running: boolean; last?: Run }
 
 const { t, locale } = useI18n()
 const msg = useMessage()
@@ -36,8 +36,8 @@ onBeforeUnmount(() => clearInterval(timer))
 
 // ---- schedule builder ----
 type Mode = 'seconds' | 'minutes' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'custom'
-interface Form { id: number; name: string; type: Job['type']; command: string; keep: number; enabled: boolean; timeout: number; mode: Mode; n: number; minute: number; time: number; dow: number; dom: number; custom: string }
-const blank = (): Form => ({ id: 0, name: '', type: 'shell', command: '', keep: 7, enabled: true, timeout: 3600, mode: 'daily', n: 5, minute: 0, time: 3 * 3600_000, dow: 1, dom: 1, custom: '0 3 * * *' })
+interface Form { id: number; name: string; type: Job['type']; command: string; keep: number; mwPaths: string[]; mwClam: boolean; enabled: boolean; timeout: number; mode: Mode; n: number; minute: number; time: number; dow: number; dom: number; custom: string }
+const blank = (): Form => ({ id: 0, name: '', type: 'shell', command: '', keep: 7, mwPaths: [], mwClam: false, enabled: true, timeout: 3600, mode: 'daily', n: 5, minute: 0, time: 3 * 3600_000, dow: 1, dom: 1, custom: '0 3 * * *' })
 const f = ref<Form | null>(null)
 const preview = ref<number[]>([])
 const previewErr = ref(false)
@@ -79,7 +79,11 @@ function openEdit(j: Job) {
   const x = blank()
   Object.assign(x, { id: j.id, name: j.name, type: j.type, enabled: j.enabled, timeout: j.timeout, mode: 'custom', custom: j.schedule })
   if (j.type === 'logrotate') x.keep = JSON.parse(j.command).keep ?? 7
-  else x.command = j.command
+  else if (j.type === 'malware_scan') {
+    const m = JSON.parse(j.command || '{}')
+    x.mwPaths = m.paths ?? []
+    x.mwClam = !!m.clamav
+  } else x.command = j.command
   f.value = x
 }
 function fromTemplate(kind: 'logrotate' | 'docker_prune' | 'apt') {
@@ -92,7 +96,8 @@ function fromTemplate(kind: 'logrotate' | 'docker_prune' | 'apt') {
 
 async function save() {
   const x = f.value!
-  const body = { name: x.name, type: x.type, schedule: schedule.value, command: x.type === 'logrotate' ? JSON.stringify({ keep: x.keep }) : x.command, enabled: x.enabled, timeout: x.timeout }
+  const command = x.type === 'logrotate' ? JSON.stringify({ keep: x.keep }) : x.type === 'malware_scan' ? JSON.stringify({ paths: x.mwPaths, clamav: x.mwClam }) : x.command
+  const body = { name: x.name, type: x.type, schedule: schedule.value, command, enabled: x.enabled, timeout: x.timeout }
   try {
     if (x.id) await put(`/cron/${x.id}`, body)
     else await post('/cron', body)
@@ -147,7 +152,7 @@ const dur = (ms: number) => (ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)}
 
 const columns: DataTableColumns<Job> = [
   { title: () => t('cron.name'), key: 'name', render: (j) => h('b', j.name) },
-  { title: () => t('cron.type'), key: 'type', width: 110, render: (j) => t(`cron.types.${j.type}`) },
+  { title: () => t('cron.type'), key: 'type', width: 200, render: (j) => typeLabel(j) },
   { title: () => t('cron.schedule'), key: 'schedule', width: 150, render: (j) => h('code', j.schedule) },
   { title: () => t('cron.next'), key: 'next', width: 170, render: (j) => (j.enabled && j.next ? datetime(j.next, locale.value) : '—') },
   {
@@ -185,7 +190,23 @@ const runCols: DataTableColumns<Run> = [
 
 const modeOptions = computed(() => (['seconds', 'minutes', 'hourly', 'daily', 'weekly', 'monthly', 'custom'] as Mode[]).map((m) => ({ label: t(`cron.modes.${m}`), value: m })))
 const dowOptions = computed(() => [0, 1, 2, 3, 4, 5, 6].map((d) => ({ label: new Intl.DateTimeFormat(locale.value, { weekday: 'long' }).format(new Date(2026, 0, 4 + d)), value: d })))
-const typeOptions = computed(() => (['shell', 'url', 'logrotate', 'backup'] as const).map((v) => ({ label: t(`cron.types.${v}`), value: v })))
+const typeOptions = computed(() => (['shell', 'url', 'logrotate', 'backup', 'system', 'ip_feeds', 'malware_scan'] as const).map((v) => ({ label: t(`cron.types.${v}`), value: v })))
+const systemOptions = computed(() => ['ssl_renew', 'time_sync', 'release_memory', 'security_scan'].map((v) => ({ label: t(`cron.sys.${v}`), value: v })))
+const feedOptions = computed(() => ['block', 'trust'].map((v) => ({ label: t(`cron.feeds.${v}`), value: v })))
+// What a built-in task does, next to its type in the list.
+function typeLabel(j: Job) {
+  const base = t(`cron.types.${j.type}`)
+  if (j.type === 'system') return `${base} · ${t(`cron.sys.${j.command}`)}`
+  if (j.type === 'ip_feeds') return `${base} · ${t(`cron.feeds.${j.command}`)}`
+  return base
+}
+watch(() => f.value?.type, (ty, old) => {
+  const x = f.value
+  if (!x || !old || ty === old) return
+  if (ty === 'system') x.command = 'ssl_renew'
+  else if (ty === 'ip_feeds') x.command = 'block'
+  else if (old === 'system' || old === 'ip_feeds') x.command = ''
+})
 </script>
 
 <template>
@@ -234,6 +255,16 @@ const typeOptions = computed(() => (['shell', 'url', 'logrotate', 'backup'] as c
         <n-form-item v-if="f.type === 'backup'" :label="t('cron.types.backup')" :feedback="t('bk.cron_hint')">
           <n-input v-model:value="f.command" type="textarea" :autosize="{ minRows: 3, maxRows: 8 }" style="font-family: monospace" placeholder='{"kind":"site","target":"*","dests":["local"],"keep":7}' />
         </n-form-item>
+        <n-form-item v-if="f.type === 'system'" :label="t('cron.task')" :feedback="t(`cron.sys_hint.${f.command}`)">
+          <n-select v-model:value="f.command" :options="systemOptions" />
+        </n-form-item>
+        <n-form-item v-if="f.type === 'ip_feeds'" :label="t('cron.task')" :feedback="t('cron.feeds_hint')">
+          <n-select v-model:value="f.command" :options="feedOptions" />
+        </n-form-item>
+        <template v-if="f.type === 'malware_scan'">
+          <n-form-item :label="t('cron.mw_paths')" :feedback="t('cron.mw_paths_hint')"><n-dynamic-tags v-model:value="f.mwPaths" /></n-form-item>
+          <n-checkbox v-model:checked="f.mwClam" style="margin-bottom: 12px">{{ t('cron.mw_clam') }}</n-checkbox>
+        </template>
         <n-form-item v-if="f.type === 'logrotate'" :label="t('cron.keep')" :feedback="t('cron.logrotate_hint')">
           <n-input-number v-model:value="f.keep" :min="1" :max="365" />
         </n-form-item>

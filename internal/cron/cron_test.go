@@ -157,3 +157,12 @@ func TestScheduled(t *testing.T) {
 		t.Error("disabled job still scheduled")
 	}
 }
+
+func TestFeedTTL(t *testing.T) {
+	if d := feedTTL("7 */6 * * *"); d != 13*time.Hour {
+		t.Fatalf("every 6h: %v", d)
+	}
+	if d := feedTTL("17 4 * * *"); d != 49*time.Hour {
+		t.Fatalf("daily: %v", d)
+	}
+}

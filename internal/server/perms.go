@@ -35,7 +35,7 @@ var moduleOf = map[string]string{
 	"logs":      "logs",
 	"probes":    "uptime",
 	"alerts":    "alerts",
-	"firewall":  "security", "crowdsec": "security", "waf": "security", "tamper": "security", "malware": "security", "secscan": "security",
+	"firewall":  "security", "security": "security", "crowdsec": "security", "waf": "security", "tamper": "security", "malware": "security", "secscan": "security",
 	"backups": "backup", "snapshots": "backup",
 	"toolbox": "toolbox",
 	"mail":    "mail",

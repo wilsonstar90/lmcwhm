@@ -22,6 +22,7 @@ var ErrNoToken = errors.New("linode.no_token")
 // Managed rule labels: lmcwhm only ever rewrites rules with these labels.
 const (
 	BlockLabel = "lmcwhm-block"
+	AllowLabel = "lmcwhm-allow"
 	PortsLabel = "lmcwhm-ports"
 	// MaxAddresses is Linode's limit of addresses per rule.
 	MaxAddresses = 255
@@ -232,21 +233,29 @@ func split(ips []string) Addresses {
 }
 
 // ApplyManaged rewrites lmcwhm's own inbound rules and leaves every other
-// rule as it is: a DROP rule for blocked addresses goes first (Linode stops
-// at the first matching rule), an optional ACCEPT rule for ports next.
+// rule as it is. Linode stops at the first matching rule, so they go first,
+// in the server's order: an ACCEPT rule (all ports) for allowed addresses,
+// a DROP rule for blocked ones, then an optional ACCEPT rule for ports.
 // Addresses beyond Linode's per-rule limit are returned as overflow.
-func ApplyManaged(r Rules, blocked []string, ports string) (Rules, []string) {
+func ApplyManaged(r Rules, blocked, allowed []string, ports string) (Rules, []string) {
 	var overflow []string
 	if len(blocked) > MaxAddresses {
 		blocked, overflow = blocked[:MaxAddresses], blocked[MaxAddresses:]
 	}
+	if len(allowed) > MaxAddresses {
+		overflow = append(overflow, allowed[MaxAddresses:]...)
+		allowed = allowed[:MaxAddresses]
+	}
 	var kept []Rule
 	for _, x := range r.Inbound {
-		if x.Label != BlockLabel && x.Label != PortsLabel {
+		if x.Label != BlockLabel && x.Label != PortsLabel && x.Label != AllowLabel {
 			kept = append(kept, x)
 		}
 	}
 	var head []Rule
+	if len(allowed) > 0 {
+		head = append(head, Rule{Action: "ACCEPT", Protocol: "TCP", Addresses: split(allowed), Label: AllowLabel, Description: "Allowed by lmcwhm"})
+	}
 	if len(blocked) > 0 {
 		// A Linode rule has one protocol; TCP carries every service the panel
 		// hosts. nftables on the server still drops all protocols.

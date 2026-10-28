@@ -8,6 +8,7 @@ import { get, post, ApiError } from '../api/client'
 import { datetime } from '../format'
 import TaskModal from './TaskModal.vue'
 import AiButton from './AiButton.vue'
+import DetailDrawer, { type DetailRow } from './DetailDrawer.vue'
 
 interface Finding { code: string; level: 'critical' | 'warning' | 'info'; category: string; value?: string; fix?: string; route?: string }
 interface Report { id: number; created_at: number; score: number; checks: number; findings: Finding[]; hostname: string; millis: number }
@@ -62,6 +63,18 @@ const counts = computed(() => {
   return c
 })
 
+const finding = ref<Finding | null>(null)
+const findingRows = computed<DetailRow[]>(() => {
+  const f = finding.value
+  if (!f) return []
+  return [
+    { label: t('scan.level'), value: t(`dash.level.${f.level}`) },
+    { label: t('scan.category'), value: t(`scan.cat.${f.category}`) },
+    { label: t('scan.finding'), value: riskText(f) },
+    { label: t('scan.detail'), value: f.value, mono: true },
+    { label: t('scan.how'), value: f.fix ? t(`scan.fix_confirm.${f.fix}`) : f.route ? t('scan.how_route') : t('scan.how_manual') },
+  ]
+})
 const cols = computed<DataTableColumns<Finding>>(() => [
   { title: () => t('scan.level'), key: 'level', width: 90, render: (f) => h(NTag, { size: 'small', type: levelType(f.level) }, () => t(`dash.level.${f.level}`)) },
   { title: () => t('scan.category'), key: 'category', width: 110, render: (f) => t(`scan.cat.${f.category}`) },
@@ -75,7 +88,7 @@ const cols = computed<DataTableColumns<Finding>>(() => [
     key: 'a',
     width: 140,
     render: (f) =>
-      h(NSpace, { size: 4 }, () => [
+      h(NSpace, { size: 4, onClick: (e: Event) => e.stopPropagation() }, () => [
         f.fix
           ? h(NPopconfirm, { onPositiveClick: () => fix(f) }, { trigger: () => h(NButton, { size: 'tiny', type: 'primary' }, () => t('scan.fix')), default: () => t(`scan.fix_confirm.${f.fix}`) })
           : null,
@@ -136,10 +149,19 @@ const aiPrompt = computed(() => (cur.value ? `${t('scan.ai_prompt')}\n${cur.valu
       </n-space>
     </n-card>
     <n-alert v-if="!cur.findings.length" type="success" :show-icon="false">{{ t('scan.clean') }}</n-alert>
-    <n-data-table v-else size="small" :columns="cols" :data="cur.findings" :row-key="(f: Finding) => f.code" />
+    <n-data-table v-else size="small" :columns="cols" :data="cur.findings" :row-key="(f: Finding) => f.code" :row-props="(f: Finding) => ({ style: 'cursor: pointer', onClick: () => (finding = f) })" />
     <p class="hint">{{ t('scan.weekly') }}</p>
   </template>
   <TaskModal :task-id="task?.id ?? null" :title="task?.title ?? ''" @close="task = null; load()" @done="load()" />
+  <DetailDrawer :show="!!finding" :title="finding ? riskText(finding) : ''" :rows="findingRows" @close="finding = null">
+    <template v-if="finding && (finding.fix || finding.route)" #actions>
+      <n-popconfirm v-if="finding.fix" @positive-click="fix(finding!); finding = null">
+        <template #trigger><n-button type="primary">{{ t('scan.fix') }}</n-button></template>
+        {{ t(`scan.fix_confirm.${finding.fix}`) }}
+      </n-popconfirm>
+      <n-button v-if="finding.route" @click="router.push({ name: finding!.route! })">{{ t('dash.fix') }} →</n-button>
+    </template>
+  </DetailDrawer>
 </template>
 
 <style scoped>

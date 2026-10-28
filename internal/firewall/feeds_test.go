@@ -60,13 +60,13 @@ func TestRefreshFeeds(t *testing.T) {
 	}
 	defer func() { fetch = fetchFeed }()
 
-	if err := sv.SaveFeeds(ctx, []string{"spamhaus_drop", "blocklist_de", "nope"}, nil, 6); err != ErrFeedUnknown {
+	if err := sv.SaveFeeds(ctx, []string{"spamhaus_drop", "blocklist_de", "nope"}, nil); err != ErrFeedUnknown {
 		t.Fatalf("unknown feed: %v", err)
 	}
-	if err := sv.SaveFeeds(ctx, []string{"spamhaus_drop", "blocklist_de"}, []Feed{{URL: "ftp://x"}}, 6); err != ErrFeedURL {
+	if err := sv.SaveFeeds(ctx, []string{"spamhaus_drop", "blocklist_de"}, []Feed{{URL: "ftp://x"}}); err != ErrFeedURL {
 		t.Fatalf("bad url: %v", err)
 	}
-	if err := sv.SaveFeeds(ctx, []string{"spamhaus_drop", "blocklist_de"}, nil, 6); err != nil {
+	if err := sv.SaveFeeds(ctx, []string{"spamhaus_drop", "blocklist_de"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := sv.RefreshFeeds(ctx); err != nil {
@@ -90,14 +90,14 @@ func TestRefreshFeeds(t *testing.T) {
 		t.Fatalf("after refresh %+v", f)
 	}
 	// Unsubscribing lifts the feed's blocks.
-	if err := sv.SaveFeeds(ctx, []string{"blocklist_de"}, nil, 6); err != nil {
+	if err := sv.SaveFeeds(ctx, []string{"blocklist_de"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if f = sv.Feeds(ctx); f.Blocking != 1 {
 		t.Fatalf("after unsubscribe %+v", f)
 	}
 	// A custom list is enabled without being named.
-	if err := sv.SaveFeeds(ctx, nil, []Feed{{URL: "https://example.com/l.txt"}}, 6); err != nil {
+	if err := sv.SaveFeeds(ctx, nil, []Feed{{URL: "https://example.com/l.txt"}}); err != nil {
 		t.Fatal(err)
 	}
 	if f = sv.Feeds(ctx); len(f.Enabled) != 1 || f.Enabled[0] != "custom1" || f.Custom[0].Name != "example.com" || f.Blocking != 0 {
@@ -121,7 +121,7 @@ func TestTrustFeeds(t *testing.T) {
 		return ParseFeed(strings.NewReader(lists[u]), guard)
 	}
 	defer func() { fetch = fetchFeed }()
-	if err := sv.SaveFeeds(ctx, []string{"cloudflare4"}, []Feed{{Name: "bl", URL: "https://bl.example/list"}}, 6); err != nil {
+	if err := sv.SaveFeeds(ctx, []string{"cloudflare4"}, []Feed{{Name: "bl", URL: "https://bl.example/list"}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := sv.RefreshFeeds(ctx); err != nil {

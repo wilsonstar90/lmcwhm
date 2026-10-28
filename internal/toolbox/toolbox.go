@@ -325,9 +325,16 @@ func (sv *Service) SetTime(ctx context.Context, tz string, ntp *bool) error {
 	return nil
 }
 
-// SyncTime restarts the NTP client, which steps the clock.
+// SyncTime makes the NTP client correct the clock now: systemd-timesyncd is
+// restarted (it steps the clock at start), or chrony told to step.
 func (sv *Service) SyncTime(ctx context.Context) error {
 	_, err := sv.Run(ctx, "systemctl", "restart", "systemd-timesyncd")
+	if err == nil {
+		return nil
+	}
+	if _, cerr := sv.Run(ctx, "chronyc", "makestep"); cerr == nil {
+		return nil
+	}
 	return err
 }
 

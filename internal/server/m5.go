@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/wilsonstar90/lmcwhm/internal/cfdns"
+	"github.com/wilsonstar90/lmcwhm/internal/cron"
 	"github.com/wilsonstar90/lmcwhm/internal/firewall"
 	"github.com/wilsonstar90/lmcwhm/internal/linode"
 	"github.com/wilsonstar90/lmcwhm/internal/netinfo"
@@ -35,6 +36,7 @@ func (s *Server) m5Routes(r chi.Router) {
 		r.Post("/firewall/linode/attach", s.handleLinodeAttach)
 		r.Get("/firewall/cloudflare", s.handleCFZones)
 		r.Post("/firewall/cloudflare/level", s.handleCFLevel)
+		r.Get("/security/overview", s.handleSecurityOverview)
 		r.Get("/firewall/feeds", s.handleFWFeeds)
 		r.Put("/firewall/feeds", s.handlePutFWFeeds)
 		r.Post("/firewall/feeds/refresh", s.handleFWFeedsRefresh)
@@ -211,27 +213,78 @@ func (s *Server) handleFWIPs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": out})
 }
 
+// feedsView is the lists with the scheduled task that updates each kind.
+type feedsView struct {
+	firewall.FeedConfig
+	Jobs map[string]*cron.Job `json:"jobs"`
+}
+
+func (s *Server) feedsView(ctx context.Context) feedsView {
+	v := feedsView{FeedConfig: s.Firewall.Feeds(ctx), Jobs: map[string]*cron.Job{}}
+	if s.Cron != nil {
+		if jobs, err := s.Cron.List(ctx); err == nil {
+			for i := range jobs {
+				if j := jobs[i]; j.Type == "ip_feeds" && v.Jobs[j.Command] == nil {
+					v.Jobs[j.Command] = &jobs[i]
+				}
+			}
+		}
+	}
+	return v
+}
+
 func (s *Server) handleFWFeeds(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.Firewall.Feeds(r.Context()))
+	writeJSON(w, http.StatusOK, s.feedsView(r.Context()))
+}
+
+// feedJobNames name the scheduled tasks created for the lists, per panel language.
+var feedJobNames = map[string]map[string]string{
+	"trust": {"en": "Trusted IP lists update", "zh-HK": "信任 IP 白名單自動更新", "zh-TW": "信任 IP 白名單自動更新", "zh-CN": "信任 IP 白名单自动更新", "ja": "信頼 IP リスト自動更新"},
+	"block": {"en": "Malicious IP blocklists update", "zh-HK": "公共惡意 IP 黑名單更新", "zh-TW": "公共惡意 IP 黑名單更新", "zh-CN": "公共恶意 IP 黑名单更新", "ja": "悪性 IP ブロックリスト更新"},
+}
+
+// feedJobSchedules: crawler and Cloudflare ranges change rarely, attackers fast.
+var feedJobSchedules = map[string]string{"trust": "17 4 * * *", "block": "7 */6 * * *"}
+
+// EnsureFeedJobs creates the scheduled task of each kind of list that has
+// lists selected and no task yet (also run at start, for older installs).
+func (s *Server) EnsureFeedJobs(ctx context.Context) {
+	if s.Cron == nil || s.Firewall == nil {
+		return
+	}
+	v := s.feedsView(ctx)
+	lang := s.Settings.Get().Language
+	for kind := range v.EnabledKinds() {
+		if v.Jobs[kind] != nil {
+			continue
+		}
+		name := feedJobNames[kind][lang]
+		if name == "" {
+			name = feedJobNames[kind]["en"]
+		}
+		if _, err := s.Cron.Create(ctx, cron.Input{Name: name, Type: "ip_feeds", Schedule: feedJobSchedules[kind], Command: kind, Enabled: true, Timeout: 1800}); err != nil {
+			s.Log.Error("feed job", "kind", kind, "err", err)
+		}
+	}
 }
 
 func (s *Server) handlePutFWFeeds(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Enabled []string        `json:"enabled"`
 		Custom  []firewall.Feed `json:"custom"`
-		Hours   int             `json:"hours"`
 	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	if err := s.Firewall.SaveFeeds(r.Context(), in.Enabled, in.Custom, in.Hours); err != nil {
+	if err := s.Firewall.SaveFeeds(r.Context(), in.Enabled, in.Custom); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 	s.auditCat(r, "security", "firewall.feeds", strings.Join(in.Enabled, ","))
+	s.EnsureFeedJobs(r.Context())
 	go s.Firewall.RefreshFeeds(context.Background())
-	writeJSON(w, http.StatusOK, s.Firewall.Feeds(r.Context()))
+	writeJSON(w, http.StatusOK, s.feedsView(r.Context()))
 }
 
 func (s *Server) handleFWFeedsRefresh(w http.ResponseWriter, r *http.Request) {

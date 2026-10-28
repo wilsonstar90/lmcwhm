@@ -176,7 +176,6 @@ func serveCmd() *cobra.Command {
 				}
 				crowdsec.Boot(ctx)
 			}()
-			go sites.RenewLoop(ctx, log.Info)
 
 			mon := monitor.New(a.st)
 			go mon.Run(ctx, log.Error)
@@ -189,6 +188,7 @@ func serveCmd() *cobra.Command {
 			bk := backup.New(a.st, box, a.paths.Home)
 			bk.WWWRoot, bk.Sites, bk.DBs, bk.Apps = env.WWWRoot, sites, dbs, apps
 			jobs.Backups = bk
+			jobs.Feeds = fw.RunFeeds
 			alerts := alert.New(a.st, box)
 			jobs.OnResult = func(j cron.Job, r cron.Run) {
 				if r.Status == "failed" || r.Status == "timeout" {
@@ -270,7 +270,7 @@ func serveCmd() *cobra.Command {
 				WebFS: web.FS(), Log: log, Sites: sites, Web: webCfg, Tasks: tm,
 				Apps: apps, DBs: dbs, Docker: dockermgr.New(tm, a.paths.Home),
 				Files: files.New(os.Getenv("LMCWHM_FILES_ROOT")), Term: terminal.New(),
-				Monitor: mon, Cron: jobs, GeoIP: geo, Firewall: fw, WAF: waf, CrowdSec: crowdsec, Backup: bk,
+				Store: a.st, Monitor: mon, Cron: jobs, GeoIP: geo, Firewall: fw, WAF: waf, CrowdSec: crowdsec, Backup: bk,
 				Tokens: apitoken.New(a.st), AI: ai.New(a.st, box, nil),
 				Alerts: alerts, Probes: probes, Stats: stats, Procs: procs, WP: wordpress.New(sites, dbs, env, tm), FTP: ftpSvc,
 				Toolbox: tb, SecScan: secscan.New(a.st), Malware: malware.New(a.st, env.WWWRoot, a.paths.Home), Tamper: tp,
@@ -282,7 +282,6 @@ func serveCmd() *cobra.Command {
 			fw.OnBlocksChanged = srv.SyncFirewall
 			tp.OnEvent = srv.TamperAlerts()
 			go tp.Boot(ctx)
-			go srv.SecScanLoop(ctx)
 			alerts.Src = srv.AlertSources()
 			go alerts.Run(ctx)
 			go func() {
@@ -291,7 +290,9 @@ func serveCmd() *cobra.Command {
 				}
 			}()
 			go crowdsec.Run(ctx, log.Error)
-			go fw.FeedLoop(ctx)
+			jobs.Tasks = srv
+			srv.EnsureFeedJobs(ctx)
+			srv.EnsureSystemJobs(ctx)
 			if err := server.WritePID(a.paths.PIDFile); err != nil {
 				return err
 			}

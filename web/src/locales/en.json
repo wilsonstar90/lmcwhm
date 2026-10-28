@@ -837,7 +837,10 @@
       "shell": "Shell script",
       "url": "URL request",
       "logrotate": "Log rotation",
-      "backup": "Backup"
+      "backup": "Backup",
+      "system": "Built-in task",
+      "ip_feeds": "IP lists update",
+      "malware_scan": "Webshell scan"
     },
     "status": {
       "running": "Running",
@@ -871,7 +874,28 @@
       "docker_prune": "Prune Docker images",
       "apt": "System updates"
     },
-    "run": "Run"
+    "run": "Run",
+    "task": "Task",
+    "sys": {
+      "ssl_renew": "Renew SSL certificates (Let's Encrypt / LiteSSL)",
+      "time_sync": "Sync server time",
+      "release_memory": "Release memory",
+      "security_scan": "Security scan"
+    },
+    "sys_hint": {
+      "ssl_renew": "Renews every website certificate that expires within 30 days.",
+      "time_sync": "Restarts the NTP client (systemd-timesyncd), which corrects the clock.",
+      "release_memory": "Writes caches to disk and drops the page cache; Linux refills it as files are read.",
+      "security_scan": "Runs the security scan and raises an alert on critical findings."
+    },
+    "feeds": {
+      "block": "Malicious IP blocklists",
+      "trust": "Trusted IP lists"
+    },
+    "feeds_hint": "Downloads the lists selected in Security → Auto-updated lists. Entries expire after two intervals if the task stops.",
+    "mw_paths": "Paths",
+    "mw_paths_hint": "Under the website root; empty = every website",
+    "mw_clam": "Also scan with ClamAV (slower)"
   },
   "sec": {
     "firewall": "Firewall",
@@ -879,7 +903,71 @@
     "cloud": "Linode / Cloudflare",
     "scan": "Security scan",
     "malware": "Webshell scan",
-    "tamper": "Tamper protection"
+    "tamper": "Tamper protection",
+    "on": "On",
+    "off": "Off",
+    "never": "Never run",
+    "not_installed": "Not installed",
+    "policy": {
+      "accept": "Allow by default",
+      "drop": "Deny by default"
+    },
+    "ov": {
+      "rules": "{n} port rules",
+      "manual": "Manual blocks",
+      "ips": "{allow} allowed · {bans} temporary bans",
+      "lists_on": "{n} lists",
+      "trusted": "{n} trusted ranges",
+      "synced": "Synced {at}",
+      "blocked_24h": "blocked in 24 hours",
+      "bans": "active bans",
+      "score": "Score",
+      "suspicious": "Suspicious files",
+      "tamper": "{n} changes in 24 hours"
+    },
+    "groups": {
+      "network": "Network",
+      "intrusion": "Intrusion",
+      "checks": "Checks"
+    },
+    "s": {
+      "firewall": {
+        "title": "Firewall",
+        "desc": "nftables on this server: default policy, ping and port rules."
+      },
+      "ips": {
+        "title": "IP lists",
+        "desc": "Addresses you allow or block by hand, and temporary bans. Click a row for details."
+      },
+      "lists": {
+        "title": "Auto-updated lists",
+        "desc": "Public malicious IP blocklists and trusted ranges (Cloudflare, crawlers), updated by scheduled tasks."
+      },
+      "cloud": {
+        "title": "Cloud sync",
+        "desc": "Push the manual block and allow lists to the Linode Cloud Firewall and Cloudflare."
+      },
+      "waf": {
+        "title": "WAF",
+        "desc": "ModSecurity with the OWASP Core Rule Set in front of every website."
+      },
+      "crowdsec": {
+        "title": "CrowdSec",
+        "desc": "Reads the website and SSH logs, detects attacks and bans the attackers."
+      },
+      "scan": {
+        "title": "Security scan",
+        "desc": "Checks SSH, accounts, updates, kernel settings, open ports and website permissions."
+      },
+      "malware": {
+        "title": "Webshell scan",
+        "desc": "Finds webshells and suspicious code in the websites; quarantine or ignore each file."
+      },
+      "tamper": {
+        "title": "Tamper protection",
+        "desc": "Locks website directories, or watches them and undoes changes."
+      }
+    }
   },
   "fw": {
     "title": "Server firewall (nftables)",
@@ -934,7 +1022,8 @@
     "sources": {
       "manual": "Manual",
       "crowdsec": "CrowdSec",
-      "waf": "WAF"
+      "waf": "WAF",
+      "mcp": "MCP / AI"
     },
     "expires": "Expires",
     "permanent": "Permanent",
@@ -974,7 +1063,18 @@
       "medium": "Medium",
       "high": "High",
       "under_attack": "I'm Under Attack!"
-    }
+    },
+    "added": "Added",
+    "cloud_sync": "Cloud sync",
+    "synced_yes": "Pushed to Linode / Cloudflare when sync is on",
+    "synced_no": "Server only (only permanent manual entries are synced)",
+    "lists_hint2": "Allowed addresses bypass every rule; blocked ones are dropped on all ports, Docker ports included. You cannot block your own address. Permanent entries added here are also the only ones synced to Linode / Cloudflare.",
+    "sync_scope": "Only the block and allow entries you add by hand (permanent ones) are pushed. Bans from CrowdSec, MCP and the public lists stay on this server: they change too often for the Linode and Cloudflare APIs.",
+    "linode_sync2": "Push the manual block and allow lists (lmcwhm-allow / lmcwhm-block rules, placed first)",
+    "cf_sync2": "Push the manual block and allow lists to every zone as IP Access Rules (note \"lmcwhm\")",
+    "cf_rules": "lmcwhm rules",
+    "last_sync": "Last sync {at}",
+    "never_synced": "Not synced yet. Turn on Linode or Cloudflare sync below; changes to the manual lists are pushed within seconds."
   },
   "waf": {
     "title": "Web application firewall",
@@ -1004,7 +1104,10 @@
     "detected": "Detected",
     "rules": "Rules",
     "exclude": "Exclude",
-    "no_site": "No website serves {host}"
+    "no_site": "No website serves {host}",
+    "host": "Host",
+    "http_status": "HTTP status",
+    "rule": "Rule"
   },
   "cs": {
     "intro": "CrowdSec reads website and SSH logs, detects attacks (brute force, scans, CVE probes) and issues bans, which the panel enforces in its firewall.",
@@ -1023,7 +1126,12 @@
     "alerts": "Alerts",
     "events": "Events",
     "decision": "Decision",
-    "community_empty": "The community blocklist is still empty. CrowdSec only sends it to engines that share signals, and this server has not detected an attack yet, so it has nothing to share. It fills in once attacks are detected. Until then, subscribe to the public blocklists below."
+    "community_empty": "The community blocklist is still empty. CrowdSec only sends it to engines that share signals, and this server has not detected an attack yet, so it has nothing to share. It fills in once attacks are detected. Until then, subscribe to the public blocklists below.",
+    "local": "This server",
+    "origin": "Source",
+    "message": "Message",
+    "network": "Network",
+    "no_decision": "No ban"
   },
   "bk": {
     "tab_list": "Backups",
@@ -1552,7 +1660,11 @@
       "auto_updates": "Install unattended-upgrades and turn on automatic security updates?",
       "lock_empty": "Lock the accounts that have no password?",
       "chmod_web": "Remove write permission for others from every file in the website folders?"
-    }
+    },
+    "detail": "Detail",
+    "how": "How to fix",
+    "how_route": "Open the related page and change the setting.",
+    "how_manual": "Review it on the server."
   },
   "mw": {
     "scan": "Scan for webshells",
@@ -1587,7 +1699,11 @@
       "php_in_image": "PHP code inside an image",
       "php_in_uploads": "PHP file in uploads",
       "clamav": "ClamAV: {sig}"
-    }
+    },
+    "rule": "Rule",
+    "line_label": "Line",
+    "modified": "Modified",
+    "snippet": "Matched code"
   },
   "tp": {
     "intro": "Watch mode reports every change to protected files and can undo it (new files are moved aside). Lock mode makes them immutable: nothing, not even PHP or root, can change them until the rule is off — turn it off before updating the site.",
@@ -1630,7 +1746,8 @@
       "restored": "restored",
       "removed": "moved aside",
       "failed": "failed"
-    }
+    },
+    "rule": "Protected path"
   },
   "users": {
     "tab": "Users",
@@ -1842,7 +1959,22 @@
     "custom": "Custom lists (one IP or CIDR per line; always on)",
     "name": "Name",
     "add_custom": "Add a list URL",
-    "count": "Blocked entries"
+    "count": "Blocked entries",
+    "schedule": "Scheduled task",
+    "next": "next {at}",
+    "job_off": "disabled",
+    "no_job": "created when you select a list",
+    "job_disabled": "The scheduled task is disabled: the lists are not updated and their entries will expire.",
+    "selected_n": "Selected",
+    "selected": "Selected",
+    "not_selected": "Not selected",
+    "pending": "Waiting",
+    "failed": "Failed",
+    "about": "About",
+    "state": "State",
+    "skipped_label": "Skipped (protected)",
+    "error": "Last error",
+    "custom_short": "Custom"
   },
   "fwtrust": {
     "title": "Trusted IPs (auto-updated)",
@@ -2016,5 +2148,19 @@
     "score": "Score",
     "ttl_sec": "Expires after (seconds)",
     "ttl_hint": "0 = never expires"
+  },
+  "apis": {
+    "tab": "API credentials",
+    "intro": "Every third-party API key the panel uses, in one place. Keys are stored encrypted and never shown again.",
+    "set": "Set",
+    "not_set": "Not set",
+    "open": "Panel settings · API credentials",
+    "moved": "The Cloudflare API token is now managed in Panel settings → API credentials.",
+    "need_token": "Add a {name} API token first.",
+    "cf_used": "Used for DNS records, DNS-01 certificates (wildcards) and Cloudflare firewall sync.",
+    "linode_used": "Used for the Linode Cloud Firewall (Security → Cloud sync).",
+    "linode_hint": "Personal access token with Firewalls: Read/Write and Linodes: Read. Saving checks it first.",
+    "linode_ok": "Token works; this server is Linode {name}",
+    "ai_used": "Used by the AI assistant and the AI analysis buttons."
   }
 }

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -1116,26 +1117,47 @@ func (sv *Service) UsesRuntime(ctx context.Context, app, version string) bool {
 
 // ---- renewal ----
 
-// RenewLoop renews ACME certificates that expire within 30 days, once a day.
-func (sv *Service) RenewLoop(ctx context.Context, log func(string, ...any)) {
-	t := time.NewTimer(2 * time.Minute)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-		}
-		all, err := sv.List(ctx)
-		if err == nil {
-			soon := time.Now().Add(30 * 24 * time.Hour).Unix()
-			for _, s := range all {
-				if s.SSLMode == "acme" && s.CertNotAfter > 0 && s.CertNotAfter < soon && !s.Stopped {
-					log("renewing certificate", "domain", s.Domain)
-					sv.IssueCert(ctx, s.ID, s.SSLChallenge, s.SSLWildcard)
-				}
-			}
-		}
-		t.Reset(24 * time.Hour)
+// RenewDue renews the ACME (Let's Encrypt / LiteSSL) certificates that
+// expire within 30 days (the "ssl_renew" scheduled task), logging to out.
+func (sv *Service) RenewDue(ctx context.Context, out io.Writer) error {
+	all, err := sv.List(ctx)
+	if err != nil {
+		return err
 	}
+	soon := time.Now().Add(30 * 24 * time.Hour).Unix()
+	var failed []string
+	n := 0
+	for _, s := range all {
+		if s.SSLMode != "acme" || s.Stopped {
+			continue
+		}
+		left := time.Until(time.Unix(s.CertNotAfter, 0)).Hours() / 24
+		if s.CertNotAfter > 0 && s.CertNotAfter >= soon {
+			fmt.Fprintf(out, "%s: valid for %.0f more days\n", s.Domain, left)
+			continue
+		}
+		n++
+		fmt.Fprintf(out, "%s: renewing (%.0f days left)\n", s.Domain, left)
+		challenge := acme.Challenge(s.SSLChallenge)
+		if challenge != "dns" {
+			challenge = "http"
+		}
+		site := s
+		err := sv.tasks.RunSync(ctx, func(ctx context.Context) error {
+			return sv.issue(ctx, &site, challenge, s.SSLWildcard, func(f string, a ...any) { fmt.Fprintf(out, "  "+f+"\n", a...) })
+		})
+		if err != nil {
+			failed = append(failed, s.Domain)
+			fmt.Fprintf(out, "%s: FAILED: %v\n", s.Domain, err)
+		} else {
+			fmt.Fprintf(out, "%s: renewed\n", s.Domain)
+		}
+	}
+	if n == 0 {
+		fmt.Fprintln(out, "no certificate is due (renewed 30 days before expiry)")
+	}
+	if len(failed) > 0 {
+		return fmt.Errorf("renewal failed: %s", strings.Join(failed, ", "))
+	}
+	return nil
 }

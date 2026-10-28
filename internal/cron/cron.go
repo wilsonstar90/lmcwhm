@@ -55,7 +55,7 @@ type Run struct {
 type Job struct {
 	ID        int64  `json:"id"`
 	Name      string `json:"name"`
-	Type      string `json:"type"` // shell | url | logrotate
+	Type      string `json:"type"` // shell | url | logrotate | backup | ip_feeds | system | malware_scan
 	Schedule  string `json:"schedule"`
 	Command   string `json:"command"`
 	Enabled   bool   `json:"enabled"`
@@ -78,9 +78,28 @@ type BackupRunner interface {
 	RunPlan(ctx context.Context, cmd string, jobID int64, out io.Writer) error
 }
 
+// FeedRunner executes "ip_feeds" jobs: kind is "trust" or "block"; entries
+// it writes live for ttl (about two schedule intervals).
+type FeedRunner func(ctx context.Context, kind string, ttl time.Duration, out io.Writer) error
+
+// FeedKinds are the commands of an "ip_feeds" job.
+var FeedKinds = map[string]bool{"trust": true, "block": true}
+
+// TaskRunner executes the panel's built-in task types: "system" (command:
+// ssl_renew, time_sync, release_memory, security_scan) and "malware_scan"
+// (command: JSON scan options).
+type TaskRunner interface {
+	ValidateTask(ctx context.Context, typ, cmd string) error
+	RunTask(ctx context.Context, typ, cmd string, out io.Writer) error
+}
+
 type Service struct {
+	// Tasks enables the "system" and "malware_scan" job types.
+	Tasks TaskRunner
 	// Backups enables the "backup" job type.
 	Backups BackupRunner
+	// Feeds enables the "ip_feeds" job type (public IP list updates).
+	Feeds FeedRunner
 	// OnResult is told about every finished run (alerts).
 	OnResult func(j Job, r Run)
 	st       *store.Store
@@ -218,6 +237,17 @@ func (sv *Service) validate(ctx context.Context, in *Input) error {
 			return ErrType
 		}
 		return sv.Backups.Validate(ctx, in.Command)
+	case "ip_feeds":
+		if sv.Feeds == nil || !FeedKinds[in.Command] {
+			return ErrCommand
+		}
+	case "system", "malware_scan":
+		if sv.Tasks == nil {
+			return ErrType
+		}
+		if err := sv.Tasks.ValidateTask(ctx, in.Type, in.Command); err != nil {
+			return ErrCommand
+		}
 	default:
 		return ErrType
 	}
@@ -490,8 +520,29 @@ func (sv *Service) dispatch(ctx context.Context, j Job, out io.Writer) (int, err
 		if sv.Backups != nil {
 			return 0, sv.Backups.RunPlan(ctx, j.Command, j.ID, out)
 		}
+	case "ip_feeds":
+		if sv.Feeds != nil {
+			return 0, sv.Feeds(ctx, j.Command, feedTTL(j.Schedule), out)
+		}
+	case "system", "malware_scan":
+		if sv.Tasks != nil {
+			return 0, sv.Tasks.RunTask(ctx, j.Type, j.Command, out)
+		}
 	}
 	return 0, ErrType
+}
+
+// feedTTL is two schedule intervals plus an hour: list entries survive one
+// failed run and expire when the job stops (disabled or deleted).
+func feedTTL(schedule string) time.Duration {
+	ttl := 13 * time.Hour
+	if s, err := parser.Parse(schedule); err == nil {
+		a := s.Next(time.Now())
+		if d := s.Next(a).Sub(a); d > 0 {
+			ttl = 2*d + time.Hour
+		}
+	}
+	return ttl
 }
 
 // runShell runs the script with bash as root in its own process group, so a

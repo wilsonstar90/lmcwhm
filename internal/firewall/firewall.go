@@ -92,7 +92,8 @@ type Service struct {
 	box *secrets.Box
 	// PanelPort returns the current panel port (protected under "drop").
 	PanelPort func() int
-	// OnBlocksChanged is called (debounced) after the permanent block list changes.
+	// OnBlocksChanged is called (debounced) after a manual permanent block or
+	// allow entry changes (what is synced to Linode / Cloudflare).
 	OnBlocksChanged func()
 	nft             string // nft binary ("" = not installed)
 
@@ -360,7 +361,7 @@ func (sv *Service) AddIP(ctx context.Context, ip, list string, ttl time.Duration
 			return x, err
 		}
 	}
-	if list == "block" && ttl == 0 {
+	if source == "manual" && ttl == 0 {
 		sv.blocksChanged()
 	}
 	return x, nil
@@ -368,7 +369,7 @@ func (sv *Service) AddIP(ctx context.Context, ip, list string, ttl time.Duration
 
 func (sv *Service) DeleteIP(ctx context.Context, id int64) error {
 	var x IP
-	err := sv.st.DB.QueryRowContext(ctx, `SELECT ip, list, expires_at FROM fw_ips WHERE id = ?`, id).Scan(&x.IP, &x.List, &x.ExpiresAt)
+	err := sv.st.DB.QueryRowContext(ctx, `SELECT ip, list, source, expires_at FROM fw_ips WHERE id = ?`, id).Scan(&x.IP, &x.List, &x.Source, &x.ExpiresAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
 	}
@@ -385,7 +386,7 @@ func (sv *Service) RemoveIP(ctx context.Context, ip, list string) error {
 		return err
 	}
 	var x IP
-	if sv.st.DB.QueryRowContext(ctx, `SELECT ip, list, expires_at FROM fw_ips WHERE ip = ? AND list = ?`, norm, list).Scan(&x.IP, &x.List, &x.ExpiresAt) != nil {
+	if sv.st.DB.QueryRowContext(ctx, `SELECT ip, list, source, expires_at FROM fw_ips WHERE ip = ? AND list = ?`, norm, list).Scan(&x.IP, &x.List, &x.Source, &x.ExpiresAt) != nil {
 		return nil
 	}
 	return sv.removeIP(ctx, x)
@@ -405,15 +406,17 @@ func (sv *Service) removeIP(ctx context.Context, x IP) error {
 			return err
 		}
 	}
-	if x.List == "block" && x.ExpiresAt == 0 {
+	if x.Source == "manual" && x.ExpiresAt == 0 {
 		sv.blocksChanged()
 	}
 	return nil
 }
 
-// PermanentBlocks lists the block list without temporary bans.
-func (sv *Service) PermanentBlocks(ctx context.Context) ([]string, error) {
-	rows, err := sv.st.DB.QueryContext(ctx, `SELECT ip FROM fw_ips WHERE list = 'block' AND expires_at = 0 ORDER BY id`)
+// ManualIPs lists the permanent entries of list ("block" or "allow") added
+// by hand in the panel: the only ones synced to Linode and Cloudflare (bans
+// from CrowdSec, MCP or the lists churn too fast for their APIs).
+func (sv *Service) ManualIPs(ctx context.Context, list string) ([]string, error) {
+	rows, err := sv.st.DB.QueryContext(ctx, `SELECT ip FROM fw_ips WHERE list = ? AND source = 'manual' AND expires_at = 0 ORDER BY id`, list)
 	if err != nil {
 		return nil, err
 	}

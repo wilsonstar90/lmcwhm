@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { h, onMounted, ref } from 'vue'
+import { computed, h, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   NAlert, NButton, NCard, NDataTable, NDynamicTags, NForm, NFormItem, NInput, NInputNumber, NRadioButton, NRadioGroup, NSelect,
@@ -8,6 +8,7 @@ import {
 import { get, patch, put, ApiError } from '../api/client'
 import { datetime } from '../format'
 import IpGeo from './IpGeo.vue'
+import DetailDrawer, { type DetailRow } from './DetailDrawer.vue'
 import TaskModal from './TaskModal.vue'
 import AiButton from './AiButton.vue'
 
@@ -83,6 +84,20 @@ const siteCols: DataTableColumns<SiteWAF> = [
   },
 ]
 const sevType = (sv: string) => (['EMERGENCY', 'ALERT', 'CRITICAL'].includes(sv) ? 'error' : sv === 'ERROR' || sv === 'WARNING' ? 'warning' : 'default')
+const ev = ref<Event | null>(null)
+const evRows = computed<DetailRow[]>(() => {
+  const e = ev.value
+  if (!e) return []
+  return [
+    { label: t('common.time'), value: e.time ? datetime(e.time, locale.value) : '' },
+    { label: t('common.ip'), value: () => h(IpGeo, { ip: e.ip }) },
+    { label: t('waf.host'), value: e.host },
+    { label: t('logs.request'), value: `${e.method} ${e.uri}`, mono: true },
+    { label: t('waf.http_status'), value: e.status },
+    { label: t('common.status'), value: e.blocked ? t('waf.blocked') : t('waf.detected') },
+    ...e.messages.map((m) => ({ label: `${t('waf.rule')} ${m.id}`, value: `[${m.severity}] ${m.message}${m.data ? `\n${m.data}` : ''}`, mono: true })),
+  ]
+})
 const evCols: DataTableColumns<Event> = [
   { title: () => t('common.time'), key: 'time', width: 170, render: (e) => (e.time ? datetime(e.time, locale.value) : '') },
   { title: () => t('common.ip'), key: 'ip', width: 270, render: (e) => h(IpGeo, { ip: e.ip }) },
@@ -144,9 +159,10 @@ const evCols: DataTableColumns<Event> = [
         <AiButton :prompt="t('ai.prompt_waf')" />
       </n-space>
     </template>
-    <n-data-table size="small" :columns="evCols" :data="events" :loading="loading" :pagination="{ pageSize: 20 }" :scroll-x="1200" />
+    <n-data-table size="small" :columns="evCols" :data="events" :loading="loading" :pagination="{ pageSize: 20 }" :row-props="(e: Event) => ({ style: 'cursor: pointer', onClick: () => (ev = e) })" :scroll-x="1200" />
   </n-card>
   <TaskModal :task-id="task?.id ?? null" :title="task?.title ?? ''" @close="task = null; load()" @done="load" />
+  <DetailDrawer :show="!!ev" :title="ev ? `${ev.method} ${ev.host}` : ''" :rows="evRows" :width="600" @close="ev = null" />
 </template>
 
 <style scoped>

@@ -8,6 +8,7 @@ import {
 } from 'naive-ui'
 import { get, post, put, ApiError } from '../api/client'
 import type { Site } from '../api/types'
+import DetailDrawer, { type DetailRow } from './DetailDrawer.vue'
 import { datetime } from '../format'
 
 interface Rule { id: number; site_id: number; path: string; mode: 'lock' | 'watch'; exts: string[]; exclude: string[]; restore: boolean; enabled: boolean; state: string; error?: string; files: number }
@@ -97,6 +98,18 @@ const cols = computed<DataTableColumns<Rule>>(() => [
       ]),
   },
 ])
+const ev = ref<Ev | null>(null)
+const evRows = computed<DetailRow[]>(() => {
+  const e = ev.value
+  if (!e) return []
+  return [
+    { label: t('common.time'), value: datetime(e.created_at, locale.value) },
+    { label: t('tp.file'), value: e.path, mono: true },
+    { label: t('tp.op'), value: t(`tp.ops.${e.op}`) },
+    { label: t('tp.action'), value: t(`tp.actions.${e.action}`) },
+    { label: t('tp.rule'), value: rules.value.find((r) => r.id === e.rule_id)?.path, mono: true },
+  ]
+})
 const evCols = computed<DataTableColumns<Ev>>(() => [
   { title: () => t('common.time'), key: 'created_at', width: 170, render: (e) => datetime(e.created_at, locale.value) },
   { title: () => t('tp.file'), key: 'path', ellipsis: { tooltip: true } },
@@ -110,7 +123,7 @@ const evCols = computed<DataTableColumns<Ev>>(() => [
   <n-space style="margin-bottom: 12px"><n-button type="primary" @click="openNew">{{ t('tp.new') }}</n-button></n-space>
   <n-data-table size="small" :columns="cols" :data="rules" :row-key="(r: Rule) => r.id" />
   <h4 style="margin: 20px 0 8px">{{ t('tp.events') }}</h4>
-  <n-data-table size="small" :columns="evCols" :data="events" :row-key="(e: Ev) => e.id" :max-height="360" />
+  <n-data-table size="small" :columns="evCols" :data="events" :row-key="(e: Ev) => e.id" :row-props="(e: Ev) => ({ style: 'cursor: pointer', onClick: () => (ev = e) })" :max-height="360" />
 
   <n-modal :show="!!f" @update:show="(v: boolean) => !v && (f = null)">
     <n-card v-if="f" :title="f.id ? t('common.edit') : t('tp.new')" style="width: min(620px, calc(100vw - 32px))" closable @close="f = null">
@@ -134,6 +147,7 @@ const evCols = computed<DataTableColumns<Ev>>(() => [
       </template>
     </n-card>
   </n-modal>
+  <DetailDrawer :show="!!ev" :title="ev?.path.split('/').pop() ?? ''" :rows="evRows" @close="ev = null" />
 </template>
 
 <style scoped>

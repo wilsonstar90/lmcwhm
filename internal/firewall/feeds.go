@@ -100,12 +100,14 @@ type FeedStatus struct {
 	Error   string `json:"error,omitempty"`
 }
 
+// FeedConfig is the selection; updates run as scheduled tasks ("ip_feeds"
+// cron jobs, one per kind), which also set how long entries live.
 type FeedConfig struct {
 	Enabled  []string              `json:"enabled"`
 	Custom   []Feed                `json:"custom"`
-	Hours    int                   `json:"hours"` // refresh interval
 	Status   map[string]FeedStatus `json:"status"`
 	LastRun  int64                 `json:"last_run"`
+	TTL      map[string]int64      `json:"ttl"` // seconds per kind, from the last scheduled run
 	Running  bool                  `json:"running"`
 	Catalog  []Feed                `json:"catalog,omitempty"`
 	Blocking int                   `json:"blocking"`
@@ -115,13 +117,13 @@ type FeedConfig struct {
 var feedMu sync.Mutex
 
 func (sv *Service) FeedConfig(ctx context.Context) FeedConfig {
-	c := FeedConfig{Hours: 6}
+	var c FeedConfig
 	var raw string
 	if sv.st.DB.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, feedsKey).Scan(&raw) == nil {
 		json.Unmarshal([]byte(raw), &c)
 	}
-	if c.Hours < 1 || c.Hours > 48 {
-		c.Hours = 6
+	if c.TTL == nil {
+		c.TTL = map[string]int64{}
 	}
 	if c.Status == nil {
 		c.Status = map[string]FeedStatus{}
@@ -160,9 +162,24 @@ func (c FeedConfig) all() []Feed {
 	return append(append([]Feed{}, FeedCatalog...), c.Custom...)
 }
 
+// EnabledKinds reports which kinds ("trust", "block") have lists selected.
+func (c FeedConfig) EnabledKinds() map[string]bool {
+	byID := map[string]string{}
+	for _, f := range c.all() {
+		byID[f.ID] = f.Kind
+	}
+	out := map[string]bool{}
+	for _, id := range c.Enabled {
+		if k := byID[id]; k != "" {
+			out[k] = true
+		}
+	}
+	return out
+}
+
 // SaveFeeds stores the selection (custom lists are always enabled); feeds no
 // longer enabled are lifted at once.
-func (sv *Service) SaveFeeds(ctx context.Context, enabled []string, custom []Feed, hours int) error {
+func (sv *Service) SaveFeeds(ctx context.Context, enabled []string, custom []Feed) error {
 	c := sv.FeedConfig(ctx)
 	seen := map[string]bool{}
 	var cus []Feed
@@ -200,9 +217,6 @@ func (sv *Service) SaveFeeds(ctx context.Context, enabled []string, custom []Fee
 			seen[id] = true
 			c.Enabled = append(c.Enabled, id)
 		}
-	}
-	if hours >= 1 && hours <= 48 {
-		c.Hours = hours
 	}
 	for id := range c.Status {
 		if !seen[id] {
@@ -349,59 +363,95 @@ func fetchFeed(ctx context.Context, u string, guard []netip.Prefix) ([]string, i
 // fetch is replaceable in tests.
 var fetch = fetchFeed
 
-// RefreshFeeds downloads every enabled feed and replaces its blocks; a feed
-// that fails keeps its previous entries until they expire.
+// defaultFeedTTL applies to an update made before any scheduled run.
+const defaultFeedTTL = 13 * time.Hour
+
+// RefreshFeeds updates every selected list now (after saving, "update now");
+// entries live as long as the last scheduled run of their kind set.
 func (sv *Service) RefreshFeeds(ctx context.Context) error {
-	if !feedMu.TryLock() {
-		return nil
+	c := sv.FeedConfig(ctx)
+	var errs []string
+	for kind := range c.EnabledKinds() {
+		ttl := time.Duration(c.TTL[kind]) * time.Second
+		if ttl <= 0 {
+			ttl = defaultFeedTTL
+		}
+		if err := sv.RunFeeds(ctx, kind, ttl, io.Discard); err != nil {
+			errs = append(errs, err.Error())
+		}
 	}
+	if len(errs) > 0 {
+		return errors.New(strings.Join(errs, "; "))
+	}
+	return nil
+}
+
+// RunFeeds downloads the selected lists of one kind and replaces their
+// entries (the "ip_feeds" scheduled task); a list that fails keeps its
+// previous entries until they expire. A line per list goes to out.
+func (sv *Service) RunFeeds(ctx context.Context, kind string, ttl time.Duration, out io.Writer) error {
+	feedMu.Lock()
 	defer feedMu.Unlock()
 	c := sv.FeedConfig(ctx)
+	if kind != KindTrust {
+		kind = KindBlock
+	}
+	c.TTL[kind] = int64(ttl / time.Second)
 	byID := map[string]Feed{}
 	for _, f := range c.all() {
 		byID[f.ID] = f
 	}
-	// Twice the interval plus slack: survives one failed download.
-	ttl := time.Duration(2*c.Hours)*time.Hour + time.Hour
-	total, changed := 0, false
 	// Trusted ranges need no guard here: the ruleset exempts them from drops,
 	// so a block CIDR that overlaps one is kept whole.
-	blockGuard := sv.protected(ctx)
+	guard := reserved
+	if kind == KindBlock {
+		guard = sv.protected(ctx)
+	}
+	// The other kind's entries count towards the limit too.
+	total := 0
+	sv.st.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM fw_ips WHERE source LIKE 'feed:%' AND list != ?`, kind).Scan(&total)
+	changed, failed, n := false, 0, 0
 	for _, id := range c.Enabled {
 		f, ok := byID[id]
-		if !ok {
+		if !ok || f.Kind != kind {
 			continue
 		}
-		guard := blockGuard
-		if f.Kind == KindTrust {
-			guard = reserved
-		}
+		n++
 		st := FeedStatus{LastRun: time.Now().Unix()}
 		entries, skipped, err := fetch(ctx, f.URL, guard)
 		if err == nil && len(entries) == 0 {
 			err = errors.New("no addresses in the list")
 		}
 		if err == nil && total+len(entries) > FeedMaxTotal {
-			err = fmt.Errorf("over the %d-entry limit for all feeds", FeedMaxTotal)
+			err = fmt.Errorf("over the %d-entry limit for all lists", FeedMaxTotal)
+		}
+		if err == nil {
+			err = sv.replaceFeed(ctx, kind, feedSourcePfx+id, f.Name, entries, ttl)
 		}
 		if err != nil {
-			prev := c.Status[id]
-			st.Entries, st.Error = prev.Entries, err.Error()
-			c.Status[id] = st
-			continue
+			failed++
+			st.Entries, st.Error = c.Status[id].Entries, err.Error()
+			fmt.Fprintf(out, "%s: FAILED: %v (previous entries kept)\n", f.Name, err)
+		} else {
+			total += len(entries)
+			st.Entries, st.Skipped = len(entries), skipped
+			changed = true
+			fmt.Fprintf(out, "%s: %d entries, %d skipped\n", f.Name, len(entries), skipped)
 		}
-		total += len(entries)
-		st.Entries, st.Skipped = len(entries), skipped
-		if err := sv.replaceFeed(ctx, f.Kind, feedSourcePfx+id, f.Name, entries, ttl); err != nil {
-			st.Error = err.Error()
-		}
-		changed = true
 		c.Status[id] = st
+	}
+	if n == 0 {
+		fmt.Fprintln(out, "no lists selected")
 	}
 	c.LastRun = time.Now().Unix()
 	sv.saveFeeds(ctx, c)
 	if changed {
-		return sv.applyBans(ctx)
+		if err := sv.applyBans(ctx); err != nil {
+			return err
+		}
+	}
+	if failed > 0 {
+		return fmt.Errorf("%d of %d lists failed", failed, n)
 	}
 	return nil
 }
@@ -429,23 +479,4 @@ func (sv *Service) replaceFeed(ctx context.Context, list, source, remark string,
 		}
 	}
 	return tx.Commit()
-}
-
-// FeedLoop refreshes the feeds on their interval.
-func (sv *Service) FeedLoop(ctx context.Context) {
-	t := time.NewTicker(5 * time.Minute)
-	defer t.Stop()
-	for {
-		c := sv.FeedConfig(ctx)
-		if len(c.Enabled) > 0 && time.Since(time.Unix(c.LastRun, 0)) >= time.Duration(c.Hours)*time.Hour {
-			if err := sv.RefreshFeeds(ctx); err != nil {
-				sv.logf("firewall feeds", "err", err)
-			}
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-		}
-	}
 }

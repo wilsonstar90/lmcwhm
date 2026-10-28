@@ -11,6 +11,8 @@ import type { CertInfo, PanelSettings, SSLMode } from '../api/types'
 import { LANGUAGES, setLang, type Lang } from '../i18n'
 import { useSession } from '../stores/session'
 import SettingsUsers from '../components/SettingsUsers.vue'
+import SettingsApi from '../components/SettingsApi.vue'
+import { useRoute } from 'vue-router'
 
 const { t } = useI18n()
 const msg = useMessage()
@@ -144,7 +146,7 @@ const langOptions = LANGUAGES.map((l) => ({ label: l.label, value: l.value }))
 </script>
 
 <template>
-  <n-tabs type="line" animated :default-value="session.user?.is_admin ? 'panel' : 'account'">
+  <n-tabs type="line" animated :default-value="(session.user?.is_admin && (useRoute().query.tab as string)) || (session.user?.is_admin ? 'panel' : 'account')">
     <n-tab-pane v-if="form" name="panel" :tab="t('settings.tab_panel')">
       <n-card size="small">
         <n-form label-placement="top" style="max-width: 560px">
@@ -262,6 +264,7 @@ const langOptions = LANGUAGES.map((l) => ({ label: l.label, value: l.value }))
       </n-card>
     </n-tab-pane>
 
+    <n-tab-pane v-if="session.user?.is_admin" name="api" :tab="t('apis.tab')" display-directive="show:lazy"><SettingsApi /></n-tab-pane>
     <n-tab-pane name="account" :tab="t('settings.tab_account')">
       <n-space vertical :size="16" style="max-width: 560px">
         <n-card size="small" :title="t('settings.change_username')">

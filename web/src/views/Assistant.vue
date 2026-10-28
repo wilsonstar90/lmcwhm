@@ -27,19 +27,8 @@ const tab = ref('chat')
 
 // ---- settings ----
 const cfg = ref<{ model: string; effort: string; base_url: string; has_key: boolean; default_model: string } | null>(null)
-const apiKey = ref('')
 async function loadCfg() {
   cfg.value = await get('/ai/config')
-}
-async function saveCfg(clear = false) {
-  try {
-    await put('/ai/config', { api_key: apiKey.value, model: cfg.value!.model, effort: cfg.value!.effort, base_url: cfg.value!.base_url, clear_key: clear })
-    apiKey.value = ''
-    msg.success(t('common.saved'))
-    loadCfg()
-  } catch (e) {
-    fail(e)
-  }
 }
 
 // ---- chat ----
@@ -63,7 +52,7 @@ async function send(text?: string) {
   } catch (e) {
     turns.value.pop()
     input.value = q
-    if (e instanceof ApiError && e.code === 'ai.no_key') tab.value = 'settings'
+    if (e instanceof ApiError && e.code === 'ai.no_key') router.push({ name: 'settings', query: { tab: 'api' } })
     fail(e)
   } finally {
     busy.value = false
@@ -138,7 +127,7 @@ onMounted(() => {
   <n-tabs v-model:value="tab" type="line" animated>
     <n-tab-pane name="chat" :tab="t('ai.tab_chat')">
       <n-alert v-if="cfg && !cfg.has_key" type="info" :show-icon="false" style="margin-bottom: 12px">
-        {{ t('ai.no_key') }} <n-button text type="primary" @click="tab = 'settings'">{{ t('ai.tab_settings') }} →</n-button>
+        {{ t('ai.no_key') }} <n-button text type="primary" @click="router.push({ name: 'settings', query: { tab: 'api' } })">{{ t('apis.open') }} →</n-button>
       </n-alert>
       <div ref="box" class="chat">
         <div v-if="!turns.length" class="empty">
@@ -189,27 +178,6 @@ onMounted(() => {
       <n-card v-if="info" size="small" :title="t('ai.tools', { n: info.tools.length })" style="margin-top: 16px">
         <n-data-table size="small" :columns="toolCols" :data="info.tools" :row-key="(x: Tool) => x.name" :max-height="420" />
         <p class="hint">{{ t('ai.prompts') }}: <code v-for="p in info.prompts" :key="p.name" style="margin-right: 8px">{{ p.name }}</code></p>
-      </n-card>
-    </n-tab-pane>
-
-    <n-tab-pane name="settings" :tab="t('ai.tab_settings')">
-      <n-card v-if="cfg" size="small" style="max-width: 640px">
-        <n-form label-placement="top">
-          <n-form-item :label="t('ai.api_key')" :feedback="t('ai.api_key_hint')">
-            <n-input v-model:value="apiKey" type="password" show-password-on="click" :placeholder="cfg.has_key ? t('fw.token_saved') : 'sk-ant-…'" />
-          </n-form-item>
-          <n-form-item :label="t('ai.model')" :feedback="t('ai.model_hint', { model: cfg.default_model })">
-            <n-select v-model:value="cfg.model" filterable tag :options="['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-fable-5-1'].map((m) => ({ label: m, value: m }))" />
-          </n-form-item>
-          <n-form-item :label="t('ai.effort')" :feedback="t('ai.effort_hint')">
-            <n-select v-model:value="cfg.effort" :options="['low', 'medium', 'high', 'xhigh', 'max'].map((v) => ({ label: v, value: v }))" style="width: 160px" />
-          </n-form-item>
-          <n-form-item :label="t('ai.base_url')" :feedback="t('ai.base_url_hint')"><n-input v-model:value="cfg.base_url" placeholder="https://api.anthropic.com" /></n-form-item>
-          <n-space>
-            <n-button type="primary" @click="saveCfg()">{{ t('common.save') }}</n-button>
-            <n-button v-if="cfg.has_key" type="error" quaternary @click="saveCfg(true)">{{ t('fw.forget') }}</n-button>
-          </n-space>
-        </n-form>
       </n-card>
     </n-tab-pane>
   </n-tabs>

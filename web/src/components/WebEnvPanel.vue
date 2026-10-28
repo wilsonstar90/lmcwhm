@@ -6,17 +6,18 @@ import {
 } from 'naive-ui'
 import { get, post, put, ApiError } from '../api/client'
 import type { WebConfig, WebStatus } from '../api/types'
+import { useRouter } from 'vue-router'
 import TaskModal from './TaskModal.vue'
 import VarnishCard from './VarnishCard.vue'
 
 const emit = defineEmits<{ changed: [] }>()
 const { t } = useI18n()
+const router = useRouter()
 const msg = useMessage()
 const fail = (e: unknown) => msg.error(e instanceof ApiError ? e.text : String(e))
 
 const status = ref<WebStatus | null>(null)
 const cfg = ref<WebConfig | null>(null)
-const cfToken = ref('')
 const eabHmac = ref('')
 const detected = ref<{ ipv4: string; ipv6: string } | null>(null)
 const saving = ref(false)
@@ -34,8 +35,8 @@ async function save(extra: Record<string, unknown> = {}) {
   if (!cfg.value) return
   saving.value = true
   try {
-    cfg.value = await put<WebConfig>('/web/config', { ...cfg.value, cf_token: cfToken.value, eab_hmac: eabHmac.value, ...extra })
-    cfToken.value = eabHmac.value = ''
+    cfg.value = await put<WebConfig>('/web/config', { ...cfg.value, eab_hmac: eabHmac.value, ...extra })
+    eabHmac.value = ''
     msg.success(t('common.saved'))
     emit('changed')
   } catch (e) {
@@ -43,11 +44,6 @@ async function save(extra: Record<string, unknown> = {}) {
   } finally {
     saving.value = false
   }
-}
-
-async function verifyCF() {
-  const r = await post<{ ok: boolean; error?: string }>('/web/cf/verify', { token: cfToken.value })
-  r.ok ? msg.success(t('web.cf_ok')) : msg.error(r.error ?? 'error')
 }
 
 async function install() {
@@ -92,21 +88,11 @@ const stateType = (s: string) => (s === 'running' ? 'success' : s ? 'warning' : 
     <n-grid v-if="cfg" cols="1 l:2" responsive="screen" :x-gap="16" :y-gap="16">
       <n-gi>
         <n-card size="small" title="Cloudflare">
-          <n-form label-placement="top">
-            <n-form-item :label="t('web.cf_token')" :feedback="t('web.cf_token_hint')">
-              <n-input
-                v-model:value="cfToken"
-                type="password"
-                show-password-on="click"
-                :placeholder="cfg.has_cf_token ? t('web.secret_set') : ''"
-              />
-            </n-form-item>
-            <n-space>
-              <n-button :loading="saving" type="primary" @click="save()">{{ t('common.save') }}</n-button>
-              <n-button :disabled="!cfToken && !cfg.has_cf_token" @click="verifyCF">{{ t('web.verify') }}</n-button>
-              <n-button v-if="cfg.has_cf_token" quaternary type="error" @click="save({ clear_cf_token: true })">{{ t('web.clear') }}</n-button>
-            </n-space>
-          </n-form>
+          <template #header-extra>
+            <n-tag size="small" :type="cfg.has_cf_token ? 'success' : 'default'">{{ cfg.has_cf_token ? t('apis.set') : t('apis.not_set') }}</n-tag>
+          </template>
+          <p class="hint" style="margin-top: 0">{{ t('apis.moved') }}</p>
+          <n-button size="small" style="margin-top: 8px" @click="router.push({ name: 'settings', query: { tab: 'api' } })">{{ t('apis.open') }} →</n-button>
         </n-card>
         <n-card size="small" :title="t('web.server_ip')" style="margin-top: 16px">
           <n-form label-placement="top">
