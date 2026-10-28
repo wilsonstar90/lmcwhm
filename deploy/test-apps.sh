@@ -345,25 +345,25 @@ task POST "/backups/$(bk_id volume lmcwhm-e2e-vol)/restore" '{}'
 # A scheduled backup is a cron job of type "backup".
 CJ="$(api POST /cron '{"name":"bk","type":"backup","schedule":"0 3 * * *","command":"{\"kind\":\"site\",\"target\":\"*\",\"dests\":[\"local\"],\"keep\":1}","enabled":true,"timeout":3600}' | jget "['id']")"
 api POST "/cron/$CJ/run" >/dev/null
-for _ in $(seq 1 60); do api GET "/cron/$CJ/runs" | grep -q '"status":"success"' && break; sleep 2; done
-api GET "/cron/$CJ/runs" | grep -q '"status":"success"' || { api GET "/cron/$CJ/runs"; fail "backup cron job"; }
+for _ in $(seq 1 60); do grep -q '"status":"success"' <<<"$(api GET "/cron/$CJ/runs")" && break; sleep 2; done
+grep -q '"status":"success"' <<<"$(api GET "/cron/$CJ/runs")" || { api GET "/cron/$CJ/runs"; fail "backup cron job"; }
 [[ "$(api GET '/backups?kind=site' | python3 -c "import sys,json; print(len([b for b in json.load(sys.stdin)['items'] if b['target']=='db.test']))")" == 1 ]] || fail "keep=1 did not prune"
-lmcwhm backup panel | grep -q "panel_" || fail "lmcwhm backup panel"
-lmcwhm backup list | grep -q panel || fail "lmcwhm backup list"
+grep -q "panel_" <<<"$(lmcwhm backup panel)" || fail "lmcwhm backup panel"
+grep -q panel <<<"$(lmcwhm backup list)" || fail "lmcwhm backup list"
 pass "backups: site, MariaDB, Docker volume and panel; restore; download; scheduled job with pruning"
 
 # ---------- M7: MCP ----------
 TOK="$(api POST /tokens '{"name":"ci","scope":"read","ips":[],"ttl_days":1}' | jget "['secret']")"
 mcp() { curl -sk -X POST "$P/mcp" -H "Authorization: Bearer $1" -H 'Content-Type: application/json' -d "$2"; }
-mcp "$TOK" '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' | grep -q '"protocolVersion":"2025-06-18"' || fail "mcp initialize"
-mcp "$TOK" '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | grep -q '"analyze_access_log"' || fail "mcp tools/list"
+grep -q '"protocolVersion":"2025-06-18"' <<<"$(mcp "$TOK" '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}')" || fail "mcp initialize"
+grep -q '"analyze_access_log"' <<<"$(mcp "$TOK" '{"jsonrpc":"2.0","id":2,"method":"tools/list"}')" || fail "mcp tools/list"
 for _ in 1 2 3; do get80 db.test /index.php >/dev/null; done
 mcp "$TOK" '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"analyze_access_log","arguments":{"domain":"db.test"}}}' | python3 -c "import sys,json; r=json.load(sys.stdin)['result']; assert not r.get('isError') and r['structuredContent']['requests']>0, r" || fail "mcp analyze_access_log"
-mcp "$TOK" '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"run_shell","arguments":{"command":"id"}}}' | grep -q '"isError":true' || fail "read token ran an admin tool"
+grep -q '"isError":true' <<<"$(mcp "$TOK" '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"run_shell","arguments":{"command":"id"}}}')" || fail "read token ran an admin tool"
 [[ "$(curl -sk -o /dev/null -w '%{http_code}' -X POST "$P/mcp" -d '{}')" == 404 ]] || fail "/mcp without a token is not hidden"
 out="$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run_shell","arguments":{"command":"echo e2e-$((6*7))"}}}' | lmcwhm mcp --stdio)"
 [[ "$out" == *e2e-42* ]] || fail "mcp --stdio: $out"
-curl -sk -b "$JAR" "$P/api/v1/mcp/skill" | grep -q "name: lmcwhm-ops" || fail "skill download"
+grep -q "name: lmcwhm-ops" <<<"$(curl -sk -b "$JAR" "$P/api/v1/mcp/skill")" || fail "skill download"
 pass "MCP: tokens, scopes, tools over HTTPS and stdio, skill"
 
 # ---------- M8 ----------
@@ -383,7 +383,7 @@ python3 /tmp/hook.py & HOOK=$!
 CH="$(api POST /alerts/channels '{"name":"hook","kind":"webhook","enabled":true,"config":{"url":"http://127.0.0.1:18192/"}}' | jget "['id']")"
 [[ "$(api POST "/alerts/channels/$CH/test" | jget "['ok']")" == True ]] || fail "alert channel test"
 grep -q "test notification" /tmp/hook.log || fail "test notification not delivered"
-api POST /alerts/rules "{\"name\":\"probes\",\"kind\":\"probe_down\",\"channels\":[$CH],\"enabled\":true}" | grep -q '"id"' || fail "alert rule"
+grep -q '"id"' <<<"$(api POST /alerts/rules "{\"name\":\"probes\",\"kind\":\"probe_down\",\"channels\":[$CH],\"enabled\":true}")" || fail "alert rule"
 grep -q "db.test" /etc/hosts || echo "127.0.0.1 db.test" >> /etc/hosts
 PR="$(api POST /probes '{"name":"db","type":"http","target":"http://db.test/index.php","keyword":"db-ok","interval":30,"fails":1,"enabled":true}' | jget "['id']")"
 [[ "$(api POST "/probes/$PR/check" | jget "['ok']")" == True ]] || fail "http probe"
@@ -395,7 +395,7 @@ api POST "/probes/$PD/delete" >/dev/null
 pass "alerts: webhook channel; uptime probes (HTTP keyword, TCP) raise probe_down"
 
 # Process guardian: a systemd service that is restarted when it dies.
-api POST /processes '{"name":"e2e-worker","command":"exec python3 -m http.server 18191 --bind 127.0.0.1","dir":"/tmp","user":"root","env":["A=1"]}' | grep -q '"state":"active"' || fail "process not active"
+grep -q '"state":"active"' <<<"$(api POST /processes '{"name":"e2e-worker","command":"exec python3 -m http.server 18191 --bind 127.0.0.1","dir":"/tmp","user":"root","env":["A=1"]}')" || fail "process not active"
 for _ in $(seq 1 20); do curl -s -o /dev/null http://127.0.0.1:18191/ && break; sleep 0.5; done
 curl -s -o /dev/null http://127.0.0.1:18191/ || fail "guarded process not serving"
 systemctl kill -s KILL lmcwhm-proc-e2e-worker.service
@@ -413,7 +413,7 @@ task PATCH "/sites/$DBSITE" '{"advanced":{"deny_ua":["BadBot"],"redirects":[{"fr
 [[ "$(curl -s -o /dev/null -w '%{http_code}' --resolve db.test:80:127.0.0.1 http://db.test/xmlrpc.php)" == 403 ]] || fail "xmlrpc not blocked"
 [[ "$(get80 db.test /index.php)" == "db-ok-42" ]] || fail "site broken by advanced settings"
 task PATCH "/sites/$DBSITE" '{"advanced":{}}'
-api GET "/sitestats?domain=db.test&days=7" | grep -q '"total"' || fail "site report"
+grep -q '"total"' <<<"$(api GET "/sitestats?domain=db.test&days=7")" || fail "site report"
 pass "website advanced settings: UA block, redirect, xmlrpc, rate limit"
 
 # Composer in the PHP image.
@@ -435,14 +435,14 @@ pass "WordPress: install with database and admin, WP-CLI info and checksum verif
 # SFTP (chrooted) and FTP accounts.
 command -v sshpass >/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq openssh-server sshpass >/dev/null
 systemctl start ssh 2>/dev/null || systemctl start sshd
-api POST /ftp/accounts '{"kind":"sftp","username":"e2esftp","password":"Sftp-pass-123","site_id":'"$DBSITE"'}' | grep -q '"id"' || fail "sftp account"
+grep -q '"id"' <<<"$(api POST /ftp/accounts '{"kind":"sftp","username":"e2esftp","password":"Sftp-pass-123","site_id":'"$DBSITE"'}')" || fail "sftp account"
 out="$(printf 'ls /site\n' | sshpass -p Sftp-pass-123 sftp -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oBatchMode=no e2esftp@127.0.0.1 2>&1)"
 [[ "$out" == *index.php* ]] || fail "sftp listing: $out"
-! sshpass -p Sftp-pass-123 ssh -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null e2esftp@127.0.0.1 id 2>/dev/null | grep -q uid || fail "sftp user got a shell"
+! grep -q uid <<<"$(sshpass -p Sftp-pass-123 ssh -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null e2esftp@127.0.0.1 id 2>/dev/null)" || fail "sftp user got a shell"
 task POST /ftp/enabled '{"on":true}'
-api POST /ftp/accounts '{"kind":"ftp","username":"e2eftp","password":"Ftp-pass-1234","site_id":'"$DBSITE"'}' | grep -q '"id"' || fail "ftp account"
-curl -s --user e2eftp:Ftp-pass-1234 ftp://127.0.0.1/ | grep -q index.php || fail "ftp listing"
-api GET /firewall | grep -q 'FTP (lmcwhm)' || fail "ftp firewall rule"
+grep -q '"id"' <<<"$(api POST /ftp/accounts '{"kind":"ftp","username":"e2eftp","password":"Ftp-pass-1234","site_id":'"$DBSITE"'}')" || fail "ftp account"
+grep -q index.php <<<"$(curl -s --user e2eftp:Ftp-pass-1234 ftp://127.0.0.1/)" || fail "ftp listing"
+grep -q 'FTP (lmcwhm)' <<<"$(api GET /firewall)" || fail "ftp firewall rule"
 task POST /ftp/enabled '{"on":false}'
 for a in $(api GET /ftp | python3 -c "import sys,json; print(' '.join(str(x['id']) for x in json.load(sys.stdin)['items']))"); do api POST "/ftp/accounts/$a/delete" >/dev/null; done
 ! id e2esftp >/dev/null 2>&1 || fail "sftp system user not removed"
