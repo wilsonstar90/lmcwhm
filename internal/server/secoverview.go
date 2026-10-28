@@ -4,9 +4,11 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/wilsonstar90/lmcwhm/internal/firewall"
+	"github.com/wilsonstar90/lmcwhm/internal/sitestats"
 )
 
 // The security page's overview: one tile per module with its state and a
@@ -143,4 +145,43 @@ func isFeed(x firewall.IP) bool { return strings.HasPrefix(x.Source, "feed:") }
 
 func (s *Server) handleSecurityOverview(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.securityOverview(r.Context()))
+}
+
+// ---- traffic overview ----
+
+// handleSecurityTraffic is the day's traffic across every website (?day=1
+// for yesterday); logs are read in first, at most every 30 seconds.
+func (s *Server) handleSecurityTraffic(w http.ResponseWriter, r *http.Request) {
+	if s.Stats == nil {
+		writeJSON(w, http.StatusOK, sitestats.Traffic{})
+		return
+	}
+	s.freshStats(r.Context())
+	var country func(string) string
+	if s.GeoIP != nil {
+		country = func(ip string) string { return s.GeoIP.Lookup(ip).Country }
+	}
+	writeJSON(w, http.StatusOK, s.Stats.Traffic(r.Context(), intParam(r, "day", 0, 1), country))
+}
+
+// handleSecurityLive is the last minute of requests and bandwidth.
+func (s *Server) handleSecurityLive(w http.ResponseWriter, r *http.Request) {
+	if s.Stats == nil || s.Stats.Sites == nil {
+		writeJSON(w, http.StatusOK, sitestats.Live{})
+		return
+	}
+	writeJSON(w, http.StatusOK, s.Stats.Live(r.Context(), s.Stats.Sites(r.Context())))
+}
+
+var statsMu sync.Mutex
+var statsAt time.Time
+
+func (s *Server) freshStats(ctx context.Context) {
+	statsMu.Lock()
+	defer statsMu.Unlock()
+	if time.Since(statsAt) < 30*time.Second {
+		return
+	}
+	statsAt = time.Now()
+	s.Stats.IngestAll(ctx, func(string, ...any) {})
 }

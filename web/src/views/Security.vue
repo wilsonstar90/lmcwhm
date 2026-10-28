@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { NMenu, NSelect, type MenuOption } from 'naive-ui'
 import { get } from '../api/client'
 import { datetime } from '../format'
+import SecTraffic from '../components/SecTraffic.vue'
 import SecFirewall from '../components/SecFirewall.vue'
 import SecIPs from '../components/SecIPs.vue'
 import SecLists from '../components/SecLists.vue'
@@ -32,15 +33,16 @@ interface Overview {
 const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const sections = ['firewall', 'ips', 'lists', 'cloud', 'waf', 'crowdsec', 'scan', 'malware', 'tamper'] as const
+const sections = ['overview', 'firewall', 'ips', 'lists', 'cloud', 'waf', 'crowdsec', 'scan', 'malware', 'tamper'] as const
 type Section = (typeof sections)[number]
 const groups: { key: string; items: Section[] }[] = [
+  { key: 'overview', items: ['overview'] },
   { key: 'network', items: ['firewall', 'ips', 'lists', 'cloud'] },
   { key: 'intrusion', items: ['waf', 'crowdsec'] },
   { key: 'checks', items: ['scan', 'malware', 'tamper'] },
 ]
 const initial = route.query.tab as Section
-const tab = ref<Section>(sections.includes(initial) ? initial : 'firewall')
+const tab = ref<Section>(sections.includes(initial) ? initial : 'overview')
 watch(tab, (v) => router.replace({ query: { ...route.query, tab: v } }))
 
 const o = ref<Overview | null>(null)
@@ -103,7 +105,7 @@ const menu = computed<MenuOption[]>(() =>
   })),
 )
 const flat = computed(() => groups.flatMap((g) => g.items.map((k) => ({ label: `${t(`sec.groups.${g.key}`)} · ${t(`sec.s.${k}.title`)}`, value: k }))))
-const comps = { firewall: SecFirewall, ips: SecIPs, lists: SecLists, cloud: SecCloud, waf: SecWAF, crowdsec: SecCrowdSec, scan: SecScan, malware: SecMalware, tamper: SecTamper }
+const comps = { overview: SecTraffic, firewall: SecFirewall, ips: SecIPs, lists: SecLists, cloud: SecCloud, waf: SecWAF, crowdsec: SecCrowdSec, scan: SecScan, malware: SecMalware, tamper: SecTamper }
 </script>
 
 <template>

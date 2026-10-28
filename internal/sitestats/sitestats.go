@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -55,6 +56,7 @@ type Service struct {
 	Sites  func(ctx context.Context) []string // domains
 	Loc    *time.Location
 	now    func() time.Time
+	mu     sync.Mutex
 }
 
 func New(st *store.Store, logDir string, loc *time.Location) *Service {
@@ -82,6 +84,9 @@ func (sv *Service) IngestAll(ctx context.Context, logf func(string, ...any)) {
 	if sv.Sites == nil {
 		return
 	}
+	// One reader at a time: two would both read from the same cursor.
+	sv.mu.Lock()
+	defer sv.mu.Unlock()
 	for _, d := range sv.Sites(ctx) {
 		if err := sv.Ingest(ctx, d); err != nil && logf != nil {
 			logf("site stats", "domain", d, "err", err)
@@ -92,7 +97,57 @@ func (sv *Service) IngestAll(ctx context.Context, logf func(string, ...any)) {
 	sv.st.DB.ExecContext(ctx, `DELETE FROM site_stats_keys WHERE day < ?`, cut)
 }
 
-type hourAgg struct{ pv, bytes, s2, s3, s4, s5, spider int64 }
+type hourAgg struct{ pv, bytes, s2, s3, s4, s5, spider, blocked int64 }
+
+// Blocked reports whether a status is a refusal by the WAF (403), a rate
+// limit (429) or nginx closing the connection (444, blocked user agents).
+func Blocked(status int) bool { return status == 403 || status == 429 || status == 444 }
+
+// Client names a user agent's browser and operating system.
+func Client(ua string) (browser, osName string) {
+	low := strings.ToLower(ua)
+	switch {
+	case ua == "" || ua == "-":
+		browser = "(none)"
+	case strings.Contains(low, "edg/"):
+		browser = "Edge"
+	case strings.Contains(low, "opr/") || strings.Contains(low, "opera"):
+		browser = "Opera"
+	case strings.Contains(low, "firefox/"):
+		browser = "Firefox"
+	case strings.Contains(low, "chrome/") || strings.Contains(low, "crios/"):
+		browser = "Chrome"
+	case strings.Contains(low, "safari/"):
+		browser = "Safari"
+	case strings.HasPrefix(low, "curl/"):
+		browser = "curl"
+	case strings.HasPrefix(low, "go-http-client"):
+		browser = "Go-http-client"
+	case strings.HasPrefix(low, "python"):
+		browser = "Python"
+	case strings.HasPrefix(low, "wget"):
+		browser = "Wget"
+	case strings.HasPrefix(low, "mozilla/"):
+		browser = "Mozilla"
+	default:
+		browser = "Other"
+	}
+	switch {
+	case strings.Contains(low, "android"):
+		osName = "Android"
+	case strings.Contains(low, "iphone") || strings.Contains(low, "ipad") || strings.Contains(low, "ios"):
+		osName = "iOS"
+	case strings.Contains(low, "windows"):
+		osName = "Windows"
+	case strings.Contains(low, "mac os x") || strings.Contains(low, "macintosh"):
+		osName = "macOS"
+	case strings.Contains(low, "linux") || strings.Contains(low, "x11"):
+		osName = "Linux"
+	default:
+		osName = "Other"
+	}
+	return
+}
 
 type keyAgg struct{ hits, bytes int64 }
 
@@ -179,6 +234,10 @@ func (sv *Service) Ingest(ctx context.Context, domain string) error {
 		case 5:
 			h.s5++
 		}
+		if Blocked(a.Status) {
+			h.blocked++
+			addKey(day, "blocked_ip", a.IP, a.Bytes)
+		}
 		if sp := spider(a.UA); sp != "" {
 			h.spider++
 			addKey(day, "spider", sp, a.Bytes)
@@ -191,6 +250,9 @@ func (sv *Service) Ingest(ctx context.Context, domain string) error {
 		}
 		addKey(day, "url", p, a.Bytes)
 		addKey(day, "status", strconv.Itoa(a.Status), a.Bytes)
+		browser, osName := Client(a.UA)
+		addKey(day, "browser", browser, 0)
+		addKey(day, "os", osName, 0)
 		if a.Referer != "" && a.Referer != "-" {
 			if u, err := url.Parse(a.Referer); err == nil && u.Host != "" && !strings.EqualFold(u.Hostname(), domain) {
 				addKey(day, "ref", strings.ToLower(u.Hostname()), 0)
@@ -203,10 +265,10 @@ func (sv *Service) Ingest(ctx context.Context, domain string) error {
 	}
 	defer tx.Rollback()
 	for hour, h := range hours {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO site_stats_hourly(domain, hour, pv, bytes, s2xx, s3xx, s4xx, s5xx, spider) VALUES(?,?,?,?,?,?,?,?,?)
+		if _, err := tx.ExecContext(ctx, `INSERT INTO site_stats_hourly(domain, hour, pv, bytes, s2xx, s3xx, s4xx, s5xx, spider, blocked) VALUES(?,?,?,?,?,?,?,?,?,?)
 			ON CONFLICT(domain, hour) DO UPDATE SET pv=pv+excluded.pv, bytes=bytes+excluded.bytes, s2xx=s2xx+excluded.s2xx, s3xx=s3xx+excluded.s3xx,
-			s4xx=s4xx+excluded.s4xx, s5xx=s5xx+excluded.s5xx, spider=spider+excluded.spider`,
-			domain, hour, h.pv, h.bytes, h.s2, h.s3, h.s4, h.s5, h.spider); err != nil {
+			s4xx=s4xx+excluded.s4xx, s5xx=s5xx+excluded.s5xx, spider=spider+excluded.spider, blocked=blocked+excluded.blocked`,
+			domain, hour, h.pv, h.bytes, h.s2, h.s3, h.s4, h.s5, h.spider, h.blocked); err != nil {
 			return err
 		}
 	}

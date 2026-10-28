@@ -928,7 +928,8 @@
     "groups": {
       "network": "ネットワーク",
       "intrusion": "侵入防御",
-      "checks": "チェック"
+      "checks": "チェック",
+      "overview": "概要"
     },
     "s": {
       "firewall": {
@@ -966,6 +967,10 @@
       "tamper": {
         "title": "改ざん防止",
         "desc": "サイトのディレクトリをロックするか、監視して変更を元に戻します。"
+      },
+      "overview": {
+        "title": "トラフィック概要",
+        "desc": "全サイト合計：リクエスト、遮断（WAF・レート制限・ブロック）、ライブ負荷、国別訪問者、クライアント、ステータスコード。"
       }
     }
   },
@@ -2162,5 +2167,42 @@
     "linode_hint": "Personal Access Token（Firewalls 読み書き、Linodes 読み取り）。保存前に確認します。",
     "linode_ok": "トークン有効。このサーバーは Linode {name}",
     "ai_used": "AI アシスタントと各ページの AI 分析ボタンで使います。"
+  },
+  "tr": {
+    "today": "今日",
+    "yesterday": "昨日",
+    "day": "日",
+    "cards": {
+      "requests": "リクエスト",
+      "blocked": "遮断",
+      "ips": "ユニーク IP",
+      "bytes": "転送量"
+    },
+    "prev": "前日同時刻：{n}",
+    "prev_day": "前日のリクエスト：{n}",
+    "share": "リクエストの {p}%",
+    "ips_sub": "訪問者（クローラー除く）",
+    "live_qps": "ライブ QPS：{v}/s",
+    "live_bw": "ライブ帯域：{v}/s",
+    "qps": "毎秒リクエスト",
+    "bandwidth": "帯域",
+    "hourly": "時間別リクエスト",
+    "map": "国別リクエスト",
+    "blocked_n": "遮断数",
+    "requests_n": "リクエスト",
+    "country": "国 / 地域",
+    "unknown": "不明",
+    "top_share": "リクエスト比",
+    "blocked_hint": "遮断の多いアドレス。クリックでファイアウォールでブロックできます。",
+    "visit_hint": "主な訪問者 IP の国（{n} リクエスト）。",
+    "clients": "クライアント",
+    "browsers": "ブラウザ",
+    "os": "OS",
+    "status": "ステータスコード",
+    "status_hint": "403・429・444 は遮断（WAF・レート制限・ブロックした UA）です。",
+    "block_day": "24 時間ブロック",
+    "block_forever": "無期限ブロック",
+    "block_confirm": "{ip} を全ポートで無期限ブロックしますか？",
+    "block_remark": "トラフィック概要から"
   }
 }

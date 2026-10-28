@@ -928,7 +928,8 @@
     "groups": {
       "network": "Network",
       "intrusion": "Intrusion",
-      "checks": "Checks"
+      "checks": "Checks",
+      "overview": "Overview"
     },
     "s": {
       "firewall": {
@@ -966,6 +967,10 @@
       "tamper": {
         "title": "Tamper protection",
         "desc": "Locks website directories, or watches them and undoes changes."
+      },
+      "overview": {
+        "title": "Traffic overview",
+        "desc": "Every website together: requests, intercepted requests (WAF, rate limits, blocked clients), live load, visitors by country, clients and status codes."
       }
     }
   },
@@ -2162,5 +2167,42 @@
     "linode_hint": "Personal access token with Firewalls: Read/Write and Linodes: Read. Saving checks it first.",
     "linode_ok": "Token works; this server is Linode {name}",
     "ai_used": "Used by the AI assistant and the AI analysis buttons."
+  },
+  "tr": {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "day": "Day",
+    "cards": {
+      "requests": "Requests",
+      "blocked": "Intercepted",
+      "ips": "Unique IPs",
+      "bytes": "Bandwidth"
+    },
+    "prev": "day before at this time: {n}",
+    "prev_day": "requests the day before: {n}",
+    "share": "{p}% of requests",
+    "ips_sub": "visitors, crawlers excluded",
+    "live_qps": "Live QPS: {v}/s",
+    "live_bw": "Live bandwidth: {v}/s",
+    "qps": "Requests per second",
+    "bandwidth": "Bandwidth",
+    "hourly": "Requests by hour",
+    "map": "Requests by country",
+    "blocked_n": "Intercepted",
+    "requests_n": "Requests",
+    "country": "Country",
+    "unknown": "Unknown",
+    "top_share": "Share of requests",
+    "blocked_hint": "Addresses whose requests were intercepted most; click one to block it in the firewall.",
+    "visit_hint": "Countries of the top visitor IPs ({n} requests).",
+    "clients": "Clients",
+    "browsers": "Browsers",
+    "os": "Systems",
+    "status": "Status codes",
+    "status_hint": "403, 429 and 444 are intercepted requests: WAF, rate limits and blocked user agents.",
+    "block_day": "Block for 24 hours",
+    "block_forever": "Block permanently",
+    "block_confirm": "Block {ip} on every port permanently?",
+    "block_remark": "from the traffic overview"
   }
 }

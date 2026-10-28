@@ -37,6 +37,8 @@ func (s *Server) m5Routes(r chi.Router) {
 		r.Get("/firewall/cloudflare", s.handleCFZones)
 		r.Post("/firewall/cloudflare/level", s.handleCFLevel)
 		r.Get("/security/overview", s.handleSecurityOverview)
+		r.Get("/security/traffic", s.handleSecurityTraffic)
+		r.Get("/security/live", s.handleSecurityLive)
 		r.Get("/firewall/feeds", s.handleFWFeeds)
 		r.Put("/firewall/feeds", s.handlePutFWFeeds)
 		r.Post("/firewall/feeds/refresh", s.handleFWFeedsRefresh)

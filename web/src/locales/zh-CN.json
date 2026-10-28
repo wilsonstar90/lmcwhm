@@ -928,7 +928,8 @@
     "groups": {
       "network": "网络防护",
       "intrusion": "入侵防护",
-      "checks": "安全检查"
+      "checks": "安全检查",
+      "overview": "总览"
     },
     "s": {
       "firewall": {
@@ -966,6 +967,10 @@
       "tamper": {
         "title": "防篡改",
         "desc": "锁定网站目录，或监控目录并还原改动。"
+      },
+      "overview": {
+        "title": "流量总览",
+        "desc": "所有网站合计：请求、拦截请求（WAF、限流、封锁客户端）、实时负载、访客地区、客户端和状态码。"
       }
     }
   },
@@ -2162,5 +2167,42 @@
     "linode_hint": "Personal Access Token，权限：Firewalls 读写、Linodes 只读。保存前会先验证。",
     "linode_ok": "Token 有效；本机为 Linode {name}",
     "ai_used": "用于 AI 助手和各页面的 AI 分析按钮。"
+  },
+  "tr": {
+    "today": "今天",
+    "yesterday": "昨天",
+    "day": "日期",
+    "cards": {
+      "requests": "请求数",
+      "blocked": "拦截请求",
+      "ips": "独立 IP",
+      "bytes": "流量"
+    },
+    "prev": "前一天此时：{n}",
+    "prev_day": "前一天总请求：{n}",
+    "share": "占请求 {p}%",
+    "ips_sub": "访客，不计爬虫",
+    "live_qps": "实时 QPS：{v}/s",
+    "live_bw": "实时流量：{v}/s",
+    "qps": "每秒请求",
+    "bandwidth": "流量",
+    "hourly": "每小时请求",
+    "map": "地区分布",
+    "blocked_n": "拦截数",
+    "requests_n": "请求数",
+    "country": "国家 / 地区",
+    "unknown": "未知",
+    "top_share": "占请求比例",
+    "blocked_hint": "被拦截最多的地址；点击可在防火墙封锁。",
+    "visit_hint": "主要访客 IP 的地区（{n} 个请求）。",
+    "clients": "客户端",
+    "browsers": "浏览器",
+    "os": "操作系统",
+    "status": "状态码",
+    "status_hint": "403、429 和 444 为拦截请求：WAF、限流和封锁的 User-Agent。",
+    "block_day": "封锁 24 小时",
+    "block_forever": "永久封锁",
+    "block_confirm": "在所有端口永久封锁 {ip}？",
+    "block_remark": "由流量总览封锁"
   }
 }

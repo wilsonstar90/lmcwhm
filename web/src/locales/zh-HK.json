@@ -928,7 +928,8 @@
     "groups": {
       "network": "網絡防護",
       "intrusion": "入侵防護",
-      "checks": "安全檢查"
+      "checks": "安全檢查",
+      "overview": "總覽"
     },
     "s": {
       "firewall": {
@@ -966,6 +967,10 @@
       "tamper": {
         "title": "防篡改",
         "desc": "鎖定網站目錄，或者監察目錄並還原改動。"
+      },
+      "overview": {
+        "title": "流量總覽",
+        "desc": "所有網站合計：請求、攔截請求（WAF、限流、封鎖客戶端）、即時負載、訪客地區、客戶端同狀態碼。"
       }
     }
   },
@@ -2162,5 +2167,42 @@
     "linode_hint": "Personal Access Token，權限：Firewalls 讀寫、Linodes 唯讀。儲存前會先驗證。",
     "linode_ok": "Token 有效；呢部機係 Linode {name}",
     "ai_used": "用於 AI 助手同各頁面嘅 AI 分析按鈕。"
+  },
+  "tr": {
+    "today": "今日",
+    "yesterday": "昨日",
+    "day": "日期",
+    "cards": {
+      "requests": "請求數",
+      "blocked": "攔截請求",
+      "ips": "獨立 IP",
+      "bytes": "流量"
+    },
+    "prev": "前一日此時：{n}",
+    "prev_day": "前一日總請求：{n}",
+    "share": "佔請求 {p}%",
+    "ips_sub": "訪客，唔計爬蟲",
+    "live_qps": "即時 QPS：{v}/s",
+    "live_bw": "即時流量：{v}/s",
+    "qps": "每秒請求",
+    "bandwidth": "流量",
+    "hourly": "每小時請求",
+    "map": "地區分佈",
+    "blocked_n": "攔截數",
+    "requests_n": "請求數",
+    "country": "國家 / 地區",
+    "unknown": "未知",
+    "top_share": "佔請求比例",
+    "blocked_hint": "被攔截最多嘅地址；撳一個可以喺防火牆封鎖佢。",
+    "visit_hint": "主要訪客 IP 嘅地區（{n} 個請求）。",
+    "clients": "客戶端",
+    "browsers": "瀏覽器",
+    "os": "作業系統",
+    "status": "狀態碼",
+    "status_hint": "403、429 同 444 係攔截請求：WAF、限流同封鎖嘅 User-Agent。",
+    "block_day": "封鎖 24 小時",
+    "block_forever": "永久封鎖",
+    "block_confirm": "喺所有端口永久封鎖 {ip}？",
+    "block_remark": "由流量總覽封鎖"
   }
 }
