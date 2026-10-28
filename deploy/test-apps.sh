@@ -217,6 +217,30 @@ code="$(api POST /terminal/ticket '{"password":"wrong"}' | jget "['code']")"
 [[ "$code" == auth.bad_password ]] || fail "terminal opened without the password: $code"
 pass "files: chunked upload, zip-slip blocked, recycle bin; terminal needs the password"
 
+# ---------- M4: monitor, cron, log center, IP geolocation ----------
+api GET '/monitor/series?range=15m' | python3 -c "import sys,json; p=json.load(sys.stdin)['items']; assert len(p)>=2 and 0<=p[-1]['cpu']<=100 and p[-1]['mem']>0, p[-3:]" || fail "monitor samples"
+api GET '/monitor/processes?n=5' | python3 -c "import sys,json; assert any(p['name']=='lmcwhm' for p in json.load(sys.stdin)['items'])" || fail "process list"
+api GET /monitor/services | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['docker'] and any(s['name']=='lmcwhm-haproxy' for s in d['items'])" || fail "services"
+JID="$(api POST /cron '{"name":"ci","type":"shell","schedule":"@yearly","command":"echo cron-ok; exit 4"}' | jget "['id']")"
+api POST "/cron/$JID/run" >/dev/null
+for _ in $(seq 1 20); do st="$(api GET "/cron/$JID/runs" | python3 -c "import sys,json; r=json.load(sys.stdin)['items']; print(r[0]['status'] if r else '')")"; [[ "$st" && "$st" != running ]] && break; sleep 1; done
+api GET "/cron/$JID/runs" | python3 -c "import sys,json; r=json.load(sys.stdin)['items'][0]; assert r['status']=='failed' and r['exit_code']==4 and 'cron-ok' in r['output'], r" || fail "cron run"
+curl -s --resolve db.test:80:127.0.0.1 http://db.test/index.php >/dev/null
+RID="$(api POST /cron '{"name":"rotate","type":"logrotate","schedule":"@daily","command":"{\"keep\":3}"}' | jget "['id']")"
+api POST "/cron/$RID/run" >/dev/null
+for _ in $(seq 1 20); do ls /www/wwwlogs/db.test.log.*.gz >/dev/null 2>&1 && break; sleep 1; done
+ls /www/wwwlogs/db.test.log.*.gz >/dev/null 2>&1 || fail "log rotation"
+curl -s --resolve db.test:80:127.0.0.1 http://db.test/after-rotate >/dev/null
+sleep 1
+api GET '/logs/site?domain=db.test&kind=access&lines=20' | python3 -c "import sys,json; i=json.load(sys.stdin)['items']; assert any(a['path']=='/after-rotate' and a['ip'] for a in i), i" \
+  || fail "access log parsed after rotation (nginx reopened)"
+api GET '/logs/ssh?limit=5' | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'items' in d" || fail "ssh log"
+api GET '/logs/journal?unit=lmcwhm&lines=20' | grep -q 'panel listening' || fail "panel journal"
+for _ in $(seq 1 60); do api GET /geoip/status | grep -q '"has_asn":true' && break; sleep 2; done
+api GET /geoip/status | grep -q '"edition":"country"' || fail "geoip database: $(api GET /geoip/status)"
+api POST /geoip/lookup '{"ips":["8.8.8.8","10.0.0.1"]}' | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['8.8.8.8']['country']=='US' and d['8.8.8.8']['asn']==15169 and d['10.0.0.1']['private'], d" || fail "geoip lookup"
+pass "M4: monitor, cron (shell + log rotation), site / SSH / journal logs, IP geolocation"
+
 # ---------- panel restart keeps projects and services ----------
 systemctl restart lmcwhm
 for _ in $(seq 1 30); do curl -sk -o /dev/null "$P/" && break; sleep 1; done

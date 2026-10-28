@@ -99,6 +99,7 @@ func (s *Server) handler() http.Handler {
 			if s.Files != nil {
 				s.fileRoutes(r)
 			}
+			s.m4Routes(r)
 			r.Get("/logs/login", s.handleLoginLogs)
 			r.Get("/logs/operation", s.handleOperationLogs)
 		})

@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -18,10 +19,13 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/audit"
 	"github.com/wilsonstar90/lmcwhm/internal/auth"
 	"github.com/wilsonstar90/lmcwhm/internal/config"
+	"github.com/wilsonstar90/lmcwhm/internal/cron"
 	"github.com/wilsonstar90/lmcwhm/internal/database"
 	"github.com/wilsonstar90/lmcwhm/internal/dockermgr"
 	"github.com/wilsonstar90/lmcwhm/internal/files"
+	"github.com/wilsonstar90/lmcwhm/internal/geoip"
 	"github.com/wilsonstar90/lmcwhm/internal/i18n"
+	"github.com/wilsonstar90/lmcwhm/internal/monitor"
 	"github.com/wilsonstar90/lmcwhm/internal/secrets"
 	"github.com/wilsonstar90/lmcwhm/internal/server"
 	"github.com/wilsonstar90/lmcwhm/internal/settings"
@@ -149,11 +153,24 @@ func serveCmd() *cobra.Command {
 			}()
 			go sites.RenewLoop(ctx, log.Info)
 
+			mon := monitor.New(a.st)
+			go mon.Run(ctx, log.Error)
+			loc, err := time.LoadLocation(a.settings.Get().Timezone)
+			if err != nil {
+				loc = time.Local
+			}
+			jobs := cron.New(a.st, env.WWWLogs, loc)
+			if err := jobs.Start(ctx); err != nil {
+				log.Error("cron", "err", err)
+			}
+			geo := geoip.New(filepath.Join(a.paths.Home, "geoip"))
+			go geo.RefreshLoop(ctx, log.Error)
 			srv, err := server.New(server.Deps{
 				Paths: a.paths, Settings: a.settings, Auth: a.auth, Audit: a.audit,
 				WebFS: web.FS(), Log: log, Sites: sites, Web: webCfg, Tasks: tm,
 				Apps: apps, DBs: database.New(a.st, box, apps, tm), Docker: dockermgr.New(tm, a.paths.Home),
 				Files: files.New(os.Getenv("LMCWHM_FILES_ROOT")), Term: terminal.New(),
+				Monitor: mon, Cron: jobs, GeoIP: geo,
 			})
 			if err != nil {
 				return err

@@ -21,7 +21,8 @@
     "done": "完成",
     "copied": "已复制",
     "copy": "复制",
-    "delete": "删除"
+    "delete": "删除",
+    "edit": "编辑"
   },
   "login": {
     "title": "登录面板",
@@ -112,7 +113,33 @@
     "tab_operation": "面板操作",
     "category": "分类",
     "action": "操作",
-    "reason": "原因"
+    "reason": "原因",
+    "tab_ssh": "SSH 登录",
+    "tab_site": "网站",
+    "tab_container": "容器",
+    "tab_system": "系统",
+    "tab_cron": "计划任务",
+    "search": "搜索",
+    "filter_kw": "关键字 / IP",
+    "filter_user_ip": "用户 / IP",
+    "download": "下载",
+    "clear": "清空",
+    "clear_confirm": "清空此日志文件？",
+    "access": "访问",
+    "error": "错误",
+    "request": "请求",
+    "size": "大小",
+    "no_sites": "没有网站",
+    "dblclick_ip": "双击一行即只显示该 IP。",
+    "unit_all": "整个系统",
+    "ssh": {
+      "accepted": "成功",
+      "failed": "失败",
+      "invalid": "用户不存在",
+      "method": "方式",
+      "failures": "失败次数",
+      "top": "登录失败最多"
+    }
   },
   "errors": {
     "auth": {
@@ -216,6 +243,22 @@
       "running": "已有更新或修复正在执行",
       "unsupported": "需要 systemd 服务器和 root（使用 install.sh 安装）",
       "up_to_date": "已是最新版本"
+    },
+    "cron": {
+      "not_found": "找不到任务",
+      "invalid_schedule": "执行周期无效",
+      "invalid_type": "任务类型无效",
+      "invalid_name": "请输入名称（最多 100 字）",
+      "invalid_command": "脚本 / URL / 设置无效",
+      "running": "任务正在执行",
+      "invalid_timeout": "超时：1 秒至 7 天"
+    },
+    "logs": {
+      "invalid_source": "未知日志",
+      "invalid_unit": "服务名称无效"
+    },
+    "geoip": {
+      "invalid_edition": "未知 IP 库"
     }
   },
   "task": {
@@ -573,5 +616,93 @@
     "done_version": "完成：当前运行 {v}。",
     "failed": "失败（exit {code}）；安装程序已回滚到之前版本，详见日志。",
     "reload": "重新加载页面"
+  },
+  "geo": {
+    "lan": "内网",
+    "none": "尚无 IP 库",
+    "status": "IP 库：{edition}（{date}）",
+    "editions": {
+      "country": "国家",
+      "city": "城市"
+    },
+    "use_city": "改用城市库（约 130 MB）",
+    "use_country": "改用国家库（约 18 MB）",
+    "downloading": "正在后台下载 IP 库…"
+  },
+  "monitor": {
+    "ranges": {
+      "15m": "15 分钟",
+      "1h": "1 小时",
+      "6h": "6 小时",
+      "24h": "24 小时",
+      "7d": "7 天",
+      "30d": "30 天"
+    },
+    "cpu_mem": "CPU / 内存",
+    "load1": "负载（1 分钟）",
+    "disk_io": "磁盘 I/O",
+    "read": "读取",
+    "write": "写入",
+    "processes": "资源占用最高的进程",
+    "process": "进程",
+    "command": "命令",
+    "services": "面板服务",
+    "disk_used": "磁盘 / 已用：{p}"
+  },
+  "cron": {
+    "create": "添加任务",
+    "name": "名称",
+    "type": "类型",
+    "schedule": "执行周期",
+    "next": "下次执行",
+    "last": "上次执行",
+    "enabled": "启用",
+    "run_now": "立即执行",
+    "history": "记录",
+    "delete_confirm": "删除任务 {name} 及其记录？",
+    "started": "已开始",
+    "duration": "耗时",
+    "trigger": "触发",
+    "manual": "手动",
+    "auto": "计划",
+    "output": "输出",
+    "view": "查看",
+    "types": {
+      "shell": "Shell 脚本",
+      "url": "访问 URL",
+      "logrotate": "日志切割"
+    },
+    "status": {
+      "running": "执行中",
+      "success": "成功",
+      "failed": "失败",
+      "timeout": "超时",
+      "skipped": "已跳过"
+    },
+    "modes": {
+      "seconds": "每 N 秒",
+      "minutes": "每 N 分钟",
+      "hourly": "每小时",
+      "daily": "每天",
+      "weekly": "每周",
+      "monthly": "每月",
+      "custom": "Cron 表达式"
+    },
+    "every": "每",
+    "unit_s": "秒",
+    "unit_m": "分钟",
+    "at_minute": "第几分钟",
+    "day": "日",
+    "preview": "之后",
+    "script": "脚本（bash，以 root 执行）",
+    "script_hint": "每次执行都会保留输出和退出码；上次尚未完成则跳过，不会重复执行。",
+    "keep": "保留份数",
+    "logrotate_hint": "压缩 /www/wwwlogs 中每个网站日志，并通知 nginx 重新打开。",
+    "timeout": "超时",
+    "tpl": {
+      "logrotate": "切割网站日志",
+      "docker_prune": "清理 Docker 镜像",
+      "apt": "系统更新"
+    }
   }
 }

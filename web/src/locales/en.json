@@ -21,7 +21,8 @@
     "done": "Done",
     "copied": "Copied",
     "copy": "Copy",
-    "delete": "Delete"
+    "delete": "Delete",
+    "edit": "Edit"
   },
   "login": {
     "title": "Sign in",
@@ -112,7 +113,33 @@
     "tab_operation": "Panel operations",
     "category": "Category",
     "action": "Action",
-    "reason": "Reason"
+    "reason": "Reason",
+    "tab_ssh": "SSH logins",
+    "tab_site": "Websites",
+    "tab_container": "Containers",
+    "tab_system": "System",
+    "tab_cron": "Cron",
+    "search": "Search",
+    "filter_kw": "Keyword / IP",
+    "filter_user_ip": "User / IP",
+    "download": "Download",
+    "clear": "Clear",
+    "clear_confirm": "Empty this log file?",
+    "access": "Access",
+    "error": "Error",
+    "request": "Request",
+    "size": "Size",
+    "no_sites": "No websites",
+    "dblclick_ip": "Double-click a row to show only that IP.",
+    "unit_all": "Whole system",
+    "ssh": {
+      "accepted": "Successful",
+      "failed": "Failed",
+      "invalid": "Unknown user",
+      "method": "Method",
+      "failures": "Failures",
+      "top": "Most failed logins"
+    }
   },
   "errors": {
     "auth": {
@@ -216,6 +243,22 @@
       "running": "An update or repair is already running",
       "unsupported": "Needs a systemd server and root (installed with install.sh)",
       "up_to_date": "Already on the latest version"
+    },
+    "cron": {
+      "not_found": "Job not found",
+      "invalid_schedule": "Invalid schedule",
+      "invalid_type": "Invalid job type",
+      "invalid_name": "Enter a name (max 100)",
+      "invalid_command": "Invalid script / URL / settings",
+      "running": "The job is already running",
+      "invalid_timeout": "Timeout: 1 second to 7 days"
+    },
+    "logs": {
+      "invalid_source": "Unknown log",
+      "invalid_unit": "Invalid unit name"
+    },
+    "geoip": {
+      "invalid_edition": "Unknown IP database"
     }
   },
   "task": {
@@ -573,5 +616,93 @@
     "done_version": "Finished: now running {v}.",
     "failed": "Failed (exit {code}); the installer rolled back to the previous version. See the log.",
     "reload": "Reload page"
+  },
+  "geo": {
+    "lan": "LAN",
+    "none": "No IP database yet",
+    "status": "IP database: {edition} ({date})",
+    "editions": {
+      "country": "country",
+      "city": "city"
+    },
+    "use_city": "Use city database (~130 MB)",
+    "use_country": "Use country database (~18 MB)",
+    "downloading": "Downloading the IP database in the background…"
+  },
+  "monitor": {
+    "ranges": {
+      "15m": "15 min",
+      "1h": "1 hour",
+      "6h": "6 hours",
+      "24h": "24 hours",
+      "7d": "7 days",
+      "30d": "30 days"
+    },
+    "cpu_mem": "CPU / memory",
+    "load1": "Load (1 min)",
+    "disk_io": "Disk I/O",
+    "read": "Read",
+    "write": "Write",
+    "processes": "Top processes",
+    "process": "Process",
+    "command": "Command",
+    "services": "Panel services",
+    "disk_used": "Disk / used: {p}"
+  },
+  "cron": {
+    "create": "Add job",
+    "name": "Name",
+    "type": "Type",
+    "schedule": "Schedule",
+    "next": "Next run",
+    "last": "Last run",
+    "enabled": "Enabled",
+    "run_now": "Run now",
+    "history": "History",
+    "delete_confirm": "Delete job {name} and its history?",
+    "started": "Started",
+    "duration": "Duration",
+    "trigger": "Trigger",
+    "manual": "Manual",
+    "auto": "Schedule",
+    "output": "Output",
+    "view": "View",
+    "types": {
+      "shell": "Shell script",
+      "url": "URL request",
+      "logrotate": "Log rotation"
+    },
+    "status": {
+      "running": "Running",
+      "success": "Success",
+      "failed": "Failed",
+      "timeout": "Timed out",
+      "skipped": "Skipped"
+    },
+    "modes": {
+      "seconds": "Every N seconds",
+      "minutes": "Every N minutes",
+      "hourly": "Hourly",
+      "daily": "Daily",
+      "weekly": "Weekly",
+      "monthly": "Monthly",
+      "custom": "Cron expression"
+    },
+    "every": "Every",
+    "unit_s": "seconds",
+    "unit_m": "minutes",
+    "at_minute": "at minute",
+    "day": "th day",
+    "preview": "Next",
+    "script": "Script (bash, runs as root)",
+    "script_hint": "Output and exit status are kept for each run; a run still going is skipped instead of starting twice.",
+    "keep": "Rotations to keep",
+    "logrotate_hint": "Gzips every website log in /www/wwwlogs and tells nginx to reopen them.",
+    "timeout": "Timeout",
+    "tpl": {
+      "logrotate": "Rotate website logs",
+      "docker_prune": "Prune Docker images",
+      "apt": "System updates"
+    }
   }
 }

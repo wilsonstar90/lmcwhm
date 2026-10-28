@@ -21,7 +21,8 @@
     "done": "完成",
     "copied": "已複製",
     "copy": "複製",
-    "delete": "刪除"
+    "delete": "刪除",
+    "edit": "編輯"
   },
   "login": {
     "title": "登入面板",
@@ -112,7 +113,33 @@
     "tab_operation": "面板操作",
     "category": "分類",
     "action": "操作",
-    "reason": "原因"
+    "reason": "原因",
+    "tab_ssh": "SSH 登入",
+    "tab_site": "網站",
+    "tab_container": "容器",
+    "tab_system": "系統",
+    "tab_cron": "計劃任務",
+    "search": "搜尋",
+    "filter_kw": "關鍵字 / IP",
+    "filter_user_ip": "用戶 / IP",
+    "download": "下載",
+    "clear": "清空",
+    "clear_confirm": "清空呢個日誌檔？",
+    "access": "訪問",
+    "error": "錯誤",
+    "request": "請求",
+    "size": "大小",
+    "no_sites": "冇網站",
+    "dblclick_ip": "雙擊一行就只顯示嗰個 IP。",
+    "unit_all": "成個系統",
+    "ssh": {
+      "accepted": "成功",
+      "failed": "失敗",
+      "invalid": "用戶不存在",
+      "method": "方式",
+      "failures": "失敗次數",
+      "top": "登入失敗最多"
+    }
   },
   "errors": {
     "auth": {
@@ -216,6 +243,22 @@
       "running": "已經有更新或修復進行緊",
       "unsupported": "需要 systemd 伺服器同 root（用 install.sh 安裝）",
       "up_to_date": "已經係最新版本"
+    },
+    "cron": {
+      "not_found": "搵唔到任務",
+      "invalid_schedule": "執行週期無效",
+      "invalid_type": "任務類型無效",
+      "invalid_name": "請輸入名稱（最多 100 字）",
+      "invalid_command": "腳本 / URL / 設定無效",
+      "running": "任務執行緊",
+      "invalid_timeout": "逾時：1 秒至 7 日"
+    },
+    "logs": {
+      "invalid_source": "未知日誌",
+      "invalid_unit": "服務名稱無效"
+    },
+    "geoip": {
+      "invalid_edition": "未知 IP 庫"
     }
   },
   "task": {
@@ -573,5 +616,93 @@
     "done_version": "完成：而家運行緊 {v}。",
     "failed": "失敗（exit {code}）；安裝程式已回滾到之前版本，詳情睇日誌。",
     "reload": "重新載入頁面"
+  },
+  "geo": {
+    "lan": "內網",
+    "none": "未有 IP 庫",
+    "status": "IP 庫：{edition}（{date}）",
+    "editions": {
+      "country": "國家",
+      "city": "城市"
+    },
+    "use_city": "改用城市庫（約 130 MB）",
+    "use_country": "改用國家庫（約 18 MB）",
+    "downloading": "背景下載緊 IP 庫…"
+  },
+  "monitor": {
+    "ranges": {
+      "15m": "15 分鐘",
+      "1h": "1 小時",
+      "6h": "6 小時",
+      "24h": "24 小時",
+      "7d": "7 日",
+      "30d": "30 日"
+    },
+    "cpu_mem": "CPU / 記憶體",
+    "load1": "負載（1 分鐘）",
+    "disk_io": "磁碟 I/O",
+    "read": "讀取",
+    "write": "寫入",
+    "processes": "資源用得最多嘅進程",
+    "process": "進程",
+    "command": "命令",
+    "services": "面板服務",
+    "disk_used": "磁碟 / 已用：{p}"
+  },
+  "cron": {
+    "create": "新增任務",
+    "name": "名稱",
+    "type": "類型",
+    "schedule": "執行週期",
+    "next": "下次執行",
+    "last": "上次執行",
+    "enabled": "啟用",
+    "run_now": "立即執行",
+    "history": "記錄",
+    "delete_confirm": "刪除任務 {name} 同佢嘅記錄？",
+    "started": "已開始",
+    "duration": "耗時",
+    "trigger": "觸發",
+    "manual": "手動",
+    "auto": "排程",
+    "output": "輸出",
+    "view": "查看",
+    "types": {
+      "shell": "Shell 腳本",
+      "url": "訪問 URL",
+      "logrotate": "日誌切割"
+    },
+    "status": {
+      "running": "執行中",
+      "success": "成功",
+      "failed": "失敗",
+      "timeout": "逾時",
+      "skipped": "已略過"
+    },
+    "modes": {
+      "seconds": "每 N 秒",
+      "minutes": "每 N 分鐘",
+      "hourly": "每小時",
+      "daily": "每日",
+      "weekly": "每星期",
+      "monthly": "每月",
+      "custom": "Cron 表達式"
+    },
+    "every": "每",
+    "unit_s": "秒",
+    "unit_m": "分鐘",
+    "at_minute": "第幾分鐘",
+    "day": "號",
+    "preview": "之後",
+    "script": "腳本（bash，以 root 執行）",
+    "script_hint": "每次執行都會保留輸出同退出碼；上次未完成會略過，唔會重複執行。",
+    "keep": "保留份數",
+    "logrotate_hint": "將 /www/wwwlogs 入面每個網站日誌壓縮，再通知 nginx 重新開啟。",
+    "timeout": "逾時",
+    "tpl": {
+      "logrotate": "切割網站日誌",
+      "docker_prune": "清理 Docker 映像",
+      "apt": "系統更新"
+    }
   }
 }

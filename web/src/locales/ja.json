@@ -21,7 +21,8 @@
     "done": "完了",
     "copied": "コピーしました",
     "copy": "コピー",
-    "delete": "削除"
+    "delete": "削除",
+    "edit": "編集"
   },
   "login": {
     "title": "ログイン",
@@ -112,7 +113,33 @@
     "tab_operation": "操作ログ",
     "category": "分類",
     "action": "操作",
-    "reason": "理由"
+    "reason": "理由",
+    "tab_ssh": "SSH ログイン",
+    "tab_site": "サイト",
+    "tab_container": "コンテナ",
+    "tab_system": "システム",
+    "tab_cron": "スケジュール",
+    "search": "検索",
+    "filter_kw": "キーワード / IP",
+    "filter_user_ip": "ユーザー / IP",
+    "download": "ダウンロード",
+    "clear": "クリア",
+    "clear_confirm": "このログファイルを空にしますか？",
+    "access": "アクセス",
+    "error": "エラー",
+    "request": "リクエスト",
+    "size": "サイズ",
+    "no_sites": "サイトなし",
+    "dblclick_ip": "行をダブルクリックするとその IP のみ表示します。",
+    "unit_all": "システム全体",
+    "ssh": {
+      "accepted": "成功",
+      "failed": "失敗",
+      "invalid": "存在しないユーザー",
+      "method": "方式",
+      "failures": "失敗回数",
+      "top": "ログイン失敗の多い IP"
+    }
   },
   "errors": {
     "auth": {
@@ -216,6 +243,22 @@
       "running": "更新または修復が既に実行中です",
       "unsupported": "systemd と root が必要です（install.sh でインストール）",
       "up_to_date": "既に最新バージョンです"
+    },
+    "cron": {
+      "not_found": "ジョブが見つかりません",
+      "invalid_schedule": "スケジュールが無効です",
+      "invalid_type": "ジョブの種類が無効です",
+      "invalid_name": "名前を入力してください（最大 100 文字）",
+      "invalid_command": "スクリプト / URL / 設定が無効です",
+      "running": "ジョブは実行中です",
+      "invalid_timeout": "タイムアウト: 1 秒〜7 日"
+    },
+    "logs": {
+      "invalid_source": "不明なログ",
+      "invalid_unit": "ユニット名が無効です"
+    },
+    "geoip": {
+      "invalid_edition": "不明な IP データベース"
     }
   },
   "task": {
@@ -573,5 +616,93 @@
     "done_version": "完了: {v} で稼働中です。",
     "failed": "失敗しました（exit {code}）。インストーラーは以前のバージョンに戻しました。ログを確認してください。",
     "reload": "ページを再読み込み"
+  },
+  "geo": {
+    "lan": "LAN",
+    "none": "IP データベースなし",
+    "status": "IP データベース: {edition}（{date}）",
+    "editions": {
+      "country": "国",
+      "city": "都市"
+    },
+    "use_city": "都市データベースを使う（約 130 MB）",
+    "use_country": "国データベースを使う（約 18 MB）",
+    "downloading": "IP データベースをバックグラウンドでダウンロード中…"
+  },
+  "monitor": {
+    "ranges": {
+      "15m": "15 分",
+      "1h": "1 時間",
+      "6h": "6 時間",
+      "24h": "24 時間",
+      "7d": "7 日",
+      "30d": "30 日"
+    },
+    "cpu_mem": "CPU / メモリ",
+    "load1": "負荷（1 分）",
+    "disk_io": "ディスク I/O",
+    "read": "読み取り",
+    "write": "書き込み",
+    "processes": "リソース使用量の多いプロセス",
+    "process": "プロセス",
+    "command": "コマンド",
+    "services": "パネルのサービス",
+    "disk_used": "ディスク / 使用率: {p}"
+  },
+  "cron": {
+    "create": "ジョブを追加",
+    "name": "名前",
+    "type": "種類",
+    "schedule": "スケジュール",
+    "next": "次回実行",
+    "last": "前回実行",
+    "enabled": "有効",
+    "run_now": "今すぐ実行",
+    "history": "履歴",
+    "delete_confirm": "ジョブ {name} と履歴を削除しますか？",
+    "started": "開始しました",
+    "duration": "所要時間",
+    "trigger": "起動",
+    "manual": "手動",
+    "auto": "スケジュール",
+    "output": "出力",
+    "view": "表示",
+    "types": {
+      "shell": "シェルスクリプト",
+      "url": "URL アクセス",
+      "logrotate": "ログローテーション"
+    },
+    "status": {
+      "running": "実行中",
+      "success": "成功",
+      "failed": "失敗",
+      "timeout": "タイムアウト",
+      "skipped": "スキップ"
+    },
+    "modes": {
+      "seconds": "N 秒ごと",
+      "minutes": "N 分ごと",
+      "hourly": "毎時",
+      "daily": "毎日",
+      "weekly": "毎週",
+      "monthly": "毎月",
+      "custom": "cron 式"
+    },
+    "every": "",
+    "unit_s": "秒ごと",
+    "unit_m": "分ごと",
+    "at_minute": "分",
+    "day": "日",
+    "preview": "次回",
+    "script": "スクリプト（bash、root で実行）",
+    "script_hint": "実行ごとに出力と終了コードを保存します。前回が実行中ならスキップし、重複実行しません。",
+    "keep": "保持数",
+    "logrotate_hint": "/www/wwwlogs のサイトログを gzip 圧縮し、nginx にファイルを開き直させます。",
+    "timeout": "タイムアウト",
+    "tpl": {
+      "logrotate": "サイトログのローテーション",
+      "docker_prune": "Docker イメージの整理",
+      "apt": "システム更新"
+    }
   }
 }

@@ -26,8 +26,9 @@ import (
 // would otherwise kill itself with the panel.
 
 const (
-	releasesAPI = "https://api.github.com/repos/wilsonstar90/lmcwhm/releases/latest"
-	maintUnit   = "lmcwhm-maintenance"
+	releasesAPI  = "https://api.github.com/repos/wilsonstar90/lmcwhm/releases/latest"
+	releasesPage = "https://github.com/wilsonstar90/lmcwhm/releases"
+	maintUnit    = "lmcwhm-maintenance"
 )
 
 var (
@@ -77,7 +78,24 @@ func newerVersion(latest, current string) bool {
 			return a[i] > b[i]
 		}
 	}
-	return strings.Contains(current, "-") && !strings.Contains(latest, "-") // dev build → release
+	// A pre-release (v0.4.0-rc1) is older than its release; a git describe
+	// build (v0.3.1-2-gabc123) is newer than the tag it was built after.
+	return strings.Contains(current, "-") && !strings.Contains(current, "-g") && !strings.Contains(latest, "-")
+}
+
+func latestTagByRedirect(ctx context.Context) (string, error) {
+	req, _ := http.NewRequestWithContext(ctx, http.MethodHead, releasesPage+"/latest", nil)
+	c := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	res, err := c.Do(req)
+	if err != nil {
+		return "", err
+	}
+	res.Body.Close()
+	_, tag, ok := strings.Cut(res.Header.Get("Location"), "/releases/tag/")
+	if !ok || tag == "" {
+		return "", fmt.Errorf("github: %s", res.Status)
+	}
+	return tag, nil
 }
 
 func latestRelease(ctx context.Context, force bool) releaseInfo {
@@ -92,23 +110,36 @@ func latestRelease(ctx context.Context, force bool) releaseInfo {
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, releasesAPI, nil)
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", "lmcwhm/"+config.Version)
-	res, err := http.DefaultClient.Do(req)
-	if err == nil && res.StatusCode != http.StatusOK {
-		err = fmt.Errorf("github: %s", res.Status)
-	}
-	if err != nil {
-		info.Error = err.Error()
-		relCache, relExpiry = info, time.Now().Add(time.Minute)
-		return info
-	}
-	defer res.Body.Close()
 	var gh struct {
 		TagName     string `json:"tag_name"`
 		Body        string `json:"body"`
 		HTMLURL     string `json:"html_url"`
 		PublishedAt string `json:"published_at"`
 	}
-	json.NewDecoder(res.Body).Decode(&gh)
+	res, err := http.DefaultClient.Do(req)
+	if err == nil {
+		if res.StatusCode == http.StatusOK {
+			json.NewDecoder(res.Body).Decode(&gh)
+		} else {
+			err = fmt.Errorf("github: %s", res.Status)
+		}
+		res.Body.Close()
+	}
+	if gh.TagName == "" {
+		// The API allows 60 anonymous requests per hour per IP; the release
+		// page redirect to /releases/tag/<tag> is not rate limited.
+		if tag, ferr := latestTagByRedirect(ctx); ferr == nil {
+			gh.TagName, gh.HTMLURL, err = tag, releasesPage+"/tag/"+tag, nil
+		}
+	}
+	if err != nil || gh.TagName == "" {
+		if err == nil {
+			err = errors.New("github: no release")
+		}
+		info.Error = err.Error()
+		relCache, relExpiry = info, time.Now().Add(time.Minute)
+		return info
+	}
 	info.Latest, info.Notes, info.URL, info.Published = gh.TagName, gh.Body, gh.HTMLURL, gh.PublishedAt
 	info.Newer = gh.TagName != "" && newerVersion(gh.TagName, info.Current)
 	relCache, relExpiry = info, time.Now().Add(10*time.Minute)

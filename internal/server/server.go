@@ -18,9 +18,12 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/audit"
 	"github.com/wilsonstar90/lmcwhm/internal/auth"
 	"github.com/wilsonstar90/lmcwhm/internal/config"
+	"github.com/wilsonstar90/lmcwhm/internal/cron"
 	"github.com/wilsonstar90/lmcwhm/internal/database"
 	"github.com/wilsonstar90/lmcwhm/internal/dockermgr"
 	"github.com/wilsonstar90/lmcwhm/internal/files"
+	"github.com/wilsonstar90/lmcwhm/internal/geoip"
+	"github.com/wilsonstar90/lmcwhm/internal/monitor"
 	"github.com/wilsonstar90/lmcwhm/internal/settings"
 	"github.com/wilsonstar90/lmcwhm/internal/site"
 	"github.com/wilsonstar90/lmcwhm/internal/tasks"
@@ -44,6 +47,9 @@ type Deps struct {
 	Docker   *dockermgr.Manager
 	Files    *files.FS
 	Term     *terminal.Service
+	Monitor  *monitor.Monitor
+	Cron     *cron.Service
+	GeoIP    *geoip.DB
 }
 
 type Server struct {
