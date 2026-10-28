@@ -15,9 +15,12 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/wilsonstar90/lmcwhm/internal/acme"
+	"github.com/wilsonstar90/lmcwhm/internal/ai"
+	"github.com/wilsonstar90/lmcwhm/internal/apitoken"
 	"github.com/wilsonstar90/lmcwhm/internal/appstore"
 	"github.com/wilsonstar90/lmcwhm/internal/audit"
 	"github.com/wilsonstar90/lmcwhm/internal/auth"
+	"github.com/wilsonstar90/lmcwhm/internal/backup"
 	"github.com/wilsonstar90/lmcwhm/internal/config"
 	"github.com/wilsonstar90/lmcwhm/internal/cron"
 	"github.com/wilsonstar90/lmcwhm/internal/database"
@@ -84,6 +87,7 @@ func main() {
 	root.AddCommand(serveCmd(), versionCmd())
 	root.AddCommand(cliCommands()...)
 	root.AddCommand(maintenanceCommands()...)
+	root.AddCommand(backupCommand(), mcpCommand())
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
@@ -168,6 +172,10 @@ func serveCmd() *cobra.Command {
 				loc = time.Local
 			}
 			jobs := cron.New(a.st, env.WWWLogs, loc)
+			dbs := database.New(a.st, box, apps, tm)
+			bk := backup.New(a.st, box, a.paths.Home)
+			bk.WWWRoot, bk.Sites, bk.DBs, bk.Apps = env.WWWRoot, sites, dbs, apps
+			jobs.Backups = bk
 			if err := jobs.Start(ctx); err != nil {
 				log.Error("cron", "err", err)
 			}
@@ -176,14 +184,20 @@ func serveCmd() *cobra.Command {
 			srv, err := server.New(server.Deps{
 				Paths: a.paths, Settings: a.settings, Auth: a.auth, Audit: a.audit,
 				WebFS: web.FS(), Log: log, Sites: sites, Web: webCfg, Tasks: tm,
-				Apps: apps, DBs: database.New(a.st, box, apps, tm), Docker: dockermgr.New(tm, a.paths.Home),
+				Apps: apps, DBs: dbs, Docker: dockermgr.New(tm, a.paths.Home),
 				Files: files.New(os.Getenv("LMCWHM_FILES_ROOT")), Term: terminal.New(),
-				Monitor: mon, Cron: jobs, GeoIP: geo, Firewall: fw, WAF: waf, CrowdSec: crowdsec,
+				Monitor: mon, Cron: jobs, GeoIP: geo, Firewall: fw, WAF: waf, CrowdSec: crowdsec, Backup: bk,
+				Tokens: apitoken.New(a.st), AI: ai.New(a.st, box, nil),
 			})
 			if err != nil {
 				return err
 			}
 			fw.OnBlocksChanged = srv.SyncFirewall
+			go func() {
+				if err := srv.ServeMCPSocket(ctx, server.MCPSocket(a.paths)); err != nil {
+					log.Error("mcp socket", "err", err)
+				}
+			}()
 			go crowdsec.Run(ctx, log.Error)
 			if err := server.WritePID(a.paths.PIDFile); err != nil {
 				return err

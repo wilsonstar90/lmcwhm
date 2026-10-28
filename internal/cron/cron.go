@@ -72,14 +72,24 @@ type LogRotate struct {
 	Keep int `json:"keep"` // rotated files kept per log
 }
 
+// BackupRunner executes "backup" jobs, whose command is a backup plan.
+type BackupRunner interface {
+	Validate(ctx context.Context, cmd string) error
+	RunPlan(ctx context.Context, cmd string, jobID int64, out io.Writer) error
+}
+
 type Service struct {
-	st      *store.Store
-	LogDir  string // website logs (/www/wwwlogs)
-	loc     *time.Location
-	mu      sync.Mutex
-	sched   *rcron.Cron
-	entries map[int64]rcron.EntryID
-	running map[int64]context.CancelFunc
+	// Backups enables the "backup" job type.
+	Backups BackupRunner
+	// OnResult is told about every finished run (alerts).
+	OnResult func(j Job, r Run)
+	st       *store.Store
+	LogDir   string // website logs (/www/wwwlogs)
+	loc      *time.Location
+	mu       sync.Mutex
+	sched    *rcron.Cron
+	entries  map[int64]rcron.EntryID
+	running  map[int64]context.CancelFunc
 }
 
 func New(st *store.Store, logDir string, loc *time.Location) *Service {
@@ -174,7 +184,7 @@ type Input struct {
 	Timeout  int    `json:"timeout"`
 }
 
-func (in *Input) validate() error {
+func (sv *Service) validate(ctx context.Context, in *Input) error {
 	in.Name, in.Schedule = strings.TrimSpace(in.Name), strings.TrimSpace(in.Schedule)
 	if in.Name == "" || len(in.Name) > 100 {
 		return ErrName
@@ -203,6 +213,11 @@ func (in *Input) validate() error {
 		if json.Unmarshal([]byte(in.Command), &lr) != nil || lr.Keep < 1 || lr.Keep > 365 {
 			return ErrCommand
 		}
+	case "backup":
+		if sv.Backups == nil {
+			return ErrType
+		}
+		return sv.Backups.Validate(ctx, in.Command)
 	default:
 		return ErrType
 	}
@@ -210,7 +225,7 @@ func (in *Input) validate() error {
 }
 
 func (sv *Service) Create(ctx context.Context, in Input) (Job, error) {
-	if err := in.validate(); err != nil {
+	if err := sv.validate(ctx, &in); err != nil {
 		return Job{}, err
 	}
 	now := time.Now().Unix()
@@ -225,7 +240,7 @@ func (sv *Service) Create(ctx context.Context, in Input) (Job, error) {
 }
 
 func (sv *Service) Update(ctx context.Context, id int64, in Input) (Job, error) {
-	if err := in.validate(); err != nil {
+	if err := sv.validate(ctx, &in); err != nil {
 		return Job{}, err
 	}
 	res, err := sv.st.DB.ExecContext(ctx, `UPDATE cron_jobs SET name=?, type=?, schedule=?, command=?, enabled=?, timeout=?, updated_at=? WHERE id=?`,
@@ -451,8 +466,12 @@ func (sv *Service) execute(parent context.Context, id int64, manual bool) {
 		status = "failed"
 		fmt.Fprintf(out, "\n[%v]", err)
 	}
+	r := Run{ID: runID, JobID: id, StartedAt: start.Unix(), DurationMS: time.Since(start).Milliseconds(), Status: status, ExitCode: code, Output: out.String(), Manual: manual}
 	sv.st.DB.ExecContext(parent, `UPDATE cron_runs SET duration_ms=?, status=?, exit_code=?, output=? WHERE id=?`,
-		time.Since(start).Milliseconds(), status, code, out.String(), runID)
+		r.DurationMS, status, code, r.Output, runID)
+	if sv.OnResult != nil {
+		sv.OnResult(j, r)
+	}
 	sv.st.DB.ExecContext(parent, `DELETE FROM cron_runs WHERE job_id = ? AND id <= (SELECT id FROM cron_runs WHERE job_id = ? ORDER BY id DESC LIMIT 1 OFFSET ?)`,
 		id, id, keepRuns)
 }
@@ -467,6 +486,10 @@ func (sv *Service) dispatch(ctx context.Context, j Job, out io.Writer) (int, err
 		var lr LogRotate
 		json.Unmarshal([]byte(j.Command), &lr)
 		return 0, sv.rotate(ctx, lr.Keep, out)
+	case "backup":
+		if sv.Backups != nil {
+			return 0, sv.Backups.RunPlan(ctx, j.Command, j.ID, out)
+		}
 	}
 	return 0, ErrType
 }

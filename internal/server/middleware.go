@@ -55,6 +55,13 @@ func (s *Server) gate(next http.Handler) http.Handler {
 			return
 		}
 
+		// MCP clients authenticate with a bearer token instead of the browser
+		// gates (bound domain, BasicAuth, security entry).
+		if r.URL.Path == "/mcp" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		if cfg.BindDomain != "" {
 			host := r.Host
 			if h, _, err := net.SplitHostPort(host); err == nil {

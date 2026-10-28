@@ -14,9 +14,12 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/wilsonstar90/lmcwhm/internal/ai"
+	"github.com/wilsonstar90/lmcwhm/internal/apitoken"
 	"github.com/wilsonstar90/lmcwhm/internal/appstore"
 	"github.com/wilsonstar90/lmcwhm/internal/audit"
 	"github.com/wilsonstar90/lmcwhm/internal/auth"
+	"github.com/wilsonstar90/lmcwhm/internal/backup"
 	"github.com/wilsonstar90/lmcwhm/internal/config"
 	"github.com/wilsonstar90/lmcwhm/internal/cron"
 	"github.com/wilsonstar90/lmcwhm/internal/database"
@@ -24,6 +27,7 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/files"
 	"github.com/wilsonstar90/lmcwhm/internal/firewall"
 	"github.com/wilsonstar90/lmcwhm/internal/geoip"
+	"github.com/wilsonstar90/lmcwhm/internal/mcp"
 	"github.com/wilsonstar90/lmcwhm/internal/monitor"
 	"github.com/wilsonstar90/lmcwhm/internal/security"
 	"github.com/wilsonstar90/lmcwhm/internal/settings"
@@ -55,12 +59,16 @@ type Deps struct {
 	Firewall *firewall.Service
 	WAF      *security.WAF
 	CrowdSec *security.CrowdSec
+	Backup   *backup.Service
+	Tokens   *apitoken.Service
+	AI       *ai.Service
 }
 
 type Server struct {
 	Deps
 	secret  string
 	restart chan struct{}
+	MCP     *mcp.Server
 }
 
 func New(d Deps) (*Server, error) {
@@ -68,7 +76,12 @@ func New(d Deps) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Server{Deps: d, secret: secret, restart: make(chan struct{}, 1)}, nil
+	s := &Server{Deps: d, secret: secret, restart: make(chan struct{}, 1)}
+	s.MCP = s.buildMCP()
+	if s.AI != nil {
+		s.AI.MCP = s.MCP
+	}
+	return s, nil
 }
 
 // RequestRestart rebuilds the listener (port / SSL / IPv6 changed). It is

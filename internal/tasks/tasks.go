@@ -46,6 +46,16 @@ func NewManager() *Manager { return &Manager{tasks: map[string]*Task{}} }
 
 // Start runs fn in the background and returns its task id immediately.
 func (m *Manager) Start(name string, fn func(ctx context.Context, log Logf) error) string {
+	return m.start(name, true, 30*time.Minute, fn)
+}
+
+// StartLong runs fn without the exclusive lock and with a longer deadline,
+// for jobs such as backups that may take hours and must not block site changes.
+func (m *Manager) StartLong(name string, timeout time.Duration, fn func(ctx context.Context, log Logf) error) string {
+	return m.start(name, false, timeout, fn)
+}
+
+func (m *Manager) start(name string, exclusive bool, timeout time.Duration, fn func(ctx context.Context, log Logf) error) string {
 	t := &Task{ID: settings.RandomString(12, settings.Alnum), Name: name, Status: Running, Log: []string{}, Started: time.Now().Unix()}
 	m.mu.Lock()
 	m.tasks[t.ID] = t
@@ -57,8 +67,10 @@ func (m *Manager) Start(name string, fn func(ctx context.Context, log Logf) erro
 	m.mu.Unlock()
 
 	go func() {
-		m.run.Lock()
-		defer m.run.Unlock()
+		if exclusive {
+			m.run.Lock()
+			defer m.run.Unlock()
+		}
 		logf := func(format string, args ...any) {
 			line := fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05"), fmt.Sprintf(format, args...))
 			m.mu.Lock()
@@ -71,7 +83,7 @@ func (m *Manager) Start(name string, fn func(ctx context.Context, log Logf) erro
 					err = fmt.Errorf("panic: %v", r)
 				}
 			}()
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			defer cancel()
 			return fn(ctx, logf)
 		}()

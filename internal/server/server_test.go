@@ -19,6 +19,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/wilsonstar90/lmcwhm/internal/apitoken"
 	"github.com/wilsonstar90/lmcwhm/internal/audit"
 	"github.com/wilsonstar90/lmcwhm/internal/auth"
 	"github.com/wilsonstar90/lmcwhm/internal/config"
@@ -58,7 +59,8 @@ func newEnv(t *testing.T, mut func(*settings.Settings)) *env {
 	srv, err := New(Deps{
 		Paths: config.Paths{CertDir: filepath.Join(dir, "ssl")}, Settings: sm, Auth: a, Audit: audit.New(st),
 		WebFS: fstest.MapFS{"index.html": {Data: []byte("<html>spa</html>")}},
-		Log:   slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Log:    slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Tokens: apitoken.New(st),
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -300,10 +300,14 @@ func (s *Server) handleLogSources(w http.ResponseWriter, r *http.Request) {
 
 // siteLog maps (domain, kind) to a log file, accepting only existing sites.
 func (s *Server) siteLog(r *http.Request, domain, kind string) (string, error) {
+	return s.siteLogPath(r.Context(), domain, kind)
+}
+
+func (s *Server) siteLogPath(ctx context.Context, domain, kind string) (string, error) {
 	if s.Sites == nil || (kind != "access" && kind != "error") {
 		return "", errBadLog
 	}
-	list, err := s.Sites.List(r.Context())
+	list, err := s.Sites.List(ctx)
 	if err != nil {
 		return "", err
 	}
