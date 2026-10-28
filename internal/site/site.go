@@ -679,7 +679,7 @@ func (sv *Service) issue(ctx context.Context, s *Site, ch acme.Challenge, wildca
 	if wildcard {
 		domains = append(domains, "*."+s.Domain)
 	}
-	res, err := sv.issuer.Obtain(ctx, acme.Request{Domains: dedupe(domains), Challenge: ch}, log)
+	res, err := sv.issuer.Obtain(ctx, acme.Request{Domains: certNames(domains), Challenge: ch}, log)
 	if err != nil && ch == acme.HTTP01 {
 		// HTTP-01 cannot pass when a proxy in front (e.g. Cloudflare with
 		// Full (strict)) rejects the origin before it has a valid certificate.
@@ -688,7 +688,7 @@ func (sv *Service) issue(ctx context.Context, s *Site, ch acme.Challenge, wildca
 			log("HTTP-01 failed: %v", err)
 			log("retrying with DNS-01 via Cloudflare")
 			ch = acme.DNS01
-			res, err = sv.issuer.Obtain(ctx, acme.Request{Domains: dedupe(domains), Challenge: ch}, log)
+			res, err = sv.issuer.Obtain(ctx, acme.Request{Domains: certNames(domains), Challenge: ch}, log)
 		}
 	}
 	if err != nil {
@@ -708,14 +708,29 @@ func (sv *Service) issue(ctx context.Context, s *Site, ch acme.Challenge, wildca
 	return sv.Apply(ctx)
 }
 
-func dedupe(in []string) []string {
+// certNames removes duplicates and names already covered by a wildcard in the
+// same list (CAs reject e.g. www.example.com together with *.example.com).
+func certNames(in []string) []string {
+	wild := map[string]bool{}
+	for _, v := range in {
+		if strings.HasPrefix(v, "*.") {
+			wild[v[2:]] = true
+		}
+	}
 	seen := map[string]bool{}
 	out := []string{}
 	for _, v := range in {
-		if !seen[v] {
-			seen[v] = true
-			out = append(out, v)
+		if seen[v] {
+			continue
 		}
+		if !strings.HasPrefix(v, "*.") {
+			// A wildcard matches exactly one extra label.
+			if i := strings.IndexByte(v, '.'); i > 0 && wild[v[i+1:]] {
+				continue
+			}
+		}
+		seen[v] = true
+		out = append(out, v)
 	}
 	return out
 }
