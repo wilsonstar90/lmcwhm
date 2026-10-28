@@ -53,11 +53,13 @@ export interface CertInfo {
   not_after: string
 }
 
+export type SiteType = 'php' | 'static' | 'node' | 'python' | 'java' | 'proxy'
+
 export interface Site {
   id: number
   domain: string
   aliases: string[]
-  type: 'php' | 'static'
+  type: SiteType
   php_version: string
   root: string
   stopped: boolean
@@ -73,6 +75,11 @@ export interface Site {
   dns_proxied: boolean
   remark: string
   created_at: number
+  runtime_version: string
+  command: string
+  app_port: number
+  proxy_target: string
+  passthrough: boolean
 }
 
 export interface ServiceStatus {
@@ -103,4 +110,113 @@ export interface Task {
   status: 'running' | 'success' | 'failed'
   log: string[]
   error?: string
+}
+
+export type AppKind = 'runtime' | 'database' | 'tool'
+
+export interface CatalogApp {
+  key: string
+  name: string
+  kind: AppKind
+  versions: { version: string; image: string; eol?: boolean }[]
+  port?: number
+  min_mem_mb?: number
+  amd64_only?: boolean
+  databases?: boolean
+}
+
+export interface InstalledApp {
+  id: number
+  app: string
+  name: string
+  kind: AppKind
+  version: string
+  image: string
+  port: number
+  container: string
+  state: string
+  has_config: boolean
+  databases: boolean
+  created_at: number
+}
+
+export interface Database {
+  id: number
+  app_id: number
+  engine: string
+  version: string
+  name: string
+  username: string
+  password: string
+  host: string
+  port: number
+  remark: string
+  created_at: number
+}
+
+export interface Container {
+  id: string
+  name: string
+  image: string
+  state: string
+  status: string
+  ports: string
+  created: string
+  managed: boolean
+  project: string
+  cpu: string
+  mem: string
+  mem_perc: string
+  net_io: string
+  block_io: string
+  host_ports: number[]
+}
+
+export interface DockerImage {
+  id: string
+  repository: string
+  tag: string
+  size: string
+  created: string
+}
+
+export interface DockerVolume {
+  name: string
+  driver: string
+  mountpoint: string
+}
+
+export interface DockerNetwork {
+  id: string
+  name: string
+  driver: string
+  scope: string
+}
+
+export interface ComposeProject {
+  name: string
+  dir: string
+  running: number
+  services: number
+  status: string
+}
+
+export interface FileEntry {
+  name: string
+  path: string
+  is_dir: boolean
+  size: number
+  mode: string
+  mtime: number
+  owner: string
+  group: string
+  link?: string
+}
+
+export interface TrashItem {
+  id: string
+  path: string
+  is_dir: boolean
+  size: number
+  deleted_at: number
 }

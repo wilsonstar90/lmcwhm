@@ -87,6 +87,15 @@ func (s *Server) handler() http.Handler {
 			if s.Sites != nil {
 				s.siteRoutes(r)
 			}
+			if s.Apps != nil {
+				s.appRoutes(r)
+			}
+			if s.Docker != nil {
+				s.dockerRoutes(r)
+			}
+			if s.Files != nil {
+				s.fileRoutes(r)
+			}
 			r.Get("/logs/login", s.handleLoginLogs)
 			r.Get("/logs/operation", s.handleOperationLogs)
 		})
@@ -95,6 +104,10 @@ func (s *Server) handler() http.Handler {
 		})
 	})
 
+	if s.Apps != nil {
+		r.HandleFunc("/adminer", s.handleAdminer)
+		r.HandleFunc("/adminer/*", s.handleAdminer)
+	}
 	r.NotFound(s.spa)
 	return r
 }

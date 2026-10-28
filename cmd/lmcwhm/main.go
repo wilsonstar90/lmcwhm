@@ -14,9 +14,13 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/wilsonstar90/lmcwhm/internal/acme"
+	"github.com/wilsonstar90/lmcwhm/internal/appstore"
 	"github.com/wilsonstar90/lmcwhm/internal/audit"
 	"github.com/wilsonstar90/lmcwhm/internal/auth"
 	"github.com/wilsonstar90/lmcwhm/internal/config"
+	"github.com/wilsonstar90/lmcwhm/internal/database"
+	"github.com/wilsonstar90/lmcwhm/internal/dockermgr"
+	"github.com/wilsonstar90/lmcwhm/internal/files"
 	"github.com/wilsonstar90/lmcwhm/internal/i18n"
 	"github.com/wilsonstar90/lmcwhm/internal/secrets"
 	"github.com/wilsonstar90/lmcwhm/internal/server"
@@ -24,6 +28,7 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/site"
 	"github.com/wilsonstar90/lmcwhm/internal/store"
 	"github.com/wilsonstar90/lmcwhm/internal/tasks"
+	"github.com/wilsonstar90/lmcwhm/internal/terminal"
 	"github.com/wilsonstar90/lmcwhm/internal/webcfg"
 	"github.com/wilsonstar90/lmcwhm/internal/webenv"
 	"github.com/wilsonstar90/lmcwhm/web"
@@ -130,7 +135,13 @@ func serveCmd() *cobra.Command {
 			}()
 			tm := tasks.NewManager()
 			sites := site.NewService(a.st, env, webCfg, &acme.Issuer{Cfg: webCfg, HTTP: responder}, tm)
+			apps := appstore.New(a.st, box, tm, a.paths.Home)
+			apps.InUse = sites.UsesRuntime
+			sites.Runtimes = apps
 			go func() {
+				if err := apps.Boot(ctx); err != nil {
+					log.Error("app store boot", "err", err)
+				}
 				if err := sites.Boot(ctx); err != nil {
 					log.Error("web stack boot", "err", err)
 				}
@@ -140,6 +151,8 @@ func serveCmd() *cobra.Command {
 			srv, err := server.New(server.Deps{
 				Paths: a.paths, Settings: a.settings, Auth: a.auth, Audit: a.audit,
 				WebFS: web.FS(), Log: log, Sites: sites, Web: webCfg, Tasks: tm,
+				Apps: apps, DBs: database.New(a.st, box, apps, tm), Docker: dockermgr.New(tm, a.paths.Home),
+				Files: files.New(os.Getenv("LMCWHM_FILES_ROOT")), Term: terminal.New(),
 			})
 			if err != nil {
 				return err

@@ -258,6 +258,16 @@ whm/
 - **PHP**：每版本一個 PHP-FPM 容器（host network，監聽 `127.0.0.1:90xx`），官方 image 加 mysqli / pdo_mysql / opcache / bcmath / exif；其他擴展喺 M2 軟件設定入面逐個裝。
 - **CI**：`deploy/test-sites.sh` 喺 Ubuntu runner 用真 Docker 測試建站、SNI、IPv6、PHP 切換、強制 HTTPS，並用 Pebble（Let's Encrypt 官方測試 CA）測試 ACME HTTP-01。DNS-01 / Cloudflare 只有單元測試（需要真 Cloudflare 帳戶）。
 
+## 4B. M2 / M3 實作備註（與原設計嘅差異）
+- **App Store 目錄**：暫時內置喺 binary（`internal/appstore/catalog.go`），未做 Git/HTTP 倉庫同 `manifest.yaml`；加新軟件 = 加一項 Catalog + 容器參數。
+- **服務網絡**：資料庫 / Redis / Memcached 用預設 bridge，只發佈 `127.0.0.1:<端口>`（同引擎多版本自動揀下一個空閒端口）；面板經 `docker exec` 用引擎自帶 CLI（mysql / mariadb / psql / mongosh / sqlcmd）管理，唔需要 Go 資料庫驅動。Adminer 用 host network（可直達所有 127.0.0.1 資料庫），由面板 `/adminer/` 反代並檢查面板 session。
+- **Runtime 項目**：唔用 pm2 / supervisor，每個項目一個容器（`lmcwhm-proj-<域名>`，host network、`--restart always`），Docker 就係守護進程；Python 預設命令會喺項目目錄建 `.venv`，重建容器都唔使重裝依賴。
+- **反向代理 / 綁定域名**：網站類型 `proxy` 統一處理「容器綁域名」；TLS 直通網站唔生成 Nginx 設定，直接寫入 HAProxy `passthrough.map`，port 80 一律 301 去 HTTPS。
+- **Docker 管理**：繼續用 `docker` CLI（`--format '{{json .}}'`），即時用量用 `docker stats --no-stream` 每 5 秒輪詢，日誌用輪詢代替 WS 串流。
+- **檔案管理器**：根目錄預設 `/`（同 aaPanel 一樣，管理員本身係 root），可用 `LMCWHM_FILES_ROOT` 收窄；回收站喺 `/www/.Recycle_bin`，跨磁碟時提示改為永久刪除。編輯器暫用純文字框，未接 Monaco。
+- **未包括（留待之後）**：資料庫備份 / 還原（M6）、遠端存取開關（M5 防火牆）、PHP 擴展管理 / php.ini 編輯、phpMyAdmin 單點登入、Tomcat、Redis key 瀏覽。
+- **CI**：`deploy/test-apps.sh` 喺 Ubuntu runner 用真 Docker 測試安裝 runtime / 資料庫、Node / Python 項目、MariaDB / PostgreSQL 建庫 + PHP 連線、設定檔回滾、容器綁域名、Compose、TLS 直通、分塊上傳、zip-slip。
+
 ## 5. 路線圖
 | 階段 | 內容 | 完成標準 |
 |---|---|---|

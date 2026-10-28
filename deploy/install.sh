@@ -97,7 +97,8 @@ fi
 if [[ $MODE == upgrade ]]; then
   green "==================================================================="
   green " lmcwhm repair / update mode (installed: ${OLD_VERSION:-unknown}, target: $VERSION)"
-  green " Kept: websites (/www/wwwroot), firewall rules, panel settings & data"
+  green " Kept: websites (/www/wwwroot), installed apps & databases, Docker containers,"
+  green "       firewall rules, panel settings & data"
   if [[ $RESET_PANEL -eq 1 ]]; then yellow " Panel access will be reset (--reset-panel)"; fi
   green "==================================================================="
 fi

@@ -19,6 +19,7 @@ let csrf = ''
 export function setCsrf(token: string) {
   csrf = token
 }
+export const getCsrf = () => csrf
 
 let onUnauthorized: () => void = () => {}
 export function setUnauthorizedHandler(fn: () => void) {

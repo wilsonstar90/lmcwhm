@@ -14,12 +14,17 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/wilsonstar90/lmcwhm/internal/appstore"
 	"github.com/wilsonstar90/lmcwhm/internal/audit"
 	"github.com/wilsonstar90/lmcwhm/internal/auth"
 	"github.com/wilsonstar90/lmcwhm/internal/config"
+	"github.com/wilsonstar90/lmcwhm/internal/database"
+	"github.com/wilsonstar90/lmcwhm/internal/dockermgr"
+	"github.com/wilsonstar90/lmcwhm/internal/files"
 	"github.com/wilsonstar90/lmcwhm/internal/settings"
 	"github.com/wilsonstar90/lmcwhm/internal/site"
 	"github.com/wilsonstar90/lmcwhm/internal/tasks"
+	"github.com/wilsonstar90/lmcwhm/internal/terminal"
 	"github.com/wilsonstar90/lmcwhm/internal/tlsutil"
 	"github.com/wilsonstar90/lmcwhm/internal/webcfg"
 )
@@ -34,6 +39,11 @@ type Deps struct {
 	Sites    *site.Service
 	Web      *webcfg.Store
 	Tasks    *tasks.Manager
+	Apps     *appstore.Service
+	DBs      *database.Service
+	Docker   *dockermgr.Manager
+	Files    *files.FS
+	Term     *terminal.Service
 }
 
 type Server struct {

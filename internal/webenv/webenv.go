@@ -7,8 +7,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/hex"
 	"embed"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -63,18 +63,23 @@ func PHPImage(v string) string { return "lmcwhm/php:" + v }
 type Site struct {
 	Domain     string
 	Aliases    []string
-	Type       string // "php" | "static"
+	Type       string // "php" | "static" | "node" | "python" | "java" | "proxy"
 	PHPVersion string
 	Root       string
 	Stopped    bool
 	ForceHTTPS bool
 	HSTS       bool
 	HasCert    bool
+	// Upstream is the URL nginx proxies to (runtime projects and proxies).
+	Upstream string
+	// Passthrough sends the raw TLS stream for every host to Upstream
+	// (host:port) instead of terminating it; nginx is not involved.
+	Passthrough bool
 }
 
 func (s Site) Hosts() []string { return append([]string{s.Domain}, s.Aliases...) }
 
-// Passthrough routes a hostname's raw TLS stream to Target (used by Docker apps in M3).
+// Passthrough routes a hostname's raw TLS stream to Target.
 type Passthrough struct {
 	Host          string
 	Target        string
@@ -214,27 +219,29 @@ func (e *Env) Ensure(ctx context.Context, sites []Site, pass []Passthrough, log 
 		}
 	}
 
-	if err := e.ensureContainer(ctx, log, NginxName, []string{
+	if err := EnsureContainer(ctx, log, NginxName, []string{
 		"--network", "host",
 		"-v", filepath.Join(e.NginxDir(), "nginx.conf") + ":/etc/nginx/nginx.conf:ro",
 		"-v", filepath.Join(e.NginxDir(), "conf.d") + ":/etc/nginx/conf.d:ro",
 		"-v", e.WWWRoot + ":" + e.WWWRoot,
 		"-v", e.WWWLogs + ":" + e.WWWLogs,
 		NginxImage,
-	}, nil); err != nil {
+	}, nil, true); err != nil {
 		return err
 	}
-	return e.ensureContainer(ctx, log, HAProxyName, []string{
+	return EnsureContainer(ctx, log, HAProxyName, []string{
 		"--network", "host", "--user", "0",
 		"-v", e.EdgeDir() + ":" + e.EdgeDir(),
 		HAProxyImage,
 		"haproxy", "-W", "-db", "-f", filepath.Join(e.EdgeDir(), "haproxy.cfg"),
-	}, []int{80, 443})
+	}, []int{80, 443}, true)
 }
 
-// ensureContainer makes sure container name runs with exactly args. A hash of
-// the arguments is stored as a label, so changed settings recreate it.
-func (e *Env) ensureContainer(ctx context.Context, log func(string, ...any), name string, args []string, ports []int) error {
+// EnsureContainer makes sure container name runs with exactly args. A hash of
+// the arguments is stored as a label, so changed settings recreate it. With
+// wait, it returns only once the container stays up; otherwise a crash-looping
+// container (e.g. a project whose code is not uploaded yet) is not an error.
+func EnsureContainer(ctx context.Context, log func(string, ...any), name string, args []string, ports []int, wait bool) error {
 	sum := sha256.Sum256([]byte(strings.Join(args, "\x00")))
 	spec := hex.EncodeToString(sum[:8])
 	state := dockerx.State(ctx, name)
@@ -266,6 +273,9 @@ func (e *Env) ensureContainer(ctx context.Context, log func(string, ...any), nam
 		if _, err := dockerx.Run(ctx, "start", name); err != nil {
 			return err
 		}
+	}
+	if !wait {
+		return nil
 	}
 	return waitRunning(ctx, name)
 }
@@ -323,16 +333,19 @@ func (e *Env) EnsurePHP(ctx context.Context, v string, log func(string, ...any))
 			return err
 		}
 	}
-	return e.ensureContainer(ctx, log, PHPName(v), []string{
+	return EnsureContainer(ctx, log, PHPName(v), []string{
 		"--network", "host",
 		"-v", e.WWWRoot + ":" + e.WWWRoot,
 		"-v", filepath.Join(dir, "zz-docker.conf") + ":/usr/local/etc/php-fpm.d/zz-docker.conf:ro",
 		"-v", filepath.Join(dir, "zz-lmcwhm.ini") + ":/usr/local/etc/php/conf.d/zz-lmcwhm.ini:ro",
 		PHPImage(v),
-	}, []int{PHPPort(v)})
+	}, []int{PHPPort(v)}, true)
 }
 
 // ---- config rendering ----
+
+// PortFree reports whether nothing listens on port (IPv4 and IPv6).
+func PortFree(port int) bool { return portFree(port) }
 
 func (e *Env) ensureDefaultCert() error {
 	p := filepath.Join(e.CertDir(), "default.pem")
@@ -392,10 +405,18 @@ func (e *Env) edgeFiles(sites []Site, pass []Passthrough) (map[string][]byte, er
 		}
 	}
 	files["crt-list.txt"] = []byte(strings.Join(crt, "\n") + "\n")
-	files["maps/force_https.map"] = mapLines(sites, func(s Site) bool { return s.ForceHTTPS && s.HasCert })
+	// Passthrough hosts terminate TLS at their backend, so plain HTTP always redirects.
+	files["maps/force_https.map"] = mapLines(sites, func(s Site) bool { return s.Passthrough || (s.ForceHTTPS && s.HasCert) })
 	files["maps/hsts.map"] = mapLines(sites, func(s Site) bool { return s.HSTS && s.HasCert })
 
 	data := edgeData{Dir: dir, IPv6: hasIPv6(), ACMEPort: ACMEPort, NginxPort: NginxPort}
+	for _, s := range sites {
+		if s.Passthrough && !s.Stopped {
+			for _, h := range s.Hosts() {
+				pass = append(pass, Passthrough{Host: h, Target: s.Upstream})
+			}
+		}
+	}
 	var pm []string
 	for i, p := range pass {
 		be := fmt.Sprintf("be_pass_%d", i)
@@ -432,6 +453,9 @@ func (e *Env) nginxFiles(sites []Site) (map[string][]byte, error) {
 	}
 	files["nginx.conf"] = main
 	for _, s := range sites {
+		if s.Passthrough {
+			continue
+		}
 		port := 0
 		if s.Type == "php" {
 			port = PHPPort(s.PHPVersion)
@@ -439,6 +463,7 @@ func (e *Env) nginxFiles(sites []Site) (map[string][]byte, error) {
 		v, err := render("vhost.conf.tmpl", map[string]any{
 			"Domain": s.Domain, "ServerNames": strings.Join(s.Hosts(), " "), "Root": s.Root,
 			"LogDir": e.WWWLogs, "NginxPort": NginxPort, "PHPPort": port, "Stopped": s.Stopped,
+			"Upstream": s.Upstream,
 		})
 		if err != nil {
 			return nil, err
@@ -471,6 +496,9 @@ func (e *Env) writeNginx(sites []Site) error {
 
 // VhostConfig returns the rendered nginx config for one site (for display).
 func (e *Env) VhostConfig(s Site) (string, error) {
+	if s.Passthrough {
+		return fmt.Sprintf("# %s: TLS passthrough to %s (no nginx config)\n", strings.Join(s.Hosts(), " "), s.Upstream), nil
+	}
 	files, err := e.nginxFiles([]Site{s})
 	if err != nil {
 		return "", err

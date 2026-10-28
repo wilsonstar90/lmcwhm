@@ -3,7 +3,20 @@
 自研伺服器控制面板（aaPanel / 寶塔式），Go 單一 Binary + Vue 3 / Naive UI。
 完整架構與路線圖：[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
-## 目前進度：M1（SNI 邊緣分流 + 網站）
+## 目前進度：M3（Docker 管理、檔案、終端）
+
+**M3 — Docker 管理 / 檔案管理器 / Terminal**
+- Docker：容器列表（即時 CPU / 記憶體 / 網絡）、建立（端口、環境變數、掛載、重啟策略、資源限制）、啟停 / 暫停 / 刪除、日誌、詳細資料、`docker exec` 終端；Images（拉取 / 刪除 / 清理）、Volumes、網絡；Compose 項目（網頁編輯 yml + .env，up / down / restart / pull、日誌）
+- 容器「綁定域名」＝建立反向代理網站（`http://127.0.0.1:端口`），自動 HAProxy 路由 + SSL + DNS；亦可揀 **TLS 直通**（按 SNI 原封轉發，由後端自己持證書）
+- 面板自己嘅容器（`lmcwhm.managed`）唔可以喺 Docker 頁刪除
+- 檔案管理器：全部操作經 Go `os.Root`，路徑（包括符號連結）唔可以走出根目錄；瀏覽、編輯（5 MB 內文字檔）、新增、改名、複製 / 移動、權限 / 擁有者（可遞歸）、zip / tar.gz 壓縮及解壓（防 zip-slip）、8 MB 分塊上傳（可續傳）、下載、回收站（`/www/.Recycle_bin`，可還原）
+- Web Terminal：xterm.js ↔ WebSocket ↔ PTY，主機 root shell 或容器 shell；每次開啟前要再輸入面板密碼
+
+**M2 — App Store / 運行環境 / 資料庫**
+- App Store（每個版本獨立安裝）：Node.js 18–24、Python 3.9–3.13、Java（Temurin JDK 8/11/17/21）、MySQL 5.7/8.0/8.4、MariaDB 10.6/10.11/11.4、PostgreSQL 13–17、MongoDB 6/7、SQL Server 2019/2022、Redis 6.2/7.2/7.4、Memcached、Adminer
+- 資料庫 / 快取以容器運行，只發佈到 `127.0.0.1:端口`；管理員密碼加密儲存；MySQL / MariaDB / Redis 設定檔可網頁編輯，保存後重啟，起唔返自動還原
+- 網站新增 **Node.js / Python / Java 項目**（專用容器運行啟動命令，監聽 `127.0.0.1:PORT`，Nginx 反代，支援 WebSocket）同 **反向代理** 類型；項目狀態、輸出日誌、重啟
+- 資料庫管理：MySQL、MariaDB、PostgreSQL、MongoDB、SQL Server 一鍵建立資料庫 + 專屬用戶、改密碼、刪除；Adminer 經面板 `/adminer/` 打開（需已登入面板）
 
 **M1 — 網站管理**
 - HAProxy 3.0 邊緣：80 / 443（IPv4 + IPv6 分開監聽，客戶真實 IP 正確傳遞），按 TLS SNI 分流：
@@ -29,7 +42,7 @@
 make web        # 建置前端（web/dist，會 embed 入 binary）
 make dev-init   # 喺 ./.dev 初始化：admin / admin12345，端口 18888，入口 /console
 make dev        # 啟動面板：https://127.0.0.1:18888/console
-make test       # go vet + go test
+make test       # go vet + go test（包括檔案穿越 / zip-slip 測試）
 make linux      # 交叉編譯 bin/lmcwhm-linux-{amd64,arm64}
 ```
 

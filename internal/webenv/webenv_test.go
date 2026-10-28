@@ -60,3 +60,36 @@ func TestRender(t *testing.T) {
 		t.Errorf("stopped site not 503:\n%s", c)
 	}
 }
+
+func TestRenderProxy(t *testing.T) {
+	e := &Env{Home: t.TempDir(), WWWRoot: "/www/wwwroot", WWWLogs: "/www/wwwlogs"}
+	sites := []Site{
+		{Domain: "node.test", Type: "node", Root: "/www/wwwroot/node.test", Upstream: "http://127.0.0.1:3000"},
+		{Domain: "tls.test", Aliases: []string{"www.tls.test"}, Type: "proxy", Upstream: "127.0.0.1:8443", Passthrough: true},
+		{Domain: "off.test", Type: "proxy", Upstream: "127.0.0.1:9443", Passthrough: true, Stopped: true},
+	}
+	ng, err := e.nginxFiles(sites)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := string(ng["conf.d/node.test.conf"])
+	if !strings.Contains(n, "proxy_pass http://127.0.0.1:3000;") || !strings.Contains(n, "$connection_upgrade") || strings.Contains(n, "fastcgi_pass") {
+		t.Errorf("node vhost:\n%s", n)
+	}
+	if _, ok := ng["conf.d/tls.test.conf"]; ok {
+		t.Error("passthrough site has an nginx vhost")
+	}
+	edge, err := e.edgeFiles(sites, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(edge["maps/passthrough.map"]); got != "tls.test be_pass_0\nwww.tls.test be_pass_1\n" {
+		t.Errorf("passthrough.map = %q", got)
+	}
+	if cfg := string(edge["haproxy.cfg"]); !strings.Contains(cfg, "server s1 127.0.0.1:8443\n") || strings.Contains(cfg, "9443") {
+		t.Errorf("haproxy.cfg passthrough backends:\n%s", cfg)
+	}
+	if got := string(edge["maps/force_https.map"]); got != "tls.test 1\nwww.tls.test 1\n" {
+		t.Errorf("force_https.map = %q", got)
+	}
+}

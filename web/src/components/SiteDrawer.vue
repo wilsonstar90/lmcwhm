@@ -3,10 +3,10 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   NDrawer, NDrawerContent, NTabs, NTabPane, NForm, NFormItem, NInput, NSelect, NButton, NSpace, NSwitch, NAlert,
-  NDescriptions, NDescriptionsItem, NRadioGroup, NRadioButton, NCheckbox, NCode, NPopconfirm, useMessage,
+  NDescriptions, NDescriptionsItem, NRadioGroup, NRadioButton, NCheckbox, NCode, NPopconfirm, NTag, NInputNumber, useMessage,
 } from 'naive-ui'
 import { get, patch, post, ApiError } from '../api/client'
-import type { Site } from '../api/types'
+import type { InstalledApp, Site } from '../api/types'
 import { datetime } from '../format'
 
 const props = defineProps<{ site: Site | null; phpVersions: string[]; hasCF: boolean }>()
@@ -25,6 +25,34 @@ const keyPem = ref('')
 const vhost = ref('')
 const delFiles = ref(false)
 const delDNS = ref(true)
+const runtimeVersion = ref('')
+const command = ref('')
+const appPort = ref<number | null>(null)
+const proxyTarget = ref('')
+const runtimes = ref<InstalledApp[]>([])
+const project = ref<{ state: string; logs: string } | null>(null)
+const isProject = computed(() => !!props.site && ['node', 'python', 'java'].includes(props.site.type))
+
+async function loadProject() {
+  if (!isProject.value) return
+  try {
+    project.value = await get<{ state: string; logs: string }>(`/sites/${props.site!.id}/project?tail=200`)
+  } catch {
+    project.value = null
+  }
+}
+async function restartProject() {
+  try {
+    await post(`/sites/${props.site!.id}/project/restart`)
+    msg.success(t('common.done'))
+    setTimeout(loadProject, 1500)
+  } catch (e) {
+    fail(e)
+  }
+}
+const runtimeOptions = computed(() =>
+  runtimes.value.filter((r) => r.app === props.site?.type).map((r) => ({ label: `${r.name} ${r.version}`, value: r.version })),
+)
 
 watch(
   () => props.site,
@@ -36,7 +64,16 @@ watch(
     challenge.value = s.ssl_challenge
     wildcard.value = s.ssl_wildcard
     vhost.value = ''
+    runtimeVersion.value = s.runtime_version
+    command.value = s.command
+    appPort.value = s.app_port || null
+    proxyTarget.value = s.proxy_target
+    project.value = null
     get<{ config: string }>(`/sites/${s.id}/vhost`).then((r) => (vhost.value = r.config)).catch(() => {})
+    if (['node', 'python', 'java'].includes(s.type)) {
+      loadProject()
+      get<{ items: InstalledApp[] }>('/apps').then((r) => (runtimes.value = r.items.filter((a) => a.kind === 'runtime'))).catch(() => {})
+    }
   },
   { immediate: true },
 )
@@ -125,7 +162,48 @@ const days = computed(() =>
           </n-space>
         </n-tab-pane>
 
-        <n-tab-pane name="ssl" tab="SSL">
+        <n-tab-pane v-if="isProject" name="project" :tab="t('site.tab_project')">
+          <n-space align="center" style="margin-bottom: 12px">
+            <n-tag :type="project?.state === 'running' ? 'success' : project?.state ? 'warning' : 'default'" size="small">
+              {{ project?.state || t('app.state.missing') }}
+            </n-tag>
+            <n-button size="small" @click="restartProject">{{ t('app.restart') }}</n-button>
+            <n-button size="small" @click="loadProject">{{ t('common.refresh') }}</n-button>
+          </n-space>
+          <n-form label-placement="top">
+            <n-space>
+              <n-form-item :label="t('site.runtime_version')">
+                <n-select v-model:value="runtimeVersion" :options="runtimeOptions" style="width: 180px" />
+              </n-form-item>
+              <n-form-item :label="t('site.app_port')">
+                <n-input-number v-model:value="appPort" :min="1024" :max="65535" :show-button="false" style="width: 140px" />
+              </n-form-item>
+            </n-space>
+            <n-form-item :label="t('site.command')" :feedback="t('site.command_hint')">
+              <n-input v-model:value="command" type="textarea" :rows="2" />
+            </n-form-item>
+            <n-button
+              type="primary"
+              @click="update({ runtime_version: runtimeVersion, command, app_port: appPort ?? 0 }, t('site.tab_project'))"
+            >{{ t('common.save') }}</n-button>
+          </n-form>
+          <p class="hint" style="margin-top: 16px">{{ t('site.project_logs') }}</p>
+          <pre class="log">{{ project?.logs || '—' }}</pre>
+        </n-tab-pane>
+
+        <n-tab-pane v-if="site.type === 'proxy'" name="proxy" :tab="t('site.proxy')">
+          <n-form label-placement="top">
+            <n-form-item :label="t('site.proxy_target')" :feedback="site.passthrough ? t('site.passthrough_hint') : t('site.proxy_target_hint')">
+              <n-input v-model:value="proxyTarget" />
+            </n-form-item>
+            <p v-if="site.passthrough" class="hint">{{ t('site.passthrough') }}</p>
+            <n-button type="primary" :disabled="proxyTarget === site.proxy_target" @click="update({ proxy_target: proxyTarget }, t('site.proxy'))">
+              {{ t('common.save') }}
+            </n-button>
+          </n-form>
+        </n-tab-pane>
+
+        <n-tab-pane v-if="!site.passthrough" name="ssl" tab="SSL">
           <n-alert v-if="site.cert_error" type="error" :title="t('site.ssl_failed')" style="margin-bottom: 16px">
             {{ site.cert_error }}
           </n-alert>
@@ -221,5 +299,17 @@ const days = computed(() =>
   margin: 0 0 8px;
   font-size: 12px;
   opacity: 0.7;
+}
+.log {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  font-size: 12px;
+  padding: 10px;
+  border-radius: 4px;
+  background: #1e1e1e;
+  color: #ddd;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 </style>

@@ -54,6 +54,22 @@ function sslTag(s: Site) {
   return h(NTag, { size: 'small', type }, () => t('site.days_left', { n: days }))
 }
 
+function typeLabel(s: Site) {
+  switch (s.type) {
+    case 'php':
+      return `PHP ${s.php_version}`
+    case 'static':
+      return t('site.static')
+    case 'node':
+      return `Node.js ${s.runtime_version}`
+    case 'python':
+      return `Python ${s.runtime_version}`
+    case 'java':
+      return `Java ${s.runtime_version}`
+  }
+  return h('span', { title: s.proxy_target }, s.passthrough ? t('site.passthrough_short') : t('site.proxy'))
+}
+
 const columns: DataTableColumns<Site> = [
   {
     title: () => t('site.domain'),
@@ -70,7 +86,7 @@ const columns: DataTableColumns<Site> = [
     width: 100,
     render: (s) => h(NTag, { size: 'small', type: s.stopped ? 'default' : 'success' }, () => (s.stopped ? t('site.stopped') : t('site.running'))),
   },
-  { title: 'PHP', key: 'php_version', width: 90, render: (s) => (s.type === 'php' ? s.php_version : t('site.static')) },
+  { title: () => t('site.type'), key: 'type', width: 130, render: typeLabel },
   { title: 'SSL', key: 'ssl', width: 120, render: sslTag },
   { title: () => t('site.remark'), key: 'remark', ellipsis: { tooltip: true } },
   {

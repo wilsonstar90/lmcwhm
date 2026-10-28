@@ -3,6 +3,8 @@ module github.com/wilsonstar90/lmcwhm
 go 1.27.3
 
 require (
+	github.com/coder/websocket v1.8.15
+	github.com/creack/pty v1.1.24
 	github.com/go-acme/lego/v4 v4.35.2
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/pquerna/otp v1.5.0

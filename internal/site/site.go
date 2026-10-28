@@ -16,6 +16,7 @@ import (
 
 	"github.com/wilsonstar90/lmcwhm/internal/acme"
 	"github.com/wilsonstar90/lmcwhm/internal/cfdns"
+	"github.com/wilsonstar90/lmcwhm/internal/dockerx"
 	"github.com/wilsonstar90/lmcwhm/internal/netinfo"
 	"github.com/wilsonstar90/lmcwhm/internal/store"
 	"github.com/wilsonstar90/lmcwhm/internal/tasks"
@@ -44,7 +45,22 @@ type Site struct {
 	Remark       string   `json:"remark"`
 	CreatedAt    int64    `json:"created_at"`
 	UpdatedAt    int64    `json:"updated_at"`
+	// Runtime projects (node | python | java) run Command in a container of
+	// the App Store runtime image, listening on 127.0.0.1:AppPort.
+	RuntimeVersion string `json:"runtime_version"`
+	Command        string `json:"command"`
+	AppPort        int    `json:"app_port"`
+	// Reverse proxies (type proxy) forward to ProxyTarget: an http(s) URL, or
+	// host:port when Passthrough hands the raw TLS stream to the backend.
+	ProxyTarget string `json:"proxy_target"`
+	Passthrough bool   `json:"passthrough"`
 }
+
+// IsProject reports a runtime project type.
+func IsProject(typ string) bool { return typ == "node" || typ == "python" || typ == "java" }
+
+// ProjectContainer is the container that runs a runtime project.
+func ProjectContainer(domain string) string { return "lmcwhm-proj-" + domain }
 
 func (s Site) Hosts() []string { return append([]string{s.Domain}, s.Aliases...) }
 
@@ -57,7 +73,32 @@ var (
 	ErrWildcardDNS = errors.New("site.wildcard_needs_dns")
 	ErrNoCFToken   = errors.New("cf.no_token")
 	ErrNoCert      = errors.New("site.no_cert")
+	ErrNoRuntime   = errors.New("site.runtime_not_installed")
+	ErrBadPort     = errors.New("site.invalid_port")
+	ErrPortTaken   = errors.New("site.port_taken")
+	ErrBadTarget   = errors.New("site.invalid_target")
+	ErrBadCommand  = errors.New("site.invalid_command")
+	ErrPassSSL     = errors.New("site.passthrough_no_ssl")
+	ErrNotProject  = errors.New("site.not_project")
 )
+
+var (
+	urlTargetRe  = regexp.MustCompile(`^https?://[A-Za-z0-9.\-]+(:[0-9]{1,5})?$|^https?://\[[0-9a-fA-F:]+\](:[0-9]{1,5})?$`)
+	passTargetRe = regexp.MustCompile(`^([A-Za-z0-9.\-]+|\[[0-9a-fA-F:]+\]):[0-9]{1,5}$`)
+)
+
+// DefaultCommands start a project; PORT and HOST are set in its environment.
+var DefaultCommands = map[string]string{
+	"node":   "[ -f package.json ] && npm install --omit=dev --no-audit --no-fund; exec npm start",
+	"python": "[ -d .venv ] || python -m venv .venv; . .venv/bin/activate; [ -f requirements.txt ] && pip install -q -r requirements.txt; exec python app.py",
+	"java":   "exec java -jar app.jar --server.port=$PORT",
+}
+
+// Runtimes is the App Store as seen by websites.
+type Runtimes interface {
+	RuntimeImage(ctx context.Context, app, version string) (string, error)
+	UsedPorts(ctx context.Context) map[int]bool
+}
 
 var hostRe = regexp.MustCompile(`^(\*\.)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$`)
 
@@ -69,6 +110,8 @@ type Service struct {
 	cfg    *webcfg.Store
 	issuer *acme.Issuer
 	tasks  *tasks.Manager
+	// Runtimes is set when the App Store is available (runtime projects).
+	Runtimes Runtimes
 }
 
 func NewService(st *store.Store, env *webenv.Env, cfg *webcfg.Store, issuer *acme.Issuer, tm *tasks.Manager) *Service {
@@ -78,14 +121,16 @@ func NewService(st *store.Store, env *webenv.Env, cfg *webcfg.Store, issuer *acm
 // ---- persistence ----
 
 const cols = `id, domain, aliases, type, php_version, root, stopped, force_https, hsts, ssl_mode, ssl_challenge,
-	ssl_wildcard, cert_issuer, cert_not_after, cert_error, dns_managed, dns_proxied, remark, created_at, updated_at`
+	ssl_wildcard, cert_issuer, cert_not_after, cert_error, dns_managed, dns_proxied, remark, created_at, updated_at,
+	runtime_version, command, app_port, proxy_target, passthrough`
 
 func scan(row interface{ Scan(...any) error }) (Site, error) {
 	var s Site
 	var aliases string
 	err := row.Scan(&s.ID, &s.Domain, &aliases, &s.Type, &s.PHPVersion, &s.Root, &s.Stopped, &s.ForceHTTPS, &s.HSTS,
 		&s.SSLMode, &s.SSLChallenge, &s.SSLWildcard, &s.CertIssuer, &s.CertNotAfter, &s.CertError,
-		&s.DNSManaged, &s.DNSProxied, &s.Remark, &s.CreatedAt, &s.UpdatedAt)
+		&s.DNSManaged, &s.DNSProxied, &s.Remark, &s.CreatedAt, &s.UpdatedAt,
+		&s.RuntimeVersion, &s.Command, &s.AppPort, &s.ProxyTarget, &s.Passthrough)
 	if err != nil {
 		return s, err
 	}
@@ -128,10 +173,12 @@ func (sv *Service) save(ctx context.Context, s *Site) error {
 	if s.ID == 0 {
 		s.CreatedAt = now
 		res, err := sv.st.DB.ExecContext(ctx, `INSERT INTO sites(domain, aliases, type, php_version, root, stopped, force_https, hsts,
-			ssl_mode, ssl_challenge, ssl_wildcard, cert_issuer, cert_not_after, cert_error, dns_managed, dns_proxied, remark, created_at, updated_at)
-			VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			ssl_mode, ssl_challenge, ssl_wildcard, cert_issuer, cert_not_after, cert_error, dns_managed, dns_proxied, remark, created_at, updated_at,
+			runtime_version, command, app_port, proxy_target, passthrough)
+			VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			s.Domain, string(aliases), s.Type, s.PHPVersion, s.Root, s.Stopped, s.ForceHTTPS, s.HSTS, s.SSLMode, s.SSLChallenge,
-			s.SSLWildcard, s.CertIssuer, s.CertNotAfter, s.CertError, s.DNSManaged, s.DNSProxied, s.Remark, s.CreatedAt, s.UpdatedAt)
+			s.SSLWildcard, s.CertIssuer, s.CertNotAfter, s.CertError, s.DNSManaged, s.DNSProxied, s.Remark, s.CreatedAt, s.UpdatedAt,
+			s.RuntimeVersion, s.Command, s.AppPort, s.ProxyTarget, s.Passthrough)
 		if err != nil {
 			return err
 		}
@@ -140,9 +187,10 @@ func (sv *Service) save(ctx context.Context, s *Site) error {
 	}
 	_, err := sv.st.DB.ExecContext(ctx, `UPDATE sites SET aliases=?, type=?, php_version=?, root=?, stopped=?, force_https=?, hsts=?,
 		ssl_mode=?, ssl_challenge=?, ssl_wildcard=?, cert_issuer=?, cert_not_after=?, cert_error=?, dns_managed=?, dns_proxied=?,
-		remark=?, updated_at=? WHERE id=?`,
+		remark=?, updated_at=?, runtime_version=?, command=?, app_port=?, proxy_target=?, passthrough=? WHERE id=?`,
 		string(aliases), s.Type, s.PHPVersion, s.Root, s.Stopped, s.ForceHTTPS, s.HSTS, s.SSLMode, s.SSLChallenge, s.SSLWildcard,
-		s.CertIssuer, s.CertNotAfter, s.CertError, s.DNSManaged, s.DNSProxied, s.Remark, s.UpdatedAt, s.ID)
+		s.CertIssuer, s.CertNotAfter, s.CertError, s.DNSManaged, s.DNSProxied, s.Remark, s.UpdatedAt,
+		s.RuntimeVersion, s.Command, s.AppPort, s.ProxyTarget, s.Passthrough, s.ID)
 	return err
 }
 
@@ -171,6 +219,55 @@ func (sv *Service) checkHosts(ctx context.Context, selfID int64, hosts []string)
 		}
 	}
 	return nil
+}
+
+// reservedPort covers the stack's own loopback listeners.
+func reservedPort(p int) bool {
+	return p == webenv.NginxPort || p == webenv.ACMEPort || (p >= 9000 && p < 9100)
+}
+
+// checkPort validates a project port; isNew additionally requires it unbound.
+func (sv *Service) checkPort(ctx context.Context, selfID int64, port int, isNew bool) error {
+	if port < 1024 || port > 65535 || reservedPort(port) {
+		return ErrBadPort
+	}
+	all, err := sv.List(ctx)
+	if err != nil {
+		return err
+	}
+	for _, s := range all {
+		if s.ID != selfID && IsProject(s.Type) && s.AppPort == port {
+			return fmt.Errorf("%w: %d", ErrPortTaken, port)
+		}
+	}
+	if sv.Runtimes != nil && sv.Runtimes.UsedPorts(ctx)[port] {
+		return fmt.Errorf("%w: %d", ErrPortTaken, port)
+	}
+	if isNew && !webenv.PortFree(port) {
+		return fmt.Errorf("%w: %d", ErrPortTaken, port)
+	}
+	return nil
+}
+
+// freePort picks the first usable project port from 3000.
+func (sv *Service) freePort(ctx context.Context) int {
+	for p := 3000; p < 3999; p++ {
+		if sv.checkPort(ctx, 0, p, true) == nil {
+			return p
+		}
+	}
+	return 0
+}
+
+func validTarget(target string, passthrough bool) bool {
+	if passthrough {
+		return passTargetRe.MatchString(target)
+	}
+	return urlTargetRe.MatchString(target)
+}
+
+func validCommand(c string) bool {
+	return strings.TrimSpace(c) != "" && len(c) <= 2000 && !strings.ContainsAny(c, "\x00\n\r")
 }
 
 func cleanHosts(in []string) []string {
@@ -203,10 +300,17 @@ func (sv *Service) spec(s Site) webenv.Site {
 		_, err := os.Stat(sv.Env.CertPath(s.Domain))
 		has = err == nil
 	}
-	return webenv.Site{
+	ws := webenv.Site{
 		Domain: s.Domain, Aliases: s.Aliases, Type: s.Type, PHPVersion: s.PHPVersion, Root: s.Root,
 		Stopped: s.Stopped, ForceHTTPS: s.ForceHTTPS, HSTS: s.HSTS, HasCert: has,
 	}
+	switch {
+	case IsProject(s.Type):
+		ws.Upstream = fmt.Sprintf("http://127.0.0.1:%d", s.AppPort)
+	case s.Type == "proxy":
+		ws.Upstream, ws.Passthrough = s.ProxyTarget, s.Passthrough
+	}
+	return ws
 }
 
 // Apply re-renders and reloads the whole stack from the database.
@@ -241,7 +345,45 @@ func (sv *Service) ensureStack(ctx context.Context, extraPHP string, log tasks.L
 			return err
 		}
 	}
+	all, err := sv.List(ctx)
+	if err != nil {
+		return err
+	}
+	for _, s := range all {
+		if IsProject(s.Type) {
+			if err := sv.ensureProject(ctx, s, log); err != nil {
+				log("project %s: %v", s.Domain, err)
+			}
+		}
+	}
 	return nil
+}
+
+// ensureProject runs (or stops) the container of a runtime project. A project
+// whose code is not deployed yet may crash-loop; that is not an error here.
+func (sv *Service) ensureProject(ctx context.Context, s Site, log tasks.Logf) error {
+	name := ProjectContainer(s.Domain)
+	if s.Stopped {
+		if dockerx.State(ctx, name) == "running" {
+			log("stopping %s", name)
+			_, err := dockerx.Run(ctx, "stop", name)
+			return err
+		}
+		return nil
+	}
+	if sv.Runtimes == nil {
+		return ErrNoRuntime
+	}
+	image, err := sv.Runtimes.RuntimeImage(ctx, s.Type, s.RuntimeVersion)
+	if err != nil {
+		return ErrNoRuntime
+	}
+	args := []string{
+		"--network", "host", "-w", s.Root, "-v", s.Root + ":" + s.Root,
+		"-e", fmt.Sprintf("PORT=%d", s.AppPort), "-e", "HOST=127.0.0.1",
+		image, "sh", "-c", s.Command,
+	}
+	return webenv.EnsureContainer(ctx, log, name, args, nil, false)
 }
 
 // InstallEnv installs / repairs the web stack (task).
@@ -282,6 +424,13 @@ type CreateInput struct {
 	Wildcard   bool     `json:"wildcard"`
 	ForceHTTPS bool     `json:"force_https"`
 	Remark     string   `json:"remark"`
+	// Runtime projects.
+	RuntimeVersion string `json:"runtime_version"`
+	Command        string `json:"command"`
+	AppPort        int    `json:"app_port"`
+	// Reverse proxies.
+	ProxyTarget string `json:"proxy_target"`
+	Passthrough bool   `json:"passthrough"`
 }
 
 func (sv *Service) Create(ctx context.Context, in CreateInput) (string, error) {
@@ -303,6 +452,37 @@ func (sv *Service) Create(ctx context.Context, in CreateInput) (string, error) {
 		}
 	case "static":
 		s.PHPVersion = ""
+	case "node", "python", "java":
+		s.PHPVersion, s.RuntimeVersion = "", in.RuntimeVersion
+		if sv.Runtimes == nil {
+			return "", ErrNoRuntime
+		}
+		if _, err := sv.Runtimes.RuntimeImage(ctx, s.Type, s.RuntimeVersion); err != nil {
+			return "", ErrNoRuntime
+		}
+		s.Command = strings.TrimSpace(in.Command)
+		if s.Command == "" {
+			s.Command = DefaultCommands[s.Type]
+		}
+		if !validCommand(s.Command) {
+			return "", ErrBadCommand
+		}
+		s.AppPort = in.AppPort
+		if s.AppPort == 0 {
+			s.AppPort = sv.freePort(ctx)
+		}
+		if err := sv.checkPort(ctx, 0, s.AppPort, true); err != nil {
+			return "", err
+		}
+	case "proxy":
+		s.PHPVersion = ""
+		s.ProxyTarget, s.Passthrough = strings.TrimRight(strings.TrimSpace(in.ProxyTarget), "/"), in.Passthrough
+		if !validTarget(s.ProxyTarget, s.Passthrough) {
+			return "", ErrBadTarget
+		}
+		if s.Passthrough && in.SSL != "none" && in.SSL != "" {
+			return "", ErrPassSSL
+		}
 	default:
 		return "", ErrBadType
 	}
@@ -323,12 +503,20 @@ func (sv *Service) Create(ctx context.Context, in CreateInput) (string, error) {
 		if err := sv.ensureStack(ctx, s.PHPVersion, log); err != nil {
 			return err
 		}
-		if err := createRoot(s.Root, s.Domain); err != nil {
-			return err
+		if s.Type != "proxy" {
+			if err := createRoot(s.Root, s.Domain, s.Type); err != nil {
+				return err
+			}
+			log("document root %s", s.Root)
 		}
-		log("document root %s", s.Root)
 		if err := sv.save(ctx, &s); err != nil {
 			return err
+		}
+		if IsProject(s.Type) {
+			log("starting project container on 127.0.0.1:%d", s.AppPort)
+			if err := sv.ensureProject(ctx, s, log); err != nil {
+				return err
+			}
 		}
 		if s.DNSManaged {
 			if err := sv.syncDNS(ctx, s, log); err != nil {
@@ -349,15 +537,54 @@ func (sv *Service) Create(ctx context.Context, in CreateInput) (string, error) {
 	}), nil
 }
 
-func createRoot(root, domain string) error {
+// placeholders is the starter code of a new, empty project directory.
+func placeholders(typ, domain string) map[string]string {
+	switch typ {
+	case "node":
+		return map[string]string{
+			"package.json": `{"name": "app", "private": true, "scripts": {"start": "node server.js"}}` + "\n",
+			"server.js": fmt.Sprintf(`const http = require('http')
+http.createServer((req, res) => {
+  res.writeHead(200, {'Content-Type': 'text/html; charset=utf-8'})
+  res.end('<h1>%s</h1><p>Node.js project created by lmcwhm.</p>\n')
+}).listen(process.env.PORT, process.env.HOST)
+`, domain),
+		}
+	case "python":
+		return map[string]string{
+			"requirements.txt": "",
+			"app.py": fmt.Sprintf(`import os
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.end_headers()
+        self.wfile.write(b"<h1>%s</h1><p>Python project created by lmcwhm.</p>\n")
+
+
+HTTPServer((os.environ["HOST"], int(os.environ["PORT"])), Handler).serve_forever()
+`, domain),
+		}
+	case "java":
+		return map[string]string{"README.txt": "Upload app.jar (e.g. a Spring Boot fat jar) here, then restart the project.\n"}
+	}
+	page := fmt.Sprintf("<!doctype html><meta charset=utf-8><title>%s</title><h1>%s</h1><p>Site created by lmcwhm.</p>\n", domain, domain)
+	return map[string]string{"index.html": page}
+}
+
+func createRoot(root, domain, typ string) error {
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return err
 	}
 	entries, _ := os.ReadDir(root)
 	if len(entries) == 0 {
-		page := fmt.Sprintf("<!doctype html><meta charset=utf-8><title>%s</title><h1>%s</h1><p>Site created by lmcwhm.</p>\n", domain, domain)
-		if err := os.WriteFile(filepath.Join(root, "index.html"), []byte(page), 0o644); err != nil {
-			return err
+		for name, body := range placeholders(typ, domain) {
+			if err := os.WriteFile(filepath.Join(root, name), []byte(body), 0o644); err != nil {
+				return err
+			}
 		}
 	}
 	// PHP-FPM runs as www-data (uid 33) in the official images.
@@ -439,6 +666,9 @@ func (sv *Service) removeDNS(ctx context.Context, s Site, log tasks.Logf) error 
 // ---- SSL ----
 
 func (sv *Service) issue(ctx context.Context, s *Site, ch acme.Challenge, wildcard bool, log tasks.Logf) error {
+	if s.Passthrough {
+		return ErrPassSSL
+	}
 	domains := []string{}
 	for _, h := range s.Hosts() {
 		if strings.HasPrefix(h, "*.") && ch != acme.DNS01 {
@@ -502,6 +732,9 @@ func (sv *Service) IssueCert(ctx context.Context, id int64, challenge string, wi
 	if wildcard && challenge != "dns" {
 		return "", ErrWildcardDNS
 	}
+	if s.Passthrough {
+		return "", ErrPassSSL
+	}
 	return sv.tasks.Start("site.ssl:"+s.Domain, func(ctx context.Context, log tasks.Logf) error {
 		return sv.issue(ctx, &s, acme.Challenge(challenge), wildcard, log)
 	}), nil
@@ -512,6 +745,9 @@ func (sv *Service) UploadCert(ctx context.Context, id int64, certPEM, keyPEM str
 	s, err := sv.Get(ctx, id)
 	if err != nil {
 		return err
+	}
+	if s.Passthrough {
+		return ErrPassSSL
 	}
 	leaf, err := acme.ParsePair([]byte(certPEM), []byte(keyPEM))
 	if err != nil {
@@ -555,6 +791,12 @@ type UpdateInput struct {
 	Stopped    *bool     `json:"stopped"`
 	Remark     *string   `json:"remark"`
 	DNSProxied *bool     `json:"dns_proxied"`
+	// Runtime projects.
+	RuntimeVersion *string `json:"runtime_version"`
+	Command        *string `json:"command"`
+	AppPort        *int    `json:"app_port"`
+	// Reverse proxies.
+	ProxyTarget *string `json:"proxy_target"`
 }
 
 // Update changes settings; it returns a task id because a new PHP version may
@@ -584,6 +826,38 @@ func (sv *Service) Update(ctx context.Context, id int64, in UpdateInput) (string
 	if in.Remark != nil {
 		s.Remark = *in.Remark
 	}
+	if in.RuntimeVersion != nil || in.Command != nil || in.AppPort != nil {
+		if !IsProject(s.Type) {
+			return "", ErrNotProject
+		}
+	}
+	if in.RuntimeVersion != nil {
+		if sv.Runtimes == nil {
+			return "", ErrNoRuntime
+		}
+		if _, err := sv.Runtimes.RuntimeImage(ctx, s.Type, *in.RuntimeVersion); err != nil {
+			return "", ErrNoRuntime
+		}
+		s.RuntimeVersion = *in.RuntimeVersion
+	}
+	if in.Command != nil {
+		if s.Command = strings.TrimSpace(*in.Command); !validCommand(s.Command) {
+			return "", ErrBadCommand
+		}
+	}
+	if in.AppPort != nil && *in.AppPort != s.AppPort {
+		if err := sv.checkPort(ctx, s.ID, *in.AppPort, true); err != nil {
+			return "", err
+		}
+		s.AppPort = *in.AppPort
+	}
+	if in.ProxyTarget != nil {
+		target := strings.TrimRight(strings.TrimSpace(*in.ProxyTarget), "/")
+		if s.Type != "proxy" || !validTarget(target, s.Passthrough) {
+			return "", ErrBadTarget
+		}
+		s.ProxyTarget = target
+	}
 	return sv.tasks.Start("site.update:"+s.Domain, func(ctx context.Context, log tasks.Logf) error {
 		if err := sv.ensureStack(ctx, s.PHPVersion, log); err != nil {
 			return err
@@ -594,6 +868,11 @@ func (sv *Service) Update(ctx context.Context, id int64, in UpdateInput) (string
 		if s.DNSManaged && (in.Aliases != nil || in.DNSProxied != nil) {
 			if err := sv.syncDNS(ctx, s, log); err != nil {
 				log("DNS: %v", err)
+			}
+		}
+		if IsProject(s.Type) {
+			if err := sv.ensureProject(ctx, s, log); err != nil {
+				return err
 			}
 		}
 		log("applying configuration")
@@ -616,6 +895,10 @@ func (sv *Service) Delete(ctx context.Context, id int64, in DeleteInput) (string
 			return err
 		}
 		os.Remove(sv.Env.CertPath(s.Domain))
+		if IsProject(s.Type) {
+			log("removing container %s", ProjectContainer(s.Domain))
+			dockerx.Remove(ctx, ProjectContainer(s.Domain))
+		}
 		if sv.Env.Installed(ctx) {
 			if err := sv.Apply(ctx); err != nil {
 				return err
@@ -642,6 +925,60 @@ func (sv *Service) Vhost(ctx context.Context, id int64) (string, error) {
 		return "", err
 	}
 	return sv.Env.VhostConfig(sv.spec(s))
+}
+
+// ---- runtime projects ----
+
+func (sv *Service) project(ctx context.Context, id int64) (Site, error) {
+	s, err := sv.Get(ctx, id)
+	if err != nil {
+		return s, err
+	}
+	if !IsProject(s.Type) {
+		return s, ErrNotProject
+	}
+	return s, nil
+}
+
+// ProjectLogs returns the tail of a project's stdout/stderr.
+func (sv *Service) ProjectLogs(ctx context.Context, id int64, n int) (string, error) {
+	s, err := sv.project(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	return dockerx.Logs(ctx, ProjectContainer(s.Domain), n), nil
+}
+
+// ProjectState is the project container's state ("" when missing).
+func (sv *Service) ProjectState(ctx context.Context, id int64) (string, error) {
+	s, err := sv.project(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	return dockerx.State(ctx, ProjectContainer(s.Domain)), nil
+}
+
+// RestartProject restarts the container, e.g. after deploying new code.
+func (sv *Service) RestartProject(ctx context.Context, id int64) error {
+	s, err := sv.project(ctx, id)
+	if err != nil {
+		return err
+	}
+	if s.Stopped {
+		return nil
+	}
+	if dockerx.State(ctx, ProjectContainer(s.Domain)) == "" {
+		return sv.tasks.RunSync(ctx, func(ctx context.Context) error { return sv.ensureProject(ctx, s, func(string, ...any) {}) })
+	}
+	_, err = dockerx.Run(ctx, "restart", ProjectContainer(s.Domain))
+	return err
+}
+
+// UsesRuntime reports whether a website runs on an App Store runtime version.
+func (sv *Service) UsesRuntime(ctx context.Context, app, version string) bool {
+	var n int
+	sv.st.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM sites WHERE type = ? AND runtime_version = ?`, app, version).Scan(&n)
+	return n > 0
 }
 
 // ---- renewal ----
