@@ -171,7 +171,7 @@ func (e *Env) RulePreview(r EdgeRule) string {
 	}
 	var b strings.Builder
 	for _, l := range rd.Lines {
-		fmt.Fprintf(&b, "http-request set-var(txn.block) str(rule-%s) if guard !exempt %s\n", rd.Code, l)
+		fmt.Fprintf(&b, "http-request set-var(txn.block) str(rule-%s) if guard !ip_allow !list_pass !acme %s\n", rd.Code, l)
 	}
 	names := make([]string, 0, len(files))
 	for n := range files {

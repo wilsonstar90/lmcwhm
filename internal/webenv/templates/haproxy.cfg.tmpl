@@ -149,23 +149,20 @@ backend st_cc
     http-request set-var(txn.prot) var(txn.host),map_str({{.Dir}}/maps/prot_exact.map)
     http-request set-var(txn.prot) var(txn.host),map_end({{.Dir}}/maps/prot_wild.map) if !{ var(txn.prot) -m found }
     acl guard var(txn.prot) -m sub ,on,
-    acl exempt ip_allow
-    acl exempt list_pass
-    acl exempt acme
-    http-request set-var(txn.block) str(cdn_only) if !blocked guard { var(txn.prot) -m sub ,cdn, } !via_cdn !exempt
-    http-request set-var(txn.block) str(fake_spider) if !blocked guard { var(txn.prot) -m sub ,fake, } { req.hdr(user-agent) -m sub -i -f {{.Dir}}/maps/spider_ua.lst } !trusted !exempt
-    http-request set-var(txn.block) str(idc) if !blocked guard { var(txn.prot) -m sub ,idc, } { src -f {{.Dir}}/maps/idc.lst } !trusted !exempt
-    http-request set-var(txn.block) str(crawler) if !blocked guard { var(txn.prot) -m sub ,crawler, } { req.hdr(user-agent) -m sub -i -f {{.Dir}}/maps/crawler_ua.lst } !exempt
+    http-request set-var(txn.block) str(cdn_only) if !blocked guard { var(txn.prot) -m sub ,cdn, } !via_cdn !ip_allow !list_pass !acme
+    http-request set-var(txn.block) str(fake_spider) if !blocked guard { var(txn.prot) -m sub ,fake, } { req.hdr(user-agent) -m sub -i -f {{.Dir}}/maps/spider_ua.lst } !trusted !ip_allow !list_pass !acme
+    http-request set-var(txn.block) str(idc) if !blocked guard { var(txn.prot) -m sub ,idc, } { src -f {{.Dir}}/maps/idc.lst } !trusted !ip_allow !list_pass !acme
+    http-request set-var(txn.block) str(crawler) if !blocked guard { var(txn.prot) -m sub ,crawler, } { req.hdr(user-agent) -m sub -i -f {{.Dir}}/maps/crawler_ua.lst } !ip_allow !list_pass !acme
 {{- range .Rules}}
 {{- $code := .Code}}
 {{- range .Lines}}
-    http-request set-var(txn.block) str(rule-{{$code}}) if !blocked guard !exempt {{.}}
+    http-request set-var(txn.block) str(rule-{{$code}}) if !blocked guard !ip_allow !list_pass !acme {{.}}
 {{- end}}
 {{- end}}
     # CC: requests per visitor address in 10 seconds, limit per host.
     http-request set-var(txn.cc) var(txn.host),map_str_int({{.Dir}}/maps/cc_exact.map)
     http-request set-var(txn.cc) var(txn.host),map_end_int({{.Dir}}/maps/cc_wild.map) if !{ var(txn.cc) -m found }
-    http-request track-sc0 src table st_cc if guard { var(txn.cc) -m found } !trusted !exempt
-    http-request set-var(txn.block) str(cc) if !blocked guard { var(txn.cc) -m found } { sc_http_req_rate(0),sub(txn.cc) gt 0 } !trusted !exempt
+    http-request track-sc0 src table st_cc if guard { var(txn.cc) -m found } !trusted !ip_allow !list_pass !acme
+    http-request set-var(txn.block) str(cc) if !blocked guard { var(txn.cc) -m found } { sc_http_req_rate(0),sub(txn.cc) gt 0 } !trusted !ip_allow !list_pass !acme
     http-request set-header X-Lmcwhm-Block %[var(txn.block)] if blocked
 {{- end}}

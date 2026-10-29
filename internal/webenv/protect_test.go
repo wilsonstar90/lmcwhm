@@ -36,9 +36,9 @@ func TestProtectionConfig(t *testing.T) {
 	cfg := string(edge["haproxy.cfg"])
 	d := e.EdgeDir()
 	for _, want := range []string{
-		"str(rule-wp-1002) if !blocked guard !exempt { path -m end -i -f " + d + "/maps/rules/wp-1002_0.lst }",
-		"str(rule-wp-1001) if !blocked guard !exempt { path -m beg -i -f " + d + "/maps/rules/wp-1001_0.lst }",
-		"str(rule-wp-1001) if !blocked guard !exempt { query -m sub -i -f " + d + "/maps/rules/wp-1001_1.lst }",
+		"str(rule-wp-1002) if !blocked guard !ip_allow !list_pass !acme { path -m end -i -f " + d + "/maps/rules/wp-1002_0.lst }",
+		"str(rule-wp-1001) if !blocked guard !ip_allow !list_pass !acme { path -m beg -i -f " + d + "/maps/rules/wp-1001_0.lst }",
+		"str(rule-wp-1001) if !blocked guard !ip_allow !list_pass !acme { query -m sub -i -f " + d + "/maps/rules/wp-1001_1.lst }",
 		"{ req.body -m sub -i -f " + d + "/maps/rules/c7_0.lst } !{ path -m beg -i -f " + d + "/maps/rules/c7_1.lst }",
 		"option http-buffer-request", "stick-table type ipv6", "sc_http_req_rate(0),sub(txn.cc) gt 0",
 		"use_backend be_web if blocked", "http-request set-header X-Lmcwhm-Block %[var(txn.block)] if blocked",
