@@ -9,6 +9,7 @@ import { get, post, ApiError } from '../api/client'
 import type { Container } from '../api/types'
 import { bytes, datetime } from '../format'
 import DockerContainer from './DockerContainer.vue'
+import DockerVolumes from './DockerVolumes.vue'
 
 // Containers as cards with live CPU / memory; click one for its settings.
 const emit = defineEmits<{ task: [id: string, title: string]; bind: [port: number, name: string]; changed: [] }>()
@@ -98,7 +99,7 @@ function onMenu(c: Container, key: string) {
 }
 
 // ---- create ----
-const blank = () => ({ name: '', image: '', ports: '', env: '', volumes: '', restart: 'unless-stopped', network: '', command: '', cpus: '', memory: '' })
+const blank = () => ({ name: '', image: '', ports: '', env: '', volumes: [] as string[], restart: 'unless-stopped', network: '', command: '', cpus: '', memory: '' })
 const f = ref(blank())
 const lines = (s: string) => s.split('\n').map((x) => x.trim()).filter(Boolean)
 const restartOptions = ['no', 'always', 'unless-stopped', 'on-failure'].map((v) => ({ label: v, value: v }))
@@ -109,7 +110,6 @@ async function create() {
       ...f.value,
       ports: lines(f.value.ports),
       env: lines(f.value.env),
-      volumes: lines(f.value.volumes),
     })
     showCreate.value = false
     emit('task', r.task_id, `${t('docker.create')} · ${f.value.image}`)
@@ -196,9 +196,9 @@ async function create() {
               <n-input v-model:value="f.ports" type="textarea" :rows="3" placeholder="127.0.0.1:8081:80" />
             </n-form-item>
           </n-gi>
-          <n-gi>
+          <n-gi span="1 s:2">
             <n-form-item :label="t('docker.volumes')" :feedback="t('docker.volumes_hint')">
-              <n-input v-model:value="f.volumes" type="textarea" :rows="3" placeholder="/www/data:/data" />
+              <DockerVolumes v-model:value="f.volumes" />
             </n-form-item>
           </n-gi>
           <n-gi>

@@ -12,6 +12,7 @@ import { bytes, datetime } from '../format'
 import LineChart from './LineChart.vue'
 import TaskModal from './TaskModal.vue'
 import TerminalView from './TerminalView.vue'
+import DockerVolumes from './DockerVolumes.vue'
 
 // The settings window of one container (aaPanel 容器設定): a left menu of
 // status, terminal, details, storage, networks, policy and the changes that
@@ -175,13 +176,13 @@ async function doCommit() {
 }
 
 // ---- edit ----
-const edit = ref<{ name: string; image: string; ports: string; env: string; volumes: string; restart: string; network: string; command: string; cpus: string; memory: string } | null>(null)
+const edit = ref<{ name: string; image: string; ports: string; env: string; volumes: string[]; restart: string; network: string; command: string; cpus: string; memory: string } | null>(null)
 const pull = ref(false)
 const lines = (s: string) => s.split('\n').map((x) => x.trim()).filter(Boolean)
 async function loadSpec() {
   try {
     const s = await get<ContainerSpec>(`${base.value}/spec`)
-    edit.value = { ...s, ports: s.ports.join('\n'), env: s.env.join('\n'), volumes: s.volumes.join('\n') }
+    edit.value = { ...s, ports: s.ports.join('\n'), env: s.env.join('\n') }
   } catch (e) {
     fail(e)
   }
@@ -189,7 +190,7 @@ async function loadSpec() {
 async function saveEdit() {
   const e = edit.value!
   try {
-    const r = await post<{ task_id: string }>(`${base.value}/recreate`, { ...e, ports: lines(e.ports), env: lines(e.env), volumes: lines(e.volumes), pull: pull.value })
+    const r = await post<{ task_id: string }>(`${base.value}/recreate`, { ...e, ports: lines(e.ports), env: lines(e.env), pull: pull.value })
     runTask(r, t('docker.c.tabs.edit'), () => (name.value = e.name || name.value))
   } catch (err) {
     fail(err)
@@ -429,9 +430,9 @@ const bound = computed(() =>
                       <n-input v-model:value="edit.ports" type="textarea" :rows="3" class="mono" />
                     </n-form-item>
                   </n-gi>
-                  <n-gi>
+                  <n-gi span="1 s:2">
                     <n-form-item :label="t('docker.volumes')" :feedback="t('docker.volumes_hint')">
-                      <n-input v-model:value="edit.volumes" type="textarea" :rows="3" class="mono" />
+                      <DockerVolumes v-model:value="edit.volumes" />
                     </n-form-item>
                   </n-gi>
                   <n-gi>

@@ -615,7 +615,7 @@
     "search": "搜索名称 / 镜像",
     "optional": "可选",
     "ports_hint": "每行一个：[IP:]主机端口:容器端口[/udp]。使用 127.0.0.1: 并绑定域名即可通过 HTTPS 对外。",
-    "volumes_hint": "每行一个：/主机路径:/容器路径[:ro] 或 卷名:/路径",
+    "volumes_hint": "主机目录（📁 选择）或存储卷名称，以及容器内的路径",
     "env": "环境变量",
     "env_hint": "每行一个 KEY=value",
     "restart_policy": "重启策略",
@@ -746,7 +746,10 @@
       "proxy_hint": "把域名绑定到已发布的端口：会创建一个反向代理网站，可选 SSL。",
       "port": "端口",
       "bound": "已绑定的域名",
-      "none_bound": "这个容器还没有绑定域名。"
+      "none_bound": "这个容器还没有绑定域名。",
+      "host_or_volume": "主机目录或存储卷名称",
+      "read_only": "只读",
+      "add_volume": "添加挂载"
     },
     "reg": {
       "server": "仓库地址",

@@ -615,7 +615,7 @@
     "search": "Search name / image",
     "optional": "Optional",
     "ports_hint": "One per line: [IP:]host:container[/udp]. Use 127.0.0.1: and bind a domain to publish through HTTPS.",
-    "volumes_hint": "One per line: /host/path:/container/path[:ro] or volume:/path",
+    "volumes_hint": "Host folder (📁 to choose) or volume name, and the path inside the container",
     "env": "Environment",
     "env_hint": "One KEY=value per line",
     "restart_policy": "Restart policy",
@@ -746,7 +746,10 @@
       "proxy_hint": "Bind a domain to a published port: a reverse proxy website is created, with SSL if you choose.",
       "port": "Port",
       "bound": "Bound domains",
-      "none_bound": "No domain is bound to this container yet."
+      "none_bound": "No domain is bound to this container yet.",
+      "host_or_volume": "Host folder or volume name",
+      "read_only": "Read only",
+      "add_volume": "Add volume"
     },
     "reg": {
       "server": "Registry",

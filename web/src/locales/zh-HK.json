@@ -615,7 +615,7 @@
     "search": "搜尋名稱 / image",
     "optional": "可選",
     "ports_hint": "每行一個：[IP:]主機端口:容器端口[/udp]。用 127.0.0.1: 再綁定域名，就可以經 HTTPS 對外。",
-    "volumes_hint": "每行一個：/主機路徑:/容器路徑[:ro] 或 volume:/路徑",
+    "volumes_hint": "主機目錄（📁 選擇）或儲存卷名稱，以及容器內的路徑",
     "env": "環境變數",
     "env_hint": "每行一個 KEY=value",
     "restart_policy": "重啟策略",
@@ -746,7 +746,10 @@
       "proxy_hint": "把域名綁定到已發佈的端口：會建立一個反向代理網站，可選 SSL。",
       "port": "端口",
       "bound": "已綁定的域名",
-      "none_bound": "這個容器還沒有綁定域名。"
+      "none_bound": "這個容器還沒有綁定域名。",
+      "host_or_volume": "主機目錄或儲存卷名稱",
+      "read_only": "唯讀",
+      "add_volume": "新增掛載"
     },
     "reg": {
       "server": "倉庫地址",

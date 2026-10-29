@@ -5,6 +5,7 @@ import { NButton, NDataTable, NSpace, NTag, NModal, NCard, NForm, NFormItem, NIn
 import { get, post, put, ApiError } from '../api/client'
 import type { ComposeProject } from '../api/types'
 import LogsModal from './LogsModal.vue'
+import { CodeEditor } from './code-editor'
 
 const emit = defineEmits<{ task: [id: string, title: string] }>()
 const { t } = useI18n()
@@ -143,10 +144,10 @@ const columns: DataTableColumns<ComposeProject> = [
           <n-input v-model:value="edit.name" placeholder="blog" />
         </n-form-item>
         <n-form-item label="docker-compose.yml">
-          <n-input v-model:value="edit.compose" type="textarea" :rows="16" class="mono" />
+          <CodeEditor v-model="edit.compose" language="docker-compose.yml" height="360px" @save="save" />
         </n-form-item>
         <n-form-item label=".env">
-          <n-input v-model:value="edit.env" type="textarea" :rows="3" class="mono" placeholder="KEY=value" />
+          <CodeEditor v-model="edit.env" language=".env" height="120px" placeholder="KEY=value" @save="save" />
         </n-form-item>
         <n-checkbox v-if="edit.isNew" v-model:checked="edit.up">{{ t('docker.start_now') }}</n-checkbox>
       </n-form>
@@ -160,10 +161,3 @@ const columns: DataTableColumns<ComposeProject> = [
   </n-modal>
   <LogsModal :url="logs?.url ?? null" :title="logs?.title ?? ''" @close="logs = null" />
 </template>
-
-<style scoped>
-.mono :deep(textarea) {
-  font-family: Menlo, Consolas, monospace;
-  font-size: 12px;
-}
-</style>
