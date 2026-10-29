@@ -76,7 +76,7 @@ func TestDomainTargets(t *testing.T) {
 	}
 	// Redirect keeps the path and drops a trailing slash.
 	sv.applyTarget(ctx, &entry, TargetInput{Target: TargetRedirect, Redirect: "https://new.example.com/", RedirectPath: true, RedirectCode: 308})
-	if sp := sv.spec(entry); sp.Redirect != "https://new.example.com" || sp.RedirectCode != 308 || !sp.RedirectPath {
+	if sp := sv.spec(entry); sp.Redirect != "https://new.example.com" || sp.RedirectCode != 308 || !sp.RedirectPath || sp.Root == "" {
 		t.Fatalf("redirect spec %+v", sp)
 	}
 	sv.applyTarget(ctx, &entry, TargetInput{Target: TargetPassthrough, ProxyTarget: "127.0.0.1:8443"})

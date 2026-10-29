@@ -347,6 +347,10 @@ func (sv *Service) specOf(s Site, byID map[int64]Site) webenv.Site {
 	}
 	ws := webenv.Site{
 		Domain: s.Domain, Aliases: s.Aliases, Stopped: s.Stopped, ForceHTTPS: s.ForceHTTPS, HSTS: s.HSTS, HasCert: has,
+		Root: s.Root, // nginx needs one even when it only proxies or redirects
+	}
+	if ws.Root == "" {
+		ws.Root = sv.Env.SiteRoot(s.Domain)
 	}
 	content := s
 	switch s.target() {
