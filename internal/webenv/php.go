@@ -511,6 +511,9 @@ func (e *Env) UpdatePHP(ctx context.Context, v string, log func(string, ...any))
 	if !ValidPHP(v) {
 		return fmt.Errorf("unsupported PHP version %q", v)
 	}
+	if err := os.MkdirAll(e.PHPDir(v), 0o755); err != nil {
+		return err
+	}
 	base := "php:" + v + "-fpm"
 	c := e.PHPConfig(v)
 	img := PHPImageFor(v, c.Extensions)
@@ -519,7 +522,10 @@ func (e *Env) UpdatePHP(ctx context.Context, v string, log func(string, ...any))
 	if _, err := dockerx.Run(ctx, "pull", "-q", base); err != nil {
 		return err
 	}
-	if imageID(ctx, base) == oldBase && dockerx.ImageExists(ctx, img) && dockerx.State(ctx, PHPName(v)) == "running" {
+	// Up to date when nothing new was pulled and the build carries the base's
+	// version (an earlier update that failed after its pull leaves an old build).
+	if imageID(ctx, base) == oldBase && dockerx.State(ctx, PHPName(v)) == "running" &&
+		phpImageVersion(ctx, img) != "" && phpImageVersion(ctx, img) == phpImageVersion(ctx, base) {
 		log("PHP %s is already built on the newest image", v)
 		return nil
 	}
@@ -582,6 +588,17 @@ func (e *Env) UpdatePHP(ctx context.Context, v string, log func(string, ...any))
 	}
 	log("PHP %s updated", v)
 	return nil
+}
+
+// phpImageVersion is the PHP_VERSION an image declares ("" if none).
+func phpImageVersion(ctx context.Context, ref string) string {
+	out, _ := dockerx.Run(ctx, "image", "inspect", "-f", "{{range .Config.Env}}{{println .}}{{end}}", ref)
+	for _, line := range strings.Split(out, "\n") {
+		if v, ok := strings.CutPrefix(strings.TrimSpace(line), "PHP_VERSION="); ok {
+			return v
+		}
+	}
+	return ""
 }
 
 func imageID(ctx context.Context, ref string) string {

@@ -55,6 +55,8 @@ get80_retry() { # host path want
 curl -sk -c "$JAR" -o /dev/null "$P/console"
 CSRF="$(curl -sk -b "$JAR" -c "$JAR" -X POST "$P/api/v1/auth/login" -d '{"username":"admin","password":"Passw0rd1"}' | jget "['csrf']")"
 [[ -n "$CSRF" ]] || fail "login"
+# PHP 8.3 is built on an older patch release, so the update check has something to find.
+docker pull -q php:8.3.0-fpm >/dev/null && docker tag php:8.3.0-fpm php:8.3-fpm
 task POST /web/install
 
 # ---------- App Store: runtime + database engines ----------
@@ -614,9 +616,17 @@ docker exec lmcwhm-php83 php -m | grep -qx redis || fail "redis extension not lo
 [[ "$(docker exec lmcwhm-php83 php -r 'echo ini_get("memory_limit");')" == 384M ]] || fail "php.ini not applied"
 api GET /php/8.3 | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['status']['pool']=='www' and 'redis' in d['modules'], d" || fail "php status"
 [[ "$(get80 db.test /index.php)" == "db-ok-42" ]] || fail "site broken by PHP settings"
-api GET /php | python3 -c "import sys,json; v=[v for v in json.load(sys.stdin)['items'] if v['version']=='8.3'][0]; assert v['full_version'].startswith('8.3.'), v" \
+api GET /php | python3 -c "import sys,json; v=[v for v in json.load(sys.stdin)['items'] if v['version']=='8.3'][0]; assert v['full_version']=='8.3.0', v" \
   || fail "php full version"
-pass "PHP: redis extension built, php.ini and FPM pool applied, FPM status read"
+api POST /apps/updates/check | python3 -c "import sys,json; u=json.load(sys.stdin)['items']['php:8.3']; assert u['available'] and u['current']=='8.3.0', u" \
+  || fail "update check did not find the PHP patch"
+task POST /php/8.3/update
+api GET /php | python3 -c "import sys,json; v=[v for v in json.load(sys.stdin)['items'] if v['version']=='8.3'][0]; assert v['full_version'].startswith('8.3.') and v['full_version']!='8.3.0' and v['state']=='running', v" \
+  || fail "php not updated"
+docker exec lmcwhm-php83 php -m | grep -qx redis || fail "redis extension lost in the PHP update"
+docker exec lmcwhm-php83 php -i | grep -q 'memory_limit => 384M' || fail "php.ini lost in the PHP update"
+task POST /php/8.3/update # already the newest: nothing to do
+pass "PHP: redis extension built, php.ini and FPM pool applied, FPM status read, patch update rebuilt with extensions and settings kept"
 
 # Varnish page cache for one site.
 task PATCH "/sites/$DBSITE" '{"advanced":{"varnish":true,"varnish_ttl":300}}'
