@@ -36,6 +36,7 @@ const (
 	KindTamper       = "tamper"        // event: a protected website file changed
 	KindMalware      = "malware"       // event: the webshell scan found files
 	KindSecurityScan = "security_scan" // event: the scheduled security scan found critical risks
+	KindAppUpdate    = "app_update"    // event: an installed app or PHP version has a patch update
 	defaultCooldown  = 60              // minutes between repeats of an active alert
 	keepEvents       = 2000
 )
@@ -45,7 +46,7 @@ var (
 	ErrRule     = errors.New("alert.invalid_rule")
 	kinds       = map[string]bool{KindCPU: true, KindMem: true, KindLoad: true, KindDisk: true, KindServiceDown: true, KindSSLExpiry: true,
 		KindProbeDown: true, KindCronFailed: true, KindLoginFailed: true, KindPanelLogin: true, KindSSHLogin: true,
-		KindTamper: true, KindMalware: true, KindSecurityScan: true}
+		KindTamper: true, KindMalware: true, KindSecurityScan: true, KindAppUpdate: true}
 )
 
 type Channel struct {
@@ -428,7 +429,7 @@ func (sv *Service) Emit(ctx context.Context, kind, key, severity, title, body st
 	for _, r := range rules {
 		if resolved {
 			sv.clear(ctx, r, key, title, body)
-		} else if kind == KindCronFailed || kind == KindFirewallDrop || kind == KindTamper || kind == KindMalware || kind == KindSecurityScan {
+		} else if kind == KindCronFailed || kind == KindFirewallDrop || kind == KindTamper || kind == KindMalware || kind == KindSecurityScan || kind == KindAppUpdate {
 			sv.deliver(ctx, r, key, severity, title, body) // one-off events: no repeat state
 		} else {
 			sv.raise(ctx, r, key, severity, title, body)

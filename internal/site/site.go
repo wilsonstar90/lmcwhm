@@ -383,6 +383,26 @@ func (sv *Service) ensureStack(ctx context.Context, extraPHP string, log tasks.L
 	return nil
 }
 
+// RecreateProjects restarts the projects of a runtime version on its
+// (updated) image.
+func (sv *Service) RecreateProjects(ctx context.Context, typ, version string, log tasks.Logf) {
+	all, err := sv.List(ctx)
+	if err != nil {
+		log("projects: %v", err)
+		return
+	}
+	for _, s := range all {
+		if s.Type != typ || s.RuntimeVersion != version {
+			continue
+		}
+		log("recreating project %s", s.Domain)
+		dockerx.Remove(ctx, ProjectContainer(s.Domain))
+		if err := sv.ensureProject(ctx, s, log); err != nil {
+			log("project %s: %v", s.Domain, err)
+		}
+	}
+}
+
 // ensureProject runs (or stops) the container of a runtime project. A project
 // whose code is not deployed yet may crash-loop; that is not an error here.
 func (sv *Service) ensureProject(ctx context.Context, s Site, log tasks.Logf) error {

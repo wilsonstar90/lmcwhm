@@ -468,15 +468,123 @@ type PHPVersionInfo struct {
 	Port       int      `json:"port"`
 	Extensions []string `json:"extensions"`
 	Sites      int      `json:"sites"`
+	// FullVersion is the exact version of the running build ("8.3.14").
+	FullVersion string `json:"full_version,omitempty"`
 }
 
 // EOLPHP reports versions without upstream security support.
 func EOLPHP(v string) bool { return phpVer(v) <= 81 }
 
-// RemovePHP stops and deletes a version's container (its settings are kept).
+// RemovePHP stops and deletes a version's container and its images (its
+// settings are kept, so a reinstall builds the same extensions).
 func (e *Env) RemovePHP(ctx context.Context, v string) error {
 	if !ValidPHP(v) {
 		return fmt.Errorf("unsupported PHP version %q", v)
 	}
-	return dockerx.Remove(ctx, PHPName(v))
+	if err := dockerx.Remove(ctx, PHPName(v)); err != nil {
+		return err
+	}
+	for _, ref := range phpImages(ctx, v) {
+		dockerx.Run(ctx, "rmi", ref)
+	}
+	dockerx.Run(ctx, "rmi", "php:"+v+"-fpm") // the base; fails harmlessly while in use
+	return nil
+}
+
+// phpImages lists the local images built for a version (the base build and
+// one per extension set).
+func phpImages(ctx context.Context, v string) []string {
+	out, _ := dockerx.Run(ctx, "images", "--format", "{{.Repository}}:{{.Tag}}", "lmcwhm/php")
+	var refs []string
+	for _, ref := range strings.Fields(out) {
+		if ref == PHPImage(v) || strings.HasPrefix(ref, PHPImage(v)+"-x") {
+			refs = append(refs, ref)
+		}
+	}
+	return refs
+}
+
+// UpdatePHP rebuilds a version on the newest upstream image of its tag
+// (php:8.3-fpm) with the same extensions, tests it with php-fpm -t and only
+// then replaces the running container; on failure the previous build stays (task context).
+func (e *Env) UpdatePHP(ctx context.Context, v string, log func(string, ...any)) error {
+	if !ValidPHP(v) {
+		return fmt.Errorf("unsupported PHP version %q", v)
+	}
+	base := "php:" + v + "-fpm"
+	c := e.PHPConfig(v)
+	img := PHPImageFor(v, c.Extensions)
+	oldBase := imageID(ctx, base)
+	log("pulling %s", base)
+	if _, err := dockerx.Run(ctx, "pull", "-q", base); err != nil {
+		return err
+	}
+	if imageID(ctx, base) == oldBase && dockerx.ImageExists(ctx, img) && dockerx.State(ctx, PHPName(v)) == "running" {
+		log("PHP %s is already built on the newest image", v)
+		return nil
+	}
+	// Keep the current builds so a failure puts them back.
+	old := map[string]string{}
+	for _, ref := range []string{PHPImage(v), img} {
+		if id := imageID(ctx, ref); id != "" {
+			old[ref] = id
+		}
+	}
+	restore := func() {
+		for ref, id := range old {
+			dockerx.Run(ctx, "tag", id, ref)
+		}
+	}
+	log("rebuilding PHP %s", v)
+	df, err := render("php.Dockerfile.tmpl", map[string]any{"Version": v})
+	if err != nil {
+		return err
+	}
+	if err := dockerx.Build(ctx, PHPImage(v), string(df)); err != nil {
+		restore()
+		return err
+	}
+	if img != PHPImage(v) {
+		dockerx.Run(ctx, "rmi", img) // untag so buildPHP rebuilds the extensions on the new base
+		if _, err := e.buildPHP(ctx, v, c.Extensions, log); err != nil {
+			restore()
+			return err
+		}
+	}
+	fpm, ini, err := e.renderPHP(v, c)
+	if err != nil {
+		restore()
+		return err
+	}
+	log("testing the new build (php-fpm -t)")
+	if err := e.testPHP(ctx, img, fpm, ini); err != nil {
+		restore()
+		return err
+	}
+	log("restarting PHP %s", v)
+	dockerx.Remove(ctx, PHPName(v))
+	if err := e.EnsurePHP(ctx, v, log); err != nil {
+		log("the new build did not start: %v; restoring the previous one", err)
+		restore()
+		dockerx.Remove(ctx, PHPName(v))
+		if err2 := e.EnsurePHP(ctx, v, log); err2 != nil {
+			return fmt.Errorf("update failed (%v) and the previous build did not start: %w", err, err2)
+		}
+		return fmt.Errorf("app.update_failed: %v", err)
+	}
+	for ref, id := range old {
+		if imageID(ctx, ref) != id {
+			dockerx.Run(ctx, "rmi", id) // the previous build, now untagged
+		}
+	}
+	if oldBase != "" && oldBase != imageID(ctx, base) {
+		dockerx.Run(ctx, "rmi", oldBase)
+	}
+	log("PHP %s updated", v)
+	return nil
+}
+
+func imageID(ctx context.Context, ref string) string {
+	id, _ := dockerx.Run(ctx, "image", "inspect", "-f", "{{.Id}}", ref)
+	return id
 }

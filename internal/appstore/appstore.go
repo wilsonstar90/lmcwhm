@@ -49,7 +49,9 @@ type Installed struct {
 	CreatedAt int64  `json:"created_at"`
 	// OOMProtect: started with a low OOM score (settings window).
 	OOMProtect bool `json:"oom_protect"`
-	secret     string
+	// FullVersion is the exact version of the local image ("11.4.4").
+	FullVersion string `json:"full_version"`
+	secret      string
 }
 
 // AdminUser is the engine's superuser that the panel uses.
@@ -76,6 +78,10 @@ type Service struct {
 	Home  string // /opt/lmcwhm
 	// InUse reports whether something (e.g. a website) still depends on an app version.
 	InUse func(ctx context.Context, app, version string) bool
+	// Backup dumps an engine's databases before an update.
+	Backup func(ctx context.Context, i Installed, log tasks.Logf) error
+	// RuntimeUpdated recreates the website projects of a runtime whose image was updated.
+	RuntimeUpdated func(ctx context.Context, app, version string, log tasks.Logf)
 }
 
 func New(st *store.Store, box *secrets.Box, tm *tasks.Manager, home string) *Service {
@@ -128,6 +134,7 @@ func (sv *Service) List(ctx context.Context) ([]Installed, error) {
 		if all[k].Container != "" {
 			all[k].State = dockerx.State(ctx, all[k].Container)
 		}
+		all[k].FullVersion = CurrentVersion(ctx, all[k].Image)
 	}
 	return all, nil
 }
@@ -144,6 +151,7 @@ func (sv *Service) Get(ctx context.Context, id int64) (Installed, error) {
 	if i.Container != "" {
 		i.State = dockerx.State(ctx, i.Container)
 	}
+	i.FullVersion = CurrentVersion(ctx, i.Image)
 	return i, nil
 }
 
@@ -336,10 +344,19 @@ func (sv *Service) Uninstall(ctx context.Context, id int64, removeData bool) (st
 		if removeData {
 			log("removing %s", sv.dir(i.App, i.Version))
 			os.RemoveAll(sv.dir(i.App, i.Version))
-			if _, err := dockerx.Run(ctx, "rmi", i.Image); err == nil {
-				log("image %s removed", i.Image)
+		}
+		// The image (and one kept by an update) frees disk space; it is pulled again on reinstall.
+		for _, ref := range []string{rollbackTag(i.App, i.Version), i.Image} {
+			if !dockerx.ImageExists(ctx, ref) {
+				continue
+			}
+			if _, err := dockerx.Run(ctx, "rmi", ref); err == nil {
+				log("image %s removed", ref)
+			} else {
+				log("image %s kept: %v", ref, err)
 			}
 		}
+		sv.forget(ctx, appKey(i.ID))
 		log("%s %s uninstalled", i.Name, i.Version)
 		return nil
 	}), nil

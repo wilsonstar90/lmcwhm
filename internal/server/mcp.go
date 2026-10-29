@@ -229,6 +229,8 @@ func (s *Server) buildMCP() *mcp.Server {
 	if s.Apps != nil {
 		add(read, "list_apps", "Installed App Store apps", "Installed runtimes, database engines and tools with version, port and container state.", nil, false,
 			noArgs(func(ctx context.Context) (any, error) { return s.Apps.List(ctx) }))
+		add(read, "app_updates", "Software updates", "Exact versions of installed apps and PHP versions and whether a patch update of the same version line is available (from the last daily check).", nil, false,
+			noArgs(func(ctx context.Context) (any, error) { return s.Apps.Updates(ctx), nil }))
 	}
 	if s.Firewall != nil {
 		add(read, "firewall_status", "Firewall status", "Firewall on/off, default policy, port rules and the number of blocked / allowed IPs.", nil, false,

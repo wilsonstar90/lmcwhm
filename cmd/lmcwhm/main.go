@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -188,6 +189,10 @@ func serveCmd() *cobra.Command {
 			bk := backup.New(a.st, box, a.paths.Home)
 			bk.WWWRoot, bk.Sites, bk.DBs, bk.Apps = env.WWWRoot, sites, dbs, apps
 			jobs.Backups = bk
+			apps.RuntimeUpdated = sites.RecreateProjects
+			apps.Backup = func(ctx context.Context, i appstore.Installed, log tasks.Logf) error {
+				return bk.BackupEngine(ctx, i.ID, logWriter(log))
+			}
 			jobs.Feeds = fw.RunFeeds
 			alerts := alert.New(a.st, box)
 			jobs.OnResult = func(j cron.Job, r cron.Run) {
@@ -322,4 +327,16 @@ func tailText(s string, n int) string {
 		return s
 	}
 	return "…" + s[len(s)-n:]
+}
+
+// logWriter turns task log lines into an io.Writer.
+type logWriter tasks.Logf
+
+func (l logWriter) Write(p []byte) (int, error) {
+	for _, line := range strings.Split(strings.TrimRight(string(p), "\n"), "\n") {
+		if line != "" {
+			l("%s", line)
+		}
+	}
+	return len(p), nil
 }

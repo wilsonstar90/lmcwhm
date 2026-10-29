@@ -564,3 +564,23 @@ func (sv *Service) RunPlan(ctx context.Context, cmd string, jobID int64, out io.
 	}
 	return sv.Run(ctx, p, jobID, out)
 }
+
+// BackupEngine stores a local copy of every database on one engine (before an update).
+func (sv *Service) BackupEngine(ctx context.Context, appID int64, out io.Writer) error {
+	if sv.DBs == nil {
+		return nil
+	}
+	all, err := sv.DBs.List(ctx)
+	if err != nil {
+		return err
+	}
+	for _, d := range all {
+		if d.AppID != appID {
+			continue
+		}
+		if err := sv.Run(ctx, Plan{Kind: KindDatabase, Target: strconv.FormatInt(d.ID, 10), Dests: []string{DestLocal}}, 0, out); err != nil {
+			return err
+		}
+	}
+	return nil
+}

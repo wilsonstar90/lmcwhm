@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/shirou/gopsutil/v4/mem"
 
+	"github.com/wilsonstar90/lmcwhm/internal/appstore"
 	"github.com/wilsonstar90/lmcwhm/internal/dockerx"
 	"github.com/wilsonstar90/lmcwhm/internal/logcenter"
 	"github.com/wilsonstar90/lmcwhm/internal/tasks"
@@ -28,7 +29,7 @@ func (s *Server) phpRoutes(r chi.Router) {
 	r.Get("/php", s.handlePHPList)
 	r.Get("/php/{v}", s.handlePHPGet)
 	r.Put("/php/{v}", s.handlePHPSave)
-	r.Post("/php/{v}/{action:install|start|stop|restart|reload|remove}", s.handlePHPAction)
+	r.Post("/php/{v}/{action:install|start|stop|restart|reload|remove|update}", s.handlePHPAction)
 	r.Get("/php/{v}/logs", s.handlePHPLogs)
 	r.Get("/varnish", s.handleVarnish)
 	r.Put("/varnish", s.handleVarnishSave)
@@ -61,10 +62,16 @@ func (s *Server) handlePHPList(w http.ResponseWriter, r *http.Request) {
 	}
 	items := []webenv.PHPVersionInfo{}
 	for _, v := range webenv.PHPVersions {
-		items = append(items, webenv.PHPVersionInfo{
+		info := webenv.PHPVersionInfo{
 			Version: v, EOL: webenv.EOLPHP(v), State: dockerx.State(r.Context(), webenv.PHPName(v)), Port: webenv.PHPPort(v),
 			Extensions: s.Sites.Env.PHPConfig(v).Extensions, Sites: count[v],
-		})
+		}
+		if info.State != "" {
+			if img, err := dockerx.Run(r.Context(), "inspect", "-f", "{{.Config.Image}}", webenv.PHPName(v)); err == nil {
+				info.FullVersion = appstore.CurrentVersion(r.Context(), img)
+			}
+		}
+		items = append(items, info)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"items": items, "extensions": webenv.PHPExtensions, "ini_keys": webenv.PHPINIKeys,
@@ -144,16 +151,39 @@ func (s *Server) handlePHPAction(w http.ResponseWriter, r *http.Request) {
 		return
 	case "remove":
 		sites, _ := s.Sites.List(r.Context())
+		var using []string
 		for _, st := range sites {
 			if st.Type == "php" && st.PHPVersion == v {
-				writeJSON(w, http.StatusConflict, apiError{Code: "php.in_use", Params: map[string]any{"site": st.Domain}})
-				return
+				using = append(using, st.Domain)
 			}
+		}
+		if len(using) > 0 {
+			writeJSON(w, http.StatusConflict, apiError{Code: "php.in_use", Params: map[string]any{"site": strings.Join(using, ", "), "count": len(using)}})
+			return
 		}
 		if err := s.Sites.Env.RemovePHP(r.Context(), v); err != nil {
 			writeErr(w, http.StatusInternalServerError, err)
 			return
 		}
+		if s.Apps != nil {
+			s.Apps.ForgetPHP(r.Context(), v)
+		}
+	case "update":
+		if dockerx.State(r.Context(), name) == "" {
+			writeErr(w, http.StatusBadRequest, errors.New("php.not_installed"))
+			return
+		}
+		id := s.Tasks.StartLong("PHP "+v, 45*time.Minute, func(ctx context.Context, log tasks.Logf) error {
+			if err := s.Sites.Env.UpdatePHP(ctx, v, log); err != nil {
+				return err
+			}
+			if s.Apps != nil {
+				s.Apps.RefreshPHP(ctx, v)
+			}
+			return nil
+		})
+		writeJSON(w, http.StatusAccepted, map[string]any{"task_id": id})
+		return
 	case "reload":
 		if _, err := dockerx.Run(r.Context(), "kill", "-s", "USR2", name); err != nil {
 			writeErr(w, http.StatusInternalServerError, err)

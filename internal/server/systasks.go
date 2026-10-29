@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -19,7 +20,7 @@ import (
 // Built-in scheduled tasks: the panel's own maintenance runs as cron jobs
 // the user can see, run, reschedule or switch off (aaPanel's default tasks).
 
-var systemCommands = map[string]bool{"ssl_renew": true, "time_sync": true, "release_memory": true, "security_scan": true}
+var systemCommands = map[string]bool{"ssl_renew": true, "time_sync": true, "release_memory": true, "security_scan": true, "app_updates": true}
 
 // malwareTask is the command of a "malware_scan" job.
 type malwareTask struct {
@@ -64,8 +65,42 @@ func (s *Server) RunTask(ctx context.Context, typ, cmd string, out io.Writer) er
 		return releaseMemory(out)
 	case "security_scan":
 		return s.securityScanTask(ctx, out)
+	case "app_updates":
+		return s.appUpdatesTask(ctx, out)
 	}
 	return cron.ErrCommand
+}
+
+// appUpdatesTask checks the installed software for patch updates (the
+// "app_updates" scheduled task); it reports, it never updates.
+func (s *Server) appUpdatesTask(ctx context.Context, out io.Writer) error {
+	if s.Apps == nil {
+		return errors.New("the App Store is not available")
+	}
+	items, err := s.Apps.CheckUpdates(ctx, s.notifyAppUpdate)
+	if err != nil {
+		return err
+	}
+	keys := make([]string, 0, len(items))
+	for k := range items {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	n := 0
+	for _, k := range keys {
+		u := items[k]
+		switch {
+		case u.Error != "":
+			fmt.Fprintf(out, "%s: %s (check failed: %s)\n", u.Name, u.Current, u.Error)
+		case u.Available:
+			n++
+			fmt.Fprintf(out, "%s: %s → %s (update available)\n", u.Name, u.Current, u.Latest)
+		default:
+			fmt.Fprintf(out, "%s: %s (up to date)\n", u.Name, u.Current)
+		}
+	}
+	fmt.Fprintf(out, "%d update(s) available\n", n)
+	return nil
 }
 
 func (s *Server) timeSyncTask(ctx context.Context, out io.Writer) error {
@@ -183,6 +218,8 @@ var defaultJobs = []defaultJob{
 		"en": "Release memory daily", "zh-HK": "每日釋放內存", "zh-TW": "每日釋放記憶體", "zh-CN": "每天释放内存", "ja": "毎日メモリ解放"}},
 	{"security_scan", "system", "security_scan", "30 3 * * 1", 3600, map[string]string{
 		"en": "Security scan", "zh-HK": "安全掃描", "zh-TW": "安全掃描", "zh-CN": "安全扫描", "ja": "セキュリティスキャン"}},
+	{"app_updates", "system", "app_updates", "25 5 * * *", 600, map[string]string{
+		"en": "Check software updates", "zh-HK": "檢查軟件更新", "zh-TW": "檢查軟體更新", "zh-CN": "检查软件更新", "ja": "ソフトウェア更新の確認"}},
 	{"malware_scan", "malware_scan", `{"paths":[],"clamav":false}`, "30 2 * * 0", 7200, map[string]string{
 		"en": "Webshell scan of websites", "zh-HK": "網站木馬掃描", "zh-TW": "網站木馬掃描", "zh-CN": "网站木马扫描", "ja": "サイトの Webshell スキャン"}},
 }

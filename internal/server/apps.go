@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -8,9 +9,11 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/wilsonstar90/lmcwhm/internal/alert"
 	"github.com/wilsonstar90/lmcwhm/internal/appstore"
 	"github.com/wilsonstar90/lmcwhm/internal/database"
 	"github.com/wilsonstar90/lmcwhm/internal/site"
@@ -21,6 +24,9 @@ func (s *Server) appRoutes(r chi.Router) {
 	r.Get("/apps", s.handleApps)
 	r.Post("/apps/install", s.handleInstallApp)
 	r.Post("/apps/{id}/uninstall", s.handleUninstallApp)
+	r.Post("/apps/{id}/update", s.handleUpdateApp)
+	r.Get("/apps/updates", s.handleAppUpdates)
+	r.Post("/apps/updates/check", s.handleCheckAppUpdates)
 	r.Post("/apps/{id}/{action:start|stop|restart}", s.handleControlApp)
 	r.Get("/apps/{id}/logs", s.handleAppLogs)
 	r.Get("/apps/{id}/config", s.handleAppConfig)
@@ -120,6 +126,49 @@ func (s *Server) handleUninstallApp(w http.ResponseWriter, r *http.Request) {
 	}
 	s.auditCat(r, "app", "app.uninstall", detail)
 	writeJSON(w, http.StatusOK, map[string]string{"task_id": id})
+}
+
+func (s *Server) handleUpdateApp(w http.ResponseWriter, r *http.Request) {
+	i, err := s.Apps.Get(r.Context(), idParam(r))
+	if err != nil {
+		writeCodedErr(w, err, appstore.ErrNotFound)
+		return
+	}
+	id, err := s.Apps.Update(r.Context(), i.ID)
+	if err != nil {
+		writeCodedErr(w, err, appstore.ErrNotFound)
+		return
+	}
+	s.auditCat(r, "app", "app.update", i.App+" "+i.Version)
+	writeJSON(w, http.StatusOK, map[string]string{"task_id": id})
+}
+
+func (s *Server) handleAppUpdates(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"items": s.Apps.Updates(r.Context())})
+}
+
+func (s *Server) handleCheckAppUpdates(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
+	defer cancel()
+	items, err := s.Apps.CheckUpdates(ctx, s.notifyAppUpdate)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+// notifyAppUpdate sends one alert per newly found update.
+func (s *Server) notifyAppUpdate(u appstore.Update) {
+	if s.Alerts == nil {
+		return
+	}
+	latest := u.Latest
+	if latest == "" || latest == u.Current {
+		latest = "new build"
+	}
+	s.Alerts.Emit(context.Background(), alert.KindAppUpdate, u.Key, "info",
+		fmt.Sprintf("Update available: %s %s → %s", u.Name, u.Current, latest), u.Image, false)
 }
 
 func (s *Server) handleControlApp(w http.ResponseWriter, r *http.Request) {
