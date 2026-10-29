@@ -13,6 +13,14 @@ server {
 
     access_log {{.LogDir}}/{{.Domain}}.log main;
     error_log  {{.LogDir}}/{{.Domain}}.error.log;
+    # Refused at the edge (blacklists, website protection, dedicated rules);
+    # the header names the reason, logged with the request.
+    if ($http_x_lmcwhm_block = cc) {
+        return 429;
+    }
+    if ($http_x_lmcwhm_block) {
+        return 403;
+    }
 {{- if .WAFOff}}
     modsecurity off;
 {{- else if .WAFExclude}}

@@ -37,6 +37,7 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/mcp"
 	"github.com/wilsonstar90/lmcwhm/internal/monitor"
 	"github.com/wilsonstar90/lmcwhm/internal/probe"
+	"github.com/wilsonstar90/lmcwhm/internal/protect"
 	"github.com/wilsonstar90/lmcwhm/internal/secscan"
 	"github.com/wilsonstar90/lmcwhm/internal/security"
 	"github.com/wilsonstar90/lmcwhm/internal/settings"
@@ -73,6 +74,7 @@ type Deps struct {
 	Cron     *cron.Service
 	GeoIP    *geoip.DB
 	Firewall *firewall.Service
+	Protect  *protect.Service
 	WAF      *security.WAF
 	CrowdSec *security.CrowdSec
 	Backup   *backup.Service

@@ -112,6 +112,31 @@ api POST /firewall/patterns/clear '{"kind":"url","list":"block"}' >/dev/null
 api POST /firewall/patterns/clear '{"kind":"url","list":"allow"}' >/dev/null
 pass "User-Agent and URL black / white lists at the edge"
 
+# ---------- website protection and dedicated rules ----------
+cur="$(api GET /protect/settings)"
+body="$(python3 -c "import sys,json; s=json.loads(sys.argv[1])['settings']; s['rules_on']=True; print(json.dumps(s))" "$cur")"
+api PUT /protect/settings "$body" | grep -q '"rules_on":true' || fail "turn dedicated rules on"
+docker exec lmcwhm-haproxy haproxy -c -f /opt/lmcwhm/edge/haproxy.cfg 2>&1 | grep -i "warning\|alert" && fail "haproxy config has warnings (protection)"
+[[ "$(code --resolve php.test:80:127.0.0.1 http://php.test/xmlrpc.php)" == 403 ]] || fail "built-in rule wp-1002 (xmlrpc.php)"
+[[ "$(code --resolve php.test:80:127.0.0.1 'http://php.test/?author=1')" == 403 ]] || fail "built-in rule wp-1003 (?author=)"
+[[ "$(get80 php.test /index.php)" == php-ok-8.3* ]] || fail "ordinary request refused by the dedicated rules"
+api POST /protect/rules '{"name":"test rule","enabled":true,"match_all":true,"conditions":[{"field":"query","op":"contains","values":["evil=1"]},{"field":"method","op":"equals","values":["GET"]}]}' | grep -q '"code":"c' || fail "add custom rule"
+[[ "$(code --resolve php.test:80:127.0.0.1 'http://php.test/index.php?evil=1')" == 403 ]] || fail "custom rule"
+[[ "$(code -X POST --resolve php.test:80:127.0.0.1 'http://php.test/index.php?evil=1')" != 403 ]] || fail "custom rule ignores its method condition"
+api GET /protect/sites/php.test/blocked | grep -q '"block":"rule-wp-1002"' || fail "blocked log without the rule: $(api GET /protect/sites/php.test/blocked | head -c 400)"
+# Scrapers and CC on php.test only.
+api PUT /protect/sites '{"items":{"php.test":{"on":true,"crawler":true,"cc":5}}}' | grep -q '"ok":true' || fail "save site protection"
+[[ "$(code -A 'python-requests/2.31' --resolve php.test:80:127.0.0.1 http://php.test/index.php)" == 403 ]] || fail "scraper User-Agent"
+[[ "$(code -A 'Mozilla/5.0' --resolve php.test:80:127.0.0.1 http://php.test/index.php)" == 200 ]] || fail "browser refused"
+got=""; for i in $(seq 1 12); do got+="$(code -A 'Mozilla/5.0' --resolve php.test:80:127.0.0.1 http://php.test/index.php) "; done
+[[ "$got" == *429* ]] || fail "CC limit not enforced: $got"
+api PUT /protect/sites '{"items":{"php.test":{"on":true}}}' >/dev/null
+body="$(python3 -c "import sys,json; s=json.loads(sys.argv[1])['settings']; s['rules_on']=False; print(json.dumps(s))" "$cur")"
+api PUT /protect/settings "$body" >/dev/null
+sleep 11 # the CC window
+[[ "$(code --resolve php.test:80:127.0.0.1 http://php.test/xmlrpc.php)" != 403 ]] || fail "dedicated rules still on"
+pass "website protection: dedicated rules, custom rule, scrapers, CC, blocked log"
+
 # ---------- static site + custom certificate (SNI selection) ----------
 wait_task "$(api POST /sites '{"domain":"static.test","type":"static","ssl":"none"}' | jget "['task_id']")"
 [[ "$(get80 static.test)" == *"Site created by lmcwhm"* ]] || fail "static default page"

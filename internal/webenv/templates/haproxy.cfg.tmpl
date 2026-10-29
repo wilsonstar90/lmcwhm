@@ -47,29 +47,20 @@ frontend fe_https
     mode http
     bind abns@lmcwhm_https accept-proxy ssl crt-list {{.Dir}}/crt-list.txt alpn h2,http/1.1
     option forwardfor
-    # Visitor address: only connections from a CDN's ranges may set it.
-    acl from_cf src -f {{.Dir}}/maps/cdn_cf.lst
-    http-request set-src req.hdr_ip(CF-Connecting-IP,1) if from_cf { req.hdr(CF-Connecting-IP) -m found }
-    http-request del-header CF-Connecting-IP if !from_cf
-{{- if .CDNHeader}}
-    acl from_cdn src -f {{.Dir}}/maps/cdn_custom.lst
-    http-request set-src req.hdr_ip({{.CDNHeader}},-1) if from_cdn !from_cf { req.hdr({{.CDNHeader}}) -m found }
+{{- if .Body}}
+    option http-buffer-request
 {{- end}}
-    # Blocked visitors (by the address above; the firewall only sees the CDN).
-    http-request deny deny_status 403 if { src -f {{.Dir}}/lists/block.lst } !{ src -f {{.Dir}}/lists/allow.lst }
-{{- template "lists" .}}
-    http-request deny deny_status 403 if list_block !list_pass
-    http-request set-header X-Lmcwhm-Pass 1 if list_pass
+{{- template "guard" .}}
     http-request set-header X-Forwarded-Proto https
     http-request set-header X-Forwarded-Port 443
-    http-request set-var(txn.host) req.hdr(host),field(1,:),lower
     http-request set-var(txn.hsts) var(txn.host),map_str({{.Dir}}/maps/hsts_exact.map)
     http-request set-var(txn.hsts) var(txn.host),map_end({{.Dir}}/maps/hsts_wild.map) if !{ var(txn.hsts) -m found }
     http-response set-header Strict-Transport-Security "max-age=31536000" if { var(txn.hsts) -m str 1 }
     http-request set-var(txn.cache) var(txn.host),map_str({{.Dir}}/maps/cache_exact.map)
     http-request set-var(txn.cache) var(txn.host),map_end({{.Dir}}/maps/cache_wild.map) if !{ var(txn.cache) -m found }
     # HTTP-01 validators follow redirects to HTTPS (e.g. Cloudflare "Always Use HTTPS").
-    use_backend be_acme if { path_beg /.well-known/acme-challenge/ }
+    use_backend be_acme if acme
+    use_backend be_web if blocked
     use_backend be_varnish if { var(txn.cache) -m str 1 }
     default_backend be_web
 
@@ -81,29 +72,19 @@ frontend fe_http
     bind :::80 v6only
 {{- end}}
     option forwardfor
+{{- if .Body}}
+    option http-buffer-request
+{{- end}}
     http-request set-header X-Forwarded-Proto http
     http-request set-header X-Forwarded-Port 80
-    acl acme path_beg /.well-known/acme-challenge/
-    # Visitor address: only connections from a CDN's ranges may set it.
-    acl from_cf src -f {{.Dir}}/maps/cdn_cf.lst
-    http-request set-src req.hdr_ip(CF-Connecting-IP,1) if from_cf { req.hdr(CF-Connecting-IP) -m found }
-    http-request del-header CF-Connecting-IP if !from_cf
-{{- if .CDNHeader}}
-    acl from_cdn src -f {{.Dir}}/maps/cdn_custom.lst
-    http-request set-src req.hdr_ip({{.CDNHeader}},-1) if from_cdn !from_cf { req.hdr({{.CDNHeader}}) -m found }
-{{- end}}
-    # Blocked visitors (by the address above; the firewall only sees the CDN).
-    http-request deny deny_status 403 if { src -f {{.Dir}}/lists/block.lst } !{ src -f {{.Dir}}/lists/allow.lst } !acme
-{{- template "lists" .}}
-    http-request deny deny_status 403 if list_block !list_pass !acme
-    http-request set-header X-Lmcwhm-Pass 1 if list_pass
-    http-request set-var(txn.host) req.hdr(host),field(1,:),lower
+{{- template "guard" .}}
     http-request set-var(txn.fh) var(txn.host),map_str({{.Dir}}/maps/force_https_exact.map)
     http-request set-var(txn.fh) var(txn.host),map_end({{.Dir}}/maps/force_https_wild.map) if !{ var(txn.fh) -m found }
     http-request redirect scheme https code 301 if !acme { var(txn.fh) -m str 1 }
     http-request set-var(txn.cache) var(txn.host),map_str({{.Dir}}/maps/cache_exact.map)
     http-request set-var(txn.cache) var(txn.host),map_end({{.Dir}}/maps/cache_wild.map) if !{ var(txn.cache) -m found }
     use_backend be_acme if acme
+    use_backend be_web if blocked
     use_backend be_varnish if { var(txn.cache) -m str 1 }
     default_backend be_web
 
@@ -120,9 +101,33 @@ backend be_varnish
     mode http
     server varnish 127.0.0.1:{{.VarnishPort}}
 
-{{define "lists"}}
-    # User-Agent / URL lists: an allowed request skips the block lists and the WAF.
-    http-request del-header X-Lmcwhm-Pass
+# Requests per visitor address (CC protection).
+backend st_cc
+    stick-table type ipv6 size 1m expire 60s store http_req_rate(10s)
+
+{{define "guard"}}
+    acl acme path_beg /.well-known/acme-challenge/
+    http-request set-var(txn.host) req.hdr(host),field(1,:),lower
+    # Visitor address: only connections from a CDN's ranges may set it.
+    acl from_cf src -f {{.Dir}}/maps/cdn_cf.lst
+    http-request set-var(txn.via_cf) bool(1) if from_cf
+{{- if .CDNHeader}}
+    acl from_cdn src -f {{.Dir}}/maps/cdn_custom.lst
+    http-request set-var(txn.via_cdn) bool(1) if from_cdn !from_cf
+{{- end}}
+    http-request set-src req.hdr_ip(CF-Connecting-IP,1) if { var(txn.via_cf) -m bool } { req.hdr(CF-Connecting-IP) -m found }
+    http-request del-header CF-Connecting-IP if !{ var(txn.via_cf) -m bool }
+{{- if .CDNHeader}}
+    http-request set-src req.hdr_ip({{.CDNHeader}},-1) if { var(txn.via_cdn) -m bool } { req.hdr({{.CDNHeader}}) -m found }
+{{- end}}
+    acl via_cdn var(txn.via_cf) -m bool
+    acl via_cdn var(txn.via_cdn) -m bool
+    # From here src is the visitor. A block only names its reason (txn.block):
+    # nginx refuses the request and logs why, so it is counted per site.
+    acl ip_allow src -f {{.Dir}}/lists/allow.lst
+    acl trusted src -f {{.Dir}}/lists/trust.lst
+    acl blocked var(txn.block) -m found
+    # User-Agent / URL lists: an allowed request skips the block lists, the protection and the WAF.
     acl list_pass req.hdr(user-agent) -m sub -i -f {{.Dir}}/maps/ua_allow_contains.lst
     acl list_pass req.hdr(user-agent) -m beg -i -f {{.Dir}}/maps/ua_allow_prefix.lst
     acl list_pass req.hdr(user-agent) -m reg -i -f {{.Dir}}/maps/ua_allow_regex.lst
@@ -135,4 +140,32 @@ backend be_varnish
     acl list_block url -m sub -i -f {{.Dir}}/maps/url_block_contains.lst
     acl list_block path -m beg -i -f {{.Dir}}/maps/url_block_prefix.lst
     acl list_block url -m reg -i -f {{.Dir}}/maps/url_block_regex.lst
+    http-request del-header X-Lmcwhm-Pass
+    http-request del-header X-Lmcwhm-Block
+    http-request set-header X-Lmcwhm-Pass 1 if list_pass
+    http-request set-var(txn.block) str(ip) if { src -f {{.Dir}}/lists/block.lst } !ip_allow !acme
+    http-request set-var(txn.block) str(list) if !blocked list_block !list_pass !acme
+    # Website protection: flags per host (",on,fake,idc,crawler,cdn,").
+    http-request set-var(txn.prot) var(txn.host),map_str({{.Dir}}/maps/prot_exact.map)
+    http-request set-var(txn.prot) var(txn.host),map_end({{.Dir}}/maps/prot_wild.map) if !{ var(txn.prot) -m found }
+    acl guard var(txn.prot) -m sub ,on,
+    acl exempt ip_allow
+    acl exempt list_pass
+    acl exempt acme
+    http-request set-var(txn.block) str(cdn_only) if !blocked guard { var(txn.prot) -m sub ,cdn, } !via_cdn !exempt
+    http-request set-var(txn.block) str(fake_spider) if !blocked guard { var(txn.prot) -m sub ,fake, } { req.hdr(user-agent) -m sub -i -f {{.Dir}}/maps/spider_ua.lst } !trusted !exempt
+    http-request set-var(txn.block) str(idc) if !blocked guard { var(txn.prot) -m sub ,idc, } { src -f {{.Dir}}/maps/idc.lst } !trusted !exempt
+    http-request set-var(txn.block) str(crawler) if !blocked guard { var(txn.prot) -m sub ,crawler, } { req.hdr(user-agent) -m sub -i -f {{.Dir}}/maps/crawler_ua.lst } !exempt
+{{- range .Rules}}
+{{- $code := .Code}}
+{{- range .Lines}}
+    http-request set-var(txn.block) str(rule-{{$code}}) if !blocked guard !exempt {{.}}
+{{- end}}
+{{- end}}
+    # CC: requests per visitor address in 10 seconds, limit per host.
+    http-request set-var(txn.cc) var(txn.host),map_str_int({{.Dir}}/maps/cc_exact.map)
+    http-request set-var(txn.cc) var(txn.host),map_end_int({{.Dir}}/maps/cc_wild.map) if !{ var(txn.cc) -m found }
+    http-request track-sc0 src table st_cc if guard { var(txn.cc) -m found } !trusted !exempt
+    http-request set-var(txn.block) str(cc) if !blocked guard { var(txn.cc) -m found } { sc_http_req_rate(0),sub(txn.cc) gt 0 } !trusted !exempt
+    http-request set-header X-Lmcwhm-Block %[var(txn.block)] if blocked
 {{- end}}

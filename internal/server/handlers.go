@@ -107,6 +107,9 @@ func (s *Server) handler() http.Handler {
 			}
 			s.m4Routes(r)
 			s.m5Routes(r)
+			if s.Sites != nil {
+				s.protectRoutes(r)
+			}
 			s.m6Routes(r)
 			s.m7Routes(r)
 			s.m8Routes(r)

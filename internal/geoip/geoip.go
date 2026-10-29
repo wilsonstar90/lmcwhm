@@ -271,3 +271,36 @@ func (d *DB) RefreshLoop(ctx context.Context, log func(string, ...any)) {
 		}
 	}
 }
+
+// ASNBuilt is the build time of the ASN database (0 = not installed).
+func (d *DB) ASNBuilt() int64 {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	if d.asn == nil {
+		return 0
+	}
+	return int64(d.asn.Metadata.BuildEpoch)
+}
+
+// ASNRanges lists every network the ASN database assigns to one of asns
+// (for example the data centres of cloud providers).
+func (d *DB) ASNRanges(asns map[uint]bool) []netip.Prefix {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	if d.asn == nil || len(asns) == 0 {
+		return nil
+	}
+	var out []netip.Prefix
+	for res := range d.asn.Networks() {
+		var rec asnRecord
+		if res.Decode(&rec) != nil || !asns[rec.Number] {
+			continue
+		}
+		p := res.Prefix()
+		if p.Addr().Is4In6() && p.Bits() >= 96 {
+			p = netip.PrefixFrom(p.Addr().Unmap(), p.Bits()-96)
+		}
+		out = append(out, p)
+	}
+	return out
+}

@@ -535,32 +535,38 @@ func (sv *Service) listsChanged() {
 }
 
 // EdgeLists are the addresses the edge proxy refuses (block, bans) and
-// never refuses (allow, trusted ranges), canonical; both empty while the
-// firewall is off.
-func (sv *Service) EdgeLists(ctx context.Context) (block, allow []string, err error) {
+// never refuses (allow), both empty while the firewall is off; and the
+// trusted ranges (Cloudflare, crawlers), which website protection uses
+// whether or not the firewall is on.
+func (sv *Service) EdgeLists(ctx context.Context) (block, allow, trust []string, err error) {
 	c, err := sv.Config(ctx)
-	if err != nil || !c.Enabled {
-		return nil, nil, err
+	if err != nil {
+		return nil, nil, nil, err
 	}
 	ips, err := sv.IPs(ctx, "")
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	block, allow = []string{}, []string{}
+	block, allow, trust = []string{}, []string{}, []string{}
 	for _, x := range ips {
 		_, norm, err := NormIP(x.IP)
 		if err != nil {
 			continue
 		}
-		if x.List == "block" {
+		switch {
+		case x.List == "trust":
+			trust = append(trust, norm)
+		case !c.Enabled:
+		case x.List == "block":
 			block = append(block, norm)
-		} else {
-			allow = append(allow, norm) // allow and trust
+		default:
+			allow = append(allow, norm)
 		}
 	}
 	sort.Strings(block)
 	sort.Strings(allow)
-	return block, allow, nil
+	sort.Strings(trust)
+	return block, allow, trust, nil
 }
 
 // ---- ruleset ----

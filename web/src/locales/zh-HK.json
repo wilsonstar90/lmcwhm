@@ -440,6 +440,12 @@
       "unknown_domain": "請先加入網域",
       "port_busy": "端口 {field} 已被佔用",
       "invalid_quota": "容量格式例如 500M 或 2G"
+    },
+    "protect": {
+      "invalid_rule": "規則無效：要有名稱同至少一個條件，每個條件要有值，正則要正確",
+      "invalid_settings": "設定無效",
+      "not_found": "搵唔到規則",
+      "builtin": "內置規則唔可以刪除，可以關閉或者還原"
     }
   },
   "task": {
@@ -1130,6 +1136,14 @@
       "overview": {
         "title": "流量總覽",
         "desc": "所有網站合計：請求、攔截請求（WAF、限流、封鎖客戶端）、即時負載、訪客地區、客戶端同狀態碼。"
+      },
+      "protect": {
+        "title": "網站防護",
+        "desc": "每個網站喺入口（HAProxy）做嘅檢查：假蜘蛛、只限 CDN、禁 IDC、爬蟲防護、CC 防禦同專屬規則。"
+      },
+      "rules": {
+        "title": "專屬規則",
+        "desc": "針對常見 CMS 漏洞嘅攔截規則（暫時係 WordPress），可以逐條開關、編輯同新增。"
       }
     }
   },
@@ -2472,5 +2486,174 @@
     "remove_auto": "移除 {ip}？名單下次更新時可能會再加入。",
     "auto_hint": "呢度只顯示自動加入嘅條目。「保留為手動」會將黑名單條目轉為永久手動黑名單。",
     "builtin_list": "內置名單（毋須下載）"
+  },
+  "prot": {
+    "cols": {
+      "site": "站點",
+      "blocked": "總攔截",
+      "fake_spider": "假蜘蛛",
+      "cdn_only": "只限 CDN",
+      "idc": "禁 IDC",
+      "crawler": "爬蟲防護",
+      "cc": "CC 防禦（次 / 10 秒）"
+    },
+    "tips": {
+      "fake_spider": "User-Agent 自稱搜尋引擎或 AI 爬蟲，但 IP 唔喺佢嘅官方 IP 段 → 攔截。只檢查已喺「雲端黑白名單 → 來源」開咗信任名單嘅爬蟲。",
+      "cdn_only": "只接受經 CDN（Cloudflare 或你設定嘅 CDN）連入嘅請求，防止繞過 CDN 直接打伺服器 IP。網站要開咗橙雲先好開。",
+      "idc": "攔截雲端 / 機房 IP（AWS、Azure、阿里雲、騰訊雲、DigitalOcean…），信任嘅爬蟲同白名單除外。需要 IP 歸屬地 ASN 資料庫。",
+      "crawler": "攔截常見採集器同惡意爬蟲嘅 User-Agent（python-requests、curl、Scrapy、AhrefsBot…），清單喺「防護設定」改。",
+      "cc": "每個訪客 IP 喺 10 秒內最多請求幾多次，超過回 429；0 = 關閉。"
+    },
+    "off": "關",
+    "log": "攔截記錄",
+    "log_title": "{domain} 嘅攔截記錄",
+    "reason": "原因",
+    "request": "請求",
+    "blocked_24h": "最近 24 小時 {n} 次",
+    "passthrough": "直通（唔適用）",
+    "search": "搜尋站點",
+    "settings": "防護設定",
+    "rules_state": "專屬規則：{s}",
+    "spiders": "可檢查嘅爬蟲：{n} 個",
+    "no_spiders": "已開假蜘蛛，但未開任何爬蟲信任名單，所以唔會攔截任何請求。去「雲端黑白名單 → 來源」開 Googlebot、Bingbot、百度等名單。",
+    "no_asn": "已開禁 IDC，但未有 ASN 資料庫：去「日誌 → IP 歸屬地」下載。",
+    "batch_pick": "揀批量操作",
+    "batch_apply": "套用到 {n} 個站點",
+    "batch": {
+      "on": "開啟防護",
+      "off": "關閉防護",
+      "fake_on": "開啟假蜘蛛",
+      "fake_off": "關閉假蜘蛛",
+      "crawler_on": "開啟爬蟲防護",
+      "crawler_off": "關閉爬蟲防護",
+      "idc_on": "開啟禁 IDC",
+      "idc_off": "關閉禁 IDC"
+    },
+    "note_order": "檢查次序：IP 黑名單 → UA / URL 黑名單 → 只限 CDN → 假蜘蛛 → 禁 IDC → 爬蟲防護 → 專屬規則 → CC。IP 白名單同 UA / URL 白名單唔受網站防護限制。",
+    "note_cdn": "經 Cloudflare 時用真實訪客 IP 判斷（見「防火牆 → CDN 真實 IP」）。直通（passthrough）站點嘅 TLS 唔喺呢度解密，所以唔適用。",
+    "note_count": "攔截次數來自網站日誌（403 / 429），每小時統計一次。",
+    "crawlers_hint": "每行一個 User-Agent 片段（包含即攔截，唔分大小寫）。",
+    "idc_hint": "每行一個 AS 號碼同名稱，例如 16509 Amazon AWS。而家共 {n} 個 IP 段。",
+    "bad_asn": "每行要以 AS 號碼開頭",
+    "reasons": {
+      "ip": "IP 黑名單",
+      "list": "UA / URL 黑名單",
+      "cdn_only": "唔係經 CDN",
+      "fake_spider": "假蜘蛛",
+      "idc": "IDC 機房 IP",
+      "crawler": "爬蟲",
+      "cc": "CC 超出頻率",
+      "rule": "專屬規則 {code}",
+      "rate": "限流",
+      "site": "網站 / WAF"
+    }
+  },
+  "rules": {
+    "title": "專屬規則",
+    "add": "新增規則",
+    "edit": "編輯規則",
+    "id": "規則 ID",
+    "name": "名稱",
+    "cms": "CMS",
+    "description": "描述",
+    "enabled": "啟用",
+    "modified": "已修改",
+    "custom": "自訂",
+    "reset": "還原",
+    "reset_confirm": "還原成預設條件同開關？",
+    "delete_confirm": "刪除呢條規則？",
+    "off_hint": "專屬規則總開關未開：下面嘅規則唔會生效。開咗之後套用到所有開咗網站防護嘅網站；如有誤攔可以逐條關閉。",
+    "note_scope": "開啟專屬規則開關後將套用於所有開咗「網站防護」嘅網站，如出現誤攔可以關閉某條規則。",
+    "note_log": "被攔截嘅請求回 403，喺「網站防護 → 攔截記錄」會顯示「專屬規則 wp-1002」之類嘅原因。",
+    "visual": "視覺編輯",
+    "code": "代碼",
+    "block_when": "當",
+    "all": "全部",
+    "any": "任何一個",
+    "conditions_match": "條件符合時攔截（403）",
+    "negate": "唔",
+    "add_cond": "+ 加條件",
+    "values_hint": "每個條件可以有多個值，符合任何一個值就算符合；輸入後撳 Enter。比對唔分大小寫。",
+    "code_hint": "條件嘅 JSON：field（path / url / query / method / ua / referer / cookie / body）、op（contains / equals / prefix / suffix / regex）、negate、values。",
+    "bad_json": "JSON 有錯：{err}",
+    "preview": "入口（HAProxy）會咁樣執行",
+    "preview_none": "（條件未完整）",
+    "fields": {
+      "path": "路徑",
+      "url": "網址（路徑 + 參數）",
+      "query": "查詢參數",
+      "method": "請求方法",
+      "ua": "User-Agent",
+      "referer": "Referer",
+      "cookie": "Cookie",
+      "body": "表單內容（POST）"
+    },
+    "ops": {
+      "contains": "包含",
+      "equals": "等於",
+      "prefix": "開頭係",
+      "suffix": "結尾係",
+      "regex": "正則"
+    },
+    "examples": {
+      "path": "例如 /xmlrpc.php",
+      "url": "例如 /wp-login.php?action=register",
+      "query": "例如 author=",
+      "method": "例如 PUT",
+      "ua": "例如 sqlmap",
+      "referer": "例如 spam.example",
+      "cookie": "例如 wordpress_test",
+      "body": "例如 give_title"
+    },
+    "builtin": {
+      "wp-1001": {
+        "name": "攔截 /wp-json/wp/v2/users 獲取管理員用戶名",
+        "desc": "預設開啟，有效防止外部經 REST API 獲取管理員用戶名"
+      },
+      "wp-1002": {
+        "name": "禁止訪問 xmlrpc.php",
+        "desc": "預設開啟，減少 xmlrpc.php 帶嚟嘅暴力破解同 pingback 風險；如 Jetpack 等需要可關閉"
+      },
+      "wp-1003": {
+        "name": "攔截經 ?author= 獲取用戶名",
+        "desc": "預設開啟，防止經 /?author=1 跳轉獲取用戶名（後台唔受影響）"
+      },
+      "wp-1004": {
+        "name": "攔截修改插件文件",
+        "desc": "建議開啟，防止後台帳號被盜後經插件編輯器植入木馬"
+      },
+      "wp-1005": {
+        "name": "攔截修改主題文件",
+        "desc": "建議開啟，防止後台帳號被盜後經主題編輯器植入木馬"
+      },
+      "wp-1006": {
+        "name": "禁止上傳 WordPress 主題、插件",
+        "desc": "建議開啟，防止後台上傳帶木馬嘅主題或插件 zip"
+      },
+      "wp-1007": {
+        "name": "禁止執行 uploads 入面嘅 PHP",
+        "desc": "預設開啟，uploads 目錄只應該有媒體檔案，出現 PHP 幾乎一定係 webshell"
+      },
+      "wp-1008": {
+        "name": "禁止訪問 wp-config.php 備份",
+        "desc": "預設開啟，wp-config.php.bak、~、.save 等備份會洩露資料庫密碼"
+      },
+      "wp-1009": {
+        "name": "禁止訪問 debug.log",
+        "desc": "預設開啟，wp-content/debug.log 可能包含路徑、SQL 同敏感資料"
+      },
+      "wp-1010": {
+        "name": "隱藏 readme.html 同 license.txt",
+        "desc": "防止掃描器得知 WordPress 版本"
+      },
+      "wp-1011": {
+        "name": "CVE-2024-5932",
+        "desc": "預設開啟，攔截 GiveWP ≤ 3.14.1 經 give_title 嘅物件注入遠端代碼執行"
+      },
+      "wp-1012": {
+        "name": "CVE-2023-4634",
+        "desc": "預設開啟，攔截 Media Library Assistant ≤ 3.09 經 mla-stream-image.php 嘅遠端代碼執行"
+      }
+    }
   }
 }

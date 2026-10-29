@@ -38,6 +38,7 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/monitor"
 	"github.com/wilsonstar90/lmcwhm/internal/netinfo"
 	"github.com/wilsonstar90/lmcwhm/internal/probe"
+	"github.com/wilsonstar90/lmcwhm/internal/protect"
 	"github.com/wilsonstar90/lmcwhm/internal/secrets"
 	"github.com/wilsonstar90/lmcwhm/internal/secscan"
 	"github.com/wilsonstar90/lmcwhm/internal/security"
@@ -168,11 +169,14 @@ func serveCmd() *cobra.Command {
 				return webenv.CDN{Cloudflare: fw.CloudflareTrust(ctx), Ranges: c.Ranges, Header: c.Header}
 			}
 			env.Patterns = func() []webenv.PatternList { return fw.EdgePatterns(ctx) }
+			geo := geoip.New(filepath.Join(a.paths.Home, "geoip"))
+			prot := protect.New(a.st, geo, fw)
+			env.Protection = func() webenv.Protection { return prot.Edge(ctx) }
 			// The edge refuses blocked visitors by their real address (behind a CDN).
 			fw.OnListsChanged = func() {
-				block, allow, err := fw.EdgeLists(ctx)
+				block, allow, trust, err := fw.EdgeLists(ctx)
 				if err == nil {
-					err = env.SetLists(ctx, block, allow)
+					err = env.SetLists(ctx, block, allow, trust)
 				}
 				if err != nil {
 					log.Error("edge ip lists", "err", err)
@@ -252,7 +256,6 @@ func serveCmd() *cobra.Command {
 			if err := jobs.Start(ctx); err != nil {
 				log.Error("cron", "err", err)
 			}
-			geo := geoip.New(filepath.Join(a.paths.Home, "geoip"))
 			go geo.RefreshLoop(ctx, log.Error)
 			tb := toolbox.New()
 			tb.SSHChanged = func(ctx context.Context) error {
@@ -291,7 +294,7 @@ func serveCmd() *cobra.Command {
 				WebFS: web.FS(), Log: log, Sites: sites, Web: webCfg, Tasks: tm,
 				Apps: apps, DBs: dbs, Docker: dockermgr.New(tm, a.paths.Home),
 				Files: files.New(os.Getenv("LMCWHM_FILES_ROOT")), Term: terminal.New(),
-				Store: a.st, Monitor: mon, Cron: jobs, GeoIP: geo, Firewall: fw, WAF: waf, CrowdSec: crowdsec, Backup: bk,
+				Store: a.st, Monitor: mon, Cron: jobs, GeoIP: geo, Firewall: fw, Protect: prot, WAF: waf, CrowdSec: crowdsec, Backup: bk,
 				Tokens: apitoken.New(a.st), AI: ai.New(a.st, box, nil),
 				Alerts: alerts, Probes: probes, Stats: stats, Procs: procs, WP: wordpress.New(sites, dbs, env, tm), FTP: ftpSvc,
 				Toolbox: tb, SecScan: secscan.New(a.st), Malware: malware.New(a.st, env.WWWRoot, a.paths.Home), Tamper: tp,

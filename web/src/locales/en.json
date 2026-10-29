@@ -440,6 +440,12 @@
       "unknown_domain": "Add the domain first",
       "port_busy": "Port {field} is already in use",
       "invalid_quota": "Quota like 500M or 2G"
+    },
+    "protect": {
+      "invalid_rule": "Invalid rule: it needs a name and at least one condition with values, and regexes must be valid",
+      "invalid_settings": "Invalid settings",
+      "not_found": "Rule not found",
+      "builtin": "Built-in rules cannot be deleted; switch them off or reset them"
     }
   },
   "task": {
@@ -1130,6 +1136,14 @@
       "overview": {
         "title": "Traffic overview",
         "desc": "Every website together: requests, intercepted requests (WAF, rate limits, blocked clients), live load, visitors by country, clients and status codes."
+      },
+      "protect": {
+        "title": "Site protection",
+        "desc": "Checks each website's requests go through at the edge (HAProxy): fake spiders, CDN only, data centres, scrapers, CC and dedicated rules."
+      },
+      "rules": {
+        "title": "Dedicated rules",
+        "desc": "Rules against known CMS weaknesses (WordPress for now); switch, edit or add each one."
       }
     }
   },
@@ -2472,5 +2486,125 @@
     "remove_auto": "Remove {ip}? The next list update may add it again.",
     "auto_hint": "Only automatic entries are shown here. \"Keep as manual\" turns a block entry into a permanent manual block.",
     "builtin_list": "Built-in list (no download)"
+  },
+  "prot": {
+    "cols": {
+      "site": "Site",
+      "blocked": "Blocked",
+      "fake_spider": "Fake spider",
+      "cdn_only": "CDN only",
+      "idc": "No IDC",
+      "crawler": "Scrapers",
+      "cc": "CC (requests / 10 s)"
+    },
+    "tips": {
+      "fake_spider": "A User-Agent claiming a search engine or AI crawler from outside its official ranges is refused. Only crawlers whose trusted list is on (Cloud lists → Sources) are checked.",
+      "cdn_only": "Only requests through a CDN (Cloudflare or the CDN you set) are accepted, so nobody can bypass it by calling the server's IP. Turn on only for proxied sites.",
+      "idc": "Refuse cloud and hosting addresses (AWS, Azure, Alibaba, Tencent, DigitalOcean, …), except trusted crawlers and allowed IPs. Needs the GeoIP ASN database.",
+      "crawler": "Refuse common scraper and bad-bot User-Agents (python-requests, curl, Scrapy, AhrefsBot, …); the list is under Protection settings.",
+      "cc": "Most requests a visitor IP may make in 10 seconds; over it gets 429. 0 = off."
+    },
+    "off": "off",
+    "log": "Blocked log",
+    "log_title": "Blocked requests of {domain}",
+    "reason": "Reason",
+    "request": "Request",
+    "blocked_24h": "{n} in the last 24 hours",
+    "passthrough": "passthrough (n/a)",
+    "search": "Search sites",
+    "settings": "Protection settings",
+    "rules_state": "Dedicated rules: {s}",
+    "spiders": "Crawlers checked: {n}",
+    "no_spiders": "Fake spider is on but no trusted crawler list is, so nothing is refused. Turn on Googlebot, Bingbot, Baidu, … under Cloud lists → Sources.",
+    "no_asn": "No IDC is on but the ASN database is missing: download it under Logs → GeoIP.",
+    "batch_pick": "Batch action",
+    "batch_apply": "Apply to {n} sites",
+    "batch": {
+      "on": "Protection on",
+      "off": "Protection off",
+      "fake_on": "Fake spider on",
+      "fake_off": "Fake spider off",
+      "crawler_on": "Scrapers on",
+      "crawler_off": "Scrapers off",
+      "idc_on": "No IDC on",
+      "idc_off": "No IDC off"
+    },
+    "note_order": "Order: IP block list → UA / URL block lists → CDN only → fake spider → no IDC → scrapers → dedicated rules → CC. Allowed IPs and UA / URL allow lists skip site protection.",
+    "note_cdn": "Behind Cloudflare the real visitor IP is used (Firewall → Real visitor IP). Passthrough sites end TLS elsewhere, so this does not apply to them.",
+    "note_count": "Blocked counts come from the site logs (403 / 429), updated every hour.",
+    "crawlers_hint": "One User-Agent fragment per line (refused when contained, any case).",
+    "idc_hint": "One AS number and name per line, e.g. 16509 Amazon AWS. {n} ranges now.",
+    "bad_asn": "Each line must start with an AS number",
+    "reasons": {
+      "ip": "IP block list",
+      "list": "UA / URL block list",
+      "cdn_only": "not through the CDN",
+      "fake_spider": "fake spider",
+      "idc": "data-centre IP",
+      "crawler": "scraper",
+      "cc": "CC rate",
+      "rule": "rule {code}",
+      "rate": "rate limit",
+      "site": "website / WAF"
+    }
+  },
+  "rules": {
+    "title": "Dedicated rules",
+    "add": "Add rule",
+    "edit": "Edit rule",
+    "id": "Rule ID",
+    "name": "Name",
+    "cms": "CMS",
+    "description": "Description",
+    "enabled": "Enabled",
+    "modified": "modified",
+    "custom": "custom",
+    "reset": "Reset",
+    "reset_confirm": "Restore the default conditions and switch?",
+    "delete_confirm": "Delete this rule?",
+    "off_hint": "The dedicated rules switch is off: the rules below do nothing. Once on they apply to every site with protection on; switch off a rule that blocks too much.",
+    "note_scope": "With the switch on, rules apply to every website with site protection on; switch off a single rule if it refuses legitimate requests.",
+    "note_log": "Refused requests get 403 and show a reason such as \"rule wp-1002\" under Site protection → Blocked log.",
+    "visual": "Visual",
+    "code": "Code",
+    "block_when": "Block (403) when",
+    "all": "all",
+    "any": "any",
+    "conditions_match": "conditions match",
+    "negate": "not",
+    "add_cond": "+ Condition",
+    "values_hint": "A condition can have several values; any one matching is enough. Press Enter after each. Matching ignores case.",
+    "code_hint": "The conditions as JSON: field (path / url / query / method / ua / referer / cookie / body), op (contains / equals / prefix / suffix / regex), negate, values.",
+    "bad_json": "JSON error: {err}",
+    "preview": "How the edge (HAProxy) runs it",
+    "preview_none": "(conditions incomplete)",
+    "fields": {
+      "path": "Path",
+      "url": "URL (path + query)",
+      "query": "Query string",
+      "method": "Method",
+      "ua": "User-Agent",
+      "referer": "Referer",
+      "cookie": "Cookie",
+      "body": "Form body (POST)"
+    },
+    "ops": {
+      "contains": "contains",
+      "equals": "equals",
+      "prefix": "starts with",
+      "suffix": "ends with",
+      "regex": "regex"
+    },
+    "examples": {
+      "path": "e.g. /xmlrpc.php",
+      "url": "e.g. /wp-login.php?action=register",
+      "query": "e.g. author=",
+      "method": "e.g. PUT",
+      "ua": "e.g. sqlmap",
+      "referer": "e.g. spam.example",
+      "cookie": "e.g. wordpress_test",
+      "body": "e.g. give_title"
+    },
+    "builtin": {}
   }
 }

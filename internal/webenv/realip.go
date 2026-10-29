@@ -83,6 +83,7 @@ func rangeList(v []string) []byte {
 const (
 	blockList = "block.lst"
 	allowList = "allow.lst"
+	trustList = "trust.lst"
 )
 
 func (e *Env) listsDir() string  { return filepath.Join(e.EdgeDir(), "lists") }
@@ -93,7 +94,7 @@ func (e *Env) ensureLists() error {
 	if err := os.MkdirAll(e.listsDir(), 0o755); err != nil {
 		return err
 	}
-	for _, n := range []string{blockList, allowList} {
+	for _, n := range []string{blockList, allowList, trustList} {
 		p := filepath.Join(e.listsDir(), n)
 		if _, err := os.Stat(p); os.IsNotExist(err) {
 			if err := os.WriteFile(p, nil, 0o644); err != nil {
@@ -106,9 +107,9 @@ func (e *Env) ensureLists() error {
 
 var listsMu sync.Mutex
 
-// SetLists stores the refused (block) and never-refused (allow) addresses and
-// pushes the difference to the running HAProxy.
-func (e *Env) SetLists(ctx context.Context, block, allow []string) error {
+// SetLists stores the refused (block), never-refused (allow) and trusted
+// addresses and pushes the difference to the running HAProxy.
+func (e *Env) SetLists(ctx context.Context, block, allow, trust []string) error {
 	listsMu.Lock()
 	defer listsMu.Unlock()
 	if err := e.ensureLists(); err != nil {
@@ -118,7 +119,7 @@ func (e *Env) SetLists(ctx context.Context, block, allow []string) error {
 	for _, l := range []struct {
 		name string
 		v    []string
-	}{{blockList, block}, {allowList, allow}} {
+	}{{blockList, block}, {allowList, allow}, {trustList, trust}} {
 		path := filepath.Join(e.listsDir(), l.name)
 		old := readList(path)
 		next := strings.Join(l.v, "\n")

@@ -107,6 +107,8 @@ type Env struct {
 	CDN func() CDN
 	// Patterns returns the User-Agent / URL black and white lists.
 	Patterns func() []PatternList
+	// Protection returns the website protection and dedicated rules.
+	Protection func() Protection
 }
 
 // WAFSettings drive ModSecurity + OWASP CRS in the nginx container.
@@ -458,6 +460,8 @@ type edgeData struct {
 	VarnishPort int
 	Passthrough []passBackend
 	CDNHeader   string // the custom CDN's address header ("" = none)
+	Rules       []ruleData
+	Body        bool // a rule reads the request body
 }
 
 type passBackend struct {
@@ -516,6 +520,7 @@ func (e *Env) edgeFiles(sites []Site, pass []Passthrough) (map[string][]byte, er
 	c := e.cdn()
 	files["maps/cdn_cf.lst"], files["maps/cdn_custom.lst"] = cdnLists(c)
 	e.patternFiles(files)
+	data.Rules, data.Body = e.protectFiles(sites, files)
 	if len(c.Ranges) > 0 && ValidHeader(c.Header) {
 		data.CDNHeader = c.Header
 	}

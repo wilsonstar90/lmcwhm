@@ -440,6 +440,12 @@
       "unknown_domain": "先にドメインを追加してください",
       "port_busy": "ポート {field} は使用中です",
       "invalid_quota": "容量は 500M や 2G の形式"
+    },
+    "protect": {
+      "invalid_rule": "無効なルール：名前と値のある条件が 1 つ以上必要で、正規表現が正しい必要があります",
+      "invalid_settings": "無効な設定",
+      "not_found": "ルールが見つかりません",
+      "builtin": "組み込みルールは削除できません。オフにするか元に戻してください"
     }
   },
   "task": {
@@ -1130,6 +1136,14 @@
       "overview": {
         "title": "トラフィック概要",
         "desc": "全サイト合計：リクエスト、遮断（WAF・レート制限・ブロック）、ライブ負荷、国別訪問者、クライアント、ステータスコード。"
+      },
+      "protect": {
+        "title": "サイト保護",
+        "desc": "各サイトへのリクエストを入口（HAProxy）で検査します：偽スパイダー、CDN 限定、IDC 拒否、スクレイパー対策、CC 対策、専用ルール。"
+      },
+      "rules": {
+        "title": "専用ルール",
+        "desc": "よく知られた CMS の脆弱性向けのブロックルール（現在は WordPress）。個別にオン / オフ・編集・追加できます。"
       }
     }
   },
@@ -2472,5 +2486,174 @@
     "remove_auto": "{ip} を削除しますか？次回のリスト更新で再追加される場合があります。",
     "auto_hint": "自動追加されたエントリのみ表示します。「手動として保持」でブロックを恒久的な手動ブロックに変更します。",
     "builtin_list": "組み込みリスト（ダウンロード不要）"
+  },
+  "prot": {
+    "cols": {
+      "site": "サイト",
+      "blocked": "ブロック数",
+      "fake_spider": "偽スパイダー",
+      "cdn_only": "CDN 限定",
+      "idc": "IDC 拒否",
+      "crawler": "スクレイパー",
+      "cc": "CC（回 / 10 秒）"
+    },
+    "tips": {
+      "fake_spider": "検索エンジンや AI クローラーを名乗る User-Agent が公式 IP 範囲外から来た場合に拒否します。「クラウドリスト → ソース」で信頼リストを有効にしたクローラーのみ検査します。",
+      "cdn_only": "CDN（Cloudflare または設定した CDN）経由のリクエストのみ受け付け、サーバー IP への直接アクセスを防ぎます。プロキシ有効のサイトでのみ使用してください。",
+      "idc": "クラウド / データセンターの IP（AWS、Azure、Alibaba、Tencent、DigitalOcean など）を拒否します（信頼クローラーと許可 IP は除外）。GeoIP の ASN データベースが必要です。",
+      "crawler": "一般的なスクレイパーや悪質ボットの User-Agent（python-requests、curl、Scrapy、AhrefsBot など）を拒否します。リストは「保護設定」で変更できます。",
+      "cc": "訪問者 IP ごとの 10 秒あたりの最大リクエスト数。超えると 429。0 = オフ。"
+    },
+    "off": "オフ",
+    "log": "ブロックログ",
+    "log_title": "{domain} のブロックログ",
+    "reason": "理由",
+    "request": "リクエスト",
+    "blocked_24h": "直近 24 時間で {n} 件",
+    "passthrough": "パススルー（対象外）",
+    "search": "サイトを検索",
+    "settings": "保護設定",
+    "rules_state": "専用ルール：{s}",
+    "spiders": "検査対象クローラー：{n}",
+    "no_spiders": "偽スパイダーがオンですが、信頼クローラーリストが有効でないため何も拒否されません。「クラウドリスト → ソース」で Googlebot、Bingbot、Baidu などを有効にしてください。",
+    "no_asn": "IDC 拒否がオンですが ASN データベースがありません：「ログ → GeoIP」でダウンロードしてください。",
+    "batch_pick": "一括操作",
+    "batch_apply": "{n} サイトに適用",
+    "batch": {
+      "on": "保護オン",
+      "off": "保護オフ",
+      "fake_on": "偽スパイダーオン",
+      "fake_off": "偽スパイダーオフ",
+      "crawler_on": "スクレイパー対策オン",
+      "crawler_off": "スクレイパー対策オフ",
+      "idc_on": "IDC 拒否オン",
+      "idc_off": "IDC 拒否オフ"
+    },
+    "note_order": "検査順：IP ブロック → UA / URL ブロック → CDN 限定 → 偽スパイダー → IDC 拒否 → スクレイパー → 専用ルール → CC。許可 IP と UA / URL 許可リストはサイト保護の対象外です。",
+    "note_cdn": "Cloudflare 経由では実際の訪問者 IP で判定します（「ファイアウォール → CDN 経由の実 IP」）。パススルーのサイトは TLS をここで復号しないため対象外です。",
+    "note_count": "ブロック数はサイトログ（403 / 429）から 1 時間ごとに集計します。",
+    "crawlers_hint": "1 行に 1 つの User-Agent 断片（含まれていれば拒否、大文字小文字は区別しません）。",
+    "idc_hint": "1 行に 1 つの AS 番号と名前（例: 16509 Amazon AWS）。現在 {n} 範囲。",
+    "bad_asn": "各行は AS 番号で始める必要があります",
+    "reasons": {
+      "ip": "IP ブロック",
+      "list": "UA / URL ブロック",
+      "cdn_only": "CDN 経由でない",
+      "fake_spider": "偽スパイダー",
+      "idc": "データセンター IP",
+      "crawler": "スクレイパー",
+      "cc": "CC 超過",
+      "rule": "専用ルール {code}",
+      "rate": "レート制限",
+      "site": "サイト / WAF"
+    }
+  },
+  "rules": {
+    "title": "専用ルール",
+    "add": "ルールを追加",
+    "edit": "ルールを編集",
+    "id": "ルール ID",
+    "name": "名前",
+    "cms": "CMS",
+    "description": "説明",
+    "enabled": "有効",
+    "modified": "変更済み",
+    "custom": "カスタム",
+    "reset": "元に戻す",
+    "reset_confirm": "既定の条件とスイッチに戻しますか？",
+    "delete_confirm": "このルールを削除しますか？",
+    "off_hint": "専用ルールの全体スイッチがオフのため、以下のルールは無効です。オンにするとサイト保護が有効な全サイトに適用されます。誤検知はルールごとにオフにできます。",
+    "note_scope": "全体スイッチをオンにすると、サイト保護が有効な全サイトに適用されます。正当なリクエストを拒否する場合は個別にオフにしてください。",
+    "note_log": "拒否されたリクエストは 403 となり、「サイト保護 → ブロックログ」に「専用ルール wp-1002」などの理由が表示されます。",
+    "visual": "ビジュアル",
+    "code": "コード",
+    "block_when": "",
+    "all": "すべての",
+    "any": "いずれかの",
+    "conditions_match": "条件に一致したらブロック（403）",
+    "negate": "否定",
+    "add_cond": "+ 条件",
+    "values_hint": "1 つの条件に複数の値を指定でき、いずれかに一致すれば成立します。入力後 Enter。大文字小文字は区別しません。",
+    "code_hint": "条件の JSON：field（path / url / query / method / ua / referer / cookie / body）、op（contains / equals / prefix / suffix / regex）、negate、values。",
+    "bad_json": "JSON エラー：{err}",
+    "preview": "入口（HAProxy）での実行内容",
+    "preview_none": "（条件が未完成）",
+    "fields": {
+      "path": "パス",
+      "url": "URL（パス + クエリ）",
+      "query": "クエリ文字列",
+      "method": "メソッド",
+      "ua": "User-Agent",
+      "referer": "Referer",
+      "cookie": "Cookie",
+      "body": "フォーム本文（POST）"
+    },
+    "ops": {
+      "contains": "含む",
+      "equals": "等しい",
+      "prefix": "前方一致",
+      "suffix": "後方一致",
+      "regex": "正規表現"
+    },
+    "examples": {
+      "path": "例: /xmlrpc.php",
+      "url": "例: /wp-login.php?action=register",
+      "query": "例: author=",
+      "method": "例: PUT",
+      "ua": "例: sqlmap",
+      "referer": "例: spam.example",
+      "cookie": "例: wordpress_test",
+      "body": "例: give_title"
+    },
+    "builtin": {
+      "wp-1001": {
+        "name": "/wp-json/wp/v2/users による管理者名取得をブロック",
+        "desc": "既定でオン。REST API 経由で管理者のユーザー名を取得されるのを防ぎます"
+      },
+      "wp-1002": {
+        "name": "xmlrpc.php へのアクセスを禁止",
+        "desc": "既定でオン。総当たり攻撃と pingback のリスクを減らします。Jetpack などが必要とする場合はオフに"
+      },
+      "wp-1003": {
+        "name": "?author= によるユーザー名取得をブロック",
+        "desc": "既定でオン。/?author=1 のリダイレクトでユーザー名を取得されるのを防ぎます（管理画面は対象外）"
+      },
+      "wp-1004": {
+        "name": "プラグインファイルの編集をブロック",
+        "desc": "推奨。管理者アカウントを盗まれた際にプラグインエディターでコードを仕込まれるのを防ぎます"
+      },
+      "wp-1005": {
+        "name": "テーマファイルの編集をブロック",
+        "desc": "推奨。管理者アカウントを盗まれた際にテーマエディターでコードを仕込まれるのを防ぎます"
+      },
+      "wp-1006": {
+        "name": "テーマ・プラグインのアップロードを禁止",
+        "desc": "推奨。バックドア入りのテーマやプラグインの zip をアップロードされるのを防ぎます"
+      },
+      "wp-1007": {
+        "name": "uploads 内の PHP 実行を禁止",
+        "desc": "既定でオン。uploads はメディア用で、PHP があればほぼ確実に Web シェルです"
+      },
+      "wp-1008": {
+        "name": "wp-config.php のバックアップへのアクセスを禁止",
+        "desc": "既定でオン。wp-config.php.bak、~、.save などはデータベースのパスワードを漏らします"
+      },
+      "wp-1009": {
+        "name": "debug.log へのアクセスを禁止",
+        "desc": "既定でオン。wp-content/debug.log にはパスや SQL、機密情報が含まれることがあります"
+      },
+      "wp-1010": {
+        "name": "readme.html と license.txt を隠す",
+        "desc": "スキャナーに WordPress のバージョンを知られるのを防ぎます"
+      },
+      "wp-1011": {
+        "name": "CVE-2024-5932",
+        "desc": "既定でオン。GiveWP ≤ 3.14.1 の give_title によるオブジェクトインジェクション（RCE）をブロック"
+      },
+      "wp-1012": {
+        "name": "CVE-2023-4634",
+        "desc": "既定でオン。Media Library Assistant ≤ 3.09 の mla-stream-image.php による RCE をブロック"
+      }
+    }
   }
 }
