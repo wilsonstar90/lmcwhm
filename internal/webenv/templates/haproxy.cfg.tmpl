@@ -57,6 +57,9 @@ frontend fe_https
 {{- end}}
     # Blocked visitors (by the address above; the firewall only sees the CDN).
     http-request deny deny_status 403 if { src -f {{.Dir}}/lists/block.lst } !{ src -f {{.Dir}}/lists/allow.lst }
+{{- template "lists" .}}
+    http-request deny deny_status 403 if list_block !list_pass
+    http-request set-header X-Lmcwhm-Pass 1 if list_pass
     http-request set-header X-Forwarded-Proto https
     http-request set-header X-Forwarded-Port 443
     http-request set-var(txn.host) req.hdr(host),field(1,:),lower
@@ -91,6 +94,9 @@ frontend fe_http
 {{- end}}
     # Blocked visitors (by the address above; the firewall only sees the CDN).
     http-request deny deny_status 403 if { src -f {{.Dir}}/lists/block.lst } !{ src -f {{.Dir}}/lists/allow.lst } !acme
+{{- template "lists" .}}
+    http-request deny deny_status 403 if list_block !list_pass !acme
+    http-request set-header X-Lmcwhm-Pass 1 if list_pass
     http-request set-var(txn.host) req.hdr(host),field(1,:),lower
     http-request set-var(txn.fh) var(txn.host),map_str({{.Dir}}/maps/force_https_exact.map)
     http-request set-var(txn.fh) var(txn.host),map_end({{.Dir}}/maps/force_https_wild.map) if !{ var(txn.fh) -m found }
@@ -113,3 +119,20 @@ backend be_web
 backend be_varnish
     mode http
     server varnish 127.0.0.1:{{.VarnishPort}}
+
+{{define "lists"}}
+    # User-Agent / URL lists: an allowed request skips the block lists and the WAF.
+    http-request del-header X-Lmcwhm-Pass
+    acl list_pass req.hdr(user-agent) -m sub -i -f {{.Dir}}/maps/ua_allow_contains.lst
+    acl list_pass req.hdr(user-agent) -m beg -i -f {{.Dir}}/maps/ua_allow_prefix.lst
+    acl list_pass req.hdr(user-agent) -m reg -i -f {{.Dir}}/maps/ua_allow_regex.lst
+    acl list_pass url -m sub -i -f {{.Dir}}/maps/url_allow_contains.lst
+    acl list_pass path -m beg -i -f {{.Dir}}/maps/url_allow_prefix.lst
+    acl list_pass url -m reg -i -f {{.Dir}}/maps/url_allow_regex.lst
+    acl list_block req.hdr(user-agent) -m sub -i -f {{.Dir}}/maps/ua_block_contains.lst
+    acl list_block req.hdr(user-agent) -m beg -i -f {{.Dir}}/maps/ua_block_prefix.lst
+    acl list_block req.hdr(user-agent) -m reg -i -f {{.Dir}}/maps/ua_block_regex.lst
+    acl list_block url -m sub -i -f {{.Dir}}/maps/url_block_contains.lst
+    acl list_block path -m beg -i -f {{.Dir}}/maps/url_block_prefix.lst
+    acl list_block url -m reg -i -f {{.Dir}}/maps/url_block_regex.lst
+{{- end}}

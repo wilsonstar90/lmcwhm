@@ -105,6 +105,8 @@ type Env struct {
 	WAF func() WAFSettings
 	// CDN returns the proxies trusted for the visitor's address (nil = Cloudflare only).
 	CDN func() CDN
+	// Patterns returns the User-Agent / URL black and white lists.
+	Patterns func() []PatternList
 }
 
 // WAFSettings drive ModSecurity + OWASP CRS in the nginx container.
@@ -513,6 +515,7 @@ func (e *Env) edgeFiles(sites []Site, pass []Passthrough) (map[string][]byte, er
 	hostMaps("cache", cache, files)
 	c := e.cdn()
 	files["maps/cdn_cf.lst"], files["maps/cdn_custom.lst"] = cdnLists(c)
+	e.patternFiles(files)
 	if len(c.Ranges) > 0 && ValidHeader(c.Header) {
 		data.CDNHeader = c.Header
 	}

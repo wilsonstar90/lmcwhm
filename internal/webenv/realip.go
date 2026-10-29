@@ -254,3 +254,39 @@ func (e *Env) runtime(ctx context.Context, cmds []string) ([]string, error) {
 	}
 	return out, nil
 }
+
+// ---- User-Agent / URL lists ----
+
+// PatternList is one edge pattern file: the values of kind (ua | url), list
+// (block | allow) and match (contains | prefix | regex).
+type PatternList struct {
+	Kind, List, Match string
+	Values            []string
+}
+
+// patternFile names the file of one list ("maps/ua_block_contains.lst").
+func patternFile(kind, list, match string) string {
+	return "maps/" + kind + "_" + list + "_" + match + ".lst"
+}
+
+// patternFiles renders every list file, empty ones included (the config
+// always loads all of them).
+func (e *Env) patternFiles(files map[string][]byte) {
+	for _, k := range []string{"ua", "url"} {
+		for _, l := range []string{"block", "allow"} {
+			for _, m := range []string{"contains", "prefix", "regex"} {
+				files[patternFile(k, l, m)] = nil
+			}
+		}
+	}
+	if e.Patterns == nil {
+		return
+	}
+	for _, p := range e.Patterns() {
+		var b bytes.Buffer
+		for _, v := range p.Values {
+			b.WriteString(v + "\n")
+		}
+		files[patternFile(p.Kind, p.List, p.Match)] = b.Bytes()
+	}
+}

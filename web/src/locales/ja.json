@@ -320,7 +320,9 @@
       "ruleset_rejected": "nftables がルールを拒否しました: {detail}",
       "feed_unknown": "不明なブロックリスト",
       "feed_bad_url": "リスト URL は http:// か https:// で始めてください",
-      "invalid_cdn": "CDN 設定が無効です：ヘッダー名が必要で、範囲は有効な IP / CIDR である必要があります。"
+      "invalid_cdn": "CDN 設定が無効です：ヘッダー名が必要で、範囲は有効な IP / CIDR である必要があります。",
+      "invalid_pattern": "無効なエントリ：値・一致方法・正規表現を確認してください（URL の前方一致は / で始めます）。",
+      "duplicate_pattern": "このエントリは既にリストにあります"
     },
     "waf": {
       "invalid_settings": "WAF 設定が無効です"
@@ -1072,7 +1074,7 @@
     "ov": {
       "rules": "ポートルール {n}",
       "manual": "手動ブロック",
-      "ips": "許可 {allow} · 一時ブロック {bans}",
+      "ips": "許可 {allow} · UA / URL {patterns}",
       "lists_on": "{n} リスト",
       "trusted": "信頼範囲 {n}",
       "synced": "同期 {at}",
@@ -1094,16 +1096,16 @@
         "desc": "このサーバーの nftables：既定ポリシー、Ping、ポートルール。"
       },
       "ips": {
-        "title": "IP リスト",
-        "desc": "手動で許可 / ブロックしたアドレスと一時ブロック。行をクリックで詳細。"
+        "title": "ブラック / ホワイトリスト",
+        "desc": "手動で追加した IP・User-Agent・URL の許可 / ブロックリスト。自動追加分は「クラウドリスト」にあります。"
       },
       "lists": {
-        "title": "自動更新リスト",
-        "desc": "公開悪性 IP リストと信頼範囲（Cloudflare・クローラー）。スケジュールで更新します。"
+        "title": "クラウドリスト",
+        "desc": "自動追加されたエントリ：公開ブロックリスト、信頼範囲（Cloudflare・検索エンジン・AI クローラー）、CrowdSec と AI のブロック。"
       },
       "cloud": {
-        "title": "クラウド同期",
-        "desc": "手動のブロック / 許可リストを Linode Cloud Firewall と Cloudflare へ送信します。"
+        "title": "エッジ同期",
+        "desc": "手動のブロック / 許可リストを Linode Cloud Firewall と Cloudflare に反映します。"
       },
       "waf": {
         "title": "WAF",
@@ -2410,5 +2412,65 @@
     "auto": "自動",
     "light": "ライト",
     "dark": "ダーク"
+  },
+  "fwl": {
+    "tabs": {
+      "ip_allow": "IP 許可",
+      "ip_block": "IP ブロック",
+      "ua_allow": "UA 許可",
+      "ua_block": "UA ブロック",
+      "url_allow": "URL 許可",
+      "url_block": "URL ブロック"
+    },
+    "col": {
+      "ip": "IP / CIDR",
+      "ua": "User-Agent",
+      "url": "URL"
+    },
+    "match": {
+      "contains": "含む",
+      "prefix": "前方一致",
+      "regex": "正規表現"
+    },
+    "match_col": "一致方法",
+    "placeholder": {
+      "ip": {
+        "any": "IP または CIDR（例: 1.2.3.4 / 1.2.3.0/24）"
+      },
+      "ua": {
+        "contains": "例: python-requests",
+        "prefix": "例: Mozilla/4.0",
+        "regex": "例: (sqlmap{'|'}nikto)"
+      },
+      "url": {
+        "contains": "例: /wp-config",
+        "prefix": "例: /api/webhook",
+        "regex": "例: \\.(env{'|'}git)"
+      }
+    },
+    "hint": {
+      "ip_allow": "許可 IP はどのファイアウォールルールにも制限されません。",
+      "ip_block": "ブロック IP は全ポートで破棄されます。CDN 経由ではサイト入口で実 IP により拒否（403）。ファイアウォールの有効化が必要です。",
+      "ua_allow": "User-Agent が一致するリクエストは UA / URL ブロックリストと WAF をスキップします。",
+      "ua_block": "User-Agent が一致するリクエストは全サイトで拒否（403）されます（ファイアウォール不要）。",
+      "url_allow": "URL が一致するリクエストは UA / URL ブロックリストと WAF をスキップします（Webhook、API など）。",
+      "url_block": "URL（パス + クエリ）が一致するリクエストは全サイトで拒否（403）されます。"
+    },
+    "import": "インポート",
+    "export": "エクスポート",
+    "clear": "全削除",
+    "clear_confirm": "このリストの {n} 件をすべて削除しますか？",
+    "import_hint": "1 行に 1 件。# で始まる行は無視します",
+    "imported": "{added} 件追加、{skipped} 件スキップ",
+    "entries": "エントリ",
+    "sources": "ソース",
+    "all_sources": "すべてのソース",
+    "all_lists": "すべての公開リスト",
+    "from_list": "リスト: {id}",
+    "keep": "手動として保持",
+    "kept": "恒久的な手動ブロックに変更しました",
+    "remove_auto": "{ip} を削除しますか？次回のリスト更新で再追加される場合があります。",
+    "auto_hint": "自動追加されたエントリのみ表示します。「手動として保持」でブロックを恒久的な手動ブロックに変更します。",
+    "builtin_list": "組み込みリスト（ダウンロード不要）"
   }
 }

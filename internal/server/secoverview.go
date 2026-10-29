@@ -26,6 +26,8 @@ type secOverview struct {
 		Block int `json:"block"` // manual, permanent
 		Allow int `json:"allow"`
 		Bans  int `json:"bans"` // temporary blocks of any source except lists
+		// Patterns counts the User-Agent / URL entries.
+		Patterns int `json:"patterns"`
 	} `json:"ips"`
 	Lists struct {
 		Trusted  int `json:"trusted"`
@@ -78,6 +80,9 @@ func (s *Server) securityOverview(ctx context.Context) secOverview {
 		b, _ := fw.ManualIPs(ctx, "block")
 		a, _ := fw.ManualIPs(ctx, "allow")
 		o.IPs.Block, o.IPs.Allow = len(b), len(a)
+		if ps, err := fw.Patterns(ctx, "", ""); err == nil {
+			o.IPs.Patterns = len(ps)
+		}
 		if ips, err := fw.IPs(ctx, "block"); err == nil {
 			for _, x := range ips {
 				if x.ExpiresAt > 0 && !isFeed(x) {

@@ -104,7 +104,7 @@ type Service struct {
 	// entry or the enabled switch changes: the edge proxy blocks by the
 	// visitor's real address too (behind a CDN the TCP source is the CDN).
 	OnListsChanged func()
-	nft             string // nft binary ("" = not installed)
+	nft            string // nft binary ("" = not installed)
 
 	mu      sync.Mutex
 	revert  *time.Timer

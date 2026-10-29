@@ -33,6 +33,8 @@ type Feed struct {
 	Info  string `json:"info,omitempty"`
 	Kind  string `json:"kind"`            // block | trust
 	Group string `json:"group,omitempty"` // trust catalog: cdn | search | ai | social
+	// Builtin lists are part of the panel (no URL to download).
+	Builtin bool `json:"builtin,omitempty"`
 }
 
 const sefinek = "https://raw.githubusercontent.com/sefinek/trusted-ips-whitelist/main/lists/"
@@ -55,6 +57,9 @@ var FeedCatalog = []Feed{
 	{ID: "bingbot", Kind: KindTrust, Group: "search", Name: "Bingbot", URL: sefinek + "bingbot/ips.txt", Info: "Bing; also powers Yahoo search"},
 	{ID: "baidu", Kind: KindTrust, Group: "search", Name: "Baiduspider", URL: sefinek + "baidu/ips.txt"},
 	{ID: "yandexbot", Kind: KindTrust, Group: "search", Name: "YandexBot", URL: sefinek + "yandexbot/ips.txt"},
+	{ID: "sogou", Kind: KindTrust, Group: "search", Name: "Sogou spider", Builtin: true, Info: "built in"},
+	{ID: "so360", Kind: KindTrust, Group: "search", Name: "360Spider", Builtin: true, Info: "built in"},
+	{ID: "toutiao", Kind: KindTrust, Group: "search", Name: "Bytespider (Toutiao)", Builtin: true, Info: "built in"},
 	{ID: "duckduckbot", Kind: KindTrust, Group: "search", Name: "DuckDuckBot", URL: sefinek + "duckduckbot/ips.txt"},
 	{ID: "applebot", Kind: KindTrust, Group: "search", Name: "Applebot", URL: sefinek + "applebot/ips.txt"},
 	{ID: "all_ai", Kind: KindTrust, Group: "ai", Name: "All AI crawlers", URL: sefinek + "all-ai-ips.txt", Info: "GPTBot, ChatGPT, ClaudeBot, Perplexity, …"},
@@ -418,7 +423,14 @@ func (sv *Service) RunFeeds(ctx context.Context, kind string, ttl time.Duration,
 		}
 		n++
 		st := FeedStatus{LastRun: time.Now().Unix()}
-		entries, skipped, err := fetch(ctx, f.URL, guard)
+		var entries []string
+		var skipped int
+		var err error
+		if f.Builtin {
+			entries, skipped, err = ParseFeed(strings.NewReader(strings.Join(spiderRanges[f.ID], "\n")), guard)
+		} else {
+			entries, skipped, err = fetch(ctx, f.URL, guard)
+		}
 		if err == nil && len(entries) == 0 {
 			err = errors.New("no addresses in the list")
 		}

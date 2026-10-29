@@ -134,3 +134,33 @@ func TestSetLists(t *testing.T) {
 }
 
 func itoa(i int) string { return strconv.Itoa(i) }
+
+func TestPatternLists(t *testing.T) {
+	e := &Env{Home: t.TempDir(), Patterns: func() []PatternList {
+		return []PatternList{{Kind: "ua", List: "block", Match: "contains", Values: []string{"sqlmap", "python-requests"}}}
+	}}
+	edge, err := e.edgeFiles(nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(edge["maps/ua_block_contains.lst"]); got != "sqlmap\npython-requests\n" {
+		t.Errorf("ua_block_contains.lst = %q", got)
+	}
+	if v, ok := edge["maps/url_allow_regex.lst"]; !ok || len(v) != 0 {
+		t.Error("empty list file missing")
+	}
+	cfg := string(edge["haproxy.cfg"])
+	for _, want := range []string{
+		"acl list_block req.hdr(user-agent) -m sub -i -f " + e.EdgeDir() + "/maps/ua_block_contains.lst",
+		"acl list_pass path -m beg -i -f " + e.EdgeDir() + "/maps/url_allow_prefix.lst",
+		"http-request deny deny_status 403 if list_block !list_pass\n", "http-request deny deny_status 403 if list_block !list_pass !acme",
+		"http-request del-header X-Lmcwhm-Pass", "http-request set-header X-Lmcwhm-Pass 1 if list_pass",
+	} {
+		if !strings.Contains(cfg, want) {
+			t.Errorf("haproxy.cfg missing %q", want)
+		}
+	}
+	if strings.Count(cfg, "acl list_block") != 12 {
+		t.Errorf("list acls in both frontends: %d", strings.Count(cfg, "acl list_block"))
+	}
+}

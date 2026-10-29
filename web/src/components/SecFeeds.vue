@@ -13,7 +13,7 @@ import DetailDrawer, { type DetailRow } from './DetailDrawer.vue'
 const props = defineProps<{ kind: 'block' | 'trust' }>()
 const emit = defineEmits<{ changed: [] }>()
 
-interface Feed { id: string; name: string; url: string; info?: string; kind: string; group?: string }
+interface Feed { id: string; name: string; url: string; info?: string; kind: string; group?: string; builtin?: boolean }
 interface FeedStatus { last_run: number; entries: number; skipped: number; error?: string }
 interface Job { id: number; name: string; schedule: string; enabled: boolean; next: number; last?: { status: string; started_at: number } }
 interface Feeds { enabled: string[]; custom: Feed[]; status: Record<string, FeedStatus>; last_run: number; running: boolean; catalog: Feed[]; blocking: number; trusted: number; jobs: Record<string, Job> }
@@ -123,7 +123,7 @@ const detailRows = computed<DetailRow[]>(() => {
   return [
     { label: t('fwfeed.list'), value: x.name },
     { label: t('fwfeed.about'), value: x.info },
-    { label: 'URL', value: () => h('a', { href: x.url, target: '_blank', rel: 'noopener noreferrer', style: 'word-break: break-all' }, x.url) },
+    { label: 'URL', value: () => (x.builtin ? t('fwl.builtin_list') : h('a', { href: x.url, target: '_blank', rel: 'noopener noreferrer', style: 'word-break: break-all' }, x.url)) },
     { label: t('fwfeed.state'), value: x.id.startsWith('custom') || enabled.value.includes(x.id) ? t('fwfeed.selected') : t('fwfeed.not_selected') },
     { label: t('fwfeed.entries'), value: s ? s.entries.toLocaleString() : '' },
     { label: t('fwfeed.skipped_label'), value: s ? s.skipped : '' },

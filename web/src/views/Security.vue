@@ -20,7 +20,7 @@ import SecTamper from '../components/SecTamper.vue'
 // then the modules grouped in a side menu: network, intrusion, checks.
 interface Overview {
   firewall: { available: boolean; enabled: boolean; policy: string; rules: number; pending: boolean }
-  ips: { block: number; allow: number; bans: number }
+  ips: { block: number; allow: number; bans: number; patterns: number }
   lists: { trusted: number; blocking: number; enabled: number }
   cloud: { linode: boolean; cf: boolean; syncing: boolean; last_sync: number; errors: number }
   waf: { enabled: boolean; blocked: number }
@@ -69,7 +69,7 @@ const tiles = computed<Tile[]>(() => {
       key: 'firewall', tone: !v.firewall.available ? 'bad' : v.firewall.pending ? 'warn' : v.firewall.enabled ? 'ok' : 'off',
       status: v.firewall.enabled ? on : off, value: v.firewall.enabled ? t(`sec.policy.${v.firewall.policy}`) : '—', sub: t('sec.ov.rules', { n: v.firewall.rules }),
     },
-    { key: 'ips', tone: 'ok', status: t('sec.ov.manual'), value: n(v.ips.block), sub: t('sec.ov.ips', { allow: n(v.ips.allow), bans: n(v.ips.bans) }) },
+    { key: 'ips', tone: 'ok', status: t('sec.ov.manual'), value: n(v.ips.block), sub: t('sec.ov.ips', { allow: n(v.ips.allow), patterns: n(v.ips.patterns) }) },
     {
       key: 'lists', tone: v.lists.enabled ? 'ok' : 'off', status: v.lists.enabled ? t('sec.ov.lists_on', { n: v.lists.enabled }) : off,
       value: n(v.lists.blocking), sub: t('sec.ov.trusted', { n: n(v.lists.trusted) }),

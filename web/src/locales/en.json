@@ -320,7 +320,9 @@
       "ruleset_rejected": "nftables rejected the ruleset: {detail}",
       "feed_unknown": "Unknown blocklist",
       "feed_bad_url": "A list URL must start with http:// or https://",
-      "invalid_cdn": "Invalid CDN settings: a header name is required and ranges must be valid IPs / CIDRs."
+      "invalid_cdn": "Invalid CDN settings: a header name is required and ranges must be valid IPs / CIDRs.",
+      "invalid_pattern": "Invalid entry: check the value, match type and regex (a URL \"starts with\" begins with /).",
+      "duplicate_pattern": "That entry is already on the list"
     },
     "waf": {
       "invalid_settings": "Invalid WAF settings"
@@ -1072,7 +1074,7 @@
     "ov": {
       "rules": "{n} port rules",
       "manual": "Manual blocks",
-      "ips": "{allow} allowed · {bans} temporary bans",
+      "ips": "allowed {allow} · UA / URL {patterns}",
       "lists_on": "{n} lists",
       "trusted": "{n} trusted ranges",
       "synced": "Synced {at}",
@@ -1094,16 +1096,16 @@
         "desc": "nftables on this server: default policy, ping and port rules."
       },
       "ips": {
-        "title": "IP lists",
-        "desc": "Addresses you allow or block by hand, and temporary bans. Click a row for details."
+        "title": "Black / white lists",
+        "desc": "IP, User-Agent and URL allow / block lists you add by hand. Automatic entries are under Cloud lists."
       },
       "lists": {
-        "title": "Auto-updated lists",
-        "desc": "Public malicious IP blocklists and trusted ranges (Cloudflare, crawlers), updated by scheduled tasks."
+        "title": "Cloud lists",
+        "desc": "Entries added automatically: public block lists, trusted ranges (Cloudflare, search engines, AI crawlers), CrowdSec and AI bans."
       },
       "cloud": {
-        "title": "Cloud sync",
-        "desc": "Push the manual block and allow lists to the Linode Cloud Firewall and Cloudflare."
+        "title": "Edge sync",
+        "desc": "Push the manual block / allow lists to a Linode Cloud Firewall and Cloudflare."
       },
       "waf": {
         "title": "WAF",
@@ -2410,5 +2412,65 @@
     "auto": "Auto",
     "light": "Light",
     "dark": "Dark"
+  },
+  "fwl": {
+    "tabs": {
+      "ip_allow": "IP allow",
+      "ip_block": "IP block",
+      "ua_allow": "UA allow",
+      "ua_block": "UA block",
+      "url_allow": "URL allow",
+      "url_block": "URL block"
+    },
+    "col": {
+      "ip": "IP / CIDR",
+      "ua": "User-Agent",
+      "url": "URL"
+    },
+    "match": {
+      "contains": "Contains",
+      "prefix": "Starts with",
+      "regex": "Regex"
+    },
+    "match_col": "Match",
+    "placeholder": {
+      "ip": {
+        "any": "IP or CIDR, e.g. 1.2.3.4 / 1.2.3.0/24"
+      },
+      "ua": {
+        "contains": "e.g. python-requests",
+        "prefix": "e.g. Mozilla/4.0",
+        "regex": "e.g. (sqlmap{'|'}nikto)"
+      },
+      "url": {
+        "contains": "e.g. /wp-config",
+        "prefix": "e.g. /api/webhook",
+        "regex": "e.g. \\.(env{'|'}git)"
+      }
+    },
+    "hint": {
+      "ip_allow": "Allowed IPs are not limited by any firewall rule.",
+      "ip_block": "Blocked IPs are dropped on every port; through a CDN they are refused at the website edge by the real address (403). The firewall must be on.",
+      "ua_allow": "Requests with a matching User-Agent skip the UA / URL block lists and the WAF.",
+      "ua_block": "Requests with a matching User-Agent are refused (403) on every website, with or without the firewall.",
+      "url_allow": "Requests to a matching URL skip the UA / URL block lists and the WAF (e.g. webhooks, APIs).",
+      "url_block": "Requests whose URL (path + query) matches are refused (403) on every website."
+    },
+    "import": "Import",
+    "export": "Export",
+    "clear": "Clear",
+    "clear_confirm": "Remove all {n} entries of this list?",
+    "import_hint": "One per line; lines starting with # are skipped",
+    "imported": "Added {added}, skipped {skipped}",
+    "entries": "Entries",
+    "sources": "Sources",
+    "all_sources": "All sources",
+    "all_lists": "All public lists",
+    "from_list": "List: {id}",
+    "keep": "Keep as manual",
+    "kept": "Now a permanent manual block",
+    "remove_auto": "Remove {ip}? The next list update may add it again.",
+    "auto_hint": "Only automatic entries are shown here. \"Keep as manual\" turns a block entry into a permanent manual block.",
+    "builtin_list": "Built-in list (no download)"
   }
 }

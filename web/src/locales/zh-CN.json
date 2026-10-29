@@ -320,7 +320,9 @@
       "ruleset_rejected": "nftables 拒绝规则：{detail}",
       "feed_unknown": "未知的黑名单",
       "feed_bad_url": "名单网址须以 http:// 或 https:// 开头",
-      "invalid_cdn": "CDN 设置无效：需填写 Header 名称，IP 段需为有效的 IP / CIDR。"
+      "invalid_cdn": "CDN 设置无效：需填写 Header 名称，IP 段需为有效的 IP / CIDR。",
+      "invalid_pattern": "名单条目无效：请检查内容、匹配方式和正则（URL“开头为”需以 / 开头）。",
+      "duplicate_pattern": "名单中已有此条目"
     },
     "waf": {
       "invalid_settings": "WAF 设置无效"
@@ -1072,7 +1074,7 @@
     "ov": {
       "rules": "{n} 条端口规则",
       "manual": "手动封锁",
-      "ips": "白名单 {allow} · 临时封锁 {bans}",
+      "ips": "白名单 {allow} · UA / URL {patterns}",
       "lists_on": "{n} 个名单",
       "trusted": "信任 IP 段 {n}",
       "synced": "同步于 {at}",
@@ -1094,15 +1096,15 @@
         "desc": "本机 nftables：默认策略、Ping 和端口规则。"
       },
       "ips": {
-        "title": "IP 名单",
-        "desc": "你手动放行或封锁的地址，以及临时封锁。点击一行查看详情。"
+        "title": "黑白名单",
+        "desc": "手动添加的 IP、User-Agent 和 URL 白名单 / 黑名单。自动添加的在“云端黑白名单”。"
       },
       "lists": {
-        "title": "自动更新名单",
-        "desc": "公共恶意 IP 黑名单和信任 IP 段（Cloudflare、爬虫），由计划任务定时更新。"
+        "title": "云端黑白名单",
+        "desc": "自动添加的名单：公共黑名单、信任 IP 段（Cloudflare、搜索引擎、AI 爬虫）、CrowdSec 和 AI 封禁。"
       },
       "cloud": {
-        "title": "云端同步",
+        "title": "边缘同步",
         "desc": "将手动黑白名单推送到 Linode Cloud Firewall 和 Cloudflare。"
       },
       "waf": {
@@ -2410,5 +2412,65 @@
     "auto": "自动",
     "light": "浅色",
     "dark": "深色"
+  },
+  "fwl": {
+    "tabs": {
+      "ip_allow": "IP 白名单",
+      "ip_block": "IP 黑名单",
+      "ua_allow": "UA 白名单",
+      "ua_block": "UA 黑名单",
+      "url_allow": "URL 白名单",
+      "url_block": "URL 黑名单"
+    },
+    "col": {
+      "ip": "IP / CIDR",
+      "ua": "User-Agent",
+      "url": "URL"
+    },
+    "match": {
+      "contains": "包含",
+      "prefix": "开头为",
+      "regex": "正则"
+    },
+    "match_col": "匹配方式",
+    "placeholder": {
+      "ip": {
+        "any": "IP 或 CIDR，例如 1.2.3.4 / 1.2.3.0/24"
+      },
+      "ua": {
+        "contains": "例如 python-requests",
+        "prefix": "例如 Mozilla/4.0",
+        "regex": "例如 (sqlmap{'|'}nikto)"
+      },
+      "url": {
+        "contains": "例如 /wp-config",
+        "prefix": "例如 /api/webhook",
+        "regex": "例如 \\.(env{'|'}git)"
+      }
+    },
+    "hint": {
+      "ip_allow": "白名单 IP 不受任何防火墙规则限制。",
+      "ip_block": "黑名单 IP 所有端口都会被丢弃；经 CDN 连入时在网站入口按真实 IP 拦截（403）。需开启防火墙才会生效。",
+      "ua_allow": "User-Agent 匹配的请求不受 UA / URL 黑名单和 WAF 检查。",
+      "ua_block": "User-Agent 匹配的请求会被拒绝（403），适用所有网站，无需开启防火墙。",
+      "url_allow": "网址匹配的请求不受 UA / URL 黑名单和 WAF 检查（例如 webhook、API）。",
+      "url_block": "网址（路径 + 参数）匹配的请求会被拒绝（403），适用所有网站。"
+    },
+    "import": "导入",
+    "export": "导出",
+    "clear": "清空",
+    "clear_confirm": "清空此名单全部 {n} 条？",
+    "import_hint": "每行一条；# 开头的行会跳过",
+    "imported": "已添加 {added} 条，跳过 {skipped} 条",
+    "entries": "名单",
+    "sources": "来源",
+    "all_sources": "全部来源",
+    "all_lists": "全部公共名单",
+    "from_list": "名单：{id}",
+    "keep": "保留为手动",
+    "kept": "已转为手动黑名单（永久）",
+    "remove_auto": "移除 {ip}？名单下次更新时可能会再次添加。",
+    "auto_hint": "这里只显示自动添加的条目。“保留为手动”会将黑名单条目转为永久手动黑名单。",
+    "builtin_list": "内置名单（无需下载）"
   }
 }

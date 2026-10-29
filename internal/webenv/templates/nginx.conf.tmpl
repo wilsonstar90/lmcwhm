@@ -18,6 +18,8 @@ http {
     # ModSecurity v3 + OWASP CRS (settings written by the image's entrypoint).
     modsecurity on;
     modsecurity_rules_file /etc/modsecurity.d/setup.conf;
+    # The edge sets this on requests the User-Agent / URL white lists allow.
+    modsecurity_rules 'SecRule REQUEST_HEADERS:X-Lmcwhm-Pass "@streq 1" "id:9000001,phase:1,pass,nolog,ctl:ruleEngine=Off"';
 {{- end}}
     default_type application/octet-stream;
     server_tokens off;

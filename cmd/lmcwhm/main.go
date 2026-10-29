@@ -167,6 +167,7 @@ func serveCmd() *cobra.Command {
 				c := fw.CDN(ctx)
 				return webenv.CDN{Cloudflare: fw.CloudflareTrust(ctx), Ranges: c.Ranges, Header: c.Header}
 			}
+			env.Patterns = func() []webenv.PatternList { return fw.EdgePatterns(ctx) }
 			// The edge refuses blocked visitors by their real address (behind a CDN).
 			fw.OnListsChanged = func() {
 				block, allow, err := fw.EdgeLists(ctx)

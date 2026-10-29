@@ -371,8 +371,8 @@ export interface FirewallRule {
 export interface FirewallIP {
   id: number
   ip: string
-  list: 'block' | 'allow'
-  source: 'manual' | 'crowdsec' | 'waf'
+  list: 'block' | 'allow' | 'trust'
+  source: string // manual | crowdsec | mcp | feed:<id>
   remark: string
   expires_at: number
   created_at: number

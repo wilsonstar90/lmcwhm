@@ -95,6 +95,23 @@ fi
 api PUT /firewall/cdn '{"ranges":[],"header":""}' >/dev/null
 pass "visitor address from a trusted CDN header only"
 
+# ---------- User-Agent / URL black and white lists ----------
+api POST /firewall/patterns '{"kind":"ua","list":"block","match":"contains","value":"sqlmap","enabled":true}' | grep -q '"id"' || fail "add UA block"
+api POST /firewall/patterns/import '{"kind":"url","list":"block","match":"prefix","values":["/blocked","#comment",""]}' | grep -q '"added":1' || fail "import URL block"
+api POST /firewall/patterns '{"kind":"url","list":"allow","match":"prefix","value":"/blocked/hook","enabled":true}' >/dev/null
+docker exec lmcwhm-haproxy haproxy -c -f /opt/lmcwhm/edge/haproxy.cfg 2>&1 | grep -i "warning\|alert" && fail "haproxy config has warnings (lists)"
+code() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
+[[ "$(code -A 'sqlmap/1.7' --resolve php.test:80:127.0.0.1 http://php.test/index.php)" == 403 ]] || fail "UA black list"
+[[ "$(code -kA 'SQLMap/1.7' --resolve php.test:443:127.0.0.1 https://php.test/index.php)" == 403 ]] || fail "UA black list (https, any case)"
+[[ "$(code --resolve php.test:80:127.0.0.1 http://php.test/blocked/x)" == 403 ]] || fail "URL black list"
+[[ "$(code --resolve php.test:80:127.0.0.1 http://php.test/blocked/hook)" != 403 ]] || fail "URL white list does not win over the black list"
+[[ "$(get80 php.test /index.php)" == php-ok-8.3* ]] || fail "ordinary request refused by the lists"
+api POST /firewall/patterns/clear '{"kind":"ua","list":"block"}' | grep -q '"removed":1' || fail "clear UA list"
+[[ "$(code -A 'sqlmap/1.7' --resolve php.test:80:127.0.0.1 http://php.test/index.php)" == 200 ]] || fail "cleared UA list still enforced"
+api POST /firewall/patterns/clear '{"kind":"url","list":"block"}' >/dev/null
+api POST /firewall/patterns/clear '{"kind":"url","list":"allow"}' >/dev/null
+pass "User-Agent and URL black / white lists at the edge"
+
 # ---------- static site + custom certificate (SNI selection) ----------
 wait_task "$(api POST /sites '{"domain":"static.test","type":"static","ssl":"none"}' | jget "['task_id']")"
 [[ "$(get80 static.test)" == *"Site created by lmcwhm"* ]] || fail "static default page"

@@ -320,7 +320,9 @@
       "ruleset_rejected": "nftables 拒絕規則：{detail}",
       "feed_unknown": "未知嘅黑名單",
       "feed_bad_url": "名單網址要以 http:// 或 https:// 開頭",
-      "invalid_cdn": "CDN 設定無效：要有 Header 名稱，IP 段要係有效嘅 IP / CIDR。"
+      "invalid_cdn": "CDN 設定無效：要有 Header 名稱，IP 段要係有效嘅 IP / CIDR。",
+      "invalid_pattern": "名單條目無效：檢查內容、比對方式同正則（URL「開頭係」要以 / 開頭）。",
+      "duplicate_pattern": "名單已經有呢一條"
     },
     "waf": {
       "invalid_settings": "WAF 設定無效"
@@ -1072,7 +1074,7 @@
     "ov": {
       "rules": "{n} 條端口規則",
       "manual": "手動封鎖",
-      "ips": "白名單 {allow} · 臨時封鎖 {bans}",
+      "ips": "白名單 {allow} · UA / URL {patterns}",
       "lists_on": "{n} 個名單",
       "trusted": "信任 IP 段 {n}",
       "synced": "同步於 {at}",
@@ -1094,15 +1096,15 @@
         "desc": "本機 nftables：預設策略、Ping 同端口規則。"
       },
       "ips": {
-        "title": "IP 名單",
-        "desc": "你手動放行或封鎖嘅地址，同埋臨時封鎖。撳一行睇詳情。"
+        "title": "黑白名單",
+        "desc": "手動加入嘅 IP、User-Agent 同 URL 白名單 / 黑名單。自動加入嘅喺「雲端黑白名單」。"
       },
       "lists": {
-        "title": "自動更新名單",
-        "desc": "公共惡意 IP 黑名單同信任 IP 段（Cloudflare、爬蟲），由計劃任務定時更新。"
+        "title": "雲端黑白名單",
+        "desc": "自動加入嘅名單：公共黑名單、信任 IP 段（Cloudflare、搜尋引擎、AI 爬蟲）、CrowdSec 同 AI 封鎖。"
       },
       "cloud": {
-        "title": "雲端同步",
+        "title": "邊緣同步",
         "desc": "將手動黑白名單推送到 Linode Cloud Firewall 同 Cloudflare。"
       },
       "waf": {
@@ -2410,5 +2412,65 @@
     "auto": "自動",
     "light": "明亮",
     "dark": "黑暗"
+  },
+  "fwl": {
+    "tabs": {
+      "ip_allow": "IP 白名單",
+      "ip_block": "IP 黑名單",
+      "ua_allow": "UA 白名單",
+      "ua_block": "UA 黑名單",
+      "url_allow": "URL 白名單",
+      "url_block": "URL 黑名單"
+    },
+    "col": {
+      "ip": "IP / CIDR",
+      "ua": "User-Agent",
+      "url": "URL"
+    },
+    "match": {
+      "contains": "包含",
+      "prefix": "開頭係",
+      "regex": "正則"
+    },
+    "match_col": "比對方式",
+    "placeholder": {
+      "ip": {
+        "any": "IP 或 CIDR，例如 1.2.3.4 / 1.2.3.0/24"
+      },
+      "ua": {
+        "contains": "例如 python-requests",
+        "prefix": "例如 Mozilla/4.0",
+        "regex": "例如 (sqlmap{'|'}nikto)"
+      },
+      "url": {
+        "contains": "例如 /wp-config",
+        "prefix": "例如 /api/webhook",
+        "regex": "例如 \\.(env{'|'}git)"
+      }
+    },
+    "hint": {
+      "ip_allow": "白名單 IP 唔受任何防火牆規則限制。",
+      "ip_block": "黑名單 IP 所有端口都會被丟棄；經 CDN 連入時喺網站入口按真實 IP 攔截（403）。防火牆要開啟先生效。",
+      "ua_allow": "User-Agent 符合嘅請求唔受 UA / URL 黑名單同 WAF 檢查。",
+      "ua_block": "User-Agent 符合嘅請求會被拒絕（403），所有網站適用，唔使開防火牆。",
+      "url_allow": "網址符合嘅請求唔受 UA / URL 黑名單同 WAF 檢查（例如 webhook、API）。",
+      "url_block": "網址（路徑 + 參數）符合嘅請求會被拒絕（403），所有網站適用。"
+    },
+    "import": "匯入",
+    "export": "匯出",
+    "clear": "清空",
+    "clear_confirm": "清空呢個名單全部 {n} 條？",
+    "import_hint": "每行一條；# 開頭嘅行會略過",
+    "imported": "已加入 {added} 條，略過 {skipped} 條",
+    "entries": "名單",
+    "sources": "來源",
+    "all_sources": "全部來源",
+    "all_lists": "全部公共名單",
+    "from_list": "名單：{id}",
+    "keep": "保留為手動",
+    "kept": "已轉為手動黑名單（永久）",
+    "remove_auto": "移除 {ip}？名單下次更新時可能會再加入。",
+    "auto_hint": "呢度只顯示自動加入嘅條目。「保留為手動」會將黑名單條目轉為永久手動黑名單。",
+    "builtin_list": "內置名單（毋須下載）"
   }
 }

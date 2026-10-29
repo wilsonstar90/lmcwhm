@@ -31,6 +31,7 @@ func (s *Server) m5Routes(r chi.Router) {
 		r.Get("/firewall/ips", s.handleFWIPs)
 		r.Post("/firewall/ips", s.handleAddFWIP)
 		r.Post("/firewall/ips/{id}/delete", s.handleDeleteFWIP)
+		s.fwListRoutes(r)
 		r.Post("/firewall/sync", s.handleFWSync)
 		r.Post("/firewall/linode/verify", s.handleLinodeVerify)
 		r.Post("/firewall/linode/attach", s.handleLinodeAttach)
@@ -245,9 +246,11 @@ func (s *Server) handleFWIPs(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
+	// ?source=manual: only entries added by hand (黑白名單).
+	manual := r.URL.Query().Get("source") == "manual"
 	out := ips[:0]
 	for _, x := range ips {
-		if !strings.HasPrefix(x.Source, "feed:") {
+		if !strings.HasPrefix(x.Source, "feed:") && (!manual || x.Source == "manual") {
 			out = append(out, x)
 		}
 	}
