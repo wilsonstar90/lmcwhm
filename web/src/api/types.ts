@@ -165,6 +165,19 @@ export interface InstalledApp {
   has_config: boolean
   databases: boolean
   created_at: number
+  oom_protect?: boolean
+  full_version?: string
+}
+
+export interface AppUpdate {
+  key: string
+  name: string
+  image: string
+  current: string
+  latest?: string
+  available: boolean
+  checked_at: number
+  error?: string
 }
 
 export interface Database {

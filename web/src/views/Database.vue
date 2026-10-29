@@ -9,8 +9,10 @@ import {
 import { get, post, patch, ApiError } from '../api/client'
 import type { Database, InstalledApp } from '../api/types'
 import TaskModal from '../components/TaskModal.vue'
-import DbSettings from '../components/DbSettings.vue'
+import AppSettings from '../components/AppSettings.vue'
 import RedisKeys from '../components/RedisKeys.vue'
+import UpdateBadge from '../components/UpdateBadge.vue'
+import { useUpdates } from '../stores/updates'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -30,6 +32,16 @@ const engine = ref<number | null>(null)
 const current = computed(() => services.value.find((e) => e.id === engine.value) ?? null)
 const show = ref(false)
 const task = ref<{ id: string; title: string } | null>(null)
+const updates = useUpdates()
+updates.load().catch(() => {})
+async function updateEngine(e: InstalledApp) {
+  try {
+    const r = await post<{ task_id: string }>(`/apps/${e.id}/update`)
+    task.value = { id: r.task_id, title: `${t('app.update')} · ${e.name} ${e.version}` }
+  } catch (err) {
+    msg.error(err instanceof ApiError ? err.text : String(err))
+  }
+}
 const revealed = ref<Set<number>>(new Set())
 const pw = ref<{ db: Database; value: string } | null>(null)
 
@@ -189,7 +201,8 @@ const columns: DataTableColumns<Database> = [
         <n-button @click="settings = current">{{ t('db.settings') }}</n-button>
       </n-space>
       <n-space align="center">
-        <span class="hint">127.0.0.1:{{ current.port }}</span>
+        <span class="hint">{{ current.name }} {{ current.full_version || current.version }} · 127.0.0.1:{{ current.port }}</span>
+        <UpdateBadge :upd="updates.forApp(current.id)" :name="`${current.name} ${current.version}`" :databases="filtered.length > 0" @update="updateEngine(current)" />
         <n-tag size="small" :type="current.state === 'running' ? 'success' : 'error'">{{ current.state || '—' }}</n-tag>
         <n-button size="small" @click="load">{{ t('common.refresh') }}</n-button>
       </n-space>
@@ -239,7 +252,7 @@ const columns: DataTableColumns<Database> = [
     </n-card>
   </n-modal>
 
-  <DbSettings :app="settings" @close="settings = null" @changed="load" />
+  <AppSettings :app="settings" @close="settings = null" @changed="load" />
   <TaskModal :task-id="task?.id ?? null" :title="task?.title ?? ''" @close="task = null; load()" @done="load" />
 </template>
 

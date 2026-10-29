@@ -243,7 +243,8 @@
       "port_in_use": "该端口已被占用",
       "wrong_engine": "该引擎没有此设置",
       "bad_setting": "数值无效 {field}",
-      "engine_error": "数据库服务器返回：{detail}"
+      "engine_error": "数据库服务器返回：{detail}",
+      "update_failed": "更新失败，已还原旧版本：{detail}"
     },
     "db": {
       "invalid_name": "名称：字母、数字和 _，以字母开头（不能使用保留名）",
@@ -377,7 +378,8 @@
       "invalid_config": "PHP 设置无效：{field}",
       "unknown_extension": "此版本没有此扩展：{field}",
       "unknown_version": "未知的 PHP 版本",
-      "in_use": "仍有网站在用：{site}"
+      "in_use": "仍有网站在用：{site}",
+      "not_installed": "此 PHP 版本未安装"
     },
     "toolbox": {
       "invalid": "数值无效",
@@ -567,7 +569,23 @@
       "memcached": "Memcached 对象缓存（64 MB）",
       "adminer": "网页数据库管理工具，在面板内 /adminer/ 打开",
       "phpmyadmin": "面板内的 MySQL / MariaDB 网页管理工具，自动登录"
-    }
+    },
+    "settings": "设置",
+    "version": "版本",
+    "update": "更新",
+    "update_to": "可更新 {v}",
+    "update_confirm": "将 {name} 从 {from} 更新到 {to}？服务会短暂停止；如果新版本无法启动，会自动还原旧版本。",
+    "update_backup": "会先自动备份其数据库（备份 → 本地）。",
+    "new_build": "新构建",
+    "up_to_date": "已是最新",
+    "all_up_to_date": "全部已是最新",
+    "check_updates": "检查更新",
+    "checked_at": "上次检查：{t}",
+    "never_checked": "尚未检查",
+    "updates_banner": "{n} 个软件可以更新",
+    "updates_hint": "更新只在已安装的版本线内进行（例如 MariaDB 11.4.x、PHP 8.3.x）。计划任务“检查软件更新”每天检查一次，需要你点击“更新”才会安装。要换新主版本，请另行安装再迁移。",
+    "uninstall_hint": "会删除容器和镜像；除非勾选“同时删除数据”，否则数据会保留。",
+    "uninstall_has_db": "仍有 {n} 个数据库使用此引擎，请先在数据库页删除。"
   },
   "db": {
     "create": "添加数据库",
@@ -1000,13 +1018,15 @@
       "ssl_renew": "续签 SSL 证书（Let's Encrypt / LiteSSL）",
       "time_sync": "服务器时间同步",
       "release_memory": "释放内存",
-      "security_scan": "安全扫描"
+      "security_scan": "安全扫描",
+      "app_updates": "检查软件更新"
     },
     "sys_hint": {
       "ssl_renew": "续签 30 天内到期的所有网站证书。",
       "time_sync": "重启 NTP 客户端（systemd-timesyncd）校正时间。",
       "release_memory": "将缓存写入磁盘并清空页面缓存；之后读文件时 Linux 会自动重新缓存。",
-      "security_scan": "执行安全扫描，发现严重问题时告警。"
+      "security_scan": "执行安全扫描，发现严重问题时告警。",
+      "app_updates": "检查已安装软件和 PHP 版本是否有小版本更新，有则发出告警；不会自动安装。"
     },
     "feeds": {
       "block": "公共恶意 IP 黑名单",
@@ -1394,7 +1414,8 @@
       "ssh_login": "SSH 登录通知",
       "tamper": "受保护文件被改动",
       "malware": "木马扫描发现可疑文件",
-      "security_scan": "安全扫描：严重风险"
+      "security_scan": "安全扫描：严重风险",
+      "app_update": "有软件更新"
     },
     "rule_desc": {
       "cpu": "CPU {minutes} 分钟平均 ≥ {threshold}%",
@@ -1720,7 +1741,8 @@
     "slowlog": "慢日志",
     "status": "负载状态",
     "not_running": "此版本未运行。",
-    "save": "测试并应用"
+    "save": "测试并应用",
+    "in_use_count": "有 {n} 个网站使用此版本，请先改用其他版本。"
   },
   "varnish": {
     "idle": "未使用",

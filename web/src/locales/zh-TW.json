@@ -243,7 +243,8 @@
       "port_in_use": "此連接埠已被佔用",
       "wrong_engine": "此引擎沒有此設定",
       "bad_setting": "數值無效 {field}",
-      "engine_error": "資料庫伺服器回應：{detail}"
+      "engine_error": "資料庫伺服器回應：{detail}",
+      "update_failed": "更新失敗，已還原舊版本：{detail}"
     },
     "db": {
       "invalid_name": "名稱：英文字母、數字與 _，以字母開頭（不可使用保留名稱）",
@@ -377,7 +378,8 @@
       "invalid_config": "PHP 設定無效：{field}",
       "unknown_extension": "此版本沒有此擴充：{field}",
       "unknown_version": "未知的 PHP 版本",
-      "in_use": "仍有網站使用：{site}"
+      "in_use": "仍有網站使用：{site}",
+      "not_installed": "此 PHP 版本尚未安裝"
     },
     "toolbox": {
       "invalid": "數值無效",
@@ -567,7 +569,23 @@
       "memcached": "Memcached 物件快取（64 MB）",
       "adminer": "網頁資料庫管理工具，於面板內 /adminer/ 開啟",
       "phpmyadmin": "面板內的 MySQL / MariaDB 網頁管理工具，自動登入"
-    }
+    },
+    "settings": "設定",
+    "version": "版本",
+    "update": "更新",
+    "update_to": "可更新 {v}",
+    "update_confirm": "將 {name} 由 {from} 更新到 {to}？服務會短暫停止；如果新版本無法啟動，會自動還原舊版本。",
+    "update_backup": "會先自動備份其資料庫（備份 → 本地）。",
+    "new_build": "新建置",
+    "up_to_date": "已是最新",
+    "all_up_to_date": "全部已是最新",
+    "check_updates": "檢查更新",
+    "checked_at": "上次檢查：{t}",
+    "never_checked": "尚未檢查",
+    "updates_banner": "{n} 個軟體可以更新",
+    "updates_hint": "更新只會在已安裝的版本線內進行（例如 MariaDB 11.4.x、PHP 8.3.x）。排程任務「檢查軟體更新」每日檢查一次，需要你按「更新」才會安裝。要換新主版本，請另行安裝再遷移。",
+    "uninstall_hint": "會刪除容器與映像；除非勾選「同時刪除資料」，否則資料會保留。",
+    "uninstall_has_db": "仍有 {n} 個資料庫使用此引擎，請先在資料庫頁刪除。"
   },
   "db": {
     "create": "新增資料庫",
@@ -1000,13 +1018,15 @@
       "ssl_renew": "續簽 SSL 憑證（Let's Encrypt / LiteSSL）",
       "time_sync": "伺服器時間同步",
       "release_memory": "釋放記憶體",
-      "security_scan": "安全掃描"
+      "security_scan": "安全掃描",
+      "app_updates": "檢查軟體更新"
     },
     "sys_hint": {
       "ssl_renew": "續簽 30 天內到期的所有網站憑證。",
       "time_sync": "重新啟動 NTP 用戶端（systemd-timesyncd）校正時間。",
       "release_memory": "將快取寫入磁碟並清空頁面快取；之後讀檔時 Linux 會自動重新快取。",
-      "security_scan": "執行安全掃描，發現嚴重問題時告警。"
+      "security_scan": "執行安全掃描，發現嚴重問題時告警。",
+      "app_updates": "檢查已安裝軟體與 PHP 版本是否有小版本更新，有則發出告警；不會自動安裝。"
     },
     "feeds": {
       "block": "公共惡意 IP 黑名單",
@@ -1394,7 +1414,8 @@
       "ssh_login": "SSH 登入通知",
       "tamper": "受保護檔案遭變更",
       "malware": "木馬掃描發現可疑檔案",
-      "security_scan": "安全掃描：嚴重風險"
+      "security_scan": "安全掃描：嚴重風險",
+      "app_update": "有軟體更新"
     },
     "rule_desc": {
       "cpu": "CPU {minutes} 分鐘平均 ≥ {threshold}%",
@@ -1720,7 +1741,8 @@
     "slowlog": "慢日誌",
     "status": "負載狀態",
     "not_running": "此版本未執行。",
-    "save": "測試並套用"
+    "save": "測試並套用",
+    "in_use_count": "有 {n} 個網站使用此版本，請先改用其他版本。"
   },
   "varnish": {
     "idle": "未使用",

@@ -25,7 +25,7 @@ const total = ref(0)
 const page = ref(1)
 
 const channelKinds = ['email', 'telegram', 'webhook', 'wecom', 'dingtalk', 'slack', 'discord']
-const ruleKinds = ['cpu', 'mem', 'load', 'disk', 'service_down', 'ssl_expiry', 'probe_down', 'cron_failed', 'login_failed', 'panel_login', 'ssh_login', 'tamper', 'malware', 'security_scan']
+const ruleKinds = ['cpu', 'mem', 'load', 'disk', 'service_down', 'ssl_expiry', 'probe_down', 'cron_failed', 'login_failed', 'panel_login', 'ssh_login', 'tamper', 'malware', 'security_scan', 'app_update']
 // Which parameters a rule kind takes.
 const ruleParams: Record<string, (keyof Params)[]> = { cpu: ['threshold', 'minutes'], mem: ['threshold', 'minutes'], load: ['threshold', 'minutes'], disk: ['threshold'], ssl_expiry: ['days'], login_failed: ['count', 'minutes'] }
 const defaults: Record<string, Params> = { cpu: { threshold: 90, minutes: 5 }, mem: { threshold: 90, minutes: 5 }, load: { threshold: 4, minutes: 5 }, disk: { threshold: 90 }, ssl_expiry: { days: 14 }, login_failed: { count: 5, minutes: 10 } }

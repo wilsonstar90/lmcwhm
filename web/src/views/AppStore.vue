@@ -1,18 +1,22 @@
 <script setup lang="ts">
-import { computed, h, onMounted, ref } from 'vue'
+import { computed, h, nextTick, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-  NTabs, NTabPane, NButton, NDataTable, NTag, NSpace, NSelect, NCard, NGrid, NGi, NModal, NInput, NCheckbox, NPopconfirm,
+  NAlert, NTabs, NTabPane, NButton, NDataTable, NTag, NSpace, NSelect, NCard, NGrid, NGi, NModal, NCheckbox, NPopconfirm,
   NDescriptions, NDescriptionsItem, useMessage, type DataTableColumns,
 } from 'naive-ui'
-import { get, post, put, ApiError } from '../api/client'
+import { get, post, ApiError } from '../api/client'
 import type { CatalogApp, InstalledApp } from '../api/types'
 import TaskModal from '../components/TaskModal.vue'
 import LogsModal from '../components/LogsModal.vue'
 import PhpVersions from '../components/PhpVersions.vue'
-import { CodeEditor } from '../components/code-editor'
+import AppSettings from '../components/AppSettings.vue'
+import UpdateBadge from '../components/UpdateBadge.vue'
+import { useUpdates } from '../stores/updates'
+import { datetime } from '../format'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const updates = useUpdates()
 const msg = useMessage()
 const fail = (e: unknown) => msg.error(e instanceof ApiError ? e.text : String(e))
 
@@ -23,17 +27,27 @@ const tab = ref('installed')
 const pick = ref<Record<string, string>>({})
 const task = ref<{ id: string; title: string } | null>(null)
 const logs = ref<{ url: string; title: string } | null>(null)
-const cfg = ref<{ app: InstalledApp; body: string } | null>(null)
+const settings = ref<InstalledApp | null>(null)
+const phpRef = ref<InstanceType<typeof PhpVersions> | null>(null)
 const cred = ref<{ app: InstalledApp; host: string; port: number; username: string; password: string } | null>(null)
 const removeData = ref(false)
 const hasPMA = computed(() => installed.value.some((i) => i.app === 'phpmyadmin'))
 
+interface PhpVer { version: string; state: string; port: number; sites: number; full_version?: string }
+const phps = ref<PhpVer[]>([])
+
 async function load() {
   loading.value = true
   try {
-    const [c, i] = await Promise.all([get<{ items: CatalogApp[] }>('/apps/catalog'), get<{ items: InstalledApp[] }>('/apps')])
+    const [c, i, p] = await Promise.all([
+      get<{ items: CatalogApp[] }>('/apps/catalog'),
+      get<{ items: InstalledApp[] }>('/apps'),
+      get<{ items: PhpVer[] }>('/php').catch(() => ({ items: [] as PhpVer[] })),
+      updates.load().catch(() => {}),
+    ])
     catalog.value = c.items
     installed.value = i.items
+    phps.value = p.items.filter((v) => v.state)
     for (const a of c.items) if (!pick.value[a.key]) pick.value[a.key] = a.versions[0].version
   } catch (e) {
     fail(e)
@@ -75,19 +89,38 @@ async function control(i: InstalledApp, action: string) {
   }
 }
 
-async function openConfig(i: InstalledApp) {
+async function update(i: InstalledApp) {
   try {
-    cfg.value = { app: i, body: (await get<{ config: string }>(`/apps/${i.id}/config`)).config }
+    const r = await post<{ task_id: string }>(`/apps/${i.id}/update`)
+    task.value = { id: r.task_id, title: `${t('app.update')} · ${i.name} ${i.version}` }
   } catch (e) {
     fail(e)
   }
 }
-async function saveConfig() {
-  const c = cfg.value!
+
+async function phpAction(v: PhpVer, a: 'update' | 'remove') {
   try {
-    const r = await put<{ task_id: string }>(`/apps/${c.app.id}/config`, { config: c.body })
-    cfg.value = null
-    task.value = { id: r.task_id, title: `${t('app.config')} · ${c.app.name} ${c.app.version}` }
+    const r = await post<{ task_id?: string }>(`/php/${v.version}/${a}`)
+    if (r.task_id) task.value = { id: r.task_id, title: `${t(a === 'update' ? 'app.update' : 'app.uninstall')} · PHP ${v.version}` }
+    else {
+      msg.success(t('common.done'))
+      load()
+    }
+  } catch (e) {
+    fail(e)
+  }
+}
+
+async function phpSettings(v: PhpVer) {
+  tab.value = 'php'
+  await nextTick()
+  phpRef.value?.openVersion(v.version)
+}
+
+async function checkUpdates() {
+  try {
+    await updates.check()
+    msg.success(updates.available.length ? t('app.updates_banner', { n: updates.available.length }) : t('app.all_up_to_date'))
   } catch (e) {
     fail(e)
   }
@@ -108,49 +141,89 @@ function copy(text: string) {
 const stateTag = (s: string) =>
   h(NTag, { size: 'small', type: s === 'running' ? 'success' : s ? 'warning' : 'default' }, () => (s ? t(`app.state.${s}`, s) : t('app.state.missing')))
 
-const columns: DataTableColumns<InstalledApp> = [
-  { title: () => t('app.name'), key: 'name', render: (i) => h('span', [h('b', i.name), ` ${i.version}`]) },
-  { title: () => t('app.kind'), key: 'kind', width: 100, render: (i) => t(`app.kinds.${i.kind}`) },
-  { title: () => t('common.status'), key: 'state', width: 110, render: (i) => (i.kind === 'runtime' ? h(NTag, { size: 'small', type: 'success' }, () => t('app.ready')) : stateTag(i.state)) },
-  { title: () => t('app.port'), key: 'port', width: 120, render: (i) => (i.port ? `127.0.0.1:${i.port}` : '—') },
-  { title: () => t('app.image'), key: 'image', ellipsis: { tooltip: true } },
+// The installed list holds App Store apps and the PHP versions of the web stack.
+type Row = { key: string; app?: InstalledApp; php?: PhpVer }
+const rows = computed<Row[]>(() => [
+  ...installed.value.map((a) => ({ key: `app:${a.id}`, app: a })),
+  ...phps.value.map((p) => ({ key: `php:${p.version}`, php: p })),
+])
+
+const versionCell = (name: string, version: string, full: string | undefined, upd: ReturnType<typeof updates.forApp>, onUpdate: () => void, databases = false) =>
+  h(NSpace, { size: 6, align: 'center', wrap: false }, () => [
+    h('span', [h('b', name), ` ${version}`, full ? h('span', { class: 'full' }, ` · ${full}`) : null]),
+    h(UpdateBadge, { upd, name: `${name} ${version}`, databases, onUpdate }),
+  ])
+
+const uninstallButton = (name: string, onConfirm: () => void, withData: boolean, extra?: string) =>
+  h(
+    NPopconfirm,
+    { onPositiveClick: onConfirm, onAfterLeave: () => (removeData.value = false) },
+    {
+      trigger: () => h(NButton, { size: 'tiny', type: 'error', ghost: true }, () => t('app.uninstall')),
+      default: () =>
+        h('div', { style: 'max-width:320px' }, [
+          h('div', t('app.uninstall_confirm', { name })),
+          extra ? h('div', { class: 'hint' }, extra) : null,
+          withData
+            ? h(NCheckbox, { checked: removeData.value, 'onUpdate:checked': (v: boolean) => (removeData.value = v), style: 'margin-top:8px' }, () => t('app.remove_data'))
+            : null,
+        ]),
+    },
+  )
+
+const columns: DataTableColumns<Row> = [
+  {
+    title: () => t('app.name'),
+    key: 'name',
+    width: 300,
+    render: (r) =>
+      r.app
+        ? versionCell(r.app.name, r.app.version, r.app.full_version, updates.forApp(r.app.id), () => update(r.app!), r.app.databases)
+        : versionCell('PHP', r.php!.version, r.php!.full_version, updates.forPHP(r.php!.version), () => phpAction(r.php!, 'update')),
+  },
+  { title: () => t('app.kind'), key: 'kind', width: 100, render: (r) => t(`app.kinds.${r.app ? r.app.kind : 'runtime'}`) },
+  {
+    title: () => t('common.status'),
+    key: 'state',
+    width: 110,
+    render: (r) => (r.app?.kind === 'runtime' ? h(NTag, { size: 'small', type: 'success' }, () => t('app.ready')) : stateTag(r.app ? r.app.state : r.php!.state)),
+  },
+  { title: () => t('app.port'), key: 'port', width: 130, render: (r) => { const p = r.app ? r.app.port : r.php!.port; return p ? `127.0.0.1:${p}` : '—' } },
   {
     title: '',
     key: 'actions',
-    width: 340,
-    render: (i) =>
-      h(NSpace, { size: 6 }, () => [
+    width: 380,
+    render: (r) => {
+      if (r.php) {
+        const v = r.php
+        return h(NSpace, { size: 6 }, () => [
+          h(NButton, { size: 'tiny', type: 'primary', onClick: () => phpSettings(v) }, () => t('app.settings')),
+          h(NButton, { size: 'tiny', onClick: () => (logs.value = { url: `/php/${v.version}/logs`, title: `PHP ${v.version}` }) }, () => t('app.logs')),
+          v.sites > 0
+            ? h(NButton, { size: 'tiny', type: 'error', ghost: true, disabled: true, title: t('php.in_use_count', { n: v.sites }) }, () => t('app.uninstall'))
+            : uninstallButton(`PHP ${v.version}`, () => phpAction(v, 'remove'), false, t('php.remove_confirm')),
+        ])
+      }
+      const i = r.app!
+      return h(NSpace, { size: 6 }, () => [
+        h(NButton, { size: 'tiny', type: 'primary', onClick: () => (settings.value = i) }, () => t('app.settings')),
         ...(i.container
           ? [
               i.state === 'running'
                 ? h(NButton, { size: 'tiny', onClick: () => control(i, 'restart') }, () => t('app.restart'))
-                : h(NButton, { size: 'tiny', type: 'primary', onClick: () => control(i, 'start') }, () => t('app.start')),
-              i.state === 'running' ? h(NButton, { size: 'tiny', onClick: () => control(i, 'stop') }, () => t('app.stop')) : null,
+                : h(NButton, { size: 'tiny', type: 'primary', ghost: true, onClick: () => control(i, 'start') }, () => t('app.start')),
               h(NButton, { size: 'tiny', onClick: () => (logs.value = { url: `/apps/${i.id}/logs`, title: `${i.name} ${i.version}` }) }, () => t('app.logs')),
             ]
           : []),
-        i.has_config ? h(NButton, { size: 'tiny', onClick: () => openConfig(i) }, () => t('app.config')) : null,
         i.kind === 'database' ? h(NButton, { size: 'tiny', onClick: () => openCred(i) }, () => t('app.credentials')) : null,
         i.app === 'adminer' ? h(NButton, { size: 'tiny', tag: 'a', href: '/adminer/', target: '_blank' }, () => t('app.open')) : null,
         i.app === 'phpmyadmin' ? h(NButton, { size: 'tiny', tag: 'a', href: '/phpmyadmin/', target: '_blank' }, () => t('app.open')) : null,
         (i.app === 'mysql' || i.app === 'mariadb') && hasPMA.value
           ? h(NButton, { size: 'tiny', tag: 'a', href: '/phpmyadmin/', target: '_blank' }, () => 'phpMyAdmin')
           : null,
-        h(
-          NPopconfirm,
-          { onPositiveClick: () => uninstall(i), onAfterLeave: () => (removeData.value = false) },
-          {
-            trigger: () => h(NButton, { size: 'tiny', type: 'error', ghost: true }, () => t('app.uninstall')),
-            default: () =>
-              h('div', [
-                h('div', t('app.uninstall_confirm', { name: `${i.name} ${i.version}` })),
-                h(NCheckbox, { checked: removeData.value, 'onUpdate:checked': (v: boolean) => (removeData.value = v), style: 'margin-top:8px' }, () =>
-                  t('app.remove_data'),
-                ),
-              ]),
-          },
-        ),
-      ]),
+        uninstallButton(`${i.name} ${i.version}`, () => uninstall(i), i.kind !== 'runtime', t('app.uninstall_hint')),
+      ])
+    },
   },
 ]
 
@@ -166,12 +239,20 @@ const versionOptions = (a: CatalogApp) =>
 <template>
   <n-tabs v-model:value="tab" type="line" animated>
     <n-tab-pane name="installed" :tab="t('app.installed')">
-      <n-space justify="end" style="margin-bottom: 12px">
-        <n-button size="small" @click="load">{{ t('common.refresh') }}</n-button>
+      <n-alert v-if="updates.available.length" type="success" :show-icon="true" style="margin-bottom: 12px">
+        {{ t('app.updates_banner', { n: updates.available.length }) }}: {{ updates.available.map((u) => `${u.name} ${u.current} → ${u.latest && u.latest !== u.current ? u.latest : t('app.new_build')}`).join('、') }}
+      </n-alert>
+      <n-space justify="space-between" align="center" style="margin-bottom: 12px">
+        <span class="hint">{{ updates.checkedAt ? t('app.checked_at', { t: datetime(updates.checkedAt, locale) }) : t('app.never_checked') }}</span>
+        <n-space>
+          <n-button size="small" :loading="updates.checking" @click="checkUpdates">{{ t('app.check_updates') }}</n-button>
+          <n-button size="small" @click="load">{{ t('common.refresh') }}</n-button>
+        </n-space>
       </n-space>
-      <n-data-table size="small" :columns="columns" :data="installed" :loading="loading" :row-key="(r: InstalledApp) => r.id" :scroll-x="980" />
+      <n-data-table size="small" :columns="columns" :data="rows" :loading="loading" :row-key="(r: Row) => r.key" :scroll-x="1020" />
+      <p class="hint">{{ t('app.updates_hint') }}</p>
     </n-tab-pane>
-    <n-tab-pane name="php" tab="PHP" display-directive="show:lazy"><PhpVersions /></n-tab-pane>
+    <n-tab-pane name="php" tab="PHP" display-directive="show:lazy"><PhpVersions ref="phpRef" @changed="load" /></n-tab-pane>
     <n-tab-pane v-for="k in kinds" :key="k" :name="k" :tab="t(`app.kinds.${k}`)">
       <n-grid cols="1 s:2 m:3" responsive="screen" :x-gap="12" :y-gap="12">
         <n-gi v-for="a in byKind[k]" :key="a.key">
@@ -192,19 +273,6 @@ const versionOptions = (a: CatalogApp) =>
     </n-tab-pane>
   </n-tabs>
 
-  <n-modal :show="!!cfg" @update:show="(v: boolean) => !v && (cfg = null)">
-    <n-card v-if="cfg" :title="`${t('app.config')} · ${cfg.app.name} ${cfg.app.version}`" style="width: min(800px, calc(100vw - 32px))" closable @close="cfg = null">
-      <p class="desc">{{ t('app.config_hint') }}</p>
-      <CodeEditor v-model="cfg.body" :language="cfg.app.app === 'redis' ? 'redis.conf' : 'my.cnf'" height="460px" />
-      <template #footer>
-        <n-space justify="end">
-          <n-button @click="cfg = null">{{ t('common.cancel') }}</n-button>
-          <n-button type="primary" @click="saveConfig">{{ t('app.save_restart') }}</n-button>
-        </n-space>
-      </template>
-    </n-card>
-  </n-modal>
-
   <n-modal :show="!!cred" @update:show="(v: boolean) => !v && (cred = null)">
     <n-card v-if="cred" :title="`${cred.app.name} ${cred.app.version}`" style="width: min(520px, calc(100vw - 32px))" closable @close="cred = null">
       <n-descriptions :column="1" label-placement="left" size="small">
@@ -219,6 +287,7 @@ const versionOptions = (a: CatalogApp) =>
     </n-card>
   </n-modal>
 
+  <AppSettings :app="settings" @close="settings = null" @changed="load" />
   <TaskModal :task-id="task?.id ?? null" :title="task?.title ?? ''" @close="task = null; load()" @done="load" />
   <LogsModal :url="logs?.url ?? null" :title="logs?.title ?? ''" @close="logs = null" />
 </template>
@@ -235,8 +304,12 @@ const versionOptions = (a: CatalogApp) =>
   color: #d03050;
   opacity: 1;
 }
-.mono :deep(textarea) {
-  font-family: Menlo, Consolas, monospace;
+.hint {
+  font-size: 12px;
+  opacity: 0.7;
+}
+:deep(.full) {
+  opacity: 0.65;
   font-size: 12px;
 }
 </style>

@@ -193,7 +193,7 @@ const runCols: DataTableColumns<Run> = [
 const modeOptions = computed(() => (['seconds', 'minutes', 'hourly', 'daily', 'weekly', 'monthly', 'custom'] as Mode[]).map((m) => ({ label: t(`cron.modes.${m}`), value: m })))
 const dowOptions = computed(() => [0, 1, 2, 3, 4, 5, 6].map((d) => ({ label: new Intl.DateTimeFormat(locale.value, { weekday: 'long' }).format(new Date(2026, 0, 4 + d)), value: d })))
 const typeOptions = computed(() => (['shell', 'url', 'logrotate', 'backup', 'system', 'ip_feeds', 'malware_scan'] as const).map((v) => ({ label: t(`cron.types.${v}`), value: v })))
-const systemOptions = computed(() => ['ssl_renew', 'time_sync', 'release_memory', 'security_scan'].map((v) => ({ label: t(`cron.sys.${v}`), value: v })))
+const systemOptions = computed(() => ['ssl_renew', 'time_sync', 'release_memory', 'security_scan', 'app_updates'].map((v) => ({ label: t(`cron.sys.${v}`), value: v })))
 const feedOptions = computed(() => ['block', 'trust'].map((v) => ({ label: t(`cron.feeds.${v}`), value: v })))
 // What a built-in task does, next to its type in the list.
 function typeLabel(j: Job) {

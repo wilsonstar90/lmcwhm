@@ -2,18 +2,22 @@
 import { computed, h, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-  NAlert, NButton, NCard, NDataTable, NDescriptions, NDescriptionsItem, NInput, NInputNumber, NModal, NPopconfirm, NSelect, NSpace,
+  NAlert, NButton, NCard, NCheckbox, NDataTable, NDescriptions, NDescriptionsItem, NInput, NInputNumber, NModal, NPopconfirm, NSelect, NSpace,
   NSwitch, NTabPane, NTabs, NTag, useMessage, type DataTableColumns,
 } from 'naive-ui'
 import { get, post, put, ApiError } from '../api/client'
 import type { InstalledApp } from '../api/types'
 import { bytes, datetime } from '../format'
 import TaskModal from './TaskModal.vue'
+import UpdateBadge from './UpdateBadge.vue'
+import { useUpdates } from '../stores/updates'
 import { CodeEditor } from './code-editor'
 
-// The settings window of one installed engine (aaPanel 軟件設定).
+// The settings window of one installed app (aaPanel 軟件設定): service,
+// version and update, uninstall, plus engine tabs for MySQL / MariaDB / Redis.
 const props = defineProps<{ app: InstalledApp | null }>()
 const emit = defineEmits<{ close: []; changed: [] }>()
+const updates = useUpdates()
 const { t, locale } = useI18n()
 const msg = useMessage()
 const fail = (e: unknown) => msg.error(e instanceof ApiError ? e.text : String(e))
@@ -32,10 +36,40 @@ function runTask(id: string, label: string) {
 // ---- service ----
 interface ServiceInfo extends InstalledApp { oom_protect: boolean; data_size: number; started: number }
 const svc = ref<ServiceInfo | null>(null)
+const isRuntime = computed(() => props.app?.kind === 'runtime')
 async function loadService() {
-  svc.value = await get<ServiceInfo>(`${base.value}/service`)
+  // A runtime is an image only: there is no service to ask about.
+  svc.value = isRuntime.value ? { ...props.app!, oom_protect: false, data_size: 0, started: 0 } : await get<ServiceInfo>(`${base.value}/service`)
   port.value = svc.value.port
+  updates.load().catch(() => {})
+  if (props.app?.databases) {
+    const r = await get<{ items: { app_id: number }[] }>('/databases')
+    dbCount.value = r.items.filter((d) => d.app_id === props.app!.id).length
+  }
 }
+
+// ---- update / uninstall ----
+const upd = computed(() => (props.app ? updates.forApp(props.app.id) : undefined))
+const dbCount = ref(0)
+const removeData = ref(false)
+async function update() {
+  try {
+    runTask((await post<{ task_id: string }>(`${base.value}/update`)).task_id, t('app.update'))
+  } catch (e) {
+    fail(e)
+  }
+}
+async function uninstall() {
+  try {
+    const r = await post<{ task_id: string }>(`${base.value}/uninstall`, { remove_data: removeData.value })
+    removeData.value = false
+    uninstalling.value = true
+    runTask(r.task_id, t('app.uninstall'))
+  } catch (e) {
+    fail(e)
+  }
+}
+const uninstalling = ref(false)
 async function control(action: string) {
   try {
     await post(`${base.value}/${action}`)
@@ -311,6 +345,7 @@ const policies = ['noeviction', 'allkeys-lru', 'allkeys-lfu', 'allkeys-random', 
 const tabs = computed(() => {
   if (isMy.value) return ['service', 'config', 'port', 'status', 'tuning', 'errorlog', 'slowlog', 'binlog']
   if (isRedis.value) return ['service', 'tuning', 'config', 'status', 'persistence', 'logs']
+  if (isRuntime.value) return ['service']
   return ['service', 'port', 'logs']
 })
 async function loadTab(name: string) {
@@ -339,8 +374,13 @@ watch(() => props.app?.id, (id) => {
 }, { immediate: true })
 watch(tab, loadTab)
 function taskDone() {
-  loadTab(tab.value)
   emit('changed')
+  if (uninstalling.value) {
+    uninstalling.value = false
+    emit('close')
+    return
+  }
+  loadTab(tab.value)
 }
 </script>
 
@@ -352,21 +392,43 @@ function taskDone() {
           <!-- service -->
           <template v-if="name === 'service' && svc">
             <n-descriptions :column="2" label-placement="left" bordered size="small">
-              <n-descriptions-item :label="t('common.status')"><n-tag size="small" :type="svc.state === 'running' ? 'success' : 'error'">{{ svc.state || '—' }}</n-tag></n-descriptions-item>
-              <n-descriptions-item :label="t('dbs.started')">{{ svc.started && svc.state === 'running' ? datetime(svc.started, locale) : '—' }}</n-descriptions-item>
-              <n-descriptions-item :label="t('dbs.address')">127.0.0.1:{{ svc.port }}</n-descriptions-item>
-              <n-descriptions-item :label="t('dbs.data_size')">{{ bytes(svc.data_size) }}</n-descriptions-item>
-              <n-descriptions-item :label="t('dbs.container')">{{ svc.container }}</n-descriptions-item>
+              <n-descriptions-item :label="t('app.version')">
+                <n-space align="center" :size="8">
+                  <span>{{ svc.version }}<template v-if="app.full_version"> · {{ app.full_version }}</template></span>
+                  <UpdateBadge :upd="upd" :name="title" :databases="dbCount > 0" @update="update" />
+                  <n-tag v-if="upd && !upd.available && upd.checked_at && !upd.error" size="tiny" :bordered="false">{{ t('app.up_to_date') }}</n-tag>
+                </n-space>
+              </n-descriptions-item>
               <n-descriptions-item :label="t('dbs.image')">{{ svc.image }}</n-descriptions-item>
+              <template v-if="!isRuntime">
+                <n-descriptions-item :label="t('common.status')"><n-tag size="small" :type="svc.state === 'running' ? 'success' : 'error'">{{ svc.state || '—' }}</n-tag></n-descriptions-item>
+                <n-descriptions-item :label="t('dbs.started')">{{ svc.started && svc.state === 'running' ? datetime(svc.started, locale) : '—' }}</n-descriptions-item>
+                <n-descriptions-item :label="t('dbs.address')">127.0.0.1:{{ svc.port }}</n-descriptions-item>
+                <n-descriptions-item :label="t('dbs.data_size')">{{ bytes(svc.data_size) }}</n-descriptions-item>
+                <n-descriptions-item :label="t('dbs.container')">{{ svc.container }}</n-descriptions-item>
+              </template>
             </n-descriptions>
-            <n-space style="margin-top: 16px">
-              <n-button v-if="svc.state !== 'running'" type="primary" @click="control('start')">{{ t('app.start') }}</n-button>
-              <n-button v-else @click="control('stop')">{{ t('app.stop') }}</n-button>
-              <n-button @click="control('restart')">{{ t('app.restart') }}</n-button>
-            </n-space>
-            <div class="section">
-              <n-space align="center"><b>{{ t('dbs.oom') }}</b><n-switch :value="svc.oom_protect" @update:value="setOOM" /></n-space>
-              <p class="hint">{{ t('dbs.oom_hint') }}</p>
+            <template v-if="!isRuntime">
+              <n-space style="margin-top: 16px">
+                <n-button v-if="svc.state !== 'running'" type="primary" @click="control('start')">{{ t('app.start') }}</n-button>
+                <n-button v-else @click="control('stop')">{{ t('app.stop') }}</n-button>
+                <n-button @click="control('restart')">{{ t('app.restart') }}</n-button>
+              </n-space>
+              <div class="section">
+                <n-space align="center"><b>{{ t('dbs.oom') }}</b><n-switch :value="svc.oom_protect" @update:value="setOOM" /></n-space>
+                <p class="hint">{{ t('dbs.oom_hint') }}</p>
+              </div>
+            </template>
+            <div class="section danger">
+              <b>{{ t('app.uninstall') }}</b>
+              <p class="hint">{{ dbCount > 0 ? t('app.uninstall_has_db', { n: dbCount }) : t('app.uninstall_hint') }}</p>
+              <n-popconfirm :positive-text="t('app.uninstall')" @positive-click="uninstall" @after-leave="removeData = false">
+                <template #trigger>
+                  <n-button type="error" :disabled="dbCount > 0">{{ t('app.uninstall') }}</n-button>
+                </template>
+                <div>{{ t('app.uninstall_confirm', { name: title }) }}</div>
+                <n-checkbox v-if="!isRuntime" v-model:checked="removeData" style="margin-top: 8px">{{ t('app.remove_data') }}</n-checkbox>
+              </n-popconfirm>
             </div>
           </template>
 
@@ -515,6 +577,9 @@ function taskDone() {
   font-size: 12px;
   opacity: 0.65;
   margin: 8px 0 0;
+}
+.section.danger b {
+  color: #d03050;
 }
 .section {
   margin-top: 20px;

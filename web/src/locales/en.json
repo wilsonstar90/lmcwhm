@@ -243,7 +243,8 @@
       "port_in_use": "That port is already in use",
       "wrong_engine": "This setting is not available for this engine",
       "bad_setting": "Invalid value {field}",
-      "engine_error": "The database server said: {detail}"
+      "engine_error": "The database server said: {detail}",
+      "update_failed": "The update failed and the previous version was restored: {detail}"
     },
     "db": {
       "invalid_name": "Name: letters, digits and _, starting with a letter (not a reserved name)",
@@ -377,7 +378,8 @@
       "invalid_config": "Invalid PHP setting: {field}",
       "unknown_extension": "Extension not available for this version: {field}",
       "unknown_version": "Unknown PHP version",
-      "in_use": "Still used by {site}"
+      "in_use": "Still used by {site}",
+      "not_installed": "This PHP version is not installed"
     },
     "toolbox": {
       "invalid": "Invalid value",
@@ -567,7 +569,23 @@
       "memcached": "Memcached object cache (64 MB)",
       "adminer": "Web database client, opened at /adminer/ inside the panel",
       "phpmyadmin": "Web MySQL / MariaDB manager inside the panel, signed in automatically"
-    }
+    },
+    "settings": "Settings",
+    "version": "Version",
+    "update": "Update",
+    "update_to": "Update to {v}",
+    "update_confirm": "Update {name} from {from} to {to}? The service stops for a moment; if the new version does not start, the previous one is restored.",
+    "update_backup": "Its databases are backed up first (Backup → local).",
+    "new_build": "new build",
+    "up_to_date": "Up to date",
+    "all_up_to_date": "Everything is up to date",
+    "check_updates": "Check for updates",
+    "checked_at": "Last checked: {t}",
+    "never_checked": "Not checked yet",
+    "updates_banner": "{n} update(s) available",
+    "updates_hint": "Updates stay within the installed version line (for example MariaDB 11.4.x or PHP 8.3.x). They are checked daily by the \"Check software updates\" task in Cron and installed only when you click Update. To move to a new major version, install it alongside and migrate.",
+    "uninstall_hint": "The container and image are removed. Data is kept unless you also tick “remove data”.",
+    "uninstall_has_db": "{n} database(s) still use this engine. Delete them on the Databases page first."
   },
   "db": {
     "create": "Add database",
@@ -1000,13 +1018,15 @@
       "ssl_renew": "Renew SSL certificates (Let's Encrypt / LiteSSL)",
       "time_sync": "Sync server time",
       "release_memory": "Release memory",
-      "security_scan": "Security scan"
+      "security_scan": "Security scan",
+      "app_updates": "Check software updates"
     },
     "sys_hint": {
       "ssl_renew": "Renews every website certificate that expires within 30 days.",
       "time_sync": "Restarts the NTP client (systemd-timesyncd), which corrects the clock.",
       "release_memory": "Writes caches to disk and drops the page cache; Linux refills it as files are read.",
-      "security_scan": "Runs the security scan and raises an alert on critical findings."
+      "security_scan": "Runs the security scan and raises an alert on critical findings.",
+      "app_updates": "Checks installed software and PHP versions for patch updates and raises an alert; nothing is installed automatically."
     },
     "feeds": {
       "block": "Malicious IP blocklists",
@@ -1394,7 +1414,8 @@
       "ssh_login": "SSH login",
       "tamper": "Protected file changed",
       "malware": "Webshell scan found files",
-      "security_scan": "Security scan: critical risks"
+      "security_scan": "Security scan: critical risks",
+      "app_update": "Software update available"
     },
     "rule_desc": {
       "cpu": "CPU ≥ {threshold}% averaged over {minutes} min",
@@ -1720,7 +1741,8 @@
     "slowlog": "Slow log",
     "status": "Status",
     "not_running": "This version is not running.",
-    "save": "Test and apply"
+    "save": "Test and apply",
+    "in_use_count": "{n} website(s) use this version; switch them to another version first."
   },
   "varnish": {
     "idle": "not used",

@@ -243,7 +243,8 @@
       "port_in_use": "そのポートは使用中です",
       "wrong_engine": "このエンジンでは使えない設定です",
       "bad_setting": "無効な値 {field}",
-      "engine_error": "データベースサーバーの応答：{detail}"
+      "engine_error": "データベースサーバーの応答：{detail}",
+      "update_failed": "更新に失敗し、元のバージョンに戻しました：{detail}"
     },
     "db": {
       "invalid_name": "名前：英字・数字・_、英字で始まる（予約名は不可）",
@@ -377,7 +378,8 @@
       "invalid_config": "PHP 設定が無効です：{field}",
       "unknown_extension": "このバージョンでは使えない拡張機能：{field}",
       "unknown_version": "不明な PHP バージョン",
-      "in_use": "まだ {site} が使用中です"
+      "in_use": "まだ {site} が使用中です",
+      "not_installed": "この PHP バージョンはインストールされていません"
     },
     "toolbox": {
       "invalid": "無効な値",
@@ -567,7 +569,23 @@
       "memcached": "Memcached オブジェクトキャッシュ（64 MB）",
       "adminer": "Web 版 DB クライアント。パネル内の /adminer/ で開きます",
       "phpmyadmin": "パネル内で使う MySQL / MariaDB の Web 管理ツール（自動ログイン）"
-    }
+    },
+    "settings": "設定",
+    "version": "バージョン",
+    "update": "更新",
+    "update_to": "{v} に更新可能",
+    "update_confirm": "{name} を {from} から {to} に更新しますか？サービスは一時停止します。新しいバージョンが起動しない場合は元に戻します。",
+    "update_backup": "先にデータベースをバックアップします（バックアップ → ローカル）。",
+    "new_build": "新しいビルド",
+    "up_to_date": "最新です",
+    "all_up_to_date": "すべて最新です",
+    "check_updates": "更新を確認",
+    "checked_at": "最終確認：{t}",
+    "never_checked": "未確認",
+    "updates_banner": "{n} 件の更新があります",
+    "updates_hint": "更新はインストール済みのバージョン系列内で行われます（例：MariaDB 11.4.x、PHP 8.3.x）。Cron の「ソフトウェア更新の確認」が毎日確認し、「更新」を押したときだけインストールされます。メジャーバージョンを変える場合は別途インストールして移行してください。",
+    "uninstall_hint": "コンテナとイメージを削除します。「データも削除」を選ばない限りデータは残ります。",
+    "uninstall_has_db": "このエンジンを使うデータベースが {n} 件あります。先にデータベースページで削除してください。"
   },
   "db": {
     "create": "データベース追加",
@@ -1000,13 +1018,15 @@
       "ssl_renew": "SSL 証明書の更新（Let's Encrypt / LiteSSL）",
       "time_sync": "サーバー時刻の同期",
       "release_memory": "メモリ解放",
-      "security_scan": "セキュリティスキャン"
+      "security_scan": "セキュリティスキャン",
+      "app_updates": "ソフトウェア更新の確認"
     },
     "sys_hint": {
       "ssl_renew": "30 日以内に期限が切れるサイト証明書をすべて更新します。",
       "time_sync": "NTP クライアント（systemd-timesyncd）を再起動して時刻を補正します。",
       "release_memory": "キャッシュを書き出してページキャッシュを解放します。読み込み時に再びキャッシュされます。",
-      "security_scan": "セキュリティスキャンを実行し、重大な問題を通知します。"
+      "security_scan": "セキュリティスキャンを実行し、重大な問題を通知します。",
+      "app_updates": "インストール済みソフトウェアと PHP のパッチ更新を確認し、あればアラートを送ります。自動ではインストールしません。"
     },
     "feeds": {
       "block": "悪性 IP ブロックリスト",
@@ -1394,7 +1414,8 @@
       "ssh_login": "SSH ログイン通知",
       "tamper": "保護ファイルの変更",
       "malware": "Webシェル検査で検出",
-      "security_scan": "セキュリティ診断：重大リスク"
+      "security_scan": "セキュリティ診断：重大リスク",
+      "app_update": "ソフトウェア更新あり"
     },
     "rule_desc": {
       "cpu": "CPU の {minutes} 分平均が {threshold}% 以上",
@@ -1720,7 +1741,8 @@
     "slowlog": "スローログ",
     "status": "ステータス",
     "not_running": "このバージョンは実行されていません。",
-    "save": "テストして適用"
+    "save": "テストして適用",
+    "in_use_count": "{n} 件のサイトがこのバージョンを使っています。先に別のバージョンへ切り替えてください。"
   },
   "varnish": {
     "idle": "未使用",

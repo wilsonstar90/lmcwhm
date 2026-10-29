@@ -11,8 +11,10 @@ import { get, post, put, ApiError } from '../api/client'
 import TaskModal from './TaskModal.vue'
 import LogsModal from './LogsModal.vue'
 import { CodeEditor } from './code-editor'
+import UpdateBadge from './UpdateBadge.vue'
+import { useUpdates } from '../stores/updates'
 
-interface Ver { version: string; eol: boolean; state: string; port: number; extensions: string[]; sites: number }
+interface Ver { version: string; eol: boolean; state: string; port: number; extensions: string[]; sites: number; full_version?: string }
 interface Ext { name: string; desc: string; min?: string; max?: string; slow?: boolean }
 interface Pool { pm: string; max_children: number; start_servers: number; min_spare: number; max_spare: number; max_requests: number; request_timeout: number; slowlog_timeout: number }
 interface Conf { extensions: string[]; ini: Record<string, string>; disable_functions: string[]; custom_ini: string; fpm: Pool }
@@ -20,6 +22,8 @@ interface Meta { items: Ver[]; extensions: Ext[]; ini_keys: { Key: string; Defau
 
 const { t } = useI18n()
 const msg = useMessage()
+const updates = useUpdates()
+const emit = defineEmits<{ changed: [] }>()
 const fail = (e: unknown) => msg.error(e instanceof ApiError ? e.text : String(e))
 const meta = ref<Meta | null>(null)
 const task = ref<{ id: string; title: string } | null>(null)
@@ -28,6 +32,7 @@ const logs = ref<{ url: string; title: string } | null>(null)
 async function load() {
   try {
     meta.value = await get<Meta>('/php')
+    updates.load().catch(() => {})
   } catch (e) {
     fail(e)
   }
@@ -41,6 +46,7 @@ async function action(v: Ver, a: string) {
     else {
       msg.success(t('common.done'))
       load()
+      emit('changed')
     }
   } catch (e) {
     fail(e)
@@ -48,7 +54,17 @@ async function action(v: Ver, a: string) {
 }
 
 const cols = computed<DataTableColumns<Ver>>(() => [
-  { title: () => t('php.version'), key: 'version', width: 120, render: (v) => h('span', [h('b', `PHP ${v.version}`), v.eol ? h(NTag, { size: 'tiny', type: 'warning', style: 'margin-left:6px' }, () => 'EOL') : null]) },
+  {
+    title: () => t('php.version'),
+    key: 'version',
+    width: 250,
+    render: (v) =>
+      h(NSpace, { size: 6, align: 'center', wrap: false }, () => [
+        h('span', [h('b', `PHP ${v.version}`), v.full_version ? h('span', { class: 'full' }, ` · ${v.full_version}`) : null]),
+        v.eol ? h(NTag, { size: 'tiny', type: 'warning' }, () => 'EOL') : null,
+        v.state ? h(UpdateBadge, { upd: updates.forPHP(v.version), name: `PHP ${v.version}`, onUpdate: () => action(v, 'update') }) : null,
+      ]),
+  },
   { title: () => t('common.status'), key: 'state', width: 110, render: (v) => h(NTag, { size: 'small', type: v.state === 'running' ? 'success' : v.state ? 'warning' : 'default' }, () => v.state || t('php.not_installed')) },
   { title: () => t('php.sites'), key: 'sites', width: 80 },
   { title: () => t('php.extensions'), key: 'extensions', ellipsis: { tooltip: true }, render: (v) => v.extensions.join(', ') || '—' },
@@ -69,8 +85,11 @@ const cols = computed<DataTableColumns<Ver>>(() => [
               v.state === 'running' ? h(NButton, { size: 'tiny', onClick: () => action(v, 'stop') }, () => t('app.stop')) : null,
               h(NButton, { size: 'tiny', onClick: () => (logs.value = { url: `/php/${v.version}/logs`, title: `PHP ${v.version}` }) }, () => t('app.logs')),
               v.sites === 0
-                ? h(NPopconfirm, { onPositiveClick: () => action(v, 'remove') }, { trigger: () => h(NButton, { size: 'tiny', type: 'error', quaternary: true }, () => t('common.delete')), default: () => t('php.remove_confirm') })
-                : null,
+                ? h(NPopconfirm, { onPositiveClick: () => action(v, 'remove'), positiveText: t('app.uninstall') }, {
+                    trigger: () => h(NButton, { size: 'tiny', type: 'error', ghost: true }, () => t('app.uninstall')),
+                    default: () => t('php.remove_confirm'),
+                  })
+                : h(NButton, { size: 'tiny', type: 'error', ghost: true, disabled: true, title: t('php.in_use_count', { n: v.sites }) }, () => t('app.uninstall')),
             ],
       ),
   },
@@ -79,6 +98,14 @@ const cols = computed<DataTableColumns<Ver>>(() => [
 // ---- settings modal ----
 const cur = ref<{ v: Ver; conf: Conf; modules: string[]; status?: Record<string, number | string>; statusError?: string } | null>(null)
 const tab = ref('ext')
+
+// openVersion opens a version's settings (from the App Store installed list).
+async function openVersion(version: string) {
+  if (!meta.value) await load()
+  const v = meta.value?.items.find((x) => x.version === version)
+  if (v) openSettings(v)
+}
+defineExpose({ openVersion })
 async function openSettings(v: Ver) {
   try {
     const r = await get<{ config: Conf; modules?: string[]; status?: Record<string, number | string>; status_error?: string }>(`/php/${v.version}`)
@@ -196,11 +223,15 @@ const statusKeys = ['pool', 'process manager', 'accepted conn', 'listen queue', 
       </template>
     </n-card>
   </n-modal>
-  <TaskModal :task-id="task?.id ?? null" :title="task?.title ?? ''" @close="task = null; load()" @done="load" />
+  <TaskModal :task-id="task?.id ?? null" :title="task?.title ?? ''" @close="task = null; load(); emit('changed')" @done="load" />
   <LogsModal :url="logs?.url ?? null" :title="logs?.title ?? ''" @close="logs = null" />
 </template>
 
 <style scoped>
+:deep(.full) {
+  opacity: 0.65;
+  font-size: 12px;
+}
 .hint,
 .sub {
   font-size: 12px;
