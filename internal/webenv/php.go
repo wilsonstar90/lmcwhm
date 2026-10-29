@@ -323,13 +323,15 @@ func (e *Env) buildPHP(ctx context.Context, v string, exts []string, log func(st
 	if img == PHPImage(v) || dockerx.ImageExists(ctx, img) {
 		return img, nil
 	}
+	return img, buildPHPExt(ctx, v, exts, log)
+}
+
+// buildPHPExt builds the extension image of a version on its base build.
+func buildPHPExt(ctx context.Context, v string, exts []string, log func(string, ...any)) error {
 	log("building PHP %s with extensions: %s (this can take several minutes)", v, strings.Join(exts, " "))
 	df := fmt.Sprintf("FROM %s\nCOPY --from=%s /usr/bin/install-php-extensions /usr/local/bin/\nRUN install-php-extensions %s\nLABEL lmcwhm.managed=\"true\"\n",
 		PHPImage(v), PHPInstallerImage, strings.Join(exts, " "))
-	if err := dockerx.Build(ctx, img, df); err != nil {
-		return "", err
-	}
-	return img, nil
+	return dockerx.Build(ctx, PHPImageFor(v, exts), df)
 }
 
 // testPHP checks a candidate configuration with php-fpm -t in a throwaway container.
@@ -551,8 +553,8 @@ func (e *Env) UpdatePHP(ctx context.Context, v string, log func(string, ...any))
 		return err
 	}
 	if img != PHPImage(v) {
-		dockerx.Run(ctx, "rmi", img) // untag so buildPHP rebuilds the extensions on the new base
-		if _, err := e.buildPHP(ctx, v, c.Extensions, log); err != nil {
+		// Built directly: the running container keeps the old image from being removed.
+		if err := buildPHPExt(ctx, v, c.Extensions, log); err != nil {
 			restore()
 			return err
 		}
