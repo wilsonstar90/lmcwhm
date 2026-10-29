@@ -62,6 +62,8 @@ task POST /apps/install '{"app":"node","version":"22"}'
 task POST /apps/install '{"app":"python","version":"3.12"}'
 task POST /apps/install '{"app":"mariadb","version":"11.4"}'
 task POST /apps/install '{"app":"postgres","version":"17"}'
+# An older patch release stands in for redis:7.4, so the update check has something to find.
+docker pull -q redis:7.4.0 >/dev/null && docker tag redis:7.4.0 redis:7.4
 task POST /apps/install '{"app":"redis","version":"7.4"}'
 [[ "$(docker inspect -f '{{.State.Status}}' lmcwhm-mariadb114)" == running ]] || fail "mariadb not running"
 docker port lmcwhm-mariadb114 | grep -q "127.0.0.1:3306" || fail "mariadb not published on loopback 3306"
@@ -191,6 +193,24 @@ code="$(api POST "/apps/$RID/port" '{"port":22}' | jget "['code']")"
 [[ "$code" == app.bad_port ]] || fail "privileged port accepted: $code"
 task POST "/apps/$RID/port" '{"port":6379}'
 pass "Redis: key browser, settings applied live, port moved"
+
+# ---------- software updates: exact versions, patch update with data kept ----------
+api GET /apps | python3 -c "import sys,json; a=[a for a in json.load(sys.stdin)['items'] if a['app']=='redis'][0]; assert a['full_version']=='7.4.0', a" \
+  || fail "redis full version"
+api POST /apps/updates/check | python3 -c "
+import sys,json; u=json.load(sys.stdin)['items']['app:'+sys.argv[1]]
+assert u['available'] and u['current']=='7.4.0' and u['latest'].startswith('7.4.') and u['latest']!='7.4.0', u" "$RID" || fail "update check did not find the redis patch"
+task POST "/apps/$RID/update"
+api GET /apps | python3 -c "import sys,json; a=[a for a in json.load(sys.stdin)['items'] if a['app']=='redis'][0]; assert a['full_version'].startswith('7.4.') and a['full_version']!='7.4.0', a" \
+  || fail "redis not updated"
+api GET "/apps/$RID/redis/key?db=3&key=lmc:a" | grep -q '"value":"hello"' || fail "redis lost data in the update"
+api GET /apps/updates | python3 -c "import sys,json; u=json.load(sys.stdin)['items']['app:'+sys.argv[1]]; assert not u['available'], u" "$RID" || fail "update still offered"
+docker image inspect lmcwhm/rollback:redis-7.4 >/dev/null 2>&1 && fail "rollback image left behind"
+task POST "/apps/$RID/update" # already the newest: nothing to do
+task POST /apps/install '{"app":"memcached","version":"1.6"}'
+task POST "/apps/$(app_id memcached 1.6)/uninstall"
+docker image inspect memcached:1.6 >/dev/null 2>&1 && fail "uninstall left the image"
+pass "software updates: exact versions, patch update found and applied with data kept; uninstall removes the image"
 
 # ---------- Docker manager: create container, bind a domain ----------
 task POST /docker/containers '{"name":"hello","image":"nginx:stable","ports":["127.0.0.1:8181:80"],"restart":"unless-stopped"}'
@@ -341,7 +361,7 @@ cron_run() { # job id -> waits for the run, prints status and output
   done
   api GET "/cron/runs/$rid" | python3 -c "import sys,json; r=json.load(sys.stdin); print(r['status']); print(r.get('output',''))"
 }
-for c in ssl_renew time_sync release_memory security_scan; do
+for c in ssl_renew time_sync release_memory security_scan app_updates; do
   out="$(cron_run "$(cron_job system "$c")")"
   [[ "$(head -1 <<<"$out")" == success ]] || fail "built-in task $c: $out"
 done
@@ -594,6 +614,8 @@ docker exec lmcwhm-php83 php -m | grep -qx redis || fail "redis extension not lo
 [[ "$(docker exec lmcwhm-php83 php -r 'echo ini_get("memory_limit");')" == 384M ]] || fail "php.ini not applied"
 api GET /php/8.3 | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['status']['pool']=='www' and 'redis' in d['modules'], d" || fail "php status"
 [[ "$(get80 db.test /index.php)" == "db-ok-42" ]] || fail "site broken by PHP settings"
+api GET /php | python3 -c "import sys,json; v=[v for v in json.load(sys.stdin)['items'] if v['version']=='8.3'][0]; assert v['full_version'].startswith('8.3.'), v" \
+  || fail "php full version"
 pass "PHP: redis extension built, php.ini and FPM pool applied, FPM status read"
 
 # Varnish page cache for one site.
