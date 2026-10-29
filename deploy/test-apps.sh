@@ -624,7 +624,7 @@ task POST /php/8.3/update
 api GET /php | python3 -c "import sys,json; v=[v for v in json.load(sys.stdin)['items'] if v['version']=='8.3'][0]; assert v['full_version'].startswith('8.3.') and v['full_version']!='8.3.0' and v['state']=='running', v" \
   || fail "php not updated"
 docker exec lmcwhm-php83 php -m | grep -qx redis || fail "redis extension lost in the PHP update"
-docker exec lmcwhm-php83 php -i | grep -q 'memory_limit => 384M' || fail "php.ini lost in the PHP update"
+[[ "$(docker exec lmcwhm-php83 php -r 'echo ini_get("memory_limit");')" == 384M ]] || fail "php.ini lost in the PHP update"
 task POST /php/8.3/update # already the newest: nothing to do
 pass "PHP: redis extension built, php.ini and FPM pool applied, FPM status read, patch update rebuilt with extensions and settings kept"
 
