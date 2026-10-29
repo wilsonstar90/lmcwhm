@@ -108,19 +108,24 @@ func check(ctx context.Context, t target, prev Update) Update {
 		u.Latest, u.Available, u.LatestDigest = prev.Latest, prev.Available && prev.Current == u.Current, prev.LatestDigest
 		return u
 	}
+	decide(&u, base.Digest, remote)
+	return u
+}
+
+// decide sets Latest / Available from the local digest and the registry's answer.
+func decide(u *Update, localDigest string, remote ImageVersion) {
 	u.LatestDigest = remote.Digest
 	switch {
-	case base.Digest != "" && remote.Digest == base.Digest:
+	case localDigest != "" && remote.Digest == localDigest:
 		u.Latest = u.Current
 	case remote.Version != "" && remote.Version != u.Current:
 		u.Latest, u.Available = remote.Version, true
-	case base.Digest != "" && remote.Digest != "":
+	case localDigest != "" && remote.Digest != "":
 		// Same version, new build (security fixes of the OS underneath).
 		u.Latest, u.Available = remote.Version, true
 	default:
 		u.Latest = remote.Version
 	}
-	return u
 }
 
 // CheckUpdates asks the registries about every installed version and stores
