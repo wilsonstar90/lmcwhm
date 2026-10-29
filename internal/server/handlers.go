@@ -27,6 +27,7 @@ import (
 var (
 	errCSRF       = errors.New("auth.csrf")
 	errBadRequest = errors.New("common.bad_request")
+	errTooLarge   = errors.New("common.too_large")
 	errInternal   = errors.New("common.internal")
 	errBadPass    = errors.New("auth.bad_password")
 )
@@ -56,6 +57,10 @@ func writeErr(w http.ResponseWriter, status int, err error) {
 func decode(r *http.Request, v any) error {
 	r.Body = http.MaxBytesReader(nil, r.Body, 1<<20)
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+		var big *http.MaxBytesError
+		if errors.As(err, &big) {
+			return errTooLarge
+		}
 		return errBadRequest
 	}
 	return nil

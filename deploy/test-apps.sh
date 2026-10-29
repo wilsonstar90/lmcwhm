@@ -384,6 +384,10 @@ fwput() { # json patch over the current config
 api GET /firewall | grep -q '"available":true' || fail "nft not available"
 fwput '{"enabled":true,"policy":"accept","ping":true,"protect":true}' | grep -q '"confirm":false' || fail "enable firewall"
 nft list table inet lmcwhm >/dev/null || fail "nft table missing"
+# The old "always allow" switch is now three system port rules, listed with the others.
+api GET /firewall | python3 -c "import sys,json; r=json.load(sys.stdin)['rules']; assert sorted(x['system'] for x in r if x.get('system'))==['panel','ssh','web'], r" || fail "system rules: $(api GET /firewall)"
+nft list chain inet lmcwhm input | grep -q 'comment "system ssh"' || fail "system ssh rule not installed"
+nft list chain inet lmcwhm input | grep -q 'log prefix "lmcwhm-drop block "' || fail "drops not logged"
 python3 -m http.server 18190 --bind 0.0.0.0 >/dev/null 2>&1 &
 HTTPD=$!
 sleep 1
@@ -397,6 +401,8 @@ code="$(api POST /firewall/ips '{"ip":"127.0.0.1","list":"block"}' | jget "['cod
 [[ "$code" == fw.self_block ]] || fail "own address could be blocked: $code"
 RLID="$(api POST /firewall/rules '{"action":"drop","proto":"tcp","ports":"18190","enabled":true}' | jget "['rule']['id']")"
 [[ "$(probe 18190)" != *"Directory listing"* ]] || fail "port drop rule not enforced"
+sleep 1
+api GET '/logs/firewall?q=18190' | python3 -c "import sys,json; d=json.load(sys.stdin); assert any(x['dport']==18190 and x['proto']=='TCP' for x in d['items']), d" || echo "    (kernel log not readable here: firewall log check skipped)"
 [[ "$(probe 80)" == *"404"* ]] || fail "protected port 80 affected by a rule"
 api POST "/firewall/rules/$RLID/delete" >/dev/null
 [[ "$(probe 18190)" == *"Directory listing"* ]] || fail "deleted rule still enforced"

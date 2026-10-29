@@ -151,6 +151,21 @@
       "method": "方式",
       "failures": "失败次数",
       "top": "登录失败最多"
+    },
+    "tab_firewall": "防火墙",
+    "fw": {
+      "reason": "拦截原因",
+      "src": "来源",
+      "port": "目标端口",
+      "iface": "网卡",
+      "filter": "筛选 IP / 协议 / 端口",
+      "rule": "规则 #{id}",
+      "reasons": {
+        "block": "黑名单",
+        "ban": "临时封禁",
+        "policy": "默认拒绝"
+      },
+      "note": "每秒最多记录 10 个被拦截的数据包（TCP / UDP / ICMP）；经 CDN 的网站请求在 HAProxy 按真实 IP 拦截，不会出现在这里。"
     }
   },
   "errors": {
@@ -187,7 +202,8 @@
       "bad_request": "请求格式错误",
       "not_found": "找不到资源",
       "internal": "服务器内部错误",
-      "network": "网络错误"
+      "network": "网络错误",
+      "too_large": "请求内容过大"
     },
     "site": {
       "invalid_domain": "域名格式错误",
@@ -303,7 +319,8 @@
       "confirm_old_connection": "确认必须使用新连接",
       "ruleset_rejected": "nftables 拒绝规则：{detail}",
       "feed_unknown": "未知的黑名单",
-      "feed_bad_url": "名单网址须以 http:// 或 https:// 开头"
+      "feed_bad_url": "名单网址须以 http:// 或 https:// 开头",
+      "invalid_cdn": "CDN 设置无效：需填写 Header 名称，IP 段需为有效的 IP / CIDR。"
     },
     "waf": {
       "invalid_settings": "WAF 设置无效"
@@ -1127,12 +1144,10 @@
     },
     "policy_hint": {
       "accept": "除规则和黑名单拒绝的以外，全部可以连入。",
-      "drop": "只有受保护端口和允许规则可以连入。应用时会进行 60 秒安全确认。"
+      "drop": "只有允许规则（包括系统规则）可以连入。应用时会进行 60 秒安全确认。"
     },
-    "protect": "受保护端口",
-    "protect_hint": "在任何规则之前始终放行 TCP {ports}（SSH、面板、网站）。",
     "ping": "响应 Ping",
-    "drop_unprotected": "默认拒绝且没有受保护端口，容易把自己锁在外面；请保留 SSH 和面板端口的允许规则。",
+    "drop_unprotected": "默认拒绝但 SSH 或面板的系统规则已停用，很容易把自己锁在外面。",
     "confirming": "正在检查经新规则是否仍能连到面板… 若不行，{n} 秒后自动还原。",
     "confirmed": "可以连到面板：已保留新规则。",
     "confirm_failed": "经新规则无法连到面板：将在 {n} 秒内自动还原为允许。",
@@ -1219,7 +1234,27 @@
     "cf_sync2": "以 IP Access Rules（备注 \"lmcwhm\"）推送手动黑白名单到所有 Zone",
     "cf_rules": "lmcwhm 规则",
     "last_sync": "上次同步 {at}",
-    "never_synced": "尚未同步。在下方开启 Linode 或 Cloudflare 同步；手动名单变更后几秒内推送。"
+    "never_synced": "尚未同步。在下方开启 Linode 或 Cloudflare 同步；手动名单变更后几秒内推送。",
+    "ping_hint": "关闭后服务器不会响应 ICMP Ping（IPv6 邻居发现照常）。",
+    "system": "系统",
+    "sys": {
+      "ssh": "SSH — 删除或停用将无法用 SSH 登录",
+      "panel": "面板 — 删除或停用将无法打开面板",
+      "web": "网站 HTTP / HTTPS"
+    },
+    "sys_off_confirm": "停用系统规则？默认拒绝时可能会把自己锁在外面。",
+    "sys_delete_confirm": "删除系统规则？删除后不会自动重建，默认拒绝时可能会把自己锁在外面。",
+    "sys_ports": "系统规则的端口会自动跟随 SSH / 面板设置。",
+    "cdn": {
+      "title": "CDN 真实 IP",
+      "hint": "经 CDN（例如 Cloudflare 橙云）连入时，服务器看到的是 CDN 的 IP。只有从 CDN IP 段连入的请求，才会改用 CDN header 中的访客 IP；日志、WAF、CrowdSec、限流和 IP 黑名单都会使用真实访客 IP。",
+      "builtin": "内置",
+      "ranges_n": "{n} 个 IP 段",
+      "other": "其他 CDN",
+      "header": "IP Header",
+      "ranges": "CDN IP 段",
+      "ranges_hint": "每行一个 IP 或 CIDR；需同时填写 Header 才会生效。"
+    }
   },
   "waf": {
     "title": "网站应用防火墙（WAF）",
@@ -2369,5 +2404,11 @@
     "hint": "单击选择文件夹，双击打开。",
     "hint_file": "单击选择文件；双击打开文件夹。",
     "add_folder": "添加文件夹"
+  },
+  "theme": {
+    "title": "主题",
+    "auto": "自动",
+    "light": "浅色",
+    "dark": "深色"
   }
 }

@@ -4,7 +4,7 @@
 // (Ctrl/⌘+Alt+G), bracket matching, Ctrl/⌘+S to save and a dark theme that
 // follows the system, like the rest of the panel.
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useOsTheme } from 'naive-ui'
+import { useDark } from '../theme'
 import { basicSetup } from 'codemirror'
 import { Compartment, EditorState } from '@codemirror/state'
 import { EditorView, keymap, placeholder as placeholderExt } from '@codemirror/view'
@@ -27,7 +27,7 @@ const host = ref<HTMLElement | null>(null)
 let view: EditorView | null = null
 const lang = new Compartment()
 const theme = new Compartment()
-const os = useOsTheme()
+const dark = useDark()
 
 // Names the panel uses that CodeMirror knows under another name.
 const aliases: Record<string, string> = { ini: 'properties', conf: 'nginx', bash: 'shell', sh: 'shell', env: 'properties', cnf: 'properties', yml: 'yaml' }
@@ -46,7 +46,7 @@ async function loadLanguage(name?: string) {
   view?.dispatch({ effects: lang.reconfigure(support) })
 }
 
-const darkExt = () => (os.value === 'dark' ? oneDark : [])
+const darkExt = () => (dark.value ? oneDark : [])
 
 onMounted(() => {
   view = new EditorView({
@@ -80,7 +80,7 @@ watch(() => props.modelValue, (v) => {
   if (view && v !== view.state.doc.toString()) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: v } })
 })
 watch(() => props.language, (l) => loadLanguage(l))
-watch(os, () => view?.dispatch({ effects: theme.reconfigure(darkExt()) }))
+watch(dark, () => view?.dispatch({ effects: theme.reconfigure(darkExt()) }))
 </script>
 
 <template>

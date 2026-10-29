@@ -39,7 +39,7 @@ async function purge() {
 </script>
 
 <template>
-  <n-form label-placement="left" label-width="auto" size="small">
+  <n-form label-placement="left" label-width="140" size="small">
     <n-divider title-placement="left">{{ t('adv.access') }}</n-divider>
     <n-form-item :label="t('adv.allow_ips')" :feedback="t('adv.allow_ips_hint')"><n-dynamic-tags v-model:value="a.allow_ips" /></n-form-item>
     <n-form-item :label="t('adv.deny_ips')"><n-dynamic-tags v-model:value="a.deny_ips" /></n-form-item>

@@ -36,6 +36,8 @@ func (s *Server) m5Routes(r chi.Router) {
 		r.Post("/firewall/linode/attach", s.handleLinodeAttach)
 		r.Get("/firewall/cloudflare", s.handleCFZones)
 		r.Post("/firewall/cloudflare/level", s.handleCFLevel)
+		r.Get("/firewall/cdn", s.handleFWCDN)
+		r.Put("/firewall/cdn", s.handlePutFWCDN)
 		r.Get("/security/overview", s.handleSecurityOverview)
 		r.Get("/security/traffic", s.handleSecurityTraffic)
 		r.Get("/security/live", s.handleSecurityLive)
@@ -101,7 +103,7 @@ func (s *Server) fwView(r *http.Request) (fwView, error) {
 		return fwView{}, err
 	}
 	v := fwView{Config: c, HasLinodeToken: c.LinodeToken != "", Available: s.Firewall.Available(), Pending: s.Firewall.Pending(),
-		ConfirmSecs: int(firewall.ConfirmWindow.Seconds()), Protected: s.Firewall.ProtectedPorts(), Live: s.Firewall.Live(r.Context()),
+		ConfirmSecs: int(firewall.ConfirmWindow.Seconds()), Protected: s.Firewall.ProtectedPorts(r.Context()), Live: s.Firewall.Live(r.Context()),
 		LastSync: firewall.LastSync(), Rules: rules}
 	v.Config.LinodeToken = ""
 	if wc, err := s.Web.Get(r.Context()); err == nil {
@@ -119,11 +121,22 @@ func (s *Server) handleFirewall(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, v)
 }
 
+// fwInput is what the firewall settings forms send: the view they loaded
+// also carries the live ruleset, which is never sent back.
+type fwInput struct {
+	Enabled          bool   `json:"enabled"`
+	Policy           string `json:"policy"`
+	Ping             bool   `json:"ping"`
+	LinodeToken      string `json:"linode_token"`
+	LinodeFirewall   int    `json:"linode_firewall"`
+	LinodeSync       bool   `json:"linode_sync"`
+	LinodePorts      bool   `json:"linode_ports"`
+	CFSync           bool   `json:"cf_sync"`
+	ClearLinodeToken bool   `json:"clear_linode_token"`
+}
+
 func (s *Server) handlePutFirewall(w http.ResponseWriter, r *http.Request) {
-	var in struct {
-		firewall.Config
-		ClearLinodeToken bool `json:"clear_linode_token"`
-	}
+	var in fwInput
 	if err := decode(r, &in); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
@@ -134,18 +147,17 @@ func (s *Server) handlePutFirewall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	apply := func(c *firewall.Config) {
-		token, unconfirmed := c.LinodeToken, c.Unconfirmed
-		*c = in.Config
-		c.Unconfirmed = unconfirmed
-		if in.Config.LinodeToken == "" {
-			c.LinodeToken = token
+		c.Enabled, c.Policy, c.Ping = in.Enabled, in.Policy, in.Ping
+		c.LinodeFirewall, c.LinodeSync, c.LinodePorts, c.CFSync = in.LinodeFirewall, in.LinodeSync, in.LinodePorts, in.CFSync
+		if in.LinodeToken != "" {
+			c.LinodeToken = in.LinodeToken
 		}
 		if in.ClearLinodeToken {
 			c.LinodeToken, c.LinodeFirewall, c.LinodeSync, c.LinodePorts = "", 0, false, false
 		}
 	}
 	armed := false
-	if cur.Enabled == in.Enabled && cur.Policy == in.Policy && cur.Ping == in.Ping && cur.Protect == in.Protect {
+	if cur.Enabled == in.Enabled && cur.Policy == in.Policy && cur.Ping == in.Ping {
 		// Cloud settings only: the server's ruleset stays as it is.
 		err = s.Firewall.SaveCloud(r.Context(), apply)
 	} else {
@@ -159,6 +171,33 @@ func (s *Server) handlePutFirewall(w http.ResponseWriter, r *http.Request) {
 	go s.syncFirewall()
 	closeIfArmed(w, armed)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true, "confirm": armed})
+}
+
+// ---- visitor addresses behind a CDN ----
+
+func (s *Server) handleFWCDN(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"config": s.Firewall.CDN(r.Context()), "cloudflare": webenv.CloudflareRanges})
+}
+
+func (s *Server) handlePutFWCDN(w http.ResponseWriter, r *http.Request) {
+	var in firewall.CDNConfig
+	if err := decode(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	c, err := s.Firewall.SaveCDN(r.Context(), in)
+	if err != nil {
+		writeFWErr(w, err)
+		return
+	}
+	s.auditCat(r, "security", "firewall.cdn", c.Header+" "+strconv.Itoa(len(c.Ranges)))
+	if s.Sites.Env.Installed(r.Context()) {
+		if err := s.Sites.Apply(r.Context()); err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"config": c})
 }
 
 func (s *Server) handleFirewallConfirm(w http.ResponseWriter, r *http.Request) {

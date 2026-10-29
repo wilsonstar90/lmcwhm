@@ -15,30 +15,45 @@ func TestApplyManaged(t *testing.T) {
 		{Action: "ACCEPT", Protocol: "TCP", Ports: "22", Label: "ssh"},
 		{Action: "DROP", Protocol: "TCP", Label: BlockLabel, Addresses: Addresses{IPv4: []string{"9.9.9.9/32"}}},
 	}, InboundPolicy: "DROP"}
-	out, over := ApplyManaged(in, []string{"1.2.3.4", "2001:db8::1", "10.0.0.0/8"}, nil, "80,443,8888")
-	if len(over) != 0 || len(out.Inbound) != 3 || out.InboundPolicy != "DROP" || out.OutboundPolicy != "ACCEPT" {
+	out, over, _ := ApplyManaged(in, []string{"1.2.3.4", "2001:db8::1", "10.0.0.0/8"}, nil, "80,443,8888")
+	if len(over) != 0 || len(out.Inbound) != 4 || out.InboundPolicy != "DROP" || out.OutboundPolicy != "ACCEPT" {
 		t.Fatalf("%+v %v", out, over)
 	}
 	b := out.Inbound[0]
 	if b.Label != BlockLabel || b.Action != "DROP" || fmt.Sprint(b.Addresses.IPv4) != "[1.2.3.4/32 10.0.0.0/8]" || fmt.Sprint(b.Addresses.IPv6) != "[2001:db8::1/128]" {
 		t.Fatalf("block rule %+v", b)
 	}
-	if out.Inbound[1].Label != PortsLabel || out.Inbound[2].Label != "ssh" {
+	if u := out.Inbound[1]; u.Label != BlockUDPLabel || u.Protocol != "UDP" || u.Action != "DROP" || fmt.Sprint(u.Addresses.IPv4) != fmt.Sprint(b.Addresses.IPv4) {
+		t.Fatalf("udp block rule %+v", u)
+	}
+	if out.Inbound[2].Label != PortsLabel || out.Inbound[3].Label != "ssh" {
 		t.Fatalf("order %+v", out.Inbound)
 	}
 	many := make([]string, 300)
 	for i := range many {
 		many[i] = fmt.Sprintf("10.0.%d.%d", i/250, i%250)
 	}
-	if _, over := ApplyManaged(Rules{}, many, nil, ""); len(over) != 45 {
+	if _, over, _ := ApplyManaged(Rules{}, many, nil, ""); len(over) != 45 {
 		t.Fatalf("overflow %d", len(over))
 	}
 	// Allowed addresses come first (and replace the previous allow rule).
 	in.Inbound = append(in.Inbound, Rule{Action: "ACCEPT", Label: AllowLabel, Addresses: Addresses{IPv4: []string{"7.7.7.7/32"}}})
-	out, _ = ApplyManaged(in, []string{"1.2.3.4"}, []string{"203.0.113.5"}, "")
-	if len(out.Inbound) != 3 || out.Inbound[0].Label != AllowLabel || out.Inbound[0].Action != "ACCEPT" ||
-		fmt.Sprint(out.Inbound[0].Addresses.IPv4) != "[203.0.113.5/32]" || out.Inbound[1].Label != BlockLabel || out.Inbound[2].Label != "ssh" {
+	out, _, _ = ApplyManaged(in, []string{"1.2.3.4", "203.0.113.5"}, []string{"203.0.113.5"}, "")
+	if len(out.Inbound) != 5 || out.Inbound[0].Label != AllowLabel || out.Inbound[0].Action != "ACCEPT" || out.Inbound[1].Label != AllowUDPLabel ||
+		fmt.Sprint(out.Inbound[0].Addresses.IPv4) != "[203.0.113.5/32]" || out.Inbound[2].Label != BlockLabel || out.Inbound[4].Label != "ssh" {
 		t.Fatalf("allow rule %+v", out.Inbound)
+	}
+	// An address on both lists is allowed only.
+	if fmt.Sprint(out.Inbound[2].Addresses.IPv4) != "[1.2.3.4/32]" {
+		t.Fatalf("allowed address also blocked: %+v", out.Inbound[2])
+	}
+	// More than Linode's 25 rules is refused, not truncated.
+	full := Rules{}
+	for i := 0; i < 22; i++ {
+		full.Inbound = append(full.Inbound, Rule{Action: "ACCEPT", Protocol: "TCP", Label: fmt.Sprintf("r%d", i)})
+	}
+	if _, _, err := ApplyManaged(full, []string{"1.2.3.4"}, []string{"5.6.7.8"}, ""); err != ErrTooManyRules {
+		t.Fatalf("err = %v", err)
 	}
 }
 

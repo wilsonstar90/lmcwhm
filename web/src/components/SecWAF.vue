@@ -124,7 +124,7 @@ const evCols: DataTableColumns<Event> = [
 <template>
   <n-card v-if="s" size="small" :title="t('waf.title')">
     <template #header-extra><n-tag :type="s.enabled ? 'success' : 'default'" size="small">{{ s.enabled ? t('fw.on') : t('fw.off') }}</n-tag></template>
-    <n-form label-placement="left" label-width="auto">
+    <n-form label-placement="left" label-width="140">
       <n-form-item :label="t('waf.enable')">
         <n-switch v-model:value="s.enabled" />
         <span class="hint">{{ t('waf.enable_hint', { image }) }}</span>

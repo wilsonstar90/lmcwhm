@@ -103,15 +103,13 @@ const tipLeft = computed(() => (hover.value === null ? 0 : (x(hover.value) / W) 
   --series-1: #2a78d6;
   --series-2: #eb6834;
 }
-@media (prefers-color-scheme: dark) {
-  .viz-root {
-    --surface-1: #1a1a19;
-    --text-primary: #f0efec;
-    --text-secondary: #c3c2b7;
-    --grid: #33322f;
-    --series-1: #3987e5;
-    --series-2: #d95926;
-  }
+html[data-theme='dark'] .viz-root {
+  --surface-1: #1a1a19;
+  --text-primary: #f0efec;
+  --text-secondary: #c3c2b7;
+  --grid: #33322f;
+  --series-1: #3987e5;
+  --series-2: #d95926;
 }
 .legend {
   display: flex;

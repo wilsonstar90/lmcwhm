@@ -201,7 +201,7 @@ async function applyTpl() {
 
   <n-modal :show="!!tp" @update:show="(v: boolean) => !v && (tp = null)">
     <n-card v-if="tp" :title="t('dns.templates')" style="width: min(720px, calc(100vw - 32px))" closable @close="tp = null">
-      <n-form label-placement="left" label-width="auto">
+      <n-form label-placement="left" label-width="140">
         <n-form-item :label="t('dns.template')"><n-select v-model:value="tp.key" :options="templates.map((x) => ({ label: x.name, value: x.key }))" @update:value="previewTpl" /></n-form-item>
         <n-form-item :label="t('dns.domain')"><n-input v-model:value="tp.domain" @blur="previewTpl" /></n-form-item>
         <n-form-item v-for="p in tpl?.params ?? []" :key="p" :label="t(`dns.param.${p}`)"><n-input v-model:value="tp.params[p]" @blur="previewTpl" /></n-form-item>

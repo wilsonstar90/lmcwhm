@@ -144,6 +144,10 @@ func parseTime(line string, now time.Time) int64 {
 		if t, err := time.Parse(time.RFC3339Nano, line[:sp]); err == nil {
 			return t.Unix()
 		}
+		// journalctl -o short-iso before systemd 250: "+0000".
+		if t, err := time.Parse("2006-01-02T15:04:05-0700", line[:sp]); err == nil {
+			return t.Unix()
+		}
 	}
 	if len(line) >= 15 {
 		if t, err := time.ParseInLocation("Jan _2 15:04:05", line[:15], time.Local); err == nil {

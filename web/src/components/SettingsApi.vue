@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { NButton, NCard, NForm, NFormItem, NInput, NSelect, NSpace, NTag, useMessage } from 'naive-ui'
 import { get, post, put, ApiError } from '../api/client'
+import { fwConfig } from '../api/firewall'
 import type { FirewallView, WebConfig } from '../api/types'
 
 // Every third-party API credential in one place: Cloudflare (DNS, DNS-01
@@ -55,8 +56,7 @@ const verifyCF = () =>
 
 // ---- Linode ----
 async function putFirewall(patch: Record<string, unknown>) {
-  const { linode_token: _, ...cfg } = fw.value as FirewallView & { linode_token?: string }
-  await put('/firewall', { ...cfg, ...patch })
+  await put('/firewall', { ...fwConfig(fw.value!), ...patch })
   fw.value = await get<FirewallView>('/firewall')
 }
 const saveLinode = (clear = false) =>

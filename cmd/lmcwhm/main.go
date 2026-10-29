@@ -163,6 +163,20 @@ func serveCmd() *cobra.Command {
 			waf := security.NewWAF(a.st, env) // before the stack boots: it picks the nginx image
 			fw := firewall.New(a.st, box, log.Error)
 			fw.PanelPort = func() int { return a.settings.Get().PanelPort }
+			env.CDN = func() webenv.CDN {
+				c := fw.CDN(ctx)
+				return webenv.CDN{Cloudflare: fw.CloudflareTrust(ctx), Ranges: c.Ranges, Header: c.Header}
+			}
+			// The edge refuses blocked visitors by their real address (behind a CDN).
+			fw.OnListsChanged = func() {
+				block, allow, err := fw.EdgeLists(ctx)
+				if err == nil {
+					err = env.SetLists(ctx, block, allow)
+				}
+				if err != nil {
+					log.Error("edge ip lists", "err", err)
+				}
+			}
 			fw.Boot(ctx)
 			crowdsec := security.NewCrowdSec(a.st, box, env, tm, fw, a.paths.Home)
 			apps := appstore.New(a.st, box, tm, a.paths.Home)
@@ -172,6 +186,7 @@ func serveCmd() *cobra.Command {
 				if err := apps.Boot(ctx); err != nil {
 					log.Error("app store boot", "err", err)
 				}
+				fw.OnListsChanged() // the lists the edge starts with
 				if err := sites.Boot(ctx); err != nil {
 					log.Error("web stack boot", "err", err)
 				}

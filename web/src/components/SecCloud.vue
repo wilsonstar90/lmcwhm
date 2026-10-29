@@ -3,6 +3,7 @@ import { computed, h, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { NAlert, NButton, NCard, NCheckbox, NDataTable, NSelect, NSpace, NTag, useMessage, type DataTableColumns } from 'naive-ui'
+import { fwConfig } from '../api/firewall'
 import { get, post, put, ApiError } from '../api/client'
 import type { FirewallView, SyncReport } from '../api/types'
 import { datetime } from '../format'
@@ -38,9 +39,8 @@ async function load() {
 onMounted(() => load().catch(fail))
 
 async function saveCfg(patch: Partial<FirewallView>) {
-  const { linode_token: _, ...cfg } = fw.value! as FirewallView & { linode_token?: string }
   try {
-    await put('/firewall', { ...cfg, ...patch })
+    await put('/firewall', { ...fwConfig(fw.value!), ...patch })
     msg.success(t('common.saved'))
     fw.value = await get<FirewallView>('/firewall')
     emit('changed')

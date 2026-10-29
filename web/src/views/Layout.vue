@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu, NButton, NSpace, type MenuOption } from 'naive-ui'
 import { useSession } from '../stores/session'
 import LangSwitch from '../components/LangSwitch.vue'
+import ThemeSwitch from '../components/ThemeSwitch.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -52,11 +53,12 @@ async function logout() {
       <n-layout-header bordered class="header">
         <span class="user">{{ session.user?.username }}</span>
         <n-space :size="8" align="center">
+          <ThemeSwitch />
           <LangSwitch />
           <n-button size="small" quaternary @click="logout">{{ t('menu.logout') }}</n-button>
         </n-space>
       </n-layout-header>
-      <n-layout-content content-style="padding: 16px; max-width: 1280px;" :native-scrollbar="false" style="height: calc(100vh - 53px)">
+      <n-layout-content content-style="padding: 16px;" :native-scrollbar="false" style="height: calc(100vh - 53px)">
         <router-view />
       </n-layout-content>
     </n-layout>

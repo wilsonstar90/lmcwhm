@@ -155,6 +155,32 @@ const filterByIP = (ip: string) => {
 }
 const accessRowProps = (a: Access) => ({ onDblclick: () => a.ip && filterByIP(a.ip) })
 
+// ---- firewall drops ----
+interface Drop { time: number; reason: string; proto: string; src: string; dst: string; sport?: number; dport?: number; iface: string }
+interface DropSummary { by_proto: Record<string, number>; top_ips: { ip: string; count: number }[]; items: Drop[] }
+const fwLog = ref<DropSummary | null>(null)
+const fwQ = ref('')
+const fwLoading = ref(false)
+async function loadFW() {
+  fwLoading.value = true
+  try {
+    fwLog.value = await get<DropSummary>(`/logs/firewall?limit=1000&q=${encodeURIComponent(fwQ.value)}`)
+  } catch (e) {
+    msg.error(e instanceof ApiError ? e.text : String(e))
+  } finally {
+    fwLoading.value = false
+  }
+}
+const dropReason = (r: string) => (r.startsWith('rule') ? t('logs.fw.rule', { id: r.slice(4) }) : t(`logs.fw.reasons.${r}`))
+const fwCols: DataTableColumns<Drop> = [
+  { title: () => t('common.time'), key: 'time', width: 170, render: (d) => (d.time ? datetime(d.time, locale.value) : '—') },
+  { title: () => t('logs.fw.reason'), key: 'reason', width: 130, render: (d) => h(NTag, { size: 'small', type: d.reason === 'policy' ? 'warning' : 'error', bordered: false }, () => dropReason(d.reason)) },
+  { title: () => t('fw.proto'), key: 'proto', width: 80 },
+  { title: () => t('logs.fw.src'), key: 'src', width: 280, render: (d) => ipCell(d.src) },
+  { title: () => t('logs.fw.port'), key: 'dport', width: 90, render: (d) => (d.dport ? String(d.dport) : '—') },
+  { title: () => t('logs.fw.iface'), key: 'iface', width: 90 },
+]
+
 // ---- containers / journal ----
 const container = ref<string | null>(null)
 const ctrQ = ref('')
@@ -224,7 +250,7 @@ const loaded = new Set<string>()
 function onTab(name: string) {
   if (loaded.has(name)) return
   loaded.add(name)
-  ;({ operation: () => ops.load(), login: () => logins.load(), ssh: loadSSH, site: loadSite, container: loadContainer, system: loadJournal, cron: () => cronRuns.load() } as Record<string, () => unknown>)[name]?.()
+  ;({ operation: () => ops.load(), login: () => logins.load(), ssh: loadSSH, firewall: loadFW, site: loadSite, container: loadContainer, system: loadJournal, cron: () => cronRuns.load() } as Record<string, () => unknown>)[name]?.()
 }
 watch(tab, onTab)
 watch([site, kind], loadSite)
@@ -240,7 +266,7 @@ onMounted(async () => {
   }
 })
 function refresh() {
-  ;({ operation: () => ops.load(), login: () => logins.load(), ssh: loadSSH, site: loadSite, container: loadContainer, system: loadJournal, cron: () => cronRuns.load() } as Record<string, () => unknown>)[tab.value]?.()
+  ;({ operation: () => ops.load(), login: () => logins.load(), ssh: loadSSH, firewall: loadFW, site: loadSite, container: loadContainer, system: loadJournal, cron: () => cronRuns.load() } as Record<string, () => unknown>)[tab.value]?.()
 }
 </script>
 
@@ -283,6 +309,29 @@ function refresh() {
           <n-card size="small" :title="t('logs.ssh.top')" style="margin-top: 12px">
             <n-data-table size="small" :columns="topCols" :data="ssh?.top_ips ?? []" />
           </n-card>
+        </n-gi>
+      </n-grid>
+    </n-tab-pane>
+
+    <n-tab-pane name="firewall" :tab="t('logs.tab_firewall')">
+      <n-space style="margin-bottom: 12px">
+        <n-input v-model:value="fwQ" clearable :placeholder="t('logs.fw.filter')" style="width: 260px" @keyup.enter="loadFW" />
+        <n-button @click="loadFW">{{ t('logs.search') }}</n-button>
+      </n-space>
+      <n-grid cols="1 l:3" responsive="screen" :x-gap="16" :y-gap="16">
+        <n-gi span="1 l:2">
+          <n-data-table size="small" :columns="fwCols" :data="fwLog?.items ?? []" :loading="fwLoading" :pagination="{ pageSize: 20 }" :scroll-x="840" />
+        </n-gi>
+        <n-gi>
+          <n-card size="small">
+            <n-space justify="space-around">
+              <n-statistic v-for="p in ['TCP', 'UDP', 'ICMP']" :key="p" :label="p" :value="(fwLog?.by_proto[p] ?? 0) + (p === 'ICMP' ? fwLog?.by_proto.ICMPv6 ?? 0 : 0)" />
+            </n-space>
+          </n-card>
+          <n-card size="small" :title="t('logs.ssh.top')" style="margin-top: 12px">
+            <n-data-table size="small" :columns="topCols" :data="fwLog?.top_ips ?? []" />
+          </n-card>
+          <p class="fw-note">{{ t('logs.fw.note') }}</p>
         </n-gi>
       </n-grid>
     </n-tab-pane>
@@ -337,6 +386,11 @@ function refresh() {
 </template>
 
 <style scoped>
+.fw-note {
+  font-size: 12px;
+  opacity: 0.6;
+  margin-top: 12px;
+}
 .lines {
   max-height: 65vh;
   overflow: auto;

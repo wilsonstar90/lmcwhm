@@ -151,6 +151,21 @@
       "method": "方式",
       "failures": "失敗回数",
       "top": "ログイン失敗の多い IP"
+    },
+    "tab_firewall": "ファイアウォール",
+    "fw": {
+      "reason": "理由",
+      "src": "送信元",
+      "port": "宛先ポート",
+      "iface": "インターフェース",
+      "filter": "IP / プロトコル / ポートで絞り込み",
+      "rule": "ルール #{id}",
+      "reasons": {
+        "block": "ブロックリスト",
+        "ban": "一時ブロック",
+        "policy": "既定で拒否"
+      },
+      "note": "破棄したパケットは毎秒最大 10 件記録します（TCP / UDP / ICMP）。CDN 経由のサイトへのリクエストは HAProxy が実 IP で拒否するため、ここには表示されません。"
     }
   },
   "errors": {
@@ -187,7 +202,8 @@
       "bad_request": "不正なリクエスト",
       "not_found": "見つかりません",
       "internal": "内部エラー",
-      "network": "ネットワークエラー"
+      "network": "ネットワークエラー",
+      "too_large": "リクエストが大きすぎます"
     },
     "site": {
       "invalid_domain": "ドメイン形式が不正",
@@ -303,7 +319,8 @@
       "confirm_old_connection": "確認には新しい接続が必要です",
       "ruleset_rejected": "nftables がルールを拒否しました: {detail}",
       "feed_unknown": "不明なブロックリスト",
-      "feed_bad_url": "リスト URL は http:// か https:// で始めてください"
+      "feed_bad_url": "リスト URL は http:// か https:// で始めてください",
+      "invalid_cdn": "CDN 設定が無効です：ヘッダー名が必要で、範囲は有効な IP / CIDR である必要があります。"
     },
     "waf": {
       "invalid_settings": "WAF 設定が無効です"
@@ -1127,12 +1144,10 @@
     },
     "policy_hint": {
       "accept": "ルールとブロックリストで拒否したもの以外はすべて到達できます。",
-      "drop": "保護ポートと許可ルールのみ到達できます。適用時に 60 秒の安全確認を行います。"
+      "drop": "許可ルール（システムルールを含む）のみ接続できます。適用時に 60 秒の安全確認を行います。"
     },
-    "protect": "保護ポート",
-    "protect_hint": "どのルールよりも先に TCP {ports}（SSH・パネル・Web）を常に許可します。",
     "ping": "Ping に応答",
-    "drop_unprotected": "既定が拒否で保護ポートがないと締め出される恐れがあります。SSH とパネルのポートを許可するルールを残してください。",
+    "drop_unprotected": "拒否ポリシーで SSH またはパネルのシステムルールが無効です。ロックアウトしやすい状態です。",
     "confirming": "新しいルールでパネルに到達できるか確認中… できなければ {n} 秒後に元に戻します。",
     "confirmed": "パネルに到達できました。新しいルールを維持します。",
     "confirm_failed": "新しいルールではパネルに到達できません。{n} 秒以内に許可へ戻ります。",
@@ -1219,7 +1234,27 @@
     "cf_sync2": "手動のブロック / 許可リストを IP Access Rules（メモ \"lmcwhm\"）として全ゾーンへ送信",
     "cf_rules": "lmcwhm ルール",
     "last_sync": "最終同期 {at}",
-    "never_synced": "未同期です。下で Linode か Cloudflare の同期を有効にすると、手動リストの変更が数秒で送信されます。"
+    "never_synced": "未同期です。下で Linode か Cloudflare の同期を有効にすると、手動リストの変更が数秒で送信されます。",
+    "ping_hint": "オフにすると ICMP Ping に応答しません（IPv6 近隣探索は動作します）。",
+    "system": "システム",
+    "sys": {
+      "ssh": "SSH — 削除・無効化すると SSH でログインできなくなります",
+      "panel": "パネル — 削除・無効化するとパネルを開けなくなります",
+      "web": "ウェブサイト HTTP / HTTPS"
+    },
+    "sys_off_confirm": "システムルールを無効にしますか？拒否ポリシーではロックアウトの恐れがあります。",
+    "sys_delete_confirm": "システムルールを削除しますか？自動で再作成されず、拒否ポリシーではロックアウトの恐れがあります。",
+    "sys_ports": "システムルールのポートは SSH・パネル設定に自動で追従します。",
+    "cdn": {
+      "title": "CDN 経由の実 IP",
+      "hint": "CDN（例: Cloudflare プロキシ）経由の接続では、サーバーには CDN の IP が見えます。CDN の IP 範囲からの接続に限り、CDN ヘッダーの訪問者 IP を使用します。ログ・WAF・CrowdSec・レート制限・IP ブロックリストが実際の訪問者 IP で動作します。",
+      "builtin": "組み込み",
+      "ranges_n": "{n} 範囲",
+      "other": "その他の CDN",
+      "header": "IP ヘッダー",
+      "ranges": "CDN の IP 範囲",
+      "ranges_hint": "1 行に 1 つの IP または CIDR。ヘッダーと併せて有効になります。"
+    }
   },
   "waf": {
     "title": "Web アプリケーションファイアウォール",
@@ -2369,5 +2404,11 @@
     "hint": "クリックで選択、ダブルクリックで開きます。",
     "hint_file": "クリックでファイルを選択、ダブルクリックでフォルダーを開きます。",
     "add_folder": "フォルダーを追加"
+  },
+  "theme": {
+    "title": "テーマ",
+    "auto": "自動",
+    "light": "ライト",
+    "dark": "ダーク"
   }
 }

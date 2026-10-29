@@ -151,6 +151,21 @@
       "method": "Method",
       "failures": "Failures",
       "top": "Most failed logins"
+    },
+    "tab_firewall": "Firewall",
+    "fw": {
+      "reason": "Reason",
+      "src": "Source",
+      "port": "Port",
+      "iface": "Interface",
+      "filter": "Filter IP / protocol / port",
+      "rule": "Rule #{id}",
+      "reasons": {
+        "block": "Block list",
+        "ban": "Temporary ban",
+        "policy": "Default drop"
+      },
+      "note": "Up to 10 dropped packets a second are logged (TCP / UDP / ICMP); website requests through a CDN are refused by HAProxy by the real visitor IP and do not appear here."
     }
   },
   "errors": {
@@ -187,7 +202,8 @@
       "bad_request": "Bad request",
       "not_found": "Not found",
       "internal": "Internal server error",
-      "network": "Network error"
+      "network": "Network error",
+      "too_large": "Request too large"
     },
     "site": {
       "invalid_domain": "Invalid domain",
@@ -303,7 +319,8 @@
       "confirm_old_connection": "Confirmation must use a new connection",
       "ruleset_rejected": "nftables rejected the ruleset: {detail}",
       "feed_unknown": "Unknown blocklist",
-      "feed_bad_url": "A list URL must start with http:// or https://"
+      "feed_bad_url": "A list URL must start with http:// or https://",
+      "invalid_cdn": "Invalid CDN settings: a header name is required and ranges must be valid IPs / CIDRs."
     },
     "waf": {
       "invalid_settings": "Invalid WAF settings"
@@ -1127,12 +1144,10 @@
     },
     "policy_hint": {
       "accept": "Everything is reachable except what rules and the block list deny.",
-      "drop": "Only protected ports and allow rules are reachable. Applied with a 60 s safety check."
+      "drop": "Only allow rules (including system rules) can connect. A 60-second safety check runs when applied."
     },
-    "protect": "Protected ports",
-    "protect_hint": "Always allow TCP {ports} (SSH, panel, web) before any rule.",
     "ping": "Answer ping",
-    "drop_unprotected": "Deny with unprotected ports can lock you out; keep an allow rule for SSH and the panel port.",
+    "drop_unprotected": "Drop policy with the SSH or panel system rule disabled: you can easily lock yourself out.",
     "confirming": "Checking that the panel is still reachable through the new rules… reverts in {n} s if not.",
     "confirmed": "The panel is reachable: new rules kept.",
     "confirm_failed": "Could not reach the panel through the new rules: they are rolled back to Allow within {n} seconds.",
@@ -1219,7 +1234,27 @@
     "cf_sync2": "Push the manual block and allow lists to every zone as IP Access Rules (note \"lmcwhm\")",
     "cf_rules": "lmcwhm rules",
     "last_sync": "Last sync {at}",
-    "never_synced": "Not synced yet. Turn on Linode or Cloudflare sync below; changes to the manual lists are pushed within seconds."
+    "never_synced": "Not synced yet. Turn on Linode or Cloudflare sync below; changes to the manual lists are pushed within seconds.",
+    "ping_hint": "When off, the server does not answer ICMP ping (IPv6 neighbour discovery still works).",
+    "system": "System",
+    "sys": {
+      "ssh": "SSH — deleting or disabling it locks you out of SSH",
+      "panel": "Panel — deleting or disabling it locks you out of the panel",
+      "web": "Websites HTTP / HTTPS"
+    },
+    "sys_off_confirm": "Disable a system rule? With a drop policy you may lock yourself out.",
+    "sys_delete_confirm": "Delete a system rule? It is not recreated, and with a drop policy you may lock yourself out.",
+    "sys_ports": "System rule ports follow the SSH and panel settings.",
+    "cdn": {
+      "title": "Real visitor IP behind a CDN",
+      "hint": "Through a CDN (e.g. Cloudflare proxied), the server sees the CDN's address. Only requests from the CDN's ranges may set the visitor address from its header; logs, the WAF, CrowdSec, rate limits and the IP block list then use the real visitor address.",
+      "builtin": "Built in",
+      "ranges_n": "{n} ranges",
+      "other": "Other CDN",
+      "header": "IP header",
+      "ranges": "CDN ranges",
+      "ranges_hint": "One IP or CIDR per line; takes effect together with the header."
+    }
   },
   "waf": {
     "title": "Web application firewall",
@@ -2369,5 +2404,11 @@
     "hint": "Click a folder to select it, double-click to open it.",
     "hint_file": "Click a file to select it; double-click a folder to open it.",
     "add_folder": "Add a folder"
+  },
+  "theme": {
+    "title": "Theme",
+    "auto": "Auto",
+    "light": "Light",
+    "dark": "Dark"
   }
 }

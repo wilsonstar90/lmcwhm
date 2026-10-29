@@ -2,14 +2,15 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-  NConfigProvider, NMessageProvider, NDialogProvider, NGlobalStyle, darkTheme, useOsTheme,
+  NConfigProvider, NMessageProvider, NDialogProvider, NGlobalStyle, darkTheme,
   zhCN, zhTW, enUS, jaJP, dateZhCN, dateZhTW, dateEnUS, dateJaJP,
   type GlobalThemeOverrides,
 } from 'naive-ui'
+import { useDark } from './theme'
 
 const { locale } = useI18n()
-const osTheme = useOsTheme()
-const theme = computed(() => (osTheme.value === 'dark' ? darkTheme : null))
+const dark = useDark()
+const theme = computed(() => (dark.value ? darkTheme : null))
 
 const naive = computed(() => {
   switch (locale.value) {

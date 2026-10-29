@@ -89,9 +89,13 @@ func (sv *Service) SyncRemote(ctx context.Context, cfToken string) SyncReport {
 		}
 		ports := ""
 		if c.LinodePorts {
-			ports = strings.ReplaceAll(joinInts(sv.ProtectedPorts()), " ", "")
+			ports = strings.ReplaceAll(joinInts(sv.ProtectedPorts(ctx)), " ", "")
 		}
-		next, overflow := linode.ApplyManaged(rules, lb, la, ports)
+		next, overflow, err := linode.ApplyManaged(rules, lb, la, ports)
+		if err != nil {
+			rep.Errors = append(rep.Errors, err.Error())
+			return rep
+		}
 		if err := cl.PutRules(ctx, c.LinodeFirewall, next); err != nil {
 			rep.Errors = append(rep.Errors, err.Error())
 			return rep

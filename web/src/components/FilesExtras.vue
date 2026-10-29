@@ -175,7 +175,7 @@ defineExpose({ share })
     <n-card v-if="shareForm" :title="t('fx.share')" style="width: min(560px, calc(100vw - 32px))" closable @close="shareForm = null">
       <p style="word-break: break-all"><b>{{ shareForm.path }}</b></p>
       <template v-if="!shareForm.created">
-        <n-form label-placement="left" label-width="auto">
+        <n-form label-placement="left" label-width="140">
           <n-form-item :label="t('fx.valid_for')"><n-input-number v-model:value="shareForm.hours" :min="0" :max="8760" style="width: 150px"><template #suffix>{{ t('fx.hours') }}</template></n-input-number></n-form-item>
           <n-form-item :label="t('fx.max_downloads')"><n-input-number v-model:value="shareForm.max" :min="0" style="width: 150px" /></n-form-item>
           <n-form-item :label="t('ftp.password')"><n-input v-model:value="shareForm.password" :placeholder="t('fx.optional')" /></n-form-item>

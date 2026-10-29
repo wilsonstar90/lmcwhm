@@ -151,6 +151,21 @@
       "method": "方式",
       "failures": "失敗次數",
       "top": "登入失敗最多"
+    },
+    "tab_firewall": "防火牆",
+    "fw": {
+      "reason": "攔截原因",
+      "src": "來源",
+      "port": "目標端口",
+      "iface": "網卡",
+      "filter": "篩選 IP / 協議 / 端口",
+      "rule": "規則 #{id}",
+      "reasons": {
+        "block": "黑名單",
+        "ban": "臨時封鎖",
+        "policy": "預設拒絕"
+      },
+      "note": "每秒最多記錄 10 個被攔封包（TCP / UDP / ICMP）；經 CDN 嘅網站請求喺 HAProxy 按真實 IP 攔截，唔會喺呢度出現。"
     }
   },
   "errors": {
@@ -187,7 +202,8 @@
       "bad_request": "請求格式錯誤",
       "not_found": "找不到資源",
       "internal": "伺服器內部錯誤",
-      "network": "網絡錯誤"
+      "network": "網絡錯誤",
+      "too_large": "請求內容太大"
     },
     "site": {
       "invalid_domain": "域名格式錯誤",
@@ -303,7 +319,8 @@
       "confirm_old_connection": "確認要用新連線",
       "ruleset_rejected": "nftables 拒絕規則：{detail}",
       "feed_unknown": "未知嘅黑名單",
-      "feed_bad_url": "名單網址要以 http:// 或 https:// 開頭"
+      "feed_bad_url": "名單網址要以 http:// 或 https:// 開頭",
+      "invalid_cdn": "CDN 設定無效：要有 Header 名稱，IP 段要係有效嘅 IP / CIDR。"
     },
     "waf": {
       "invalid_settings": "WAF 設定無效"
@@ -1127,12 +1144,10 @@
     },
     "policy_hint": {
       "accept": "除咗規則同黑名單拒絕嘅，全部可以連入。",
-      "drop": "只有受保護端口同允許規則可以連入。套用時會做 60 秒安全確認。"
+      "drop": "只有允許規則（包括系統規則）可以連入。套用時會做 60 秒安全確認。"
     },
-    "protect": "受保護端口",
-    "protect_hint": "任何規則之前一定放行 TCP {ports}（SSH、面板、網站）。",
     "ping": "回應 Ping",
-    "drop_unprotected": "預設拒絕又冇受保護端口，好容易鎖死自己；請保留 SSH 同面板端口嘅允許規則。",
+    "drop_unprotected": "預設拒絕但 SSH 或面板嘅系統規則已停用，好容易鎖死自己。",
     "confirming": "檢查緊經新規則仲連唔連到面板… 如果唔得，{n} 秒後自動還原。",
     "confirmed": "面板可以連到：已保留新規則。",
     "confirm_failed": "經新規則連唔到面板：{n} 秒內會自動還原為允許。",
@@ -1219,7 +1234,27 @@
     "cf_sync2": "以 IP Access Rules（備註 \"lmcwhm\"）推送手動黑白名單到所有 Zone",
     "cf_rules": "lmcwhm 規則",
     "last_sync": "上次同步 {at}",
-    "never_synced": "未同步過。喺下面開啟 Linode 或 Cloudflare 同步；手動名單一有改動，幾秒內就會推送。"
+    "never_synced": "未同步過。喺下面開啟 Linode 或 Cloudflare 同步；手動名單一有改動，幾秒內就會推送。",
+    "ping_hint": "關閉後伺服器唔會回應 ICMP Ping（IPv6 鄰居發現照常）。",
+    "system": "系統",
+    "sys": {
+      "ssh": "SSH — 刪除或停用會無法用 SSH 登入",
+      "panel": "面板 — 刪除或停用會無法開面板",
+      "web": "網站 HTTP / HTTPS"
+    },
+    "sys_off_confirm": "停用系統規則？預設拒絕時可能會鎖死自己。",
+    "sys_delete_confirm": "刪除系統規則？刪除後唔會自動重建，預設拒絕時可能會鎖死自己。",
+    "sys_ports": "系統規則嘅端口會自動跟 SSH / 面板設定。",
+    "cdn": {
+      "title": "CDN 真實 IP",
+      "hint": "經 CDN（例如 Cloudflare 橙雲）連入時，伺服器見到嘅係 CDN 嘅 IP。只有喺 CDN IP 段連入嘅請求，先會改用 CDN header 入面嘅訪客 IP；日誌、WAF、CrowdSec、限流同 IP 黑名單都會用返真實訪客 IP。",
+      "builtin": "內置",
+      "ranges_n": "{n} 個 IP 段",
+      "other": "其他 CDN",
+      "header": "IP Header",
+      "ranges": "CDN IP 段",
+      "ranges_hint": "每行一個 IP 或 CIDR；要同時填 Header 先生效。"
+    }
   },
   "waf": {
     "title": "網站應用防火牆（WAF）",
@@ -2369,5 +2404,11 @@
     "hint": "撳一下揀文件夾，撳兩下打開。",
     "hint_file": "撳一下揀檔案；撳兩下打開文件夾。",
     "add_folder": "加入文件夾"
+  },
+  "theme": {
+    "title": "主題",
+    "auto": "自動",
+    "light": "明亮",
+    "dark": "黑暗"
   }
 }

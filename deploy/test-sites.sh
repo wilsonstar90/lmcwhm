@@ -67,6 +67,34 @@ out="$(get443 php.test /index.php)"; echo "    $out"
 [[ "$out" == *"ip=127.0.0.1"* ]] || fail "real client IP not passed through: $out"
 pass "PHP 8.3 site over HTTP, HTTPS, IPv4 and IPv6"
 
+# ---------- visitor address behind a CDN ----------
+# 127.0.0.1 (curl) plays the CDN: only its header is believed, Cloudflare's is not.
+api PUT /firewall/cdn '{"ranges":["127.0.0.1"],"header":"X-Real-IP"}' | grep -q '"header":"X-Real-IP"' || fail "save CDN settings"
+docker exec lmcwhm-haproxy haproxy -c -f /opt/lmcwhm/edge/haproxy.cfg 2>&1 | grep -i "warning\|alert" && fail "haproxy config has warnings (CDN)"
+out="$(curl -s -H 'X-Real-IP: 203.0.113.9' --resolve php.test:80:127.0.0.1 http://php.test/index.php)"
+[[ "$out" == *"ip=203.0.113.9"* ]] || fail "CDN header not used: $out"
+out="$(curl -sk -H 'X-Real-IP: 203.0.113.9' --resolve php.test:443:127.0.0.1 https://php.test/index.php)"
+[[ "$out" == *"ip=203.0.113.9"* ]] || fail "CDN header not used over https: $out"
+out="$(curl -s -H 'CF-Connecting-IP: 198.51.100.1' --resolve php.test:80:127.0.0.1 http://php.test/index.php)"
+[[ "$out" == *"ip=127.0.0.1"* ]] || fail "CF-Connecting-IP believed from a non-Cloudflare address: $out"
+if command -v nft >/dev/null; then
+  api PUT /firewall '{"enabled":true,"policy":"accept","ping":true}' | grep -q '"ok":true' || fail "enable firewall"
+  api POST /firewall/ips '{"ip":"203.0.113.9","list":"block"}' >/dev/null
+  sleep 4 # the edge lists follow within a few seconds, without a reload
+  code="$(curl -s -o /dev/null -w '%{http_code}' -H 'X-Real-IP: 203.0.113.9' --resolve php.test:80:127.0.0.1 http://php.test/index.php)"
+  [[ "$code" == 403 ]] || fail "blocked visitor behind the CDN got $code"
+  [[ "$(get80 php.test /index.php)" == php-ok-8.3* ]] || fail "unblocked visitor refused"
+  id="$(api GET '/firewall/ips?list=block' | jget "['items'][0]['id']")"
+  api POST "/firewall/ips/$id/delete" >/dev/null
+  sleep 4
+  code="$(curl -s -o /dev/null -w '%{http_code}' -H 'X-Real-IP: 203.0.113.9' --resolve php.test:80:127.0.0.1 http://php.test/index.php)"
+  [[ "$code" == 200 ]] || fail "unblocked visitor still refused ($code)"
+  api PUT /firewall '{"enabled":false,"policy":"accept","ping":true}' >/dev/null
+  pass "blocked by the real visitor address at the edge"
+fi
+api PUT /firewall/cdn '{"ranges":[],"header":""}' >/dev/null
+pass "visitor address from a trusted CDN header only"
+
 # ---------- static site + custom certificate (SNI selection) ----------
 wait_task "$(api POST /sites '{"domain":"static.test","type":"static","ssl":"none"}' | jget "['task_id']")"
 [[ "$(get80 static.test)" == *"Site created by lmcwhm"* ]] || fail "static default page"

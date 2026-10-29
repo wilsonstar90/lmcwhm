@@ -242,7 +242,7 @@ func (s *Server) buildMCP() *mcp.Server {
 				rules, _ := s.Firewall.Rules(ctx)
 				blocks, _ := s.Firewall.IPs(ctx, "block")
 				allows, _ := s.Firewall.IPs(ctx, "allow")
-				return map[string]any{"enabled": c.Enabled, "policy": c.Policy, "ping": c.Ping, "protected_ports": s.Firewall.ProtectedPorts(),
+				return map[string]any{"enabled": c.Enabled, "policy": c.Policy, "ping": c.Ping, "protected_ports": s.Firewall.ProtectedPorts(ctx),
 					"rules": rules, "blocked_ips": len(blocks), "allowed_ips": len(allows), "linode_sync": c.LinodeSync, "cloudflare_sync": c.CFSync}, nil
 			}))
 		add(read, "list_ip_rules", "Blocked / allowed IPs", "IP block or allow list entries with source (manual, crowdsec, mcp) and expiry.",

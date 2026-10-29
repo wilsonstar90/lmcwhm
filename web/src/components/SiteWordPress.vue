@@ -96,7 +96,7 @@ const updates = computed(() => (info.value ? info.value.plugins.filter((p) => p.
     <template v-if="isWP === false">
       <n-alert type="info" :show-icon="false" style="margin-bottom: 12px">{{ t('wp.install_intro') }}</n-alert>
       <n-alert v-if="!engines.length" type="warning" :show-icon="false">{{ t('wp.need_mysql') }}</n-alert>
-      <n-form v-else label-placement="left" label-width="auto">
+      <n-form v-else label-placement="left" label-width="140">
         <n-form-item :label="t('wp.site_title')"><n-input v-model:value="form.title" /></n-form-item>
         <n-form-item :label="t('wp.admin_user')"><n-input v-model:value="form.admin_user" /></n-form-item>
         <n-form-item :label="t('wp.admin_pass')"><n-input v-model:value="form.admin_pass" /></n-form-item>

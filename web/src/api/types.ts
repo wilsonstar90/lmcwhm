@@ -365,6 +365,7 @@ export interface FirewallRule {
   remark: string
   enabled: boolean
   created_at: number
+  system?: 'ssh' | 'panel' | 'web'
 }
 
 export interface FirewallIP {
@@ -388,7 +389,6 @@ export interface FirewallView {
   enabled: boolean
   policy: 'accept' | 'drop'
   ping: boolean
-  protect: boolean
   linode_token?: string
   linode_firewall: number
   linode_sync: boolean

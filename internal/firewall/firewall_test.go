@@ -64,7 +64,7 @@ func TestRuleset(t *testing.T) {
 	if _, err := sv.AddIP(ctx, "0.0.0.0/0", "block", 0, "manual", ""); err == nil {
 		t.Error("blocked the whole Internet")
 	}
-	rs, err := sv.Ruleset(ctx, Config{Enabled: true, Policy: "drop", Ping: false, Protect: true})
+	rs, err := sv.Ruleset(ctx, Config{Enabled: true, Policy: "drop", Ping: false})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestRuleset(t *testing.T) {
 		"table inet lmcwhm {", "policy drop;", "set block4 { type ipv4_addr; flags interval; auto-merge; elements = { 198.51.100.7 }; }",
 		"set block6 { type ipv6_addr; flags interval; auto-merge; elements = { 2001:db8::/48 }; }", "192.0.2.9 timeout 36",
 		"elements = { 192.0.2.10 }", "icmp type echo-request drop", "meta l4proto { icmp, ipv6-icmp } accept",
-		"tcp dport { 22, 80, 443, 8888 } accept", "tcp dport { 3306, 6379 } drop", "udp dport { 3306, 6379 } drop",
+		"tcp dport { 8888 } accept comment \"system panel\"", "tcp dport { 80, 443 } accept comment \"system web\"", "tcp dport { 3306, 6379 } drop", "udp dport { 3306, 6379 } drop",
 		"ip saddr 203.0.113.0/24 tcp dport { 9000-9100 } accept", "iifname \"docker0\" accept", "chain forward",
 	} {
 		if !strings.Contains(rs, want) {
@@ -82,9 +82,41 @@ func TestRuleset(t *testing.T) {
 	if strings.Contains(rs, "dport { 1 }") {
 		t.Error("disabled rule rendered")
 	}
-	// Protected ports come before user rules, so a drop rule cannot lock SSH out.
-	if strings.Index(rs, "protected") > strings.Index(rs, "rule 1") {
-		t.Error("protected ports after user rules")
+	// System rules come before user rules, so a drop rule cannot lock SSH out.
+	if !strings.Contains(rs, "comment \"system ssh\"") || strings.Index(rs, "system ssh") > strings.Index(rs, "rule 1\"") {
+		t.Error("system rules missing or after user rules")
+	}
+}
+
+func TestSystemRules(t *testing.T) {
+	sv, _ := newSvc(t)
+	ctx := context.Background()
+	rules, err := sv.Rules(ctx)
+	if err != nil || len(rules) != 3 {
+		t.Fatalf("rules = %+v, %v", rules, err)
+	}
+	panel := rules[1]
+	if panel.System != "panel" || panel.Ports != "8888" || !panel.Enabled {
+		t.Fatalf("panel rule = %+v", panel)
+	}
+	// Ports follow the panel; the kind survives an edit that tries to change it.
+	sv.PanelPort = func() int { return 9443 }
+	panel.Ports, panel.System, panel.Enabled = "1", "", false
+	if _, _, err := sv.SaveRule(ctx, panel); err != nil {
+		t.Fatal(err)
+	}
+	rules, _ = sv.Rules(ctx)
+	if rules[1].System != "panel" || rules[1].Ports != "9443" || rules[1].Enabled {
+		t.Fatalf("after edit = %+v", rules[1])
+	}
+	if got := sv.ProtectedPorts(ctx); strings.Contains(joinInts(got), "9443") {
+		t.Errorf("disabled rule still protected: %v", got)
+	}
+	// Deleted system rules stay deleted.
+	sv.DeleteRule(ctx, rules[0].ID)
+	sv.seeded.Store(false)
+	if rules, _ = sv.Rules(ctx); len(rules) != 2 {
+		t.Errorf("deleted system rule came back: %+v", rules)
 	}
 }
 
@@ -149,5 +181,25 @@ func TestSyncBans(t *testing.T) {
 	ips, _ = sv.IPs(ctx, "block")
 	if len(ips) != 2 {
 		t.Fatalf("after removal %+v", ips)
+	}
+}
+
+func TestDropLog(t *testing.T) {
+	sv, _ := newSvc(t)
+	ctx := context.Background()
+	sv.SaveRule(ctx, Rule{Action: "drop", Proto: "udp", Ports: "53", Enabled: true})
+	rs, _ := sv.Ruleset(ctx, Config{Enabled: true, Policy: "drop"})
+	for _, want := range []string{
+		"ip saddr @block4 ip saddr != @trust4 limit rate 10/second burst 20 packets log prefix \"lmcwhm-drop block \" level info\n\t\tip saddr @block4 ip saddr != @trust4 counter drop",
+		"ip6 saddr @ban6 ip6 saddr != @trust6 limit rate 10/second burst 20 packets log prefix \"lmcwhm-drop ban \"",
+		"udp dport { 53 } limit rate 10/second burst 20 packets log prefix \"lmcwhm-drop rule1 \"",
+		"ct state new limit rate 10/second burst 20 packets log prefix \"lmcwhm-drop policy \"",
+	} {
+		if !strings.Contains(rs, want) {
+			t.Errorf("ruleset missing %q:\n%s", want, rs)
+		}
+	}
+	if rs, _ := sv.Ruleset(ctx, Config{Enabled: true, Policy: "accept"}); strings.Contains(rs, "drop policy") {
+		t.Error("policy drop logged under accept")
 	}
 }

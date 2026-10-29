@@ -65,15 +65,13 @@ function move(e: MouseEvent, it: (typeof items)[number]) {
 .map.block {
   --hue: #eb6834;
 }
-@media (prefers-color-scheme: dark) {
-  .map {
-    --grid: #33322f;
-    --edge: #1a1a19;
-    --hue: #3987e5;
-  }
-  .map.block {
-    --hue: #d95926;
-  }
+html[data-theme='dark'] .map {
+  --grid: #33322f;
+  --edge: #1a1a19;
+  --hue: #3987e5;
+}
+html[data-theme='dark'] .map.block {
+  --hue: #d95926;
 }
 svg {
   width: 100%;

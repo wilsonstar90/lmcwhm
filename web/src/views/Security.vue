@@ -140,7 +140,7 @@ const comps = { overview: SecTraffic, firewall: SecFirewall, ips: SecIPs, lists:
 <style scoped>
 .tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
   gap: 10px;
   margin-bottom: 16px;
 }

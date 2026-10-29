@@ -63,11 +63,9 @@ const pct = (v: number) => `${(v * 100).toFixed(v < 0.1 ? 1 : 0)}%`
   --gap: #fcfcfb;
   position: relative;
 }
-@media (prefers-color-scheme: dark) {
-  .tm {
-    --hue: #3987e5;
-    --gap: #1a1a19;
-  }
+html[data-theme='dark'] .tm {
+  --hue: #3987e5;
+  --gap: #1a1a19;
 }
 .tile {
   position: absolute;

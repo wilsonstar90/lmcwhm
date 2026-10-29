@@ -103,6 +103,8 @@ type Env struct {
 	Timezone string
 	// WAF returns the current WAF settings (nil = off).
 	WAF func() WAFSettings
+	// CDN returns the proxies trusted for the visitor's address (nil = Cloudflare only).
+	CDN func() CDN
 }
 
 // WAFSettings drive ModSecurity + OWASP CRS in the nginx container.
@@ -453,6 +455,7 @@ type edgeData struct {
 	NginxPort   int
 	VarnishPort int
 	Passthrough []passBackend
+	CDNHeader   string // the custom CDN's address header ("" = none)
 }
 
 type passBackend struct {
@@ -508,6 +511,11 @@ func (e *Env) edgeFiles(sites []Site, pass []Passthrough) (map[string][]byte, er
 	hostMaps("force_https", fh, files)
 	hostMaps("hsts", hsts, files)
 	hostMaps("cache", cache, files)
+	c := e.cdn()
+	files["maps/cdn_cf.lst"], files["maps/cdn_custom.lst"] = cdnLists(c)
+	if len(c.Ranges) > 0 && ValidHeader(c.Header) {
+		data.CDNHeader = c.Header
+	}
 	data.VarnishPort = VarnishPort
 	cfg, err := render("haproxy.cfg.tmpl", data)
 	if err != nil {
@@ -520,6 +528,9 @@ func (e *Env) edgeFiles(sites []Site, pass []Passthrough) (map[string][]byte, er
 func (e *Env) writeEdge(sites []Site, pass []Passthrough) error {
 	files, err := e.edgeFiles(sites, pass)
 	if err != nil {
+		return err
+	}
+	if err := e.ensureLists(); err != nil {
 		return err
 	}
 	for name, body := range files {
@@ -685,7 +696,7 @@ func snapshot(dir string) (map[string][]byte, error) {
 			return nil
 		}
 		if d.IsDir() {
-			if d.Name() == "certs" || d.Name() == "run" {
+			if d.Name() == "certs" || d.Name() == "run" || d.Name() == "lists" {
 				return filepath.SkipDir
 			}
 			return nil
@@ -702,7 +713,7 @@ func snapshot(dir string) (map[string][]byte, error) {
 func restore(dir string, snap map[string][]byte) {
 	filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
-			if d != nil && d.IsDir() && (d.Name() == "certs" || d.Name() == "run") {
+			if d != nil && d.IsDir() && (d.Name() == "certs" || d.Name() == "run" || d.Name() == "lists") {
 				return filepath.SkipDir
 			}
 			return nil

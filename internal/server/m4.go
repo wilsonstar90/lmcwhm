@@ -50,6 +50,7 @@ func (s *Server) m4Routes(r chi.Router) {
 	r.Get("/logs/site/download", s.handleSiteLogDownload)
 	r.Post("/logs/site/clear", s.handleSiteLogClear)
 	r.Get("/logs/ssh", s.handleSSHLog)
+	r.Get("/logs/firewall", s.handleFirewallLog)
 	r.Get("/logs/journal", s.handleJournal)
 	r.Get("/logs/container", s.handleContainerLog)
 }
@@ -391,6 +392,10 @@ func (s *Server) handleSiteLogClear(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSSHLog(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, logcenter.SSH(r.Context(), intParam(r, "limit", 500, 5000), r.URL.Query().Get("q")))
+}
+
+func (s *Server) handleFirewallLog(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, logcenter.Drops(r.Context(), intParam(r, "limit", 1000, 10000), r.URL.Query().Get("q")))
 }
 
 // handleJournal: unit "" = whole system, "lmcwhm" = the panel itself.

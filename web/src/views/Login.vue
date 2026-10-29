@@ -6,6 +6,7 @@ import { NCard, NForm, NFormItem, NInput, NButton, NAlert } from 'naive-ui'
 import { useSession } from '../stores/session'
 import { ApiError } from '../api/client'
 import LangSwitch from '../components/LangSwitch.vue'
+import ThemeSwitch from '../components/ThemeSwitch.vue'
 
 const { t } = useI18n()
 const session = useSession()
@@ -40,7 +41,7 @@ async function submit() {
 
 <template>
   <div class="wrap">
-    <div class="lang"><LangSwitch /></div>
+    <div class="lang"><ThemeSwitch /> <LangSwitch /></div>
     <n-card class="card" :title="session.alias">
       <p class="sub">{{ t('login.title') }}</p>
       <n-form @submit.prevent="submit">
@@ -89,6 +90,9 @@ async function submit() {
   position: absolute;
   top: 16px;
   right: 16px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 .card {
   width: 100%;

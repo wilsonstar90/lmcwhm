@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/wilsonstar90/lmcwhm/internal/secrets"
@@ -51,8 +52,9 @@ type Config struct {
 	Enabled bool   `json:"enabled"`
 	Policy  string `json:"policy"` // accept | drop (default for new inbound connections)
 	Ping    bool   `json:"ping"`   // answer ICMP echo
-	// Protect always accepts SSH, panel, HTTP and HTTPS before user rules.
-	Protect bool `json:"protect"`
+	// Protect is the old "always accept SSH, panel and web" switch; it only
+	// decides whether the system rules that replaced it start enabled.
+	Protect bool `json:"protect,omitempty"`
 
 	LinodeToken    string `json:"linode_token,omitempty"` // sealed at rest
 	LinodeFirewall int    `json:"linode_firewall"`
@@ -75,6 +77,9 @@ type Rule struct {
 	Remark    string `json:"remark"`
 	Enabled   bool   `json:"enabled"`
 	CreatedAt int64  `json:"created_at"`
+	// System marks the rules the panel creates for itself (ssh | panel | web).
+	// Their ports follow sshd and the panel settings.
+	System string `json:"system,omitempty"`
 }
 
 type IP struct {
@@ -95,6 +100,10 @@ type Service struct {
 	// OnBlocksChanged is called (debounced) after a manual permanent block or
 	// allow entry changes (what is synced to Linode / Cloudflare).
 	OnBlocksChanged func()
+	// OnListsChanged is called (debounced) after any block / allow / trust
+	// entry or the enabled switch changes: the edge proxy blocks by the
+	// visitor's real address too (behind a CDN the TCP source is the CDN).
+	OnListsChanged func()
 	nft             string // nft binary ("" = not installed)
 
 	mu      sync.Mutex
@@ -102,7 +111,9 @@ type Service struct {
 	pending bool
 	armedAt time.Time
 	syncT   *time.Timer
+	listT   *time.Timer
 	logf    func(string, ...any)
+	seeded  atomic.Bool
 }
 
 func New(st *store.Store, box *secrets.Box, logf func(string, ...any)) *Service {
@@ -172,9 +183,9 @@ func (sv *Service) SaveCloud(ctx context.Context, fn func(*Config)) error {
 	if err != nil {
 		return err
 	}
-	local := [4]any{c.Enabled, c.Policy, c.Ping, c.Protect}
+	local := [3]any{c.Enabled, c.Policy, c.Ping}
 	fn(&c)
-	if local != [4]any{c.Enabled, c.Policy, c.Ping, c.Protect} {
+	if local != [3]any{c.Enabled, c.Policy, c.Ping} {
 		return ErrBadPolicy
 	}
 	return sv.saveConfig(ctx, c)
@@ -251,7 +262,11 @@ func (r *Rule) validate() error {
 // ---- rules ----
 
 func (sv *Service) Rules(ctx context.Context) ([]Rule, error) {
-	rows, err := sv.st.DB.QueryContext(ctx, `SELECT id, action, proto, ports, source, remark, enabled, created_at FROM fw_rules ORDER BY id`)
+	if err := sv.seedSystem(ctx); err != nil {
+		return nil, err
+	}
+	// System rules come first, so a user drop rule cannot lock SSH out.
+	rows, err := sv.st.DB.QueryContext(ctx, `SELECT id, action, proto, ports, source, remark, enabled, created_at, system FROM fw_rules ORDER BY system = '', id`)
 	if err != nil {
 		return nil, err
 	}
@@ -259,12 +274,65 @@ func (sv *Service) Rules(ctx context.Context) ([]Rule, error) {
 	out := []Rule{}
 	for rows.Next() {
 		var r Rule
-		if err := rows.Scan(&r.ID, &r.Action, &r.Proto, &r.Ports, &r.Source, &r.Remark, &r.Enabled, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.Action, &r.Proto, &r.Ports, &r.Source, &r.Remark, &r.Enabled, &r.CreatedAt, &r.System); err != nil {
 			return nil, err
+		}
+		if p := sv.systemPorts(r.System); p != "" {
+			r.Ports = p
 		}
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+const seededKey = "fw_system_seeded"
+
+// seedSystem creates the system rules once (they replace the old Protect
+// switch and start enabled when it was on). Deleted ones are not recreated.
+func (sv *Service) seedSystem(ctx context.Context) error {
+	if sv.seeded.Load() {
+		return nil
+	}
+	var x string
+	if sv.st.DB.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, seededKey).Scan(&x) == nil {
+		sv.seeded.Store(true)
+		return nil
+	}
+	c, err := sv.Config(ctx)
+	if err != nil {
+		return err
+	}
+	now := time.Now().Unix()
+	for _, sys := range []string{"ssh", "panel", "web"} {
+		ports := sv.systemPorts(sys)
+		if ports == "" {
+			continue
+		}
+		if _, err := sv.st.DB.ExecContext(ctx, `INSERT INTO fw_rules(action, proto, ports, source, remark, enabled, created_at, system) VALUES('accept','tcp',?,'','',?,?,?)`,
+			ports, c.Protect, now, sys); err != nil {
+			return err
+		}
+	}
+	if _, err := sv.st.DB.ExecContext(ctx, `INSERT INTO settings(key, value) VALUES(?, '1') ON CONFLICT(key) DO NOTHING`, seededKey); err != nil {
+		return err
+	}
+	sv.seeded.Store(true)
+	return nil
+}
+
+// systemPorts are the live ports of a system rule ("" for user rules).
+func (sv *Service) systemPorts(sys string) string {
+	switch sys {
+	case "ssh":
+		return strings.ReplaceAll(joinInts(SSHPorts()), " ", "")
+	case "panel":
+		if p := sv.PanelPort(); p > 0 {
+			return strconv.Itoa(p)
+		}
+	case "web":
+		return "80,443"
+	}
+	return ""
 }
 
 // SaveRule creates (ID 0) or replaces a rule and applies the ruleset.
@@ -273,6 +341,7 @@ func (sv *Service) SaveRule(ctx context.Context, r Rule) (Rule, bool, error) {
 		return r, false, err
 	}
 	if r.ID == 0 {
+		r.System = ""
 		r.CreatedAt = time.Now().Unix()
 		res, err := sv.st.DB.ExecContext(ctx, `INSERT INTO fw_rules(action, proto, ports, source, remark, enabled, created_at) VALUES(?,?,?,?,?,?,?)`,
 			r.Action, r.Proto, r.Ports, r.Source, r.Remark, r.Enabled, r.CreatedAt)
@@ -281,6 +350,16 @@ func (sv *Service) SaveRule(ctx context.Context, r Rule) (Rule, bool, error) {
 		}
 		r.ID, _ = res.LastInsertId()
 	} else {
+		// A system rule keeps its kind; its ports follow the services.
+		var sys string
+		if err := sv.st.DB.QueryRowContext(ctx, `SELECT system FROM fw_rules WHERE id = ?`, r.ID).Scan(&sys); errors.Is(err, sql.ErrNoRows) {
+			return r, false, ErrNotFound
+		} else if err != nil {
+			return r, false, err
+		}
+		if r.System = sys; sys != "" {
+			r.Ports = sv.systemPorts(sys)
+		}
 		res, err := sv.st.DB.ExecContext(ctx, `UPDATE fw_rules SET action=?, proto=?, ports=?, source=?, remark=?, enabled=? WHERE id=?`,
 			r.Action, r.Proto, r.Ports, r.Source, r.Remark, r.Enabled, r.ID)
 		if err != nil {
@@ -357,6 +436,7 @@ func (sv *Service) AddIP(ctx context.Context, ip, list string, ttl time.Duration
 			if err := sv.run(ctx, fmt.Sprintf("add element inet %s %s { %s timeout %ds }\n", Table, set, norm, int(ttl.Seconds())+1)); err != nil {
 				sv.logf("firewall ban", "err", err)
 			}
+			sv.listsChanged()
 		} else if _, err := sv.Apply(ctx); err != nil {
 			return x, err
 		}
@@ -442,6 +522,47 @@ func (sv *Service) blocksChanged() {
 	sv.syncT = time.AfterFunc(5*time.Second, sv.OnBlocksChanged)
 }
 
+func (sv *Service) listsChanged() {
+	sv.mu.Lock()
+	defer sv.mu.Unlock()
+	if sv.OnListsChanged == nil {
+		return
+	}
+	if sv.listT != nil {
+		sv.listT.Stop()
+	}
+	sv.listT = time.AfterFunc(2*time.Second, sv.OnListsChanged)
+}
+
+// EdgeLists are the addresses the edge proxy refuses (block, bans) and
+// never refuses (allow, trusted ranges), canonical; both empty while the
+// firewall is off.
+func (sv *Service) EdgeLists(ctx context.Context) (block, allow []string, err error) {
+	c, err := sv.Config(ctx)
+	if err != nil || !c.Enabled {
+		return nil, nil, err
+	}
+	ips, err := sv.IPs(ctx, "")
+	if err != nil {
+		return nil, nil, err
+	}
+	block, allow = []string{}, []string{}
+	for _, x := range ips {
+		_, norm, err := NormIP(x.IP)
+		if err != nil {
+			continue
+		}
+		if x.List == "block" {
+			block = append(block, norm)
+		} else {
+			allow = append(allow, norm) // allow and trust
+		}
+	}
+	sort.Strings(block)
+	sort.Strings(allow)
+	return block, allow, nil
+}
+
 // ---- ruleset ----
 
 // SSHPorts reads the ports sshd listens on (default 22).
@@ -474,14 +595,23 @@ func SSHPorts() []int {
 	return out
 }
 
-// ProtectedPorts are always accepted (TCP) when Protect is on.
-func (sv *Service) ProtectedPorts() []int {
-	set := map[int]bool{80: true, 443: true}
-	for _, p := range SSHPorts() {
-		set[p] = true
+// ProtectedPorts are the TCP ports of the enabled system accept rules (what
+// the Linode Cloud Firewall keeps open).
+func (sv *Service) ProtectedPorts(ctx context.Context) []int {
+	rules, err := sv.Rules(ctx)
+	if err != nil {
+		return nil
 	}
-	if p := sv.PanelPort(); p > 0 {
-		set[p] = true
+	set := map[int]bool{}
+	for _, r := range rules {
+		if r.System == "" || !r.Enabled || r.Action != "accept" || r.Source != "" || r.Proto == "udp" {
+			continue
+		}
+		for _, part := range strings.Split(r.Ports, ",") {
+			if p, err := strconv.Atoi(part); err == nil {
+				set[p] = true
+			}
+		}
 	}
 	out := make([]int, 0, len(set))
 	for p := range set {
@@ -546,11 +676,17 @@ func (sv *Service) Ruleset(ctx context.Context, c Config) (string, error) {
 	}
 	// Trusted ranges (Cloudflare, crawlers) are never blocked or banned, but
 	// get no other exemption: port rules and the default policy still apply.
-	drops := "\t\tip saddr @block4 ip saddr != @trust4 counter drop\n\t\tip6 saddr @block6 ip6 saddr != @trust6 counter drop\n" +
-		"\t\tip saddr @ban4 ip saddr != @trust4 counter drop\n\t\tip6 saddr @ban6 ip6 saddr != @trust6 counter drop\n"
+	// Every drop is logged first (rate limited: a limit that fails only skips
+	// the log, never the drop), for the firewall log: TCP, UDP and ICMP alike.
+	var drops strings.Builder
+	for _, x := range []struct{ fam, set string }{{"ip", "block4"}, {"ip6", "block6"}, {"ip", "ban4"}, {"ip6", "ban6"}} {
+		trust := "@trust" + x.set[len(x.set)-1:]
+		match := fmt.Sprintf("%s saddr @%s %s saddr != %s", x.fam, x.set, x.fam, trust)
+		fmt.Fprintf(&drops, "\t\t%s %s\n\t\t%s counter drop\n", match, logDrop(strings.TrimRight(x.set, "46")), match)
+	}
 	fmt.Fprintf(&b, "\tchain input {\n\t\ttype filter hook input priority -10; policy %s;\n", c.Policy)
 	b.WriteString("\t\tiif \"lo\" accept\n\t\tip saddr @allow4 accept\n\t\tip6 saddr @allow6 accept\n")
-	b.WriteString(drops)
+	b.WriteString(drops.String())
 	b.WriteString("\t\tct state established,related accept\n\t\tct state invalid drop\n")
 	if !c.Ping {
 		b.WriteString("\t\ticmp type echo-request drop\n\t\ticmpv6 type echo-request drop\n")
@@ -560,9 +696,6 @@ func (sv *Service) Ruleset(ctx context.Context, c Config) (string, error) {
 	if c.Policy == "drop" {
 		// Containers reach host services (DNS, published ports) over the bridges.
 		b.WriteString("\t\tiifname \"docker0\" accept\n\t\tiifname \"br-*\" accept\n")
-	}
-	if c.Protect {
-		fmt.Fprintf(&b, "\t\ttcp dport { %s } accept comment \"protected: SSH, panel, web\"\n", joinInts(sv.ProtectedPorts()))
 	}
 	for _, r := range rules {
 		if !r.Enabled {
@@ -582,16 +715,34 @@ func (sv *Service) Ruleset(ctx context.Context, c Config) (string, error) {
 		if r.Proto == "both" {
 			protos = []string{"tcp", "udp"}
 		}
-		for _, p := range protos {
-			fmt.Fprintf(&b, "\t\t%s%s dport { %s } %s comment \"rule %d\"\n", src, p, ports, r.Action, r.ID)
+		comment := "rule " + strconv.FormatInt(r.ID, 10)
+		if r.System != "" {
+			comment = "system " + r.System
 		}
+		for _, p := range protos {
+			if r.Action == "drop" {
+				fmt.Fprintf(&b, "\t\t%s%s dport { %s } %s\n", src, p, ports, logDrop("rule"+strconv.FormatInt(r.ID, 10)))
+			}
+			fmt.Fprintf(&b, "\t\t%s%s dport { %s } %s comment \"%s\"\n", src, p, ports, r.Action, comment)
+		}
+	}
+	if c.Policy == "drop" {
+		b.WriteString("\t\tct state new " + logDrop("policy") + "\n")
 	}
 	b.WriteString("\t}\n")
 	// Docker-published ports are forwarded, not delivered to input.
 	b.WriteString("\tchain forward {\n\t\ttype filter hook forward priority -10; policy accept;\n\t\tip saddr @allow4 accept\n\t\tip6 saddr @allow6 accept\n")
-	b.WriteString(drops)
+	b.WriteString(drops.String())
 	b.WriteString("\t}\n}\n")
 	return b.String(), nil
+}
+
+// DropPrefix starts the kernel log line of every logged drop.
+const DropPrefix = "lmcwhm-drop "
+
+// logDrop logs a packet that the next rule drops, at most 10 a second.
+func logDrop(reason string) string {
+	return fmt.Sprintf("limit rate 10/second burst 20 packets log prefix \"%s%s \" level info", DropPrefix, reason)
 }
 
 func (sv *Service) run(ctx context.Context, script string, args ...string) error {
@@ -633,6 +784,7 @@ func (sv *Service) Apply(ctx context.Context) (bool, error) {
 }
 
 func (sv *Service) applyGuarded(ctx context.Context, c Config) (bool, error) {
+	sv.listsChanged()
 	if !sv.Available() {
 		if !c.Enabled {
 			return false, nil
@@ -741,6 +893,9 @@ func (sv *Service) Boot(ctx context.Context) {
 		sv.saveConfig(ctx, c)
 		sv.logf("firewall: unconfirmed drop policy reverted to accept at start")
 	}
+	if err := sv.seedSystem(ctx); err != nil {
+		sv.logf("firewall: system rules", "err", err)
+	}
 	if err == nil && c.Enabled && sv.Available() {
 		if err := sv.install(ctx, c); err != nil {
 			sv.logf("firewall boot", "err", err)
@@ -754,7 +909,10 @@ func (sv *Service) Boot(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-t.C:
-				sv.st.DB.ExecContext(ctx, `DELETE FROM fw_ips WHERE expires_at > 0 AND expires_at <= ?`, time.Now().Unix())
+				res, err := sv.st.DB.ExecContext(ctx, `DELETE FROM fw_ips WHERE expires_at > 0 AND expires_at <= ?`, time.Now().Unix())
+				if n, _ := res.RowsAffected(); err == nil && n > 0 {
+					sv.listsChanged()
+				}
 			}
 		}
 	}()
@@ -817,6 +975,7 @@ func (sv *Service) SyncBans(ctx context.Context, source string, add []Ban, remov
 // out (the allow list is matched first), and nobody is there to confirm a
 // background sync, so arming would revert "drop" to "accept".
 func (sv *Service) applyBans(ctx context.Context) error {
+	sv.listsChanged()
 	c, err := sv.Config(ctx)
 	if err != nil || !c.Enabled || !sv.Available() {
 		return err

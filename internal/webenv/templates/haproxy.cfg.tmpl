@@ -47,6 +47,16 @@ frontend fe_https
     mode http
     bind abns@lmcwhm_https accept-proxy ssl crt-list {{.Dir}}/crt-list.txt alpn h2,http/1.1
     option forwardfor
+    # Visitor address: only connections from a CDN's ranges may set it.
+    acl from_cf src -f {{.Dir}}/maps/cdn_cf.lst
+    http-request set-src req.hdr_ip(CF-Connecting-IP,1) if from_cf { req.hdr(CF-Connecting-IP) -m found }
+    http-request del-header CF-Connecting-IP if !from_cf
+{{- if .CDNHeader}}
+    acl from_cdn src -f {{.Dir}}/maps/cdn_custom.lst
+    http-request set-src req.hdr_ip({{.CDNHeader}},-1) if from_cdn !from_cf { req.hdr({{.CDNHeader}}) -m found }
+{{- end}}
+    # Blocked visitors (by the address above; the firewall only sees the CDN).
+    http-request deny deny_status 403 if { src -f {{.Dir}}/lists/block.lst } !{ src -f {{.Dir}}/lists/allow.lst }
     http-request set-header X-Forwarded-Proto https
     http-request set-header X-Forwarded-Port 443
     http-request set-var(txn.host) req.hdr(host),field(1,:),lower
@@ -71,6 +81,16 @@ frontend fe_http
     http-request set-header X-Forwarded-Proto http
     http-request set-header X-Forwarded-Port 80
     acl acme path_beg /.well-known/acme-challenge/
+    # Visitor address: only connections from a CDN's ranges may set it.
+    acl from_cf src -f {{.Dir}}/maps/cdn_cf.lst
+    http-request set-src req.hdr_ip(CF-Connecting-IP,1) if from_cf { req.hdr(CF-Connecting-IP) -m found }
+    http-request del-header CF-Connecting-IP if !from_cf
+{{- if .CDNHeader}}
+    acl from_cdn src -f {{.Dir}}/maps/cdn_custom.lst
+    http-request set-src req.hdr_ip({{.CDNHeader}},-1) if from_cdn !from_cf { req.hdr({{.CDNHeader}}) -m found }
+{{- end}}
+    # Blocked visitors (by the address above; the firewall only sees the CDN).
+    http-request deny deny_status 403 if { src -f {{.Dir}}/lists/block.lst } !{ src -f {{.Dir}}/lists/allow.lst } !acme
     http-request set-var(txn.host) req.hdr(host),field(1,:),lower
     http-request set-var(txn.fh) var(txn.host),map_str({{.Dir}}/maps/force_https_exact.map)
     http-request set-var(txn.fh) var(txn.host),map_end({{.Dir}}/maps/force_https_wild.map) if !{ var(txn.fh) -m found }
