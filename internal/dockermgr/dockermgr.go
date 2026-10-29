@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/wilsonstar90/lmcwhm/internal/dockerx"
 	"github.com/wilsonstar90/lmcwhm/internal/tasks"
@@ -92,6 +93,8 @@ type Container struct {
 	NetIO     string `json:"net_io"`
 	BlockIO   string `json:"block_io"`
 	HostPorts []int  `json:"host_ports"`
+	CreatedAt int64  `json:"created_at"`
+	Usage     *Usage `json:"usage"` // with stats, running containers only
 }
 
 type psLine struct {
@@ -99,7 +102,7 @@ type psLine struct {
 }
 
 type statsLine struct {
-	ID, CPUPerc, MemUsage, MemPerc, NetIO, BlockIO string
+	ID, CPUPerc, MemUsage, MemPerc, NetIO, BlockIO, PIDs string
 }
 
 var hostPortRe = regexp.MustCompile(`(?:0\.0\.0\.0|127\.0\.0\.1|\[::\]|::):(\d+)->`)
@@ -136,6 +139,11 @@ func (m *Manager) Containers(ctx context.Context, stats bool) ([]Container, erro
 		}
 		if u, ok := usage[p.ID]; ok {
 			c.CPU, c.Mem, c.MemPerc, c.NetIO, c.BlockIO = u.CPUPerc, u.MemUsage, u.MemPerc, u.NetIO, u.BlockIO
+			us := parseUsage(u)
+			c.Usage = &us
+		}
+		if t, err := time.Parse("2006-01-02 15:04:05 -0700 MST", p.CreatedAt); err == nil {
+			c.CreatedAt = t.Unix()
 		}
 		out = append(out, c)
 	}

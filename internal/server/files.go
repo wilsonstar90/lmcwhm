@@ -309,7 +309,10 @@ func (s *Server) handleTrashEmpty(w http.ResponseWriter, r *http.Request) {
 
 // handleTerminalTicket re-checks the password before a shell is opened.
 func (s *Server) handleTerminalTicket(w http.ResponseWriter, r *http.Request) {
-	var in struct{ Password, Container string }
+	var in struct {
+		Password, Container, Shell string
+		Root                       bool
+	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
@@ -319,7 +322,7 @@ func (s *Server) handleTerminalTicket(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, errBadPass)
 		return
 	}
-	t, err := s.Term.Issue(sess.User.Username, in.Container)
+	t, err := s.Term.Issue(sess.User.Username, in.Container, in.Shell, in.Root)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return

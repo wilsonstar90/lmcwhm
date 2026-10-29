@@ -200,9 +200,47 @@ task POST /sites '{"domain":"hello.test","type":"proxy","proxy_target":"http://1
 get80_retry hello.test / "Welcome to nginx" || fail "container bound to domain"
 code="$(api POST /docker/containers/lmcwhm-nginx/remove | jget "['code']")"
 [[ "$code" == docker.managed ]] || fail "managed container could be removed: $code"
-[[ "$(api POST /docker/containers/hello/stop | jget "['ok']")" == True ]] || fail "stop container"
-[[ "$(api POST /docker/containers/hello/remove | jget "['ok']")" == True ]] || fail "remove container"
 pass "Docker container created, bound to a domain, protected stack containers"
+
+# ---------- Docker container settings: rename, policy, networks, logs, commit, upgrade, edit ----------
+api GET /docker/overview | python3 -c "import sys,json; o=json.load(sys.stdin); assert o['containers']['running']>=1 and o['images']['total']>=1 and o['networks']['total']>=3, o" \
+  || fail "docker overview"
+[[ "$(api POST /docker/containers/hello/rename '{"name":"hello2"}' | jget "['ok']")" == True ]] || fail "rename container"
+[[ "$(docker inspect -f '{{.Name}}' hello2)" == /hello2 ]] || fail "container not renamed"
+code="$(api POST /docker/containers/lmcwhm-nginx/rename '{"name":"x"}' | jget "['code']")"
+[[ "$code" == docker.managed ]] || fail "managed container could be renamed: $code"
+[[ "$(api POST /docker/containers/hello2/restart-policy '{"policy":"on-failure","max_retry":3}' | jget "['ok']")" == True ]] || fail "restart policy"
+[[ "$(docker inspect -f '{{.HostConfig.RestartPolicy.Name}}:{{.HostConfig.RestartPolicy.MaximumRetryCount}}' hello2)" == on-failure:3 ]] || fail "restart policy not applied"
+api GET /docker/containers/hello2/info | python3 -c "import sys,json; c=json.load(sys.stdin); assert c['host_ports']==[8181] and c['restart']=='on-failure' and c['state']=='running' and c['networks'], c" \
+  || fail "container info"
+docker network create lmcwhm-e2e-net >/dev/null
+[[ "$(api POST /docker/containers/hello2/networks/connect '{"network":"lmcwhm-e2e-net"}' | jget "['ok']")" == True ]] || fail "network connect"
+docker inspect -f '{{json .NetworkSettings.Networks}}' hello2 | grep -q lmcwhm-e2e-net || fail "network not connected"
+[[ "$(api POST /docker/containers/hello2/networks/disconnect '{"network":"lmcwhm-e2e-net"}' | jget "['ok']")" == True ]] || fail "network disconnect"
+docker network rm lmcwhm-e2e-net >/dev/null
+get80_retry hello.test / "Welcome to nginx" || fail "hello2 still served"
+api GET "/docker/containers/hello2/logs?since=$(( $(date +%s) - 3*86400 ))&tail=100" | grep -q 'GET / HTTP' || fail "container logs (last 3 days)"
+api GET /docker/containers/hello2/logs/download | grep -q 'GET / HTTP' || fail "container logs download"
+[[ "$(api POST /docker/containers/hello2/logs/clear | jget "['ok']")" == True ]] || fail "clear logs"
+[[ ! -s "$(docker inspect -f '{{.LogPath}}' hello2)" ]] || fail "log file not truncated"
+task POST /docker/containers/hello2/commit '{"repository":"lmcwhm-e2e","tag":"v1","message":"e2e"}'
+docker image inspect lmcwhm-e2e:v1 >/dev/null || fail "image not committed"
+old="$(docker inspect -f '{{.Id}}' hello2)"
+task POST /docker/containers/hello2/upgrade '{"force_pull":false,"force_recreate":false}'
+[[ "$(docker inspect -f '{{.Id}}' hello2)" == "$old" ]] || fail "upgrade recreated an unchanged image"
+task POST /docker/containers/hello2/upgrade '{"image":"lmcwhm-e2e:v1","force_pull":false,"force_recreate":false}'
+[[ "$(docker inspect -f '{{.Id}}' hello2)" != "$old" ]] || fail "upgrade did not recreate"
+[[ "$(docker inspect -f '{{.Config.Image}} {{.HostConfig.RestartPolicy.Name}}' hello2)" == "lmcwhm-e2e:v1 on-failure" ]] || fail "upgrade lost settings"
+get80_retry hello.test / "Welcome to nginx" || fail "upgraded container not served"
+spec="$(api GET /docker/containers/hello2/spec | python3 -c "import sys,json; s=json.load(sys.stdin); assert s['ports']==['127.0.0.1:8181:80'], s; s['env'].append('E2E=1'); s['image']='nginx:stable'; print(json.dumps(s))")"
+task POST /docker/containers/hello2/recreate "$spec"
+docker inspect -f '{{json .Config.Env}}' hello2 | grep -q '"E2E=1"' || fail "edit not applied"
+get80_retry hello.test / "Welcome to nginx" || fail "edited container not served"
+[[ -z "$(docker ps -aq -f name=hello2_lmcwhm_old)" ]] || fail "old container left behind"
+[[ "$(api POST /docker/containers/hello2/stop | jget "['ok']")" == True ]] || fail "stop container"
+[[ "$(api POST /docker/containers/hello2/remove | jget "['ok']")" == True ]] || fail "remove container"
+docker rmi lmcwhm-e2e:v1 >/dev/null
+pass "Docker container settings: rename, restart policy, networks, logs (range, download, clear), commit, upgrade, edit"
 
 # ---------- Compose ----------
 body="$(python3 -c "import json; print(json.dumps({'name':'web','compose':'services:\n  web:\n    image: nginx:stable\n    ports:\n      - \"127.0.0.1:8182:80\"\n','env':'','up':True}))")"

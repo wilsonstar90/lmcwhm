@@ -30,6 +30,8 @@ var containerRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.\-]{0,127}$`)
 type Ticket struct {
 	User      string
 	Container string // "" = host shell
+	Shell     string // in a container: "bash", "sh" or "" (bash when present)
+	Root      bool   // in a container: exec as uid 0
 	expires   time.Time
 }
 
@@ -41,8 +43,11 @@ type Service struct {
 func New() *Service { return &Service{tickets: map[string]Ticket{}} }
 
 // Issue returns a single-use ticket valid for 30 seconds.
-func (s *Service) Issue(user, container string) (string, error) {
+func (s *Service) Issue(user, container, shell string, root bool) (string, error) {
 	if container != "" && !containerRe.MatchString(container) {
+		return "", ErrBadTarget
+	}
+	if shell != "" && shell != "bash" && shell != "sh" {
 		return "", ErrBadTarget
 	}
 	id := settings.RandomString(32, settings.Alnum)
@@ -54,7 +59,7 @@ func (s *Service) Issue(user, container string) (string, error) {
 			delete(s.tickets, k)
 		}
 	}
-	s.tickets[id] = Ticket{User: user, Container: container, expires: now.Add(30 * time.Second)}
+	s.tickets[id] = Ticket{User: user, Container: container, Shell: shell, Root: root, expires: now.Add(30 * time.Second)}
 	return id, nil
 }
 
@@ -72,8 +77,15 @@ func (s *Service) Redeem(id, user string) (Ticket, error) {
 
 func command(t Ticket) *exec.Cmd {
 	if t.Container != "" {
-		return exec.Command("docker", "exec", "-it", "-e", "TERM=xterm-256color", t.Container,
-			"sh", "-c", "if command -v bash >/dev/null 2>&1; then exec bash; else exec sh; fi")
+		args := []string{"exec", "-it", "-e", "TERM=xterm-256color"}
+		if t.Root {
+			args = append(args, "-u", "0")
+		}
+		args = append(args, t.Container)
+		if t.Shell != "" {
+			return exec.Command("docker", append(args, t.Shell)...)
+		}
+		return exec.Command("docker", append(args, "sh", "-c", "if command -v bash >/dev/null 2>&1; then exec bash; else exec sh; fi")...)
 	}
 	shell := "/bin/bash"
 	if _, err := os.Stat(shell); err != nil {
