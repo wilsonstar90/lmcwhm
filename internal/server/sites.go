@@ -34,6 +34,7 @@ func (s *Server) siteRoutes(r chi.Router) {
 	r.Post("/sites/{id}/ssl/upload", s.handleUploadSSL)
 	r.Post("/sites/{id}/ssl/disable", s.handleDisableSSL)
 	r.Get("/sites/{id}/vhost", s.handleVhost)
+	r.Post("/sites/{id}/target", s.handleSiteTarget)
 }
 
 // writeSiteErr maps service errors (some wrapped with a detail) to API codes.
@@ -41,6 +42,11 @@ func writeSiteErr(w http.ResponseWriter, err error) {
 	if errors.Is(err, site.ErrDomainTaken) {
 		host := strings.TrimSpace(strings.TrimPrefix(err.Error(), site.ErrDomainTaken.Error()+":"))
 		writeJSON(w, http.StatusConflict, apiError{Code: site.ErrDomainTaken.Error(), Params: map[string]any{"domain": host}})
+		return
+	}
+	if errors.Is(err, site.ErrLinked) {
+		names := strings.TrimSpace(strings.TrimPrefix(err.Error(), site.ErrLinked.Error()+":"))
+		writeJSON(w, http.StatusConflict, apiError{Code: site.ErrLinked.Error(), Params: map[string]any{"domains": names}})
 		return
 	}
 	if errors.Is(err, site.ErrNotFound) {
@@ -300,4 +306,21 @@ func (s *Server) handleVhost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"config": v})
+}
+
+// handleSiteTarget points a domain entry at a website, container, URL,
+// passthrough backend or redirect.
+func (s *Server) handleSiteTarget(w http.ResponseWriter, r *http.Request) {
+	var in site.TargetInput
+	if err := decode(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	id, err := s.Sites.SetTarget(r.Context(), idParam(r), in)
+	if err != nil {
+		writeSiteErr(w, err)
+		return
+	}
+	s.audit(r, "site.target", strconv.FormatInt(idParam(r), 10)+" "+in.Target)
+	writeJSON(w, http.StatusOK, map[string]string{"task_id": id})
 }

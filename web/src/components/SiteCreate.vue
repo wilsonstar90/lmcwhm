@@ -117,7 +117,6 @@ async function submit() {
               <n-radio-button value="python">Python</n-radio-button>
               <n-radio-button value="java">Java</n-radio-button>
               <n-radio-button value="tomcat">Tomcat</n-radio-button>
-              <n-radio-button value="proxy">{{ t('site.proxy') }}</n-radio-button>
             </n-radio-group>
           </n-form-item>
           <n-form-item v-if="f.type === 'php'" :label="t('site.php_version')">

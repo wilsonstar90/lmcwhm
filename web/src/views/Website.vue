@@ -28,10 +28,11 @@ async function load() {
       get<WebStatus>('/web/status'),
       get<WebConfig>('/web/config'),
     ])
-    sites.value = s.items
+    // Domain entries without website files live on the domain page.
+    sites.value = s.items.filter((x) => x.type !== 'proxy')
     status.value = st
     cfg.value = c
-    if (selected.value) selected.value = s.items.find((x) => x.id === selected.value!.id) ?? null
+    if (selected.value) selected.value = sites.value.find((x) => x.id === selected.value!.id) ?? null
   } finally {
     loading.value = false
   }

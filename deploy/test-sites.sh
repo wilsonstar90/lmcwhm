@@ -137,6 +137,37 @@ sleep 11 # the CC window
 [[ "$(code --resolve php.test:80:127.0.0.1 http://php.test/xmlrpc.php)" != 403 ]] || fail "dedicated rules still on"
 pass "website protection: dedicated rules, custom rule, scrapers, CC, blocked log"
 
+# ---------- domain entries: link, redirect, port forwarding ----------
+PHPID="$(site_id php.test)"
+wait_task "$(api POST /sites "{\"domain\":\"link.test\",\"aliases\":[\"www.link.test\"],\"type\":\"proxy\",\"target\":\"link\",\"target_site\":$PHPID,\"ssl\":\"none\"}" | jget "['task_id']")"
+[[ "$(get80 link.test /index.php)" == php-ok-8.3* ]] || fail "linked domain does not show the website: $(get80 link.test /index.php)"
+[[ "$(get80 www.link.test /index.php)" == php-ok-8.3* ]] || fail "alias of a linked domain"
+api GET /routes | python3 -c "import sys,json; r=[x for x in json.load(sys.stdin)['items'] if x['host']=='link.test'][0]; assert r['target']=='link' and r['target_name']=='php.test', r" || fail "route of the linked domain"
+code="$(api POST "/sites/$PHPID/delete" '{"files":false}' | jget "['code']")"
+[[ "$code" == site.linked ]] || fail "a linked website could be deleted: $code"
+LID="$(site_id link.test)"
+wait_task "$(api POST "/sites/$LID/target" '{"target":"redirect","redirect":"https://php.test/","redirect_code":308,"redirect_path":true}' | jget "['task_id']")"
+loc="$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' --resolve link.test:80:127.0.0.1 'http://link.test/a/b?c=1')"
+[[ "$loc" == "308 https://php.test/a/b?c=1" ]] || fail "redirect target: $loc"
+[[ "$(api POST "/sites/$LID/target" '{"target":"redirect","redirect":"https://x.test/a;b"}' | jget "['code']")" == site.invalid_redirect ]] || fail "unsafe redirect accepted"
+wait_task "$(api POST "/sites/$LID/target" '{"target":"url","proxy_target":"http://127.0.0.1:8080"}' | jget "['task_id']")"
+api GET "/sites/$LID/vhost" | grep -q 'proxy_pass http://127.0.0.1:8080' || fail "url target not proxied: $(api GET "/sites/$LID/vhost")"
+wait_task "$(api POST "/sites/$LID/delete" '{"files":false,"dns":false}' | jget "['task_id']")"
+pass "domain entries: link to a website, redirect, retarget, linked website kept"
+
+if command -v nft >/dev/null; then
+  docker pull -q busybox >/dev/null
+  FID="$(api POST /forwards '{"proto":"tcp","listen":18222,"target_port":80,"enabled":true,"remark":"e2e"}' | jget "['id']")"
+  [[ -n "$FID" && "$FID" != None ]] || fail "add port forward: $(api POST /forwards '{"proto":"tcp","listen":18222,"target_port":80,"enabled":true}')"
+  nft list table inet lmcwhm_fwd | grep -q 'tcp dport 18222 counter packets [0-9]* bytes [0-9]* redirect to :80' || fail "forward rule: $(nft list table inet lmcwhm_fwd)"
+  out="$(docker run --rm busybox wget -T 5 -qO- --header 'Host: php.test' http://172.17.0.1:18222/index.php 2>&1 || true)"
+  [[ "$out" == php-ok-8.3* ]] || fail "port forward 18222 -> 80: $out"
+  [[ "$(api POST /forwards '{"proto":"tcp","listen":443,"target_port":8443,"enabled":true}' | jget "['code']")" == fw.forward_port_taken ]] || fail "forward on 443 accepted"
+  api POST "/forwards/$FID/delete" >/dev/null
+  ! nft list table inet lmcwhm_fwd >/dev/null 2>&1 || fail "forward table kept"
+  pass "port forwarding (TCP) through nftables"
+fi
+
 # ---------- static site + custom certificate (SNI selection) ----------
 wait_task "$(api POST /sites '{"domain":"static.test","type":"static","ssl":"none"}' | jget "['task_id']")"
 [[ "$(get80 static.test)" == *"Site created by lmcwhm"* ]] || fail "static default page"

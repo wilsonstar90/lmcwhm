@@ -65,6 +65,10 @@ server {
         default_type text/html;
         return 503 "<h1>Site stopped</h1>";
     }
+{{else if .Redirect}}
+    location / {
+        return {{.RedirectCode}} {{.Redirect}}{{if .RedirectPath}}$request_uri{{end}};
+    }
 {{else}}
     location ~ /\.(?!well-known) {
         deny all;

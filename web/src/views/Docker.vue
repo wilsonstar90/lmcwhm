@@ -9,7 +9,7 @@ import DockerContainers from '../components/DockerContainers.vue'
 import DockerCompose from '../components/DockerCompose.vue'
 import DockerResources from '../components/DockerResources.vue'
 import DockerRegistries from '../components/DockerRegistries.vue'
-import SiteCreate from '../components/SiteCreate.vue'
+import DomainCreate, { type DomainPreset } from '../components/DomainCreate.vue'
 import TaskModal from '../components/TaskModal.vue'
 
 // Docker: a tile per kind of resource on top (click one to open its list),
@@ -28,7 +28,7 @@ const o = ref<DockerOverview | null>(null)
 const web = ref<WebStatus | null>(null)
 const cfg = ref<WebConfig | null>(null)
 const task = ref<{ id: string; title: string } | null>(null)
-const bind = ref<{ proxy_target: string; remark: string } | null>(null)
+const bind = ref<DomainPreset | null>(null)
 const list = ref<{ load: () => void } | null>(null)
 
 async function loadOverview() {
@@ -55,7 +55,7 @@ async function openBind(port: number, name: string) {
   if (!web.value) {
     ;[web.value, cfg.value] = await Promise.all([get<WebStatus>('/web/status'), get<WebConfig>('/web/config')])
   }
-  bind.value = { proxy_target: `http://127.0.0.1:${port}`, remark: `docker: ${name}` }
+  bind.value = { target: 'docker', container: name, port, proxy_target: `http://127.0.0.1:${port}`, remark: `docker: ${name}` }
 }
 
 interface Tile { key: Section; value: string; sub: string; on: boolean }
@@ -93,11 +93,10 @@ const tiles = computed<Tile[]>(() => {
   <DockerRegistries v-else-if="tab === 'registries'" ref="list" @changed="loadOverview" />
   <DockerResources v-else :key="tab" ref="list" :kind="tab" @task="openTask" />
 
-  <SiteCreate
+  <DomainCreate
     :show="!!bind"
-    :php-versions="web?.php_versions ?? []"
     :has-c-f="!!cfg?.has_cf_token"
-    :preset="bind ? { type: 'proxy', ...bind } : undefined"
+    :preset="bind ?? undefined"
     @close="bind = null"
     @created="(id: string, d: string) => { bind = null; openTask(id, t('docker.bind_domain') + ' · ' + d) }"
   />

@@ -220,7 +220,10 @@
       "passthrough_no_ssl": "TLS passthrough sites get their certificate from the backend",
       "not_project": "Not a runtime project",
       "invalid_waf_rule": "Rule IDs are numbers",
-      "invalid_advanced": "Invalid advanced setting (IPs, user agents, domains or redirects)"
+      "invalid_advanced": "Invalid advanced setting (IPs, user agents, domains or redirects)",
+      "linked": "Other domains still show this website: {domains}; change their target first",
+      "no_content": "Invalid website, or this domain has no website files of its own",
+      "invalid_redirect": "Invalid redirect URL (http(s)://…; no ? when keeping the path)"
     },
     "cf": {
       "no_token": "Set a Cloudflare API token first",
@@ -322,7 +325,9 @@
       "feed_bad_url": "A list URL must start with http:// or https://",
       "invalid_cdn": "Invalid CDN settings: a header name is required and ranges must be valid IPs / CIDRs.",
       "invalid_pattern": "Invalid entry: check the value, match type and regex (a URL \"starts with\" begins with /).",
-      "duplicate_pattern": "That entry is already on the list"
+      "duplicate_pattern": "That entry is already on the list",
+      "invalid_forward": "Invalid port forward: check the protocol, ports, target (IPv4) and source",
+      "forward_port_taken": "Port {port} is already in use"
     },
     "waf": {
       "invalid_settings": "Invalid WAF settings"
@@ -894,7 +899,8 @@
     "dns": {
       "ok": "This server",
       "other": "Elsewhere",
-      "none": "No record"
+      "none": "No record",
+      "cloudflare": "Cloudflare ☁"
     },
     "no_cert": {
       "short": "No certificate",
@@ -919,6 +925,10 @@
     "wildcard_overridden": {
       "short": "Partly overridden",
       "long": "These hostnames inside the wildcard belong to other sites: {hosts}"
+    },
+    "passthrough_realip": {
+      "short": "Passthrough + Cloudflare",
+      "long": "TLS is not ended here, so CF-Connecting-IP cannot be read: the backend only sees Cloudflare's addresses."
     }
   },
   "maint": {
@@ -2606,5 +2616,79 @@
       "body": "e.g. give_title"
     },
     "builtin": {}
+  },
+  "dom": {
+    "intro": "One row per domain (its aliases and subdomains with it). Manage sets where it goes (a website, Docker, a URL, passthrough, a redirect), its aliases, SSL and DNS; a website's own PHP, runtime and rewrite settings stay in the website settings.",
+    "target": "Connects to",
+    "website": "Website",
+    "entry": "Domain",
+    "manage": "Manage",
+    "website_settings": "Website",
+    "manage_domain": "Manage domain",
+    "targets": {
+      "site": "Its website",
+      "link": "Another website",
+      "docker": "Docker",
+      "url": "URL",
+      "passthrough": "TLS passthrough",
+      "redirect": "Redirect"
+    },
+    "target_hint": {
+      "site": "This domain's own website files / project.",
+      "link": "Shows another website's content (a website can have several domains, each with its SSL).",
+      "docker": "Goes to a port a container publishes (TLS ends at the edge, then HTTP).",
+      "url": "Reverse proxy to any http(s) URL, e.g. a server on the private network.",
+      "passthrough": "The TLS stream goes untouched to host:port (the backend holds the certificate; the CDN visitor IP cannot be read).",
+      "redirect": "Every request is redirected to another URL."
+    },
+    "redirect_to": "Redirect to",
+    "keep_path": "Keep the path and query",
+    "codes": {
+      "301": "301 permanent",
+      "302": "302 temporary",
+      "307": "307 temporary (same method)",
+      "308": "308 permanent (same method)"
+    },
+    "no_containers": "No container publishes a port",
+    "retarget_note": "This domain's website files ({root}) are kept; switch back to \"Its website\" to serve them again.",
+    "aliases_hint": "Press Enter after each; wildcards like *.example.com work.",
+    "ssl_passthrough": "TLS passthrough: the backend holds the certificate, nothing to issue here.",
+    "dns_hint": "When on, the panel creates and updates the A / AAAA records of this domain and every alias in Cloudflare.",
+    "dns_managed": "Manage the Cloudflare DNS records",
+    "cert_partial": "{n}/{total} covered",
+    "warned": "{n} domains need attention.",
+    "delete": "Delete domain",
+    "delete_confirm": "Delete {host}? Its Cloudflare DNS records are removed too.",
+    "add_kinds": {
+      "entry": "New domain",
+      "alias": "As an alias",
+      "site": "New website"
+    },
+    "add_hint": {
+      "entry": "Next, choose where it goes: another website, Docker, a URL, passthrough or a redirect.",
+      "alias": "An alias of an existing domain, with the same target and SSL.",
+      "site": "A new website with its own files (PHP, static, Node.js, …)."
+    },
+    "drawer_hint": "Domains, aliases, SSL, DNS and the target now live on the Domains / SNI page; change them here with Manage domain.",
+    "not_serving": "This domain now goes to another service",
+    "linked": "Other domains showing this website"
+  },
+  "fwd": {
+    "title": "Port forwarding",
+    "add": "Add forward",
+    "listen": "Listen port",
+    "target": "To",
+    "traffic": "Traffic",
+    "to": "To",
+    "host": "IPv4 address",
+    "delete_confirm": "Delete the forward of port {port}?",
+    "where": {
+      "local": "Local port",
+      "docker": "Docker container",
+      "remote": "Another server"
+    },
+    "note_proto": "TCP, UDP or both; the visitor IP is kept (to a local port).",
+    "note_firewall": "The firewall lets forwarded connections through; with a Linode Cloud Firewall, open the listen port there too.",
+    "note_remote": "Forwarding to another server is IPv4 only and masqueraded (it sees this server as the source)."
   }
 }

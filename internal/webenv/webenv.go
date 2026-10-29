@@ -84,7 +84,12 @@ type Site struct {
 	// Passthrough sends the raw TLS stream for every host to Upstream
 	// (host:port) instead of terminating it; nginx is not involved.
 	Passthrough bool
-	Advanced    Advanced
+	// Redirect answers every request with a redirect to this URL (with the
+	// request path appended when RedirectPath).
+	Redirect     string
+	RedirectCode int
+	RedirectPath bool
+	Advanced     Advanced
 }
 
 func (s Site) Hosts() []string { return append([]string{s.Domain}, s.Aliases...) }
@@ -573,6 +578,7 @@ func (e *Env) nginxFiles(sites []Site) (map[string][]byte, error) {
 			"LogDir": e.WWWLogs, "NginxPort": NginxPort, "PHPPort": port, "Stopped": s.Stopped,
 			"Upstream": s.Upstream, "WAFOff": w.Enabled && s.WAFOff, "WAFExclude": wafExclusions(w.Enabled, s.WAFExclude),
 			"Adv": s.Advanced, "ReqZone": zone("req", s.Domain), "ConnZone": zone("conn", s.Domain), "DenyUA": uaRegex(s.Advanced.DenyUA),
+			"Redirect": s.Redirect, "RedirectCode": redirectCode(s.RedirectCode), "RedirectPath": s.RedirectPath,
 		})
 		if err != nil {
 			return nil, err
@@ -580,6 +586,14 @@ func (e *Env) nginxFiles(sites []Site) (map[string][]byte, error) {
 		files[filepath.Join("conf.d", s.Domain+".conf")] = v
 	}
 	return files, nil
+}
+
+func redirectCode(c int) int {
+	switch c {
+	case 301, 302, 307, 308:
+		return c
+	}
+	return 301
 }
 
 var ruleIDRe = regexp.MustCompile(`^\d{1,7}$`)

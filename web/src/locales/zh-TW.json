@@ -220,7 +220,10 @@
       "passthrough_no_ssl": "TLS 直通網站的憑證由後端提供",
       "not_project": "不是 Runtime 專案",
       "invalid_waf_rule": "規則 ID 必須是數字",
-      "invalid_advanced": "進階設定無效（IP、User-Agent、網域或重新導向）"
+      "invalid_advanced": "進階設定無效（IP、User-Agent、網域或重新導向）",
+      "linked": "仍有其他網域連到此網站：{domains}，請先修改它們的目標",
+      "no_content": "所選網站無效，或此網域沒有自己的網站檔案",
+      "invalid_redirect": "轉址網址無效（http(s)://…；保留路徑時不可包含 ?）"
     },
     "cf": {
       "no_token": "請先設定 Cloudflare API Token",
@@ -322,7 +325,9 @@
       "feed_bad_url": "名單網址須以 http:// 或 https:// 開頭",
       "invalid_cdn": "CDN 設定無效：需填 Header 名稱，IP 段需為有效的 IP / CIDR。",
       "invalid_pattern": "名單項目無效：請檢查內容、比對方式與正則（URL「開頭為」需以 / 開頭）。",
-      "duplicate_pattern": "名單已有此項目"
+      "duplicate_pattern": "名單已有此項目",
+      "invalid_forward": "連接埠轉發無效：請檢查協定、連接埠、目標（IPv4）與來源",
+      "forward_port_taken": "連接埠 {port} 已被使用"
     },
     "waf": {
       "invalid_settings": "WAF 設定無效"
@@ -894,7 +899,8 @@
     "dns": {
       "ok": "本機",
       "other": "其他位址",
-      "none": "無記錄"
+      "none": "無記錄",
+      "cloudflare": "Cloudflare ☁"
     },
     "no_cert": {
       "short": "無憑證",
@@ -919,6 +925,10 @@
     "wildcard_overridden": {
       "short": "部分被覆蓋",
       "long": "萬用字元範圍內以下網域屬於其他站點：{hosts}"
+    },
+    "passthrough_realip": {
+      "short": "直通 + Cloudflare",
+      "long": "TLS 直通不在此解密，因此讀不到 CF-Connecting-IP：後端只會看到 Cloudflare 的 IP。"
     }
   },
   "maint": {
@@ -2655,5 +2665,79 @@
         "desc": "預設開啟，攔截 Media Library Assistant ≤ 3.09 經 mla-stream-image.php 的遠端程式碼執行"
       }
     }
+  },
+  "dom": {
+    "intro": "每個網域一列（別名與子網域在同一列）。按「管理」修改它連到哪裡（網站、Docker、網址、直通、轉址）、別名、SSL 與 DNS；網站本身的 PHP、執行環境、偽靜態等則在網站設定。",
+    "target": "連結到",
+    "website": "網站",
+    "entry": "網域",
+    "manage": "管理",
+    "website_settings": "網站設定",
+    "manage_domain": "管理網域",
+    "targets": {
+      "site": "本身網站",
+      "link": "其他網站",
+      "docker": "Docker",
+      "url": "網址",
+      "passthrough": "TLS 直通",
+      "redirect": "轉址"
+    },
+    "target_hint": {
+      "site": "使用此網域本身的網站檔案 / 專案。",
+      "link": "顯示另一個網站的內容（同一個網站可有多個網域，各自有 SSL）。",
+      "docker": "轉到容器發佈的連接埠（在入口終止 TLS，再以 HTTP 轉發）。",
+      "url": "反向代理到任何 http(s) 網址，例如內網伺服器。",
+      "passthrough": "不解密，將 TLS 原封不動轉到後端 host:port（憑證由後端提供；讀不到 CDN 真實 IP）。",
+      "redirect": "將所有請求轉址到另一個網址。"
+    },
+    "redirect_to": "轉到",
+    "keep_path": "保留路徑與參數",
+    "codes": {
+      "301": "301 永久",
+      "302": "302 暫時",
+      "307": "307 暫時（保留方法）",
+      "308": "308 永久（保留方法）"
+    },
+    "no_containers": "沒有發佈連接埠的容器",
+    "retarget_note": "此網域的網站檔案（{root}）會保留，改回「本身網站」就會再顯示。",
+    "aliases_hint": "輸入後按 Enter；可使用 *.example.com 萬用字元。",
+    "ssl_passthrough": "TLS 直通：憑證由後端提供，這裡不需申請。",
+    "dns_hint": "開啟後，面板會在 Cloudflare 自動建立並更新此網域與所有別名的 A / AAAA 記錄。",
+    "dns_managed": "自動管理 Cloudflare DNS 記錄",
+    "cert_partial": "{n}/{total} 有憑證",
+    "warned": "{n} 個網域有需要留意之處。",
+    "delete": "刪除網域",
+    "delete_confirm": "刪除 {host}？會一併刪除它的 Cloudflare DNS 記錄。",
+    "add_kinds": {
+      "entry": "新網域",
+      "alias": "加為別名",
+      "site": "新網站"
+    },
+    "add_hint": {
+      "entry": "下一步選擇它連到哪裡：其他網站、Docker、網址、直通或轉址。",
+      "alias": "加入現有網域的別名，使用相同的目標與 SSL。",
+      "site": "建立有自己檔案的新網站（PHP、靜態、Node.js…）。"
+    },
+    "drawer_hint": "網域、別名、SSL、DNS 與連結目標已整合到「網域 / SNI」頁；這裡可直接按「管理網域」修改。",
+    "not_serving": "此網域目前連到其他服務",
+    "linked": "其他連到此網站的網域"
+  },
+  "fwd": {
+    "title": "連接埠轉發",
+    "add": "新增轉發",
+    "listen": "監聽連接埠",
+    "target": "轉到",
+    "traffic": "流量",
+    "to": "轉到",
+    "host": "IPv4 位址",
+    "delete_confirm": "刪除連接埠 {port} 的轉發？",
+    "where": {
+      "local": "本機連接埠",
+      "docker": "Docker 容器",
+      "remote": "其他伺服器"
+    },
+    "note_proto": "支援 TCP、UDP 或兩者；保留訪客真實 IP（轉到本機時）。",
+    "note_firewall": "防火牆會自動放行轉發的連線；如果使用 Linode Cloud Firewall，記得在那裡開放監聽連接埠。",
+    "note_remote": "轉到其他伺服器只支援 IPv4，並會做 SNAT（對方看到的來源是此伺服器）。"
   }
 }

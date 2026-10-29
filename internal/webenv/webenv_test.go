@@ -155,3 +155,20 @@ func TestWAF(t *testing.T) {
 		}
 	}
 }
+
+func TestRedirectVhost(t *testing.T) {
+	e := &Env{Home: t.TempDir(), WWWRoot: "/www/wwwroot", WWWLogs: "/www/wwwlogs"}
+	ng, err := e.nginxFiles([]Site{
+		{Domain: "old.com", Type: "static", Redirect: "https://new.com", RedirectCode: 308, RedirectPath: true},
+		{Domain: "x.com", Type: "static", Redirect: "https://y.com/landing", RedirectCode: 999},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v := string(ng["conf.d/old.com.conf"]); !strings.Contains(v, "return 308 https://new.com$request_uri;") || strings.Contains(v, "try_files") {
+		t.Errorf("redirect vhost:\n%s", v)
+	}
+	if v := string(ng["conf.d/x.com.conf"]); !strings.Contains(v, "return 301 https://y.com/landing;") {
+		t.Errorf("redirect without path:\n%s", v)
+	}
+}

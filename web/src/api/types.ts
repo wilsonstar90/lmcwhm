@@ -88,6 +88,29 @@ export interface Site {
   waf_off?: boolean
   waf_exclude?: string[] | null
   advanced?: SiteAdvanced
+  target: DomainTarget
+  target_site: number
+  container: string
+  redirect: string
+  redirect_code: number
+  redirect_path: boolean
+}
+
+// What a domain entry serves (its own website, another website, a container, …).
+export type DomainTarget = 'site' | 'link' | 'docker' | 'url' | 'passthrough' | 'redirect'
+
+export interface PortForward {
+  id: number
+  proto: 'tcp' | 'udp' | 'both'
+  listen: number
+  target_host: string
+  target_port: number
+  source: string
+  remark: string
+  enabled: boolean
+  created_at: number
+  packets: number
+  bytes: number
 }
 
 export interface SiteAdvanced {
@@ -344,9 +367,14 @@ export interface Route {
   dns_proxied: boolean
   overrides?: string[]
   health: '' | 'up' | 'down'
-  dns: '' | 'ok' | 'other' | 'none'
+  dns: '' | 'ok' | 'other' | 'none' | 'cloudflare'
   dns_addrs?: string[]
   warnings: string[]
+  target: DomainTarget
+  target_site: number
+  target_name?: string
+  redirect?: string
+  remark: string
 }
 
 export interface RouteResolution {

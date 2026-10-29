@@ -110,6 +110,7 @@ func (s *Server) handler() http.Handler {
 			if s.Sites != nil {
 				s.protectRoutes(r)
 			}
+			s.forwardRoutes(r)
 			s.m6Routes(r)
 			s.m7Routes(r)
 			s.m8Routes(r)

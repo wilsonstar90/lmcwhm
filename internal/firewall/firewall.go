@@ -693,6 +693,8 @@ func (sv *Service) Ruleset(ctx context.Context, c Config) (string, error) {
 	fmt.Fprintf(&b, "\tchain input {\n\t\ttype filter hook input priority -10; policy %s;\n", c.Policy)
 	b.WriteString("\t\tiif \"lo\" accept\n\t\tip saddr @allow4 accept\n\t\tip6 saddr @allow6 accept\n")
 	b.WriteString(drops.String())
+	// Port forwards (their own table) were checked there: let them through.
+	b.WriteString("\t\tct status dnat accept\n")
 	b.WriteString("\t\tct state established,related accept\n\t\tct state invalid drop\n")
 	if !c.Ping {
 		b.WriteString("\t\ticmp type echo-request drop\n\t\ticmpv6 type echo-request drop\n")
@@ -739,6 +741,7 @@ func (sv *Service) Ruleset(ctx context.Context, c Config) (string, error) {
 	// Docker-published ports are forwarded, not delivered to input.
 	b.WriteString("\tchain forward {\n\t\ttype filter hook forward priority -10; policy accept;\n\t\tip saddr @allow4 accept\n\t\tip6 saddr @allow6 accept\n")
 	b.WriteString(drops.String())
+	b.WriteString("\t\tct status dnat accept\n")
 	b.WriteString("\t}\n}\n")
 	return b.String(), nil
 }
@@ -901,6 +904,9 @@ func (sv *Service) Boot(ctx context.Context) {
 	}
 	if err := sv.seedSystem(ctx); err != nil {
 		sv.logf("firewall: system rules", "err", err)
+	}
+	if err := sv.InstallForwards(ctx); err != nil {
+		sv.logf("firewall: port forwards", "err", err)
 	}
 	if err == nil && c.Enabled && sv.Available() {
 		if err := sv.install(ctx, c); err != nil {

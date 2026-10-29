@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   NDrawer, NDrawerContent, NTabs, NTabPane, NForm, NFormItem, NInput, NSelect, NButton, NSpace, NSwitch, NAlert,
-  NDescriptions, NDescriptionsItem, NRadioGroup, NRadioButton, NCheckbox, NCode, NPopconfirm, NTag, NInputNumber, useMessage,
+  NDescriptions, NDescriptionsItem, NCheckbox, NCode, NPopconfirm, NTag, NInputNumber, useMessage,
 } from 'naive-ui'
 import { get, patch, post, ApiError } from '../api/client'
 import type { InstalledApp, Site } from '../api/types'
@@ -11,6 +11,7 @@ import { datetime } from '../format'
 import SiteAdvanced from './SiteAdvanced.vue'
 import SiteStats from './SiteStats.vue'
 import SiteWordPress from './SiteWordPress.vue'
+import DomainEditor from './DomainEditor.vue'
 
 const props = defineProps<{ site: Site | null; phpVersions: string[]; hasCF: boolean }>()
 const emit = defineEmits<{ close: []; task: [id: string, title: string]; changed: [] }>()
@@ -18,22 +19,17 @@ const { t, locale } = useI18n()
 const msg = useMessage()
 const fail = (e: unknown) => msg.error(e instanceof ApiError ? e.text : String(e))
 
-const aliases = ref('')
 const php = ref('')
-const remark = ref('')
-const challenge = ref<'http' | 'dns'>('http')
-const wildcard = ref(false)
-const certPem = ref('')
-const keyPem = ref('')
 const vhost = ref('')
 const delFiles = ref(false)
 const delDNS = ref(true)
 const runtimeVersion = ref('')
 const command = ref('')
 const appPort = ref<number | null>(null)
-const proxyTarget = ref('')
 const runtimes = ref<InstalledApp[]>([])
 const project = ref<{ state: string; logs: string } | null>(null)
+const editingDomain = ref<number | null>(null)
+const linked = ref<Site[]>([])
 const isProject = computed(() => !!props.site && ['node', 'python', 'java', 'tomcat'].includes(props.site.type))
 
 async function loadProject() {
@@ -69,18 +65,14 @@ watch(
   () => props.site,
   (s) => {
     if (!s) return
-    aliases.value = s.aliases.join('\n')
     php.value = s.php_version
-    remark.value = s.remark
-    challenge.value = s.ssl_challenge
-    wildcard.value = s.ssl_wildcard
     vhost.value = ''
     runtimeVersion.value = s.runtime_version
     command.value = s.command
     appPort.value = s.app_port || null
-    proxyTarget.value = s.proxy_target
     project.value = null
     get<{ config: string }>(`/sites/${s.id}/vhost`).then((r) => (vhost.value = r.config)).catch(() => {})
+    get<{ items: Site[] }>('/sites').then((r) => (linked.value = r.items.filter((x) => x.target === 'link' && x.target_site === s.id))).catch(() => {})
     if (['node', 'python', 'java'].includes(s.type)) {
       loadProject()
       get<{ items: InstalledApp[] }>('/apps').then((r) => (runtimes.value = r.items.filter((a) => a.kind === 'runtime'))).catch(() => {})
@@ -98,32 +90,6 @@ async function update(body: Record<string, unknown>, title: string) {
   }
 }
 
-async function issue() {
-  try {
-    const r = await post<{ task_id: string }>(`/sites/${props.site!.id}/ssl/issue`, { challenge: challenge.value, wildcard: wildcard.value })
-    emit('task', r.task_id, t('site.ssl_issue'))
-  } catch (e) {
-    fail(e)
-  }
-}
-async function upload() {
-  try {
-    await post(`/sites/${props.site!.id}/ssl/upload`, { cert: certPem.value, key: keyPem.value })
-    certPem.value = keyPem.value = ''
-    msg.success(t('common.saved'))
-    emit('changed')
-  } catch (e) {
-    fail(e)
-  }
-}
-async function disableSSL() {
-  try {
-    await post(`/sites/${props.site!.id}/ssl/disable`)
-    emit('changed')
-  } catch (e) {
-    fail(e)
-  }
-}
 async function remove() {
   try {
     const r = await post<{ task_id: string }>(`/sites/${props.site!.id}/delete`, { files: delFiles.value, dns: delDNS.value })
@@ -133,9 +99,6 @@ async function remove() {
     fail(e)
   }
 }
-
-// The error came back through Cloudflare (its IPv6 range, 52x origin errors).
-const behindCloudflare = computed(() => /2606:4700:|\b52[0-9]\b|cloudflare/i.test(props.site?.cert_error ?? ''))
 
 const phpOptions = computed(() => props.phpVersions.map((v) => ({ label: `PHP ${v}`, value: v })))
 const days = computed(() =>
@@ -148,29 +111,26 @@ const days = computed(() =>
     <n-drawer-content v-if="site" :title="site.domain" closable>
       <n-tabs type="line" animated>
         <n-tab-pane name="domains" :tab="t('site.tab_domains')">
-          <n-form label-placement="top">
-            <n-form-item :label="t('site.aliases')" :feedback="t('site.aliases_hint')">
-              <n-input v-model:value="aliases" type="textarea" :rows="4" />
-            </n-form-item>
-            <n-form-item :label="t('site.remark')">
-              <n-input v-model:value="remark" />
-            </n-form-item>
-            <n-button
-              type="primary"
-              @click="update({ aliases: aliases.split(/[\s,]+/).filter(Boolean), remark }, t('site.tab_domains'))"
-            >{{ t('common.save') }}</n-button>
-          </n-form>
-          <n-descriptions :column="1" label-placement="left" size="small" style="margin-top: 24px">
-            <n-descriptions-item :label="t('site.root')"><code>{{ site.root }}</code></n-descriptions-item>
-            <n-descriptions-item :label="t('site.dns')">
-              {{ site.dns_managed ? 'Cloudflare' + (site.dns_proxied ? ' (proxied)' : '') : '—' }}
+          <n-alert type="default" :show-icon="false" style="margin-bottom: 12px">{{ t('dom.drawer_hint') }}</n-alert>
+          <n-descriptions :column="1" label-placement="left" size="small">
+            <n-descriptions-item :label="t('route.host')">
+              <n-space :size="4"><b>{{ site.domain }}</b><n-tag v-for="a in site.aliases" :key="a" size="tiny">{{ a }}</n-tag></n-space>
             </n-descriptions-item>
+            <n-descriptions-item :label="t('dom.target')">
+              {{ t(`dom.targets.${site.target || 'site'}`) }}
+              <n-tag v-if="site.target && site.target !== 'site'" size="tiny" type="warning" style="margin-left: 6px">{{ t('dom.not_serving') }}</n-tag>
+            </n-descriptions-item>
+            <n-descriptions-item label="SSL">{{ site.ssl_mode === 'none' ? t('route.cert_none') : `${site.cert_issuer} · ${t('site.days_left', { n: days })}` }}</n-descriptions-item>
+            <n-descriptions-item label="DNS">{{ site.dns_managed ? 'Cloudflare' + (site.dns_proxied ? ' ☁' : '') : '—' }}</n-descriptions-item>
+            <n-descriptions-item :label="t('dom.linked')">
+              <n-space v-if="linked.length" :size="4"><n-tag v-for="l in linked" :key="l.id" size="tiny" type="info">{{ l.domain }}</n-tag></n-space>
+              <span v-else>—</span>
+            </n-descriptions-item>
+            <n-descriptions-item :label="t('site.root')"><code>{{ site.root }}</code></n-descriptions-item>
             <n-descriptions-item :label="t('site.created')">{{ datetime(site.created_at, locale) }}</n-descriptions-item>
           </n-descriptions>
-          <n-space v-if="site.dns_managed" style="margin-top: 12px">
-            <n-switch :value="site.dns_proxied" @update:value="(v: boolean) => update({ dns_proxied: v }, 'DNS')" />
-            <span>{{ t('site.cf_proxied') }}</span>
-          </n-space>
+          <n-button type="primary" style="margin-top: 16px" @click="editingDomain = site.id">{{ t('dom.manage_domain') }}</n-button>
+          <DomainEditor :site-id="editingDomain" :has-c-f="hasCF" @close="editingDomain = null" @changed="emit('changed')" @task="(id: string, title: string) => emit('task', id, title)" />
         </n-tab-pane>
 
         <n-tab-pane v-if="isProject" name="project" :tab="t('site.tab_project')">
@@ -200,74 +160,6 @@ const days = computed(() =>
           </n-form>
           <p class="hint" style="margin-top: 16px">{{ t('site.project_logs') }}</p>
           <pre class="log">{{ project?.logs || '—' }}</pre>
-        </n-tab-pane>
-
-        <n-tab-pane v-if="site.type === 'proxy'" name="proxy" :tab="t('site.proxy')">
-          <n-form label-placement="top">
-            <n-form-item :label="t('site.proxy_target')" :feedback="site.passthrough ? t('site.passthrough_hint') : t('site.proxy_target_hint')">
-              <n-input v-model:value="proxyTarget" />
-            </n-form-item>
-            <p v-if="site.passthrough" class="hint">{{ t('site.passthrough') }}</p>
-            <n-button type="primary" :disabled="proxyTarget === site.proxy_target" @click="update({ proxy_target: proxyTarget }, t('site.proxy'))">
-              {{ t('common.save') }}
-            </n-button>
-          </n-form>
-        </n-tab-pane>
-
-        <n-tab-pane v-if="!site.passthrough" name="ssl" tab="SSL">
-          <n-alert v-if="site.cert_error" type="error" :title="t('site.ssl_failed')" style="margin-bottom: 16px">
-            {{ site.cert_error }}
-          </n-alert>
-          <n-alert v-if="behindCloudflare" type="warning" :title="t('site.cf_hint_title')" style="margin-bottom: 16px">
-            {{ hasCF ? t('site.cf_hint_dns') : t('site.cf_hint_token') }}
-          </n-alert>
-          <n-descriptions v-if="site.ssl_mode !== 'none'" :column="1" label-placement="left" size="small" style="margin-bottom: 16px">
-            <n-descriptions-item :label="t('site.ssl_source')">{{ site.ssl_mode === 'acme' ? 'ACME' : t('site.ssl_custom') }}</n-descriptions-item>
-            <n-descriptions-item :label="t('site.ssl_issuer')">{{ site.cert_issuer }}</n-descriptions-item>
-            <n-descriptions-item :label="t('site.ssl_expires')">
-              {{ datetime(site.cert_not_after, locale) }} ({{ t('site.days_left', { n: days }) }})
-            </n-descriptions-item>
-          </n-descriptions>
-          <n-space vertical :size="12">
-            <n-space align="center">
-              <n-switch
-                :value="site.force_https"
-                :disabled="site.ssl_mode === 'none'"
-                @update:value="(v: boolean) => update({ force_https: v }, t('site.force_https'))"
-              />
-              <span>{{ t('site.force_https') }}</span>
-              <n-switch
-                :value="site.hsts"
-                :disabled="site.ssl_mode === 'none'"
-                style="margin-left: 16px"
-                @update:value="(v: boolean) => update({ hsts: v }, 'HSTS')"
-              />
-              <span>HSTS</span>
-            </n-space>
-            <n-form label-placement="top">
-              <n-form-item :label="t('site.ssl_issue')">
-                <n-space vertical>
-                  <n-radio-group v-model:value="challenge">
-                    <n-radio-button value="http">HTTP-01</n-radio-button>
-                    <n-radio-button value="dns" :disabled="!hasCF">DNS-01 (Cloudflare)</n-radio-button>
-                  </n-radio-group>
-                  <n-checkbox v-if="challenge === 'dns'" v-model:checked="wildcard">{{ t('site.wildcard') }}</n-checkbox>
-                  <n-button type="primary" @click="issue">{{ site.ssl_mode === 'acme' ? t('site.ssl_renew') : t('site.ssl_issue') }}</n-button>
-                </n-space>
-              </n-form-item>
-              <n-form-item :label="t('site.ssl_upload')">
-                <n-space vertical style="width: 100%">
-                  <n-input v-model:value="certPem" type="textarea" :rows="4" placeholder="-----BEGIN CERTIFICATE-----" />
-                  <n-input v-model:value="keyPem" type="textarea" :rows="4" placeholder="-----BEGIN PRIVATE KEY-----" />
-                  <n-button :disabled="!certPem || !keyPem" @click="upload">{{ t('site.ssl_upload') }}</n-button>
-                </n-space>
-              </n-form-item>
-            </n-form>
-            <n-popconfirm v-if="site.ssl_mode !== 'none'" @positive-click="disableSSL">
-              <template #trigger><n-button type="error" ghost>{{ t('site.ssl_disable') }}</n-button></template>
-              {{ t('site.ssl_disable_confirm') }}
-            </n-popconfirm>
-          </n-space>
         </n-tab-pane>
 
         <n-tab-pane v-if="site.type === 'php'" name="php" tab="PHP">

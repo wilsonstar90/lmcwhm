@@ -220,7 +220,10 @@
       "passthrough_no_ssl": "TLS 直通网站的证书由后端提供",
       "not_project": "不是运行环境项目",
       "invalid_waf_rule": "规则 ID 必须是数字",
-      "invalid_advanced": "高级设置无效（IP、User-Agent、域名或重定向）"
+      "invalid_advanced": "高级设置无效（IP、User-Agent、域名或重定向）",
+      "linked": "仍有其他域名连到此网站：{domains}，请先修改它们的目标",
+      "no_content": "所选网站无效，或此域名没有自己的网站文件",
+      "invalid_redirect": "跳转网址无效（http(s)://…；保留路径时不能包含 ?）"
     },
     "cf": {
       "no_token": "请先设置 Cloudflare API Token",
@@ -322,7 +325,9 @@
       "feed_bad_url": "名单网址须以 http:// 或 https:// 开头",
       "invalid_cdn": "CDN 设置无效：需填写 Header 名称，IP 段需为有效的 IP / CIDR。",
       "invalid_pattern": "名单条目无效：请检查内容、匹配方式和正则（URL“开头为”需以 / 开头）。",
-      "duplicate_pattern": "名单中已有此条目"
+      "duplicate_pattern": "名单中已有此条目",
+      "invalid_forward": "端口转发无效：请检查协议、端口、目标（IPv4）和来源",
+      "forward_port_taken": "端口 {port} 已被使用"
     },
     "waf": {
       "invalid_settings": "WAF 设置无效"
@@ -894,7 +899,8 @@
     "dns": {
       "ok": "本机",
       "other": "其他地址",
-      "none": "无记录"
+      "none": "无记录",
+      "cloudflare": "Cloudflare ☁"
     },
     "no_cert": {
       "short": "无证书",
@@ -919,6 +925,10 @@
     "wildcard_overridden": {
       "short": "部分被覆盖",
       "long": "通配符范围内以下域名属于其他站点：{hosts}"
+    },
+    "passthrough_realip": {
+      "short": "直通 + Cloudflare",
+      "long": "TLS 直通不在此解密，因此读不到 CF-Connecting-IP：后端只会看到 Cloudflare 的 IP。"
     }
   },
   "maint": {
@@ -2655,5 +2665,79 @@
         "desc": "默认开启，拦截 Media Library Assistant ≤ 3.09 通过 mla-stream-image.php 的远程代码执行"
       }
     }
+  },
+  "dom": {
+    "intro": "每个域名一行（别名和子域名在同一行）。点“管理”修改它连到哪里（网站、Docker、网址、直通、跳转）、别名、SSL 和 DNS；网站本身的 PHP、运行环境、伪静态等在网站设置中。",
+    "target": "连接到",
+    "website": "网站",
+    "entry": "域名",
+    "manage": "管理",
+    "website_settings": "网站设置",
+    "manage_domain": "管理域名",
+    "targets": {
+      "site": "本身网站",
+      "link": "其他网站",
+      "docker": "Docker",
+      "url": "网址",
+      "passthrough": "TLS 直通",
+      "redirect": "跳转"
+    },
+    "target_hint": {
+      "site": "使用此域名本身的网站文件 / 项目。",
+      "link": "显示另一个网站的内容（同一网站可有多个域名，各自有 SSL）。",
+      "docker": "转到容器发布的端口（在入口终止 TLS，再用 HTTP 转发）。",
+      "url": "反向代理到任何 http(s) 网址，例如内网服务器。",
+      "passthrough": "不解密，将 TLS 原样转到后端 host:port（证书由后端提供；读不到 CDN 真实 IP）。",
+      "redirect": "将所有请求跳转到另一个网址。"
+    },
+    "redirect_to": "跳转到",
+    "keep_path": "保留路径和参数",
+    "codes": {
+      "301": "301 永久",
+      "302": "302 临时",
+      "307": "307 临时（保留方法）",
+      "308": "308 永久（保留方法）"
+    },
+    "no_containers": "没有发布端口的容器",
+    "retarget_note": "此域名的网站文件（{root}）会保留，改回“本身网站”就会再次显示。",
+    "aliases_hint": "输入后按回车；可使用 *.example.com 通配符。",
+    "ssl_passthrough": "TLS 直通：证书由后端提供，这里无需申请。",
+    "dns_hint": "开启后，面板会在 Cloudflare 自动创建并更新此域名和所有别名的 A / AAAA 记录。",
+    "dns_managed": "自动管理 Cloudflare DNS 记录",
+    "cert_partial": "{n}/{total} 有证书",
+    "warned": "{n} 个域名需要留意。",
+    "delete": "删除域名",
+    "delete_confirm": "删除 {host}？会同时删除它的 Cloudflare DNS 记录。",
+    "add_kinds": {
+      "entry": "新域名",
+      "alias": "添加为别名",
+      "site": "新网站"
+    },
+    "add_hint": {
+      "entry": "下一步选择它连到哪里：其他网站、Docker、网址、直通或跳转。",
+      "alias": "添加为现有域名的别名，使用相同的目标和 SSL。",
+      "site": "创建有自己文件的新网站（PHP、静态、Node.js…）。"
+    },
+    "drawer_hint": "域名、别名、SSL、DNS 和连接目标已整合到“域名 / SNI”页；这里可以直接点“管理域名”修改。",
+    "not_serving": "此域名目前连到其他服务",
+    "linked": "其他连到此网站的域名"
+  },
+  "fwd": {
+    "title": "端口转发",
+    "add": "新增转发",
+    "listen": "监听端口",
+    "target": "转到",
+    "traffic": "流量",
+    "to": "转到",
+    "host": "IPv4 地址",
+    "delete_confirm": "删除端口 {port} 的转发？",
+    "where": {
+      "local": "本机端口",
+      "docker": "Docker 容器",
+      "remote": "其他服务器"
+    },
+    "note_proto": "支持 TCP、UDP 或两者；保留访客真实 IP（转到本机时）。",
+    "note_firewall": "防火墙会自动放行转发的连接；如果使用 Linode Cloud Firewall，记得在那里开放监听端口。",
+    "note_remote": "转到其他服务器只支持 IPv4，并会做 SNAT（对方看到的来源是此服务器）。"
   }
 }

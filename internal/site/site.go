@@ -60,6 +60,15 @@ type Site struct {
 	WAFExclude []string `json:"waf_exclude"`
 	// Advanced nginx settings (directory listing, IP / UA rules, rate limits, ...).
 	Advanced webenv.Advanced `json:"advanced"`
+	// Target is what the domain serves (see targets.go): its own website
+	// files, another website (TargetSite), a Docker container (Container,
+	// through ProxyTarget), a URL, TLS passthrough or a redirect.
+	Target       string `json:"target"`
+	TargetSite   int64  `json:"target_site"`
+	Container    string `json:"container"`
+	Redirect     string `json:"redirect"`
+	RedirectCode int    `json:"redirect_code"`
+	RedirectPath bool   `json:"redirect_path"`
 }
 
 // IsProject reports a runtime project type.
@@ -137,7 +146,8 @@ func NewService(st *store.Store, env *webenv.Env, cfg *webcfg.Store, issuer *acm
 
 const cols = `id, domain, aliases, type, php_version, root, stopped, force_https, hsts, ssl_mode, ssl_challenge,
 	ssl_wildcard, cert_issuer, cert_not_after, cert_error, dns_managed, dns_proxied, remark, created_at, updated_at,
-	runtime_version, command, app_port, proxy_target, passthrough, waf_off, waf_exclude, advanced`
+	runtime_version, command, app_port, proxy_target, passthrough, waf_off, waf_exclude, advanced,
+	target, target_site, container, redirect, redirect_code, redirect_path`
 
 func scan(row interface{ Scan(...any) error }) (Site, error) {
 	var s Site
@@ -145,7 +155,8 @@ func scan(row interface{ Scan(...any) error }) (Site, error) {
 	err := row.Scan(&s.ID, &s.Domain, &aliases, &s.Type, &s.PHPVersion, &s.Root, &s.Stopped, &s.ForceHTTPS, &s.HSTS,
 		&s.SSLMode, &s.SSLChallenge, &s.SSLWildcard, &s.CertIssuer, &s.CertNotAfter, &s.CertError,
 		&s.DNSManaged, &s.DNSProxied, &s.Remark, &s.CreatedAt, &s.UpdatedAt,
-		&s.RuntimeVersion, &s.Command, &s.AppPort, &s.ProxyTarget, &s.Passthrough, &s.WAFOff, &wafEx, &adv)
+		&s.RuntimeVersion, &s.Command, &s.AppPort, &s.ProxyTarget, &s.Passthrough, &s.WAFOff, &wafEx, &adv,
+		&s.Target, &s.TargetSite, &s.Container, &s.Redirect, &s.RedirectCode, &s.RedirectPath)
 	if err != nil {
 		return s, err
 	}
@@ -192,11 +203,13 @@ func (sv *Service) save(ctx context.Context, s *Site) error {
 		s.CreatedAt = now
 		res, err := sv.st.DB.ExecContext(ctx, `INSERT INTO sites(domain, aliases, type, php_version, root, stopped, force_https, hsts,
 			ssl_mode, ssl_challenge, ssl_wildcard, cert_issuer, cert_not_after, cert_error, dns_managed, dns_proxied, remark, created_at, updated_at,
-			runtime_version, command, app_port, proxy_target, passthrough, waf_off, waf_exclude, advanced)
-			VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			runtime_version, command, app_port, proxy_target, passthrough, waf_off, waf_exclude, advanced,
+			target, target_site, container, redirect, redirect_code, redirect_path)
+			VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			s.Domain, string(aliases), s.Type, s.PHPVersion, s.Root, s.Stopped, s.ForceHTTPS, s.HSTS, s.SSLMode, s.SSLChallenge,
 			s.SSLWildcard, s.CertIssuer, s.CertNotAfter, s.CertError, s.DNSManaged, s.DNSProxied, s.Remark, s.CreatedAt, s.UpdatedAt,
-			s.RuntimeVersion, s.Command, s.AppPort, s.ProxyTarget, s.Passthrough, s.WAFOff, strings.Join(s.WAFExclude, " "), advJSON(s.Advanced))
+			s.RuntimeVersion, s.Command, s.AppPort, s.ProxyTarget, s.Passthrough, s.WAFOff, strings.Join(s.WAFExclude, " "), advJSON(s.Advanced),
+			s.Target, s.TargetSite, s.Container, s.Redirect, s.RedirectCode, s.RedirectPath)
 		if err != nil {
 			return err
 		}
@@ -205,10 +218,12 @@ func (sv *Service) save(ctx context.Context, s *Site) error {
 	}
 	_, err := sv.st.DB.ExecContext(ctx, `UPDATE sites SET aliases=?, type=?, php_version=?, root=?, stopped=?, force_https=?, hsts=?,
 		ssl_mode=?, ssl_challenge=?, ssl_wildcard=?, cert_issuer=?, cert_not_after=?, cert_error=?, dns_managed=?, dns_proxied=?,
-		remark=?, updated_at=?, runtime_version=?, command=?, app_port=?, proxy_target=?, passthrough=?, waf_off=?, waf_exclude=?, advanced=? WHERE id=?`,
+		remark=?, updated_at=?, runtime_version=?, command=?, app_port=?, proxy_target=?, passthrough=?, waf_off=?, waf_exclude=?, advanced=?,
+		target=?, target_site=?, container=?, redirect=?, redirect_code=?, redirect_path=? WHERE id=?`,
 		string(aliases), s.Type, s.PHPVersion, s.Root, s.Stopped, s.ForceHTTPS, s.HSTS, s.SSLMode, s.SSLChallenge, s.SSLWildcard,
 		s.CertIssuer, s.CertNotAfter, s.CertError, s.DNSManaged, s.DNSProxied, s.Remark, s.UpdatedAt,
-		s.RuntimeVersion, s.Command, s.AppPort, s.ProxyTarget, s.Passthrough, s.WAFOff, strings.Join(s.WAFExclude, " "), advJSON(s.Advanced), s.ID)
+		s.RuntimeVersion, s.Command, s.AppPort, s.ProxyTarget, s.Passthrough, s.WAFOff, strings.Join(s.WAFExclude, " "), advJSON(s.Advanced),
+		s.Target, s.TargetSite, s.Container, s.Redirect, s.RedirectCode, s.RedirectPath, s.ID)
 	return err
 }
 
@@ -310,29 +325,57 @@ func (sv *Service) specs(ctx context.Context) ([]webenv.Site, error) {
 	if err != nil {
 		return nil, err
 	}
+	byID := make(map[int64]Site, len(all))
+	for _, s := range all {
+		byID[s.ID] = s
+	}
 	out := make([]webenv.Site, 0, len(all))
 	for _, s := range all {
-		out = append(out, sv.spec(s))
+		out = append(out, sv.specOf(s, byID))
 	}
 	return out, nil
 }
 
-func (sv *Service) spec(s Site) webenv.Site {
+// spec renders one entry; a link to another website needs the others (specs).
+func (sv *Service) spec(s Site) webenv.Site { return sv.specOf(s, nil) }
+
+func (sv *Service) specOf(s Site, byID map[int64]Site) webenv.Site {
 	has := false
 	if s.SSLMode != "none" && s.CertNotAfter > 0 {
 		_, err := os.Stat(sv.Env.CertPath(s.Domain))
 		has = err == nil
 	}
 	ws := webenv.Site{
-		Domain: s.Domain, Aliases: s.Aliases, Type: s.Type, PHPVersion: s.PHPVersion, Root: s.Root,
-		Stopped: s.Stopped, ForceHTTPS: s.ForceHTTPS, HSTS: s.HSTS, HasCert: has, WAFOff: s.WAFOff, WAFExclude: s.WAFExclude,
-		Advanced: s.Advanced,
+		Domain: s.Domain, Aliases: s.Aliases, Stopped: s.Stopped, ForceHTTPS: s.ForceHTTPS, HSTS: s.HSTS, HasCert: has,
 	}
-	switch {
-	case IsProject(s.Type):
-		ws.Upstream = fmt.Sprintf("http://127.0.0.1:%d", s.AppPort)
-	case s.Type == "proxy":
-		ws.Upstream, ws.Passthrough = s.ProxyTarget, s.Passthrough
+	content := s
+	switch s.target() {
+	case TargetLink:
+		t, ok := byID[s.TargetSite]
+		if !ok && byID == nil {
+			t, ok = sv.lookup(s.TargetSite)
+		}
+		if !ok || !t.HasContent() {
+			ws.Type, ws.Stopped = "static", true // the website is gone: 503
+			return ws
+		}
+		content = t
+		ws.Stopped = s.Stopped || t.Stopped
+	case TargetDocker, TargetURL:
+		ws.Type, ws.Upstream = "proxy", s.ProxyTarget
+		ws.WAFOff, ws.WAFExclude, ws.Advanced = s.WAFOff, s.WAFExclude, s.Advanced
+		return ws
+	case TargetPassthrough:
+		ws.Type, ws.Upstream, ws.Passthrough = "proxy", s.ProxyTarget, true
+		return ws
+	case TargetRedirect:
+		ws.Type, ws.Redirect, ws.RedirectCode, ws.RedirectPath = "static", s.Redirect, s.RedirectCode, s.RedirectPath
+		return ws
+	}
+	ws.Type, ws.PHPVersion, ws.Root = content.Type, content.PHPVersion, content.Root
+	ws.WAFOff, ws.WAFExclude, ws.Advanced = content.WAFOff, content.WAFExclude, content.Advanced
+	if IsProject(content.Type) {
+		ws.Upstream = fmt.Sprintf("http://127.0.0.1:%d", content.AppPort)
 	}
 	return ws
 }
@@ -514,9 +557,15 @@ type CreateInput struct {
 	RuntimeVersion string `json:"runtime_version"`
 	Command        string `json:"command"`
 	AppPort        int    `json:"app_port"`
-	// Reverse proxies.
-	ProxyTarget string `json:"proxy_target"`
-	Passthrough bool   `json:"passthrough"`
+	// Domain entries without a website (type "proxy"): what they serve.
+	ProxyTarget  string `json:"proxy_target"`
+	Passthrough  bool   `json:"passthrough"`
+	Target       string `json:"target"` // link | docker | url | passthrough | redirect
+	TargetSite   int64  `json:"target_site"`
+	Container    string `json:"container"`
+	Redirect     string `json:"redirect"`
+	RedirectCode int    `json:"redirect_code"`
+	RedirectPath bool   `json:"redirect_path"`
 }
 
 func (sv *Service) Create(ctx context.Context, in CreateInput) (string, error) {
@@ -562,15 +611,31 @@ func (sv *Service) Create(ctx context.Context, in CreateInput) (string, error) {
 		}
 	case "proxy":
 		s.PHPVersion = ""
-		s.ProxyTarget, s.Passthrough = strings.TrimRight(strings.TrimSpace(in.ProxyTarget), "/"), in.Passthrough
-		if !validTarget(s.ProxyTarget, s.Passthrough) {
-			return "", ErrBadTarget
+		t := in.Target
+		switch {
+		case t != "":
+		case in.Passthrough:
+			t = TargetPassthrough
+		case in.Container != "":
+			t = TargetDocker
+		default:
+			t = TargetURL
+		}
+		if t == TargetSite {
+			return "", ErrNoContent
+		}
+		if err := sv.applyTarget(ctx, &s, TargetInput{Target: t, TargetSite: in.TargetSite, Container: in.Container, ProxyTarget: in.ProxyTarget,
+			Redirect: in.Redirect, RedirectCode: in.RedirectCode, RedirectPath: in.RedirectPath}); err != nil {
+			return "", err
 		}
 		if s.Passthrough && in.SSL != "none" && in.SSL != "" {
 			return "", ErrPassSSL
 		}
 	default:
 		return "", ErrBadType
+	}
+	if s.HasContent() {
+		s.Target = TargetSite
 	}
 	cfg, err := sv.cfg.Get(ctx)
 	if err != nil {
@@ -915,6 +980,7 @@ type UpdateInput struct {
 	Stopped    *bool     `json:"stopped"`
 	Remark     *string   `json:"remark"`
 	DNSProxied *bool     `json:"dns_proxied"`
+	DNSManaged *bool     `json:"dns_managed"` // keep A / AAAA records in Cloudflare
 	// Runtime projects.
 	RuntimeVersion *string `json:"runtime_version"`
 	Command        *string `json:"command"`
@@ -954,6 +1020,14 @@ func (sv *Service) Update(ctx context.Context, id int64, in UpdateInput) (string
 	}
 	if in.Remark != nil {
 		s.Remark = *in.Remark
+	}
+	if in.DNSManaged != nil {
+		if *in.DNSManaged {
+			if cfg, err := sv.cfg.Get(ctx); err != nil || cfg.CFToken == "" {
+				return "", ErrNoCFToken
+			}
+		}
+		s.DNSManaged = *in.DNSManaged
 	}
 	if in.RuntimeVersion != nil || in.Command != nil || in.AppPort != nil {
 		if !IsProject(s.Type) {
@@ -1007,7 +1081,7 @@ func (sv *Service) Update(ctx context.Context, id int64, in UpdateInput) (string
 	}
 	if in.ProxyTarget != nil {
 		target := strings.TrimRight(strings.TrimSpace(*in.ProxyTarget), "/")
-		if s.Type != "proxy" || !validTarget(target, s.Passthrough) {
+		if t := s.target(); t != TargetURL && t != TargetDocker && t != TargetPassthrough || !validTarget(target, s.Passthrough) {
 			return "", ErrBadTarget
 		}
 		s.ProxyTarget = target
@@ -1019,7 +1093,7 @@ func (sv *Service) Update(ctx context.Context, id int64, in UpdateInput) (string
 		if err := sv.save(ctx, &s); err != nil {
 			return err
 		}
-		if s.DNSManaged && (in.Aliases != nil || in.DNSProxied != nil) {
+		if s.DNSManaged && (in.Aliases != nil || in.DNSProxied != nil || in.DNSManaged != nil) {
 			if err := sv.syncDNS(ctx, s, log); err != nil {
 				log("DNS: %v", err)
 			}
@@ -1043,6 +1117,11 @@ func (sv *Service) Delete(ctx context.Context, id int64, in DeleteInput) (string
 	s, err := sv.Get(ctx, id)
 	if err != nil {
 		return "", err
+	}
+	if s.HasContent() {
+		if err := sv.linkedErr(ctx, s.ID); err != nil {
+			return "", err
+		}
 	}
 	return sv.tasks.Start("site.delete:"+s.Domain, func(ctx context.Context, log tasks.Logf) error {
 		if _, err := sv.st.DB.ExecContext(ctx, `DELETE FROM sites WHERE id = ?`, s.ID); err != nil {

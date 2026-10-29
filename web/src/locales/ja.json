@@ -220,7 +220,10 @@
       "passthrough_no_ssl": "TLS パススルーのサイトはバックエンドが証明書を持ちます",
       "not_project": "ランタイムプロジェクトではありません",
       "invalid_waf_rule": "ルール ID は数字です",
-      "invalid_advanced": "詳細設定が無効です（IP・UA・ドメイン・リダイレクト）"
+      "invalid_advanced": "詳細設定が無効です（IP・UA・ドメイン・リダイレクト）",
+      "linked": "他のドメインがまだこのサイトを表示しています：{domains}。先に接続先を変更してください",
+      "no_content": "無効なサイト、またはこのドメインに独自のサイトファイルがありません",
+      "invalid_redirect": "無効なリダイレクト URL（http(s)://…。パス保持時は ? 不可）"
     },
     "cf": {
       "no_token": "Cloudflare トークンを設定してください",
@@ -322,7 +325,9 @@
       "feed_bad_url": "リスト URL は http:// か https:// で始めてください",
       "invalid_cdn": "CDN 設定が無効です：ヘッダー名が必要で、範囲は有効な IP / CIDR である必要があります。",
       "invalid_pattern": "無効なエントリ：値・一致方法・正規表現を確認してください（URL の前方一致は / で始めます）。",
-      "duplicate_pattern": "このエントリは既にリストにあります"
+      "duplicate_pattern": "このエントリは既にリストにあります",
+      "invalid_forward": "無効なポート転送：プロトコル・ポート・転送先（IPv4）・送信元を確認してください",
+      "forward_port_taken": "ポート {port} は使用中です"
     },
     "waf": {
       "invalid_settings": "WAF 設定が無効です"
@@ -894,7 +899,8 @@
     "dns": {
       "ok": "このサーバー",
       "other": "別の場所",
-      "none": "レコードなし"
+      "none": "レコードなし",
+      "cloudflare": "Cloudflare ☁"
     },
     "no_cert": {
       "short": "証明書なし",
@@ -919,6 +925,10 @@
     "wildcard_overridden": {
       "short": "一部上書き",
       "long": "ワイルドカード内の次のホスト名は別のサイトに属します: {hosts}"
+    },
+    "passthrough_realip": {
+      "short": "パススルー + Cloudflare",
+      "long": "ここで TLS を終端しないため CF-Connecting-IP を読めません。バックエンドには Cloudflare の IP しか見えません。"
     }
   },
   "maint": {
@@ -2655,5 +2665,79 @@
         "desc": "既定でオン。Media Library Assistant ≤ 3.09 の mla-stream-image.php による RCE をブロック"
       }
     }
+  },
+  "dom": {
+    "intro": "ドメインごとに 1 行（エイリアスとサブドメインも同じ行）。「管理」で接続先（サイト・Docker・URL・パススルー・リダイレクト）、エイリアス、SSL、DNS を変更します。サイト自体の PHP・実行環境・リライトはサイト設定で行います。",
+    "target": "接続先",
+    "website": "サイト",
+    "entry": "ドメイン",
+    "manage": "管理",
+    "website_settings": "サイト設定",
+    "manage_domain": "ドメインを管理",
+    "targets": {
+      "site": "自身のサイト",
+      "link": "他のサイト",
+      "docker": "Docker",
+      "url": "URL",
+      "passthrough": "TLS パススルー",
+      "redirect": "リダイレクト"
+    },
+    "target_hint": {
+      "site": "このドメイン自身のサイトファイル / プロジェクト。",
+      "link": "別のサイトの内容を表示します（1 つのサイトに複数ドメイン、それぞれ SSL）。",
+      "docker": "コンテナが公開するポートへ（入口で TLS を終端し HTTP で転送）。",
+      "url": "任意の http(s) URL へのリバースプロキシ（例: 内部ネットワークのサーバー）。",
+      "passthrough": "TLS を復号せず host:port へそのまま転送（証明書はバックエンド側。CDN の実 IP は取得不可）。",
+      "redirect": "すべてのリクエストを別の URL にリダイレクトします。"
+    },
+    "redirect_to": "リダイレクト先",
+    "keep_path": "パスとクエリを保持",
+    "codes": {
+      "301": "301 恒久",
+      "302": "302 一時",
+      "307": "307 一時（メソッド維持）",
+      "308": "308 恒久（メソッド維持）"
+    },
+    "no_containers": "ポートを公開しているコンテナがありません",
+    "retarget_note": "このドメインのサイトファイル（{root}）は残ります。「自身のサイト」に戻すと再び表示されます。",
+    "aliases_hint": "入力後 Enter。*.example.com のワイルドカードも使えます。",
+    "ssl_passthrough": "TLS パススルー：証明書はバックエンド側のため、ここでの発行は不要です。",
+    "dns_hint": "オンにすると、このドメインと全エイリアスの A / AAAA レコードを Cloudflare に自動作成・更新します。",
+    "dns_managed": "Cloudflare の DNS レコードを自動管理",
+    "cert_partial": "{n}/{total} 証明書あり",
+    "warned": "{n} 件のドメインに注意事項があります。",
+    "delete": "ドメインを削除",
+    "delete_confirm": "{host} を削除しますか？Cloudflare の DNS レコードも削除されます。",
+    "add_kinds": {
+      "entry": "新しいドメイン",
+      "alias": "エイリアスとして",
+      "site": "新しいサイト"
+    },
+    "add_hint": {
+      "entry": "次に接続先を選びます：他のサイト・Docker・URL・パススルー・リダイレクト。",
+      "alias": "既存ドメインのエイリアス（同じ接続先と SSL）。",
+      "site": "独自ファイルを持つ新しいサイト（PHP・静的・Node.js など）。"
+    },
+    "drawer_hint": "ドメイン・エイリアス・SSL・DNS・接続先は「ドメイン / SNI」ページに統合されました。ここでは「ドメインを管理」から変更できます。",
+    "not_serving": "このドメインは現在別のサービスに接続されています",
+    "linked": "このサイトを表示している他のドメイン"
+  },
+  "fwd": {
+    "title": "ポート転送",
+    "add": "転送を追加",
+    "listen": "待ち受けポート",
+    "target": "転送先",
+    "traffic": "通信量",
+    "to": "転送先",
+    "host": "IPv4 アドレス",
+    "delete_confirm": "ポート {port} の転送を削除しますか？",
+    "where": {
+      "local": "ローカルポート",
+      "docker": "Docker コンテナ",
+      "remote": "他のサーバー"
+    },
+    "note_proto": "TCP・UDP・両方に対応。ローカルへの転送では訪問者の実 IP を保持します。",
+    "note_firewall": "ファイアウォールは転送された接続を自動で許可します。Linode Cloud Firewall を使う場合は待ち受けポートを開放してください。",
+    "note_remote": "他サーバーへの転送は IPv4 のみで、SNAT されます（相手からはこのサーバーが送信元に見えます）。"
   }
 }

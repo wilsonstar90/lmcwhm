@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"net"
+	"net/netip"
 	"net/url"
 	"os"
 	"sort"
@@ -29,6 +30,13 @@ type Route struct {
 	SiteID   int64  `json:"site_id"`
 	Domain   string `json:"domain"` // owning site
 	Type     string `json:"type"`
+	// Target is what the entry serves (see targets.go); TargetName is the
+	// website a "link" shows, Redirect where a "redirect" sends visitors.
+	Target     string `json:"target"`
+	TargetSite int64  `json:"target_site"`
+	TargetName string `json:"target_name,omitempty"`
+	Redirect   string `json:"redirect,omitempty"`
+	Remark     string `json:"remark"`
 	// Mode is "terminate" (TLS ends at HAProxy, then nginx) or "passthrough".
 	Mode     string `json:"mode"`
 	Upstream string `json:"upstream"` // where nginx / HAProxy forwards ("" = served by nginx)
@@ -134,7 +142,9 @@ func (sv *Service) Routes(ctx context.Context) ([]Route, error) {
 	}
 	var out []Route
 	exact := map[string]int64{}
+	byID := map[int64]Site{}
 	for _, s := range sites {
+		byID[s.ID] = s
 		for _, h := range s.Hosts() {
 			if !strings.HasPrefix(h, "*.") {
 				exact[h] = s.ID
@@ -142,7 +152,7 @@ func (sv *Service) Routes(ctx context.Context) ([]Route, error) {
 		}
 	}
 	for _, s := range sites {
-		spec := sv.spec(s)
+		spec := sv.specOf(s, byID)
 		var cert *x509.Certificate
 		if spec.HasCert {
 			cert = certFor(sv.Env.CertPath(s.Domain))
@@ -152,14 +162,17 @@ func (sv *Service) Routes(ctx context.Context) ([]Route, error) {
 				Host: h, Wildcard: strings.HasPrefix(h, "*."), Primary: i == 0, SiteID: s.ID, Domain: s.Domain, Type: s.Type,
 				Mode: "terminate", Upstream: spec.Upstream, Stopped: s.Stopped, ForceHTTPS: s.ForceHTTPS, HSTS: s.HSTS,
 				CertIssuer: s.CertIssuer, CertExpiry: s.CertNotAfter, DNSManaged: s.DNSManaged, DNSProxied: s.DNSProxied,
-				Warnings: []string{},
+				Warnings: []string{}, Target: s.target(), TargetSite: s.TargetSite, Redirect: s.Redirect, Remark: s.Remark, Container: s.Container,
+			}
+			if t, ok := byID[s.TargetSite]; ok && r.Target == TargetLink {
+				r.TargetName = t.Domain
 			}
 			if s.Passthrough {
 				r.Mode = "passthrough"
 			} else {
 				r.CertCovers = covers(cert, h)
 			}
-			if IsProject(s.Type) {
+			if IsProject(s.Type) && r.Target == TargetSite {
 				r.Container = ProjectContainer(s.Domain)
 			}
 			if r.Wildcard {
@@ -195,10 +208,15 @@ func reversed(h string) string {
 func (sv *Service) Check(ctx context.Context, routes []Route) {
 	c, _ := sv.cfg.Get(ctx)
 	ours := map[string]bool{}
-	for _, ip := range []string{c.ServerIPv4, c.ServerIPv6} {
+	v4, v6 := sv.serverIPs(ctx, c) // configured, else detected
+	for _, ip := range []string{v4, v6} {
 		if ip != "" {
 			ours[ip] = true
 		}
+	}
+	var cf []netip.Prefix
+	for _, r := range webenv.CloudflareRanges {
+		cf = append(cf, netip.MustParsePrefix(r))
 	}
 	ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
 	defer cancel()
@@ -243,10 +261,20 @@ func (sv *Service) Check(ctx context.Context, routes []Route) {
 			}
 			sort.Strings(addrs)
 			r.DNSAddrs, r.DNS = addrs, "other"
+			proxied := true
 			for _, a := range addrs {
 				if ours[a] {
 					r.DNS = "ok"
 				}
+				ip, err := netip.ParseAddr(a)
+				in := false
+				for _, p := range cf {
+					in = in || err == nil && p.Contains(ip.Unmap())
+				}
+				proxied = proxied && in
+			}
+			if r.DNS == "other" && proxied {
+				r.DNS = "cloudflare" // proxied (orange cloud): Cloudflare answers for the server
 			}
 		}(&routes[i])
 	}
@@ -265,6 +293,10 @@ func routeWarnings(r Route, knowIPs bool) []string {
 	}
 	if r.Mode == "terminate" && !r.CertCovers {
 		w = append(w, "route.no_cert")
+	}
+	if r.Mode == "passthrough" && r.DNS == "cloudflare" {
+		// TLS is not ended here, so the visitor address in CF-Connecting-IP cannot be read.
+		w = append(w, "route.passthrough_realip")
 	}
 	if r.Mode == "passthrough" && r.DNSProxied {
 		// Cloudflare's proxy ends TLS itself; the backend must hold a certificate Cloudflare accepts.
