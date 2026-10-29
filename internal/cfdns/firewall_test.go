@@ -81,3 +81,19 @@ func TestSyncBlocks(t *testing.T) {
 		t.Fatalf("rules = %v", vals)
 	}
 }
+
+// A token without the firewall permission gets 9109; the error names the permission.
+func TestAccessRulesPermissionHint(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte(`{"success":false,"errors":[{"code":9109,"message":"Unauthorized to access requested resource"}],"result":null}`))
+	}))
+	defer ts.Close()
+	old := BaseURL
+	BaseURL = ts.URL
+	defer func() { BaseURL = old }()
+	_, err := New("t").AccessRules(context.Background(), "z1")
+	if err == nil || !strings.Contains(err.Error(), "9109") || !strings.Contains(err.Error(), "Firewall Services → Edit") {
+		t.Fatalf("err = %v", err)
+	}
+}

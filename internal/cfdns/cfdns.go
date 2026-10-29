@@ -68,15 +68,36 @@ func (c *Client) do(ctx context.Context, method, path string, body, out any) err
 	}
 	if !r.Success {
 		var msgs []string
+		denied := resp.StatusCode == http.StatusForbidden
 		for _, e := range r.Errors {
 			msgs = append(msgs, fmt.Sprintf("%d %s", e.Code, e.Message))
+			denied = denied || e.Code == 9109 || e.Code == 10000
 		}
-		return fmt.Errorf("cloudflare: %s", strings.Join(msgs, "; "))
+		msg := "cloudflare: " + strings.Join(msgs, "; ")
+		if denied {
+			msg += " — " + permissionHint(path)
+		}
+		return errors.New(msg)
 	}
 	if out != nil {
 		return json.Unmarshal(r.Result, out)
 	}
 	return nil
+}
+
+// permissionHint names the API token permission an endpoint needs.
+func permissionHint(path string) string {
+	switch {
+	case strings.Contains(path, "/firewall/access_rules"):
+		return `the token needs the "Zone → Firewall Services → Edit" permission`
+	case strings.Contains(path, "/settings/"):
+		return `the token needs the "Zone → Zone Settings → Edit" permission`
+	case strings.Contains(path, "/dns_records"):
+		return `the token needs the "Zone → DNS → Edit" permission`
+	case strings.HasPrefix(path, "/zones"):
+		return `the token needs the "Zone → Zone → Read" permission`
+	}
+	return "the token lacks a permission for " + path
 }
 
 // Verify checks that the token is valid and active.

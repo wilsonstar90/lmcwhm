@@ -61,7 +61,7 @@ func (sv *Service) SyncRemote(ctx context.Context, cfToken string) SyncReport {
 		cf := cfdns.New(cfToken)
 		zones, err := cf.Zones(ctx)
 		if err != nil {
-			rep.Errors = append(rep.Errors, "cloudflare: "+err.Error())
+			rep.Errors = append(rep.Errors, err.Error()) // already "cloudflare: …"
 		}
 		for _, z := range zones {
 			add, del, skipped, err := cf.SyncAccess(ctx, z.ID, blocks, allows)
