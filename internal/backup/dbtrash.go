@@ -153,4 +153,3 @@ func (sv *Service) PurgeAllTrashedDBs(ctx context.Context) error {
 	}
 	return nil
 }
-
