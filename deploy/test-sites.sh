@@ -336,7 +336,7 @@ wait_task "$(api PATCH "/sites/$PID" '{"php_version":"8.2"}' | jget "['task_id']
 [[ "$(get80 php.test /index.php)" == php-ok-8.2* ]] || fail "php switch to 8.2"
 pass "switch PHP 8.3 -> 8.2"
 
-wait_task "$(api PATCH "/sites/$PID" '{"stopped":true}' | jget "['task_id']")"
+wait_task "$(api PATCH "/sites/$PID" '{"stopped":true,"stop_mode":"404"}' | jget "['task_id']")"
 [[ "$(curl -s -o /dev/null -w '%{http_code}' --resolve php.test:80:127.0.0.1 http://php.test/)" == 404 ]] || fail "stopped site"
 wait_task "$(api PATCH "/sites/$PID" '{"stopped":false}' | jget "['task_id']")"
 pass "stop / start site"
