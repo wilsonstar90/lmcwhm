@@ -275,3 +275,17 @@ func TestLogo(t *testing.T) {
 		t.Fatalf("logo: %d %v", r.StatusCode, r.Header)
 	}
 }
+
+// Browsers reach an HTTPS panel over HTTP/2, where 444 must still close
+// the stream without an answer.
+func TestUnauthStatusHTTP2(t *testing.T) {
+	e := newEnv(t, func(s *settings.Settings) { s.SecurityEntry = "/console"; s.UnauthStatus = 444 })
+	ts := httptest.NewUnstartedServer(e.ts.Config.Handler)
+	ts.EnableHTTP2 = true
+	ts.StartTLS()
+	defer ts.Close()
+	c := ts.Client()
+	if r, err := c.Get(ts.URL + "/login"); err == nil {
+		t.Fatalf("HTTP/2: got %s (%s) instead of an aborted stream", r.Status, r.Proto)
+	}
+}

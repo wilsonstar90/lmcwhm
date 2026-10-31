@@ -10,6 +10,7 @@ import { get, post, put, ApiError } from '../../api/client'
 import type { FileEntry } from '../../api/types'
 import { bytes, datetime } from '../../format'
 import { CodeEditor } from '../code-editor'
+import { useDark } from '../../theme'
 import { baseName, editorBus, iconOf, join, parentOf } from './state'
 
 const { t, locale } = useI18n()
@@ -26,9 +27,12 @@ const narrow = ref(window.matchMedia('(max-width: 767px)').matches)
 window.matchMedia('(max-width: 767px)').addEventListener?.('change', (e) => (narrow.value = e.matches))
 const prefs = reactive((() => {
   try {
-    return { font: 13, theme: 'dark' as 'auto' | 'light' | 'dark', tree: true, ...JSON.parse(localStorage.getItem('lmcwhm.editor') ?? '{}') }
+    const saved = JSON.parse(localStorage.getItem('lmcwhm.editor') ?? '{}')
+    // Before v2 the window started dark and saved that with any other change.
+    if (saved.v !== 2) delete saved.theme
+    return { font: 13, theme: 'light' as 'auto' | 'light' | 'dark', tree: true, ...saved, v: 2 }
   } catch {
-    return { font: 13, theme: 'dark' as 'auto' | 'light' | 'dark', tree: true }
+    return { font: 13, theme: 'light' as 'auto' | 'light' | 'dark', tree: true, v: 2 }
   }
 })())
 watch(prefs, (p) => {
@@ -114,6 +118,9 @@ function closeAll() {
 // ---- toolbar ----
 const ed = ref<{ search: () => void; gotoLine: () => void; focus: () => void } | null>(null)
 const fonts = [12, 13, 14, 15, 16, 18, 20].map((n) => ({ label: `${n}px`, key: n }))
+// Light by default and whatever the panel's theme; 'auto' follows the panel.
+const panelDark = useDark()
+const lightWin = computed(() => prefs.theme === 'light' || (prefs.theme === 'auto' && !panelDark.value))
 const themes = computed(() => [
   { label: t('theme.auto'), key: 'auto' }, { label: t('theme.light'), key: 'light' }, { label: t('theme.dark'), key: 'dark' },
 ])
@@ -246,7 +253,7 @@ const editorHeight = computed(() => '100%')
 
 <template>
   <teleport to="body">
-    <div v-if="visible && state !== 'min'" class="win" :class="[state, { narrow }]" :style="winStyle" @keydown.stop>
+    <div v-if="visible && state !== 'min'" class="win" :class="[state, { narrow, light: lightWin }]" :style="winStyle" @keydown.stop>
       <div class="titlebar" @pointerdown="startDrag" @pointermove="onDrag" @pointerup="endDrag" @dblclick="state = state === 'max' ? 'normal' : 'max'">
         <span class="title">{{ t('fe.title') }}</span>
         <span class="grow" />
@@ -330,6 +337,45 @@ const editorHeight = computed(() => '100%')
 </template>
 
 <style scoped>
+/* Light editor window (默認); the dark colours below are the base. */
+.win.light {
+  background: #fff;
+  color: #1f2328;
+}
+.win.light .tools {
+  background: #f0f1f3;
+  border-bottom: 1px solid #e3e4e7;
+}
+.win.light .tools button,
+.win.light .treetools button {
+  color: #333;
+}
+.win.light .tools button:hover:not(:disabled),
+.win.light .treetools button:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+.win.light .tree {
+  background: #f7f8fa;
+  border-right: 1px solid #e3e4e7;
+}
+.win.light .tree :deep(.n-tree) {
+  --n-node-text-color: #333;
+  --n-node-color-hover: rgba(0, 0, 0, 0.05);
+}
+.win.light .treetools {
+  background: #eceef1;
+}
+.win.light .tabs {
+  background: #eceef1;
+}
+.win.light .tab {
+  color: #666;
+}
+.win.light .tab.on {
+  background: #fff;
+  color: #111;
+}
+
 .win {
   position: fixed;
   z-index: 1800;

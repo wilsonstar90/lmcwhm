@@ -14,6 +14,7 @@ const props = defineProps<{
   format: (v: number) => string
   max?: number // fixed y max (e.g. 100 for %)
   height?: number
+  seconds?: boolean // time labels with seconds (live charts)
 }>()
 
 const W = 600
@@ -47,7 +48,7 @@ const timeLabel = (t: number) => {
   const d = new Date(t * 1000)
   return span > 2 * 86400
     ? d.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })
-    : d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+    : d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', ...(props.seconds ? { second: '2-digit' } : {}) })
 }
 const xTicks = computed(() => (n.value < 2 ? [] : [0, Math.floor((n.value - 1) / 2), n.value - 1].map((i) => ({ i, x: x(i), label: timeLabel(props.times[i]) }))))
 

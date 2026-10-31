@@ -3,7 +3,7 @@ import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   NAlert, NButton, NCard, NCode, NCollapse, NCollapseItem, NDataTable, NForm, NFormItem, NInput, NModal, NPopconfirm, NRadioButton,
-  NRadioGroup, NSelect, NSpace, NSwitch, NTag, useMessage, type DataTableColumns,
+  NRadioGroup, NSelect, NSpace, NSwitch, NTag, NTooltip, useMessage, type DataTableColumns,
 } from 'naive-ui'
 import { get, post, put, ApiError } from '../api/client'
 import { fwConfig } from '../api/firewall'
@@ -74,6 +74,15 @@ async function save() {
 
 // ---- port rules ----
 const edit = ref<FirewallRule | null>(null)
+// A rule may name several sources (stored comma separated, edited one per line).
+function sourceCell(src: string) {
+  if (!src) return t('fw.anywhere')
+  const all = src.split(',')
+  return h(NSpace, { size: 4, align: 'center', wrap: false }, () => [
+    ...all.slice(0, 2).map((ip) => h(IpGeo, { ip })),
+    all.length > 2 ? h(NTooltip, null, { trigger: () => h(NTag, { size: 'tiny', bordered: false }, () => `+${all.length - 2}`), default: () => all.slice(2).join('\n') }) : null,
+  ])
+}
 const blank = (): FirewallRule => ({ id: 0, action: 'accept', proto: 'tcp', ports: '', source: '', remark: '', enabled: true, created_at: 0 })
 async function saveRule() {
   const r = edit.value!
@@ -105,7 +114,7 @@ const columns: DataTableColumns<FirewallRule> = [
   { title: () => t('fw.action'), key: 'action', width: 90, render: (r) => h(NTag, { size: 'small', type: r.action === 'accept' ? 'success' : 'error' }, () => t(`fw.actions.${r.action}`)) },
   { title: () => t('fw.proto'), key: 'proto', width: 90, render: (r) => (r.proto === 'both' ? 'TCP+UDP' : r.proto.toUpperCase()) },
   { title: () => t('fw.ports'), key: 'ports', width: 160, render: (r) => h('code', r.ports) },
-  { title: () => t('fw.source'), key: 'source', width: 280, render: (r) => (r.source ? h(IpGeo, { ip: r.source }) : t('fw.anywhere')) },
+  { title: () => t('fw.source'), key: 'source', width: 280, render: (r) => sourceCell(r.source) },
   {
     title: () => t('site.remark'),
     key: 'remark',
@@ -130,7 +139,7 @@ const columns: DataTableColumns<FirewallRule> = [
     width: 140,
     render: (r) =>
       h(NSpace, { size: 6 }, () => [
-        h(NButton, { size: 'tiny', onClick: () => (edit.value = { ...r }) }, () => t('common.edit')),
+        h(NButton, { size: 'tiny', onClick: () => (edit.value = { ...r, source: r.source.replaceAll(',', '\n') }) }, () => t('common.edit')),
         h(NPopconfirm, { onPositiveClick: () => removeRule(r) }, { trigger: () => h(NButton, { size: 'tiny', type: 'error', ghost: true }, () => t('common.delete')), default: () => (r.system ? t('fw.sys_delete_confirm') : t('fw.delete_rule')) }),
       ]),
   },
@@ -210,7 +219,7 @@ const presets = [
           <n-button v-for="p in presets" :key="p.label" size="tiny" quaternary @click="edit.ports = p.ports">{{ p.label }}</n-button>
         </n-space>
         <n-form-item :label="t('fw.source')" :feedback="t('fw.source_hint')">
-          <n-input v-model:value="edit.source" :placeholder="t('fw.anywhere')" />
+          <n-input v-model:value="edit.source" type="textarea" :autosize="{ minRows: 2, maxRows: 8 }" :placeholder="t('fw.source_multi')" />
         </n-form-item>
         <n-form-item :label="t('site.remark')"><n-input v-model:value="edit.remark" /></n-form-item>
       </n-form>

@@ -12,6 +12,7 @@ import (
 	"github.com/shirou/gopsutil/v4/disk"
 	"github.com/shirou/gopsutil/v4/load"
 	"github.com/shirou/gopsutil/v4/mem"
+	"github.com/shirou/gopsutil/v4/process"
 )
 
 // Detail is what the dashboard's load, CPU, memory and disk cards show when
@@ -65,6 +66,11 @@ func CollectDetail(ctx context.Context) Detail {
 	}
 	if m, err := load.MiscWithContext(ctx); err == nil {
 		d.Load.ProcsRunning, d.Load.ProcsTotal = m.ProcsRunning, m.ProcsTotal
+	}
+	if d.Load.ProcsTotal == 0 { // not reported outside Linux
+		if pids, err := process.PidsWithContext(ctx); err == nil {
+			d.Load.ProcsTotal = len(pids)
+		}
 	}
 	t0, err0 := cpu.TimesWithContext(ctx, false)
 	pc, _ := cpu.PercentWithContext(ctx, 300*time.Millisecond, true)

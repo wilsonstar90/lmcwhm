@@ -6,6 +6,9 @@ import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu, NButton, N
 import { useSession } from '../stores/session'
 import LangSwitch from '../components/LangSwitch.vue'
 import ThemeSwitch from '../components/ThemeSwitch.vue'
+import BrandLogo from '../components/BrandLogo.vue'
+import TaskBox from '../components/TaskBox.vue'
+import MaintenanceBar from '../components/MaintenanceBar.vue'
 import { arrange, loadMenu, menuConfig } from '../menu'
 
 const { t } = useI18n()
@@ -49,13 +52,21 @@ async function logout() {
       @collapse="collapsed = true"
       @expand="collapsed = false"
     >
-      <div class="brand">{{ session.alias }}</div>
+      <div class="brand"><BrandLogo /><TaskBox v-if="session.user?.is_admin" /></div>
       <n-menu :value="(route.name as string)" :options="menu" />
     </n-layout-sider>
     <n-layout>
       <n-layout-header bordered class="header">
-        <span class="user">{{ session.user?.username }}</span>
-        <n-space :size="8" align="center">
+        <div class="left">
+          <!-- The menu is folded away on phones: the logo and messages move here. -->
+          <template v-if="collapsed">
+            <BrandLogo />
+            <TaskBox v-if="session.user?.is_admin" />
+          </template>
+          <span v-else class="user">{{ session.user?.username }}</span>
+        </div>
+        <n-space :size="8" align="center" :wrap="false">
+          <MaintenanceBar v-if="session.user?.is_admin" compact />
           <ThemeSwitch />
           <LangSwitch />
           <n-button size="small" quaternary @click="logout">{{ t('menu.logout') }}</n-button>
@@ -79,16 +90,24 @@ async function logout() {
   height: calc(100dvh - 53px);
 }
 .brand {
-  font-weight: 600;
-  font-size: 18px;
-  padding: 16px 20px;
-  color: #20a53a;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px 14px 20px;
+  min-height: 32px;
+}
+.left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
 .header {
   height: 53px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   padding: 0 16px;
 }
 .user {

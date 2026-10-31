@@ -1,14 +1,19 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { NAlert, NButton, NCard, NCheckbox, NCode, NInput, NModal, NSelect, NSpace, NTag, NText, useMessage } from 'naive-ui'
+import { NAlert, NBadge, NButton, NCard, NCheckbox, NCode, NDropdown, NInput, NModal, NSelect, NSpace, NSpin, NTag, NText, useDialog, useMessage } from 'naive-ui'
 import { get, post, ApiError } from '../api/client'
+
+// compact: the header's version, 更新, 修復 and 重啟 (a menu on phones);
+// otherwise the full bar in 面板設定 with the channel and rollback.
+const props = defineProps<{ compact?: boolean }>()
 
 interface Release { current: string; latest: string; newer: boolean; notes: string; url: string; published_at: string; error?: string; rollback?: string }
 interface Status { running: boolean; log: string; exit: number; version: string }
 
 const { t } = useI18n()
 const msg = useMessage()
+const dialog = useDialog()
 const rel = ref<Release | null>(null)
 const checking = ref(false)
 const confirm = ref<{ action: 'update' | 'repair' | 'rollback'; password: string; rebuild: boolean; withData: boolean } | null>(null)
@@ -73,13 +78,74 @@ async function poll() {
     /* restarting */
   }
 }
+// ---- restart (重啟面板) ----
+const restarting = ref(false)
+function restart() {
+  dialog.warning({
+    title: t('maint.restart'),
+    content: t('maint.restart_desc'),
+    positiveText: t('common.confirm'),
+    negativeText: t('common.cancel'),
+    onPositiveClick: async () => {
+      try {
+        await post('/system/restart')
+      } catch (e) {
+        msg.error(e instanceof ApiError ? e.text : String(e))
+        return
+      }
+      restarting.value = true
+      // Wait for the panel to go away and come back.
+      const t0 = Date.now()
+      const wait = async () => {
+        if (Date.now() - t0 > 3000) {
+          try {
+            await get('/public/meta')
+            window.location.reload()
+            return
+          } catch {
+            /* still restarting */
+          }
+        }
+        if (Date.now() - t0 < 120000) setTimeout(wait, 1500)
+        else restarting.value = false
+      }
+      setTimeout(wait, 1500)
+    },
+  })
+}
+const mq = window.matchMedia('(max-width: 767px)')
+const narrow = ref(mq.matches)
+mq.addEventListener?.('change', (e) => (narrow.value = e.matches))
+const menu = computed(() => [
+  { key: 'update', label: rel.value?.newer ? t('maint.available', { v: rel.value.latest }) : t('maint.update'), disabled: !rel.value?.newer },
+  { key: 'repair', label: t('maint.repair') },
+  { key: 'restart', label: t('maint.restart') },
+])
+function pick(k: string) {
+  if (k === 'restart') restart()
+  else confirm.value = { action: k as 'update' | 'repair', password: '', rebuild: false, withData: false }
+}
+
 const done = computed(() => !!progress.value && !progress.value.running && progress.value.exit >= 0)
 const reload = () => window.location.reload()
 const changed = computed(() => done.value && progress.value!.version !== startedVersion.value)
 </script>
 
 <template>
-  <n-card size="small" style="margin-bottom: 16px">
+  <div v-if="props.compact" class="compact">
+    <span v-if="!narrow" class="ver" :title="rel?.newer ? t('maint.available', { v: rel.latest }) : ''">{{ rel?.current }}</span>
+    <n-dropdown v-if="narrow" :options="menu" trigger="click" @select="pick">
+      <n-badge dot :show="!!rel?.newer" :offset="[-4, 4]"><n-button size="small" quaternary>⋯</n-button></n-badge>
+    </n-dropdown>
+    <template v-else>
+      <n-badge dot :show="!!rel?.newer" :offset="[-4, 4]">
+        <n-button size="small" quaternary :disabled="!rel?.newer" @click="pick('update')">⟳ {{ t('maint.update') }}</n-button>
+      </n-badge>
+      <n-button size="small" quaternary @click="pick('repair')">🔧 {{ t('maint.repair') }}</n-button>
+      <n-button size="small" quaternary @click="restart">⏻ {{ t('maint.restart') }}</n-button>
+    </template>
+  </div>
+  <n-card v-else size="small" style="margin-bottom: 16px">
     <n-space justify="space-between" align="center">
       <n-space align="center" :size="8">
         <b>lmcwhm {{ rel?.current }}</b>
@@ -126,6 +192,12 @@ const changed = computed(() => done.value && progress.value!.version !== started
     </n-card>
   </n-modal>
 
+  <n-modal :show="restarting" :mask-closable="false">
+    <n-card style="width: min(360px, calc(100vw - 32px))">
+      <n-space align="center"><n-spin size="small" /> {{ t('maint.restarting') }}</n-space>
+    </n-card>
+  </n-modal>
+
   <n-modal :show="!!progress" :mask-closable="false">
     <n-card v-if="progress" :title="t('maint.progress')" style="width: min(760px, calc(100vw - 32px))" :closable="done" @close="progress = null">
       <n-alert v-if="!done" type="info" :show-icon="false" style="margin-bottom: 12px">{{ t('maint.wait') }}</n-alert>
@@ -140,3 +212,17 @@ const changed = computed(() => done.value && progress.value!.version !== started
     </n-card>
   </n-modal>
 </template>
+
+<style scoped>
+.compact {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.ver {
+  font-size: 12px;
+  opacity: 0.7;
+  margin-right: 4px;
+  font-variant-numeric: tabular-nums;
+}
+</style>

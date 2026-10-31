@@ -95,6 +95,53 @@ fi
 api PUT /firewall/cdn '{"ranges":[],"header":""}' >/dev/null
 pass "visitor address from a trusted CDN header only"
 
+# ---------- a website behind a CDN (網站防護 → CDN, like aaPanel) ----------
+# The site's headers are believed from any connection, in order; X-Forwarded-For
+# gives its last address. Sites without the switch ignore them.
+[[ "$(curl -s -H 'X-Real-IP: 203.0.113.7' --resolve php.test:80:127.0.0.1 http://php.test/index.php)" == *"ip=127.0.0.1"* ]] || fail "X-Real-IP believed before CDN is on"
+api PUT /protect/sites '{"items":{"php.test":{"on":true,"cdn":true}}}' | grep -q '"ok":true' || fail "turn CDN on"
+docker exec lmcwhm-haproxy haproxy -c -f /opt/lmcwhm/edge/haproxy.cfg 2>&1 | grep -i "warning\|alert" && fail "haproxy config has warnings (site CDN)"
+out="$(curl -s -H 'X-Real-IP: 203.0.113.7' --resolve php.test:80:127.0.0.1 http://php.test/index.php)"
+[[ "$out" == *"ip=203.0.113.7"* ]] || fail "site CDN header not used: $out"
+out="$(curl -sk -H 'X-Forwarded-For: 192.0.2.1, 203.0.113.6' --resolve php.test:443:127.0.0.1 https://php.test/index.php)"
+[[ "$out" == *"ip=203.0.113.6"* ]] || fail "X-Forwarded-For: not its last address: $out"
+out="$(curl -s -H 'CF-Connecting-IP: 203.0.113.5' -H 'X-Real-IP: 203.0.113.7' --resolve php.test:80:127.0.0.1 http://php.test/index.php)"
+[[ "$out" == *"ip=203.0.113.5"* ]] || fail "headers not tried in order: $out"
+api PUT /protect/sites '{"items":{"php.test":{"on":true,"cdn":true,"cdn_headers":["X-Test-Client"]}}}' | grep -q '"ok":true' || fail "custom CDN headers"
+out="$(curl -s -H 'X-Test-Client: 203.0.113.8' -H 'X-Real-IP: 203.0.113.7' --resolve php.test:80:127.0.0.1 http://php.test/index.php)"
+[[ "$out" == *"ip=203.0.113.8"* ]] || fail "custom CDN header list: $out"
+code="$(api PUT /protect/sites '{"items":{"php.test":{"on":true,"cdn":true,"cdn_headers":["bad header"]}}}' | jget ".get('code','')")"
+[[ -n "$code" ]] || fail "invalid header name accepted"
+if command -v nft >/dev/null; then
+  api PUT /firewall '{"enabled":true,"policy":"accept","ping":true}' >/dev/null
+  api POST /firewall/ips '{"ip":"203.0.113.8","list":"block"}' >/dev/null
+  sleep 4
+  code="$(curl -s -o /dev/null -w '%{http_code}' -H 'X-Test-Client: 203.0.113.8' --resolve php.test:80:127.0.0.1 http://php.test/index.php)"
+  [[ "$code" == 403 ]] || fail "blocked visitor behind the site's CDN got $code"
+  id="$(api GET '/firewall/ips?list=block' | jget "['items'][0]['id']")"
+  api POST "/firewall/ips/$id/delete" >/dev/null
+  api PUT /firewall '{"enabled":false,"policy":"accept","ping":true}' >/dev/null
+fi
+api PUT /protect/sites '{"items":{"php.test":{"on":true}}}' >/dev/null
+pass "website behind a CDN: visitor address from its header list"
+
+# ---------- unauthenticated response (未認證響應狀態) ----------
+cur="$(api GET /settings)"
+body="$(python3 -c "import sys,json; s=json.loads(sys.argv[1]); s['security_entry']='/e2e-entry'; s['unauth_status']=403; print(json.dumps(s))" "$cur")"
+api PUT /settings "$body" | grep -q '"unauth_status":403' || fail "save unauthenticated response"
+[[ "$(curl -sk -o /dev/null -w '%{http_code}' "$P/login")" == 403 ]] || fail "unauthenticated visitor not answered 403"
+body="$(python3 -c "import sys,json; s=json.loads(sys.argv[1]); s['unauth_status']=444; print(json.dumps(s))" "$body")"
+api PUT /settings "$body" >/dev/null
+curl -sk -o /dev/null "$P/login" && fail "444 answered instead of closing the connection"
+body="$(python3 -c "import sys,json; s=json.loads(sys.argv[1]); s['security_entry']=''; s['unauth_status']=0; print(json.dumps(s))" "$body")"
+api PUT /settings "$body" | grep -q '"security_entry":""' || fail "restore settings"
+pass "unauthenticated response follows the setting"
+
+# ---------- message box: background tasks and their history ----------
+api GET /tasks | grep -q '"running"' || fail "running tasks"
+api GET '/tasks/history?size=50' | python3 -c "import sys,json; d=json.load(sys.stdin); assert any(i['name'].startswith('site.create') for i in d['items']), d" || fail "site creation not in the task history"
+pass "message box lists finished tasks"
+
 # ---------- User-Agent / URL black and white lists ----------
 api POST /firewall/patterns '{"kind":"ua","list":"block","match":"contains","value":"sqlmap","enabled":true}' | grep -q '"id"' || fail "add UA block"
 api POST /firewall/patterns/import '{"kind":"url","list":"block","match":"prefix","values":["/blocked","#comment",""]}' | grep -q '"added":1' || fail "import URL block"

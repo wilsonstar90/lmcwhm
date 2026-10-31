@@ -118,7 +118,22 @@
     "new_password": "新密码（至少 8 位）",
     "current_password": "当前密码",
     "change_password": "修改密码",
-    "restarting": "面板重启中，即将跳转…"
+    "restarting": "面板重启中，即将跳转…",
+    "site_root": "默认建站目录",
+    "site_root_hint": "新网站会创建在此目录（留空 = /www/wwwroot）。修改后 nginx 和 PHP 会重建一次，旧网站不受影响。",
+    "backup_dir": "默认备份目录",
+    "backup_dir_hint": "新备份写入此目录（留空 = 面板目录下的 backup）；旧备份保留在原位置，仍可列出和还原。",
+    "unauth_status": "未认证响应状态",
+    "unauth_hint": "陌生 IP 未登录且未正确输入安全入口（或授权 IP、绑定域名不符）时的响应，可用于隐藏面板特征。",
+    "unauth": {
+      "404": "404 - 页面不存在",
+      "403": "403 - 拒绝访问",
+      "401": "401 - 未授权访问",
+      "400": "400 - 客户端请求错误",
+      "408": "408 - 客户端超时",
+      "416": "416 - 无效请求",
+      "444": "444 - 直接断开连接"
+    }
   },
   "logs": {
     "tab_login": "面板登录",
@@ -194,7 +209,10 @@
       "invalid_domain": "域名格式错误",
       "invalid_language": "不支持的语言",
       "basic_auth_password_required": "请设置 BasicAuth 密码",
-      "invalid_menu": "菜单设置无效"
+      "invalid_menu": "菜单设置无效",
+      "invalid_dir": "无法使用该目录：须为绝对路径，且不能是系统目录（/etc、/usr、/root…）",
+      "invalid_unauth_status": "未认证响应状态无效",
+      "bad_logo": "Logo 须为 PNG、SVG 或 WebP，最大 256 KB"
     },
     "ssl": {
       "invalid_pair": "证书与私钥不匹配或格式错误"
@@ -472,6 +490,9 @@
       "not_found": "页面不存在",
       "in_use": "页面仍在使用，请先修改对应",
       "builtin": "内置页面不能删除，可以还原"
+    },
+    "system": {
+      "unsupported": "此服务器不支持该操作"
     }
   },
   "task": {
@@ -975,7 +996,10 @@
     "beta": "测试版",
     "rollback_to": "回滚到 {v}",
     "rollback_desc": "从 {from} 回到上次更新前的 {to}。",
-    "with_data": "同时还原更新前备份的面板数据（之后的改动会另存）"
+    "with_data": "同时还原更新前备份的面板数据（之后的改动会另存）",
+    "restart": "重启",
+    "restart_desc": "重启面板程序（网站和软件不受影响），约 5 秒。",
+    "restarting": "面板重启中…"
   },
   "geo": {
     "lan": "内网",
@@ -1301,7 +1325,8 @@
       "header": "IP Header",
       "ranges": "CDN IP 段",
       "ranges_hint": "每行一个 IP 或 CIDR；需同时填写 Header 才会生效。"
-    }
+    },
+    "source_multi": "留空 = 任何地方；每行一个 IP / CIDR（最多 50 个）"
   },
   "waf": {
     "title": "网站应用防火墙（WAF）",
@@ -1685,7 +1710,11 @@
     "effort": "思考深度",
     "effort_hint": "越高越详细，但越慢也越贵。",
     "base_url": "API 地址（可选）",
-    "base_url_hint": "仅在 Anthropic API 前有网关时才需填写。"
+    "base_url_hint": "仅在 Anthropic API 前有网关时才需填写。",
+    "provider": "服务商",
+    "provider_key": "更换服务商需要输入新的 API key。",
+    "or_key_hint": "在 openrouter.ai/keys 获取；加密保存，费用由你的 OpenRouter 账户支付。",
+    "or_model_hint": "OpenRouter 上支持工具调用的模型；可直接输入模型 ID，例如 openai/gpt-5。思考深度只适用于 Claude 模型。"
   },
   "dash": {
     "running": "运行中",
@@ -2409,7 +2438,8 @@
     "linode_used": "用于 Linode Cloud Firewall（安全 → 云端同步）。",
     "linode_hint": "Personal Access Token，权限：Firewalls 读写、Linodes 读写。保存前会先验证。",
     "linode_ok": "Token 有效；本机为 Linode {name}",
-    "ai_used": "用于 AI 助手和各页面的 AI 分析按钮。"
+    "ai_used": "用于 AI 助手和各页面的 AI 分析按钮。",
+    "ai_title": "AI（Anthropic / OpenRouter）"
   },
   "tr": {
     "today": "今天",
@@ -2546,7 +2576,8 @@
       "idc": "禁 IDC",
       "crawler": "爬虫防护",
       "cc": "CC 防御（次 / 10 秒）",
-      "waf": "WAF"
+      "waf": "WAF",
+      "cdn": "CDN"
     },
     "tips": {
       "fake_spider": "User-Agent 自称搜索引擎或 AI 爬虫，但 IP 不在其官方 IP 段 → 拦截。只检查已在“云端黑白名单 → 来源”开启信任名单的爬虫。",
@@ -2554,7 +2585,8 @@
       "idc": "拦截云 / 机房 IP（AWS、Azure、阿里云、腾讯云、DigitalOcean…），信任的爬虫和白名单除外。需要 IP 归属地 ASN 数据库。",
       "crawler": "拦截常见采集器和恶意爬虫的 User-Agent（python-requests、curl、Scrapy、AhrefsBot…），列表在“防护设置”中修改。",
       "cc": "每个访客 IP 在 10 秒内最多请求次数，超过返回 429；0 = 关闭。",
-      "waf": "此网站的 OWASP 规则（ModSecurity）开关；需先在 WAF 设置中开启。"
+      "waf": "此网站的 OWASP 规则（ModSecurity）开关；需先在 WAF 设置中开启。",
+      "cdn": "此网站经 CDN 访问（任何 CDN，不仅 Cloudflare）：按「Headers」列表顺序获取访客真实 IP，黑名单、CC、WAF 和日志都使用该 IP。"
     },
     "off": "关",
     "log": "拦截记录",
@@ -2601,7 +2633,15 @@
     },
     "excluded": "排除 {n}",
     "excl_title": "{domain}：排除 OWASP 规则",
-    "excl_hint": "在此网站不执行的 CRS 规则 ID（例如误判的 942100）。"
+    "excl_hint": "在此网站不执行的 CRS 规则 ID（例如误判的 942100）。",
+    "cdn_headers": "CDN Headers",
+    "cdn_headers_of": "管理网站 CDN-Headers【{site}】",
+    "cdn_header_name": "header 名称",
+    "cdn_add": "添加",
+    "cdn_note": "防火墙将按顺序尝试在以上 header 中获取客户 IP，以第一个有效值为准。",
+    "cdn_risk": "注意：直接访问服务器 IP（不经 CDN）的人可以自行伪造这些 header，冒充其他 IP 绕过 IP 黑名单和 CC 限制；WAF、专属规则和 UA / URL 黑名单仍然有效。如需完全防止，可在 Linode 云防火墙只放行 CDN IP 段访问 80 / 443。",
+    "cdn_reset": "恢复默认",
+    "cdn_bad_header": "header 名称只能包含英文、数字和 -，且不能重复"
   },
   "rules": {
     "title": "专属规则",
@@ -3292,5 +3332,135 @@
       "old": "MySQL 5.7 已停止支持，不提供编译安装。",
       "none": "此软件不支持编译安装。"
     }
+  },
+  "logo": {
+    "title": "Logo",
+    "text": "文字（面板别名）",
+    "image": "图片",
+    "text_hint": "使用「面板设置」中的面板别名作为文字 Logo。",
+    "image_hint": "PNG、SVG 或 WebP，最大 256 KB；高度缩放到 32 px。",
+    "upload": "上传图片",
+    "too_big": "图片太大（最大 256 KB）"
+  },
+  "tbx": {
+    "title": "消息盒子",
+    "running": "任务列表",
+    "history": "消息列表",
+    "log": "执行日志",
+    "none": "当前没有任务执行",
+    "no_log": "选择一个任务查看日志",
+    "cron": "计划任务",
+    "name": "名称",
+    "created": "创建时间",
+    "took": "任务耗时",
+    "result": "结果",
+    "clear": "清空",
+    "clear_confirm": "清空所有消息？",
+    "failed_note": "有任务失败，点击一行查看详情。",
+    "secs": "{n} 秒",
+    "mins": "{m} 分 {s} 秒",
+    "names": {
+      "app_install": "安装",
+      "app_update": "更新",
+      "app_build": "编译",
+      "app_uninstall": "卸载",
+      "app_config": "软件设置",
+      "app_port": "修改端口",
+      "app_oom": "内存设置",
+      "site_create": "创建网站",
+      "site_delete": "删除网站",
+      "site_update": "更新网站",
+      "site_ssl": "申请 SSL",
+      "site_target": "修改网站目标",
+      "site_batch": "网站批量操作",
+      "web_install": "安装网站环境",
+      "web_apply": "应用网站设置",
+      "db_create": "创建数据库",
+      "db_delete": "删除数据库",
+      "docker_pull": "拉取镜像",
+      "docker_create": "创建容器",
+      "docker_recreate": "重建容器",
+      "docker_upgrade": "升级容器",
+      "docker_commit": "提交容器",
+      "compose_up": "启动 Compose",
+      "compose_down": "停止 Compose",
+      "compose_delete": "删除 Compose",
+      "crowdsec_install": "安装 CrowdSec",
+      "crowdsec_uninstall": "卸载 CrowdSec",
+      "wordpress_install": "安装 WordPress",
+      "php_install": "安装 PHP",
+      "php_update": "更新 PHP",
+      "php_build": "编译 PHP",
+      "backup_run": "备份",
+      "backup_restore": "还原备份"
+    }
+  },
+  "hc": {
+    "title": "状态",
+    "load": "负载",
+    "smooth": "运行流畅",
+    "normal": "运行正常",
+    "slow": "运行缓慢",
+    "blocked": "运行堵塞",
+    "load_at": "运行达到 {n}%",
+    "basic": "基础信息",
+    "load_avg": "最近 1 / 5 / 15 分钟平均负载",
+    "procs": "活动进程数 / 总进程数",
+    "more_load": "更多负载信息",
+    "top_cpu": "CPU 占用率 top 5 的进程信息",
+    "top_mem": "内存使用率 top 5 的进程信息",
+    "proc": "进程名称",
+    "cores": "{n} 核心",
+    "used": "占用 {n}%",
+    "cpu_counts": "{s} 个物理 CPU，{c} 个物理核心，{l} 个逻辑核心",
+    "per_core": "核心使用率",
+    "core": "核心 {n}",
+    "memory": "内存",
+    "mem_info": "内存信息",
+    "free": "空闲内存",
+    "used_mem": "已用",
+    "total": "总共",
+    "shared": "共享",
+    "available": "可分配内存",
+    "release": "立即释放",
+    "released": "已释放 {n}",
+    "kill": "结束",
+    "kill_confirm": "结束进程 {name}（PID {pid}）？",
+    "killed": "已结束 {name}",
+    "disk_used": "容量占用 {n}%",
+    "clean": "立即清理",
+    "mount": "挂载点",
+    "disk_sizes": "共 {t}，可用 {f}，已用 {u}",
+    "device": "设备",
+    "inodes": "Inode 信息",
+    "usage": "使用率",
+    "alert": "告警",
+    "settings": "设置",
+    "threshold": "占用率超过（%）",
+    "threshold_load": "1 分钟负载超过",
+    "minutes": "持续（分钟）",
+    "need_channel": "请先在告警中心添加通知渠道",
+    "alert_name": {
+      "cpu": "CPU 占用过高",
+      "load": "负载过高",
+      "mem": "内存占用过高",
+      "disk": "磁盘空间不足"
+    }
+  },
+  "io": {
+    "traffic": "流量",
+    "disk_io": "磁盘 IO",
+    "all": "所有",
+    "nic": "网卡",
+    "disk": "磁盘",
+    "up": "上行",
+    "down": "下行",
+    "sent": "总发送",
+    "recv": "总接收",
+    "read": "读取",
+    "write": "写入",
+    "ops": "每秒读写",
+    "ops_n": "{n} 次",
+    "latency": "IO 延迟"
   }
 }

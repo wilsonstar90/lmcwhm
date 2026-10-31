@@ -118,7 +118,22 @@
     "new_password": "New password (8+ chars)",
     "current_password": "Current password",
     "change_password": "Change password",
-    "restarting": "Panel restarting, redirecting…"
+    "restarting": "Panel restarting, redirecting…",
+    "site_root": "Default website directory",
+    "site_root_hint": "New websites are created here (empty = /www/wwwroot). Changing it recreates nginx and PHP once; existing websites stay where they are.",
+    "backup_dir": "Default backup directory",
+    "backup_dir_hint": "New backups are written here (empty = backup in the panel directory); older backups stay where they are and can still be listed and restored.",
+    "unauth_status": "Unauthenticated response",
+    "unauth_hint": "What unknown visitors get before signing in or using the security entry (or with a wrong authorized IP or bound domain), to hide the panel.",
+    "unauth": {
+      "404": "404 - Not Found",
+      "403": "403 - Forbidden",
+      "401": "401 - Unauthorized",
+      "400": "400 - Bad Request",
+      "408": "408 - Request Timeout",
+      "416": "416 - Range Not Satisfiable",
+      "444": "444 - Close the connection"
+    }
   },
   "logs": {
     "tab_login": "Panel logins",
@@ -194,7 +209,10 @@
       "invalid_domain": "Invalid domain",
       "invalid_language": "Unsupported language",
       "basic_auth_password_required": "Set a BasicAuth password",
-      "invalid_menu": "Invalid menu settings"
+      "invalid_menu": "Invalid menu settings",
+      "invalid_dir": "This directory cannot be used: it must be an absolute path and not a system directory (/etc, /usr, /root…)",
+      "invalid_unauth_status": "Invalid unauthenticated response",
+      "bad_logo": "The logo must be a PNG, SVG or WebP image of at most 256 KB"
     },
     "ssl": {
       "invalid_pair": "Certificate and key do not match or are invalid"
@@ -472,6 +490,9 @@
       "not_found": "Page not found",
       "in_use": "The page is in use; change the mapping first",
       "builtin": "Built-in pages cannot be deleted; reset them instead"
+    },
+    "system": {
+      "unsupported": "This server does not support that operation"
     }
   },
   "task": {
@@ -975,7 +996,10 @@
     "beta": "Beta",
     "rollback_to": "Roll back to {v}",
     "rollback_desc": "Go back from {from} to {to}, the version installed before the last update.",
-    "with_data": "Also restore the panel data backed up before that update (changes made since are kept aside)"
+    "with_data": "Also restore the panel data backed up before that update (changes made since are kept aside)",
+    "restart": "Restart",
+    "restart_desc": "Restarts the panel program (websites and apps keep running); about 5 seconds.",
+    "restarting": "The panel is restarting…"
   },
   "geo": {
     "lan": "LAN",
@@ -1301,7 +1325,8 @@
       "header": "IP header",
       "ranges": "CDN ranges",
       "ranges_hint": "One IP or CIDR per line; takes effect together with the header."
-    }
+    },
+    "source_multi": "Empty = anywhere; one IP / CIDR per line (up to 50)"
   },
   "waf": {
     "title": "Web application firewall",
@@ -1685,7 +1710,11 @@
     "effort": "Effort",
     "effort_hint": "Higher is more thorough but slower and costs more.",
     "base_url": "API base URL (optional)",
-    "base_url_hint": "Only for a gateway in front of the Anthropic API."
+    "base_url_hint": "Only for a gateway in front of the Anthropic API.",
+    "provider": "Provider",
+    "provider_key": "Switching providers needs a new API key.",
+    "or_key_hint": "From openrouter.ai/keys; stored encrypted, billed to your OpenRouter account.",
+    "or_model_hint": "OpenRouter models that can use tools; you can also type a model ID such as openai/gpt-5. Thinking effort applies to Claude models only."
   },
   "dash": {
     "running": "running",
@@ -2409,7 +2438,8 @@
     "linode_used": "Used for the Linode Cloud Firewall (Security → Cloud sync).",
     "linode_hint": "Personal access token with Firewalls: Read/Write and Linodes: Read/Write. Saving checks it first.",
     "linode_ok": "Token works; this server is Linode {name}",
-    "ai_used": "Used by the AI assistant and the AI analysis buttons."
+    "ai_used": "Used by the AI assistant and the AI analysis buttons.",
+    "ai_title": "AI (Anthropic / OpenRouter)"
   },
   "tr": {
     "today": "Today",
@@ -2546,7 +2576,8 @@
       "idc": "No IDC",
       "crawler": "Scrapers",
       "cc": "CC (requests / 10 s)",
-      "waf": "WAF"
+      "waf": "WAF",
+      "cdn": "CDN"
     },
     "tips": {
       "fake_spider": "A User-Agent claiming a search engine or AI crawler from outside its official ranges is refused. Only crawlers whose trusted list is on (Cloud lists → Sources) are checked.",
@@ -2554,7 +2585,8 @@
       "idc": "Refuse cloud and hosting addresses (AWS, Azure, Alibaba, Tencent, DigitalOcean, …), except trusted crawlers and allowed IPs. Needs the GeoIP ASN database.",
       "crawler": "Refuse common scraper and bad-bot User-Agents (python-requests, curl, Scrapy, AhrefsBot, …); the list is under Protection settings.",
       "cc": "Most requests a visitor IP may make in 10 seconds; over it gets 429. 0 = off.",
-      "waf": "OWASP rules (ModSecurity) on this site; turn the WAF on first."
+      "waf": "OWASP rules (ModSecurity) on this site; turn the WAF on first.",
+      "cdn": "This website is reached through a CDN (any CDN, not only Cloudflare): the visitor address is read from the Headers list in order, and the block lists, CC, WAF and logs all use it."
     },
     "off": "off",
     "log": "Blocked log",
@@ -2601,7 +2633,15 @@
     },
     "excluded": "{n} excluded",
     "excl_title": "{domain}: excluded OWASP rules",
-    "excl_hint": "CRS rule IDs not run on this site (e.g. a false positive 942100)."
+    "excl_hint": "CRS rule IDs not run on this site (e.g. a false positive 942100).",
+    "cdn_headers": "CDN headers",
+    "cdn_headers_of": "CDN headers of {site}",
+    "cdn_header_name": "Header name",
+    "cdn_add": "Add",
+    "cdn_note": "The visitor address is taken from the first of these headers that holds a valid one.",
+    "cdn_risk": "Note: anyone connecting to the server IP directly (not through the CDN) can forge these headers and pose as another IP to get around the IP block list and CC limits; the WAF, dedicated rules and User-Agent / URL lists still apply. To prevent it completely, allow only the CDN ranges to ports 80 / 443 in the Linode Cloud Firewall.",
+    "cdn_reset": "Restore defaults",
+    "cdn_bad_header": "Header names may only contain letters, digits and -, without duplicates"
   },
   "rules": {
     "title": "Dedicated rules",
@@ -3243,5 +3283,135 @@
       "old": "MySQL 5.7 is end-of-life: no compile install.",
       "none": "No compile install for this app."
     }
+  },
+  "logo": {
+    "title": "Logo",
+    "text": "Text (panel alias)",
+    "image": "Image",
+    "text_hint": "The panel alias from Panel settings is shown as the logo.",
+    "image_hint": "PNG, SVG or WebP, at most 256 KB; scaled to 32 px high.",
+    "upload": "Upload image",
+    "too_big": "The image is too large (max 256 KB)"
+  },
+  "tbx": {
+    "title": "Messages",
+    "running": "Running",
+    "history": "Messages",
+    "log": "Log",
+    "none": "No task is running",
+    "no_log": "Pick a task to see its log",
+    "cron": "Scheduled",
+    "name": "Name",
+    "created": "Created",
+    "took": "Took",
+    "result": "Result",
+    "clear": "Clear",
+    "clear_confirm": "Clear all messages?",
+    "failed_note": "A task failed; click its row for details.",
+    "secs": "{n} s",
+    "mins": "{m} min {s} s",
+    "names": {
+      "app_install": "Install",
+      "app_update": "Update",
+      "app_build": "Compile",
+      "app_uninstall": "Uninstall",
+      "app_config": "App settings",
+      "app_port": "Change port",
+      "app_oom": "Memory settings",
+      "site_create": "Create website",
+      "site_delete": "Delete website",
+      "site_update": "Update website",
+      "site_ssl": "Issue SSL",
+      "site_target": "Change website target",
+      "site_batch": "Website batch",
+      "web_install": "Install web stack",
+      "web_apply": "Apply website settings",
+      "db_create": "Create database",
+      "db_delete": "Delete database",
+      "docker_pull": "Pull image",
+      "docker_create": "Create container",
+      "docker_recreate": "Recreate container",
+      "docker_upgrade": "Upgrade container",
+      "docker_commit": "Commit container",
+      "compose_up": "Start Compose",
+      "compose_down": "Stop Compose",
+      "compose_delete": "Delete Compose",
+      "crowdsec_install": "Install CrowdSec",
+      "crowdsec_uninstall": "Uninstall CrowdSec",
+      "wordpress_install": "Install WordPress",
+      "php_install": "Install PHP",
+      "php_update": "Update PHP",
+      "php_build": "Compile PHP",
+      "backup_run": "Backup",
+      "backup_restore": "Restore backup"
+    }
+  },
+  "hc": {
+    "title": "Status",
+    "load": "Load",
+    "smooth": "Running smoothly",
+    "normal": "Running normally",
+    "slow": "Running slowly",
+    "blocked": "Overloaded",
+    "load_at": "Load at {n}%",
+    "basic": "Basic information",
+    "load_avg": "Load average (1 / 5 / 15 min)",
+    "procs": "Running / total processes",
+    "more_load": "More load information",
+    "top_cpu": "Top 5 processes by CPU",
+    "top_mem": "Top 5 processes by memory",
+    "proc": "Process",
+    "cores": "{n} cores",
+    "used": "{n}% used",
+    "cpu_counts": "{s} physical CPU(s), {c} cores, {l} threads",
+    "per_core": "Per-core usage",
+    "core": "Core {n}",
+    "memory": "Memory",
+    "mem_info": "Memory information",
+    "free": "Free",
+    "used_mem": "Used",
+    "total": "Total",
+    "shared": "Shared",
+    "available": "Available",
+    "release": "Free now",
+    "released": "Freed {n}",
+    "kill": "End",
+    "kill_confirm": "End process {name} (PID {pid})?",
+    "killed": "Ended {name}",
+    "disk_used": "{n}% used",
+    "clean": "Clean up",
+    "mount": "Mount point",
+    "disk_sizes": "Total {t}, free {f}, used {u}",
+    "device": "Device",
+    "inodes": "Inodes",
+    "usage": "Usage",
+    "alert": "Alert",
+    "settings": "Settings",
+    "threshold": "Usage above (%)",
+    "threshold_load": "1-minute load above",
+    "minutes": "For (minutes)",
+    "need_channel": "Add a notification channel in the alert centre first",
+    "alert_name": {
+      "cpu": "High CPU usage",
+      "load": "High load",
+      "mem": "High memory usage",
+      "disk": "Low disk space"
+    }
+  },
+  "io": {
+    "traffic": "Traffic",
+    "disk_io": "Disk IO",
+    "all": "All",
+    "nic": "Interface",
+    "disk": "Disk",
+    "up": "Upload",
+    "down": "Download",
+    "sent": "Total sent",
+    "recv": "Total received",
+    "read": "Read",
+    "write": "Write",
+    "ops": "Operations / s",
+    "ops_n": "{n}",
+    "latency": "IO latency"
   }
 }

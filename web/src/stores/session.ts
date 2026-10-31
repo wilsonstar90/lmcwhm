@@ -7,11 +7,16 @@ export const useSession = defineStore('session', () => {
   const user = ref<User | null>(null)
   const alias = ref('lmcwhm')
   const version = ref('')
+  // The header logo: an uploaded image, or the alias as text. logoRev busts
+  // the browser cache after an upload.
+  const logoImage = ref(false)
+  const logoRev = ref(0)
 
   async function loadMeta() {
-    const m = await get<{ alias: string; language: string; version: string }>('/public/meta')
+    const m = await get<{ alias: string; language: string; version: string; logo_image?: boolean }>('/public/meta')
     alias.value = m.alias
     version.value = m.version
+    logoImage.value = !!m.logo_image
     return m
   }
 
@@ -44,5 +49,5 @@ export const useSession = defineStore('session', () => {
     setCsrf('')
   }
 
-  return { user, alias, version, loadMeta, restore, login, logout }
+  return { user, alias, version, logoImage, logoRev, loadMeta, restore, login, logout }
 })

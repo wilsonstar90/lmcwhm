@@ -13,6 +13,9 @@ import { useSession } from '../stores/session'
 import SettingsUsers from '../components/SettingsUsers.vue'
 import SettingsApi from '../components/SettingsApi.vue'
 import SettingsMenu from '../components/SettingsMenu.vue'
+import SettingsLogo from '../components/SettingsLogo.vue'
+import MaintenanceBar from '../components/MaintenanceBar.vue'
+import PathInput from '../components/PathInput.vue'
 import { useRoute } from 'vue-router'
 
 const { t } = useI18n()
@@ -144,11 +147,14 @@ async function changePassword() {
 }
 
 const langOptions = LANGUAGES.map((l) => ({ label: l.label, value: l.value }))
+// 未認證響應狀態: 0 is the default 404.
+const unauthOptions = [404, 403, 401, 400, 408, 416, 444].map((c) => ({ label: t(`settings.unauth.${c}`), value: c === 404 ? 0 : c }))
 </script>
 
 <template>
   <n-tabs type="line" animated :default-value="(session.user?.is_admin && (useRoute().query.tab as string)) || (session.user?.is_admin ? 'panel' : 'account')">
     <n-tab-pane v-if="form" name="panel" :tab="t('settings.tab_panel')">
+      <MaintenanceBar />
       <n-card size="small">
         <n-form label-placement="top" style="max-width: 560px">
           <n-form-item :label="t('settings.alias')">
@@ -169,6 +175,12 @@ const langOptions = LANGUAGES.map((l) => ({ label: l.label, value: l.value }))
           <n-form-item :label="t('settings.session_timeout')">
             <n-input-number v-model:value="form.session_timeout" :min="300" :step="3600" style="width: 200px" />
           </n-form-item>
+          <n-form-item :label="t('settings.site_root')" :feedback="t('settings.site_root_hint')">
+            <PathInput v-model:value="form.site_root" placeholder="/www/wwwroot" />
+          </n-form-item>
+          <n-form-item :label="t('settings.backup_dir')" :feedback="t('settings.backup_dir_hint')">
+            <PathInput v-model:value="form.backup_dir" placeholder="/opt/lmcwhm/backup" />
+          </n-form-item>
           <n-button type="primary" :loading="saving" @click="save">{{ t('common.save') }}</n-button>
         </n-form>
       </n-card>
@@ -180,6 +192,9 @@ const langOptions = LANGUAGES.map((l) => ({ label: l.label, value: l.value }))
           <n-form label-placement="top" style="max-width: 560px">
             <n-form-item :label="t('settings.entry')" :feedback="t('settings.entry_hint')">
               <n-input v-model:value="form.security_entry" placeholder="/console" />
+            </n-form-item>
+            <n-form-item :label="t('settings.unauth_status')" :feedback="t('settings.unauth_hint')">
+              <n-select v-model:value="form.unauth_status" :options="unauthOptions" style="max-width: 320px" />
             </n-form-item>
             <n-form-item :label="t('settings.bind_domain')" :feedback="t('settings.bind_domain_hint')">
               <n-input v-model:value="form.bind_domain" placeholder="panel.example.com" />
@@ -266,7 +281,7 @@ const langOptions = LANGUAGES.map((l) => ({ label: l.label, value: l.value }))
     </n-tab-pane>
 
     <n-tab-pane v-if="session.user?.is_admin" name="api" :tab="t('apis.tab')" display-directive="show:lazy"><SettingsApi /></n-tab-pane>
-    <n-tab-pane v-if="session.user?.is_admin" name="interface" :tab="t('menucfg.tab')" display-directive="show:lazy"><SettingsMenu /></n-tab-pane>
+    <n-tab-pane v-if="session.user?.is_admin" name="interface" :tab="t('menucfg.tab')" display-directive="show:lazy"><SettingsLogo /><SettingsMenu /></n-tab-pane>
     <n-tab-pane name="account" :tab="t('settings.tab_account')">
       <n-space vertical :size="16" style="max-width: 560px">
         <n-card size="small" :title="t('settings.change_username')">

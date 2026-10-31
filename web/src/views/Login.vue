@@ -7,6 +7,7 @@ import { useSession } from '../stores/session'
 import { ApiError } from '../api/client'
 import LangSwitch from '../components/LangSwitch.vue'
 import ThemeSwitch from '../components/ThemeSwitch.vue'
+import BrandLogo from '../components/BrandLogo.vue'
 
 const { t } = useI18n()
 const session = useSession()
@@ -42,7 +43,8 @@ async function submit() {
 <template>
   <div class="wrap">
     <div class="lang"><ThemeSwitch /> <LangSwitch /></div>
-    <n-card class="card" :title="session.alias">
+    <n-card class="card">
+      <template #header><BrandLogo /></template>
       <p class="sub">{{ t('login.title') }}</p>
       <n-form @submit.prevent="submit">
         <template v-if="!needTotp">

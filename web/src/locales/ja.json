@@ -118,7 +118,22 @@
     "new_password": "新しいパスワード（8文字以上）",
     "current_password": "現在のパスワード",
     "change_password": "パスワード変更",
-    "restarting": "再起動中、リダイレクトします…"
+    "restarting": "再起動中、リダイレクトします…",
+    "site_root": "既定のサイトディレクトリ",
+    "site_root_hint": "新しいサイトはここに作成されます（空 = /www/wwwroot）。変更すると nginx と PHP を一度再作成します。既存のサイトはそのままです。",
+    "backup_dir": "既定のバックアップディレクトリ",
+    "backup_dir_hint": "新しいバックアップはここに保存されます（空 = パネルディレクトリの backup）。古いバックアップは元の場所のまま一覧・復元できます。",
+    "unauth_status": "未認証時の応答",
+    "unauth_hint": "未ログインでセキュリティ入口を通っていない訪問者（許可 IP・バインドドメイン不一致を含む）への応答。パネルの存在を隠すために使います。",
+    "unauth": {
+      "404": "404 - Not Found",
+      "403": "403 - アクセス拒否",
+      "401": "401 - 未認証",
+      "400": "400 - 不正なリクエスト",
+      "408": "408 - タイムアウト",
+      "416": "416 - 範囲が無効",
+      "444": "444 - 接続を切断"
+    }
   },
   "logs": {
     "tab_login": "ログイン履歴",
@@ -194,7 +209,10 @@
       "invalid_domain": "ドメイン形式が不正",
       "invalid_language": "未対応の言語",
       "basic_auth_password_required": "BasicAuth パスワードを設定してください",
-      "invalid_menu": "メニュー設定が無効です"
+      "invalid_menu": "メニュー設定が無効です",
+      "invalid_dir": "このディレクトリは使えません：絶対パスで、システムディレクトリ（/etc、/usr、/root…）以外を指定してください",
+      "invalid_unauth_status": "未認証時の応答が無効です",
+      "bad_logo": "ロゴは PNG、SVG または WebP、256 KB 以下にしてください"
     },
     "ssl": {
       "invalid_pair": "証明書と鍵が一致しないか不正です"
@@ -472,6 +490,9 @@
       "not_found": "ページが見つかりません",
       "in_use": "使用中のページです。先に割り当てを変更してください",
       "builtin": "組み込みページは削除できません。元に戻してください"
+    },
+    "system": {
+      "unsupported": "このサーバーではこの操作はできません"
     }
   },
   "task": {
@@ -975,7 +996,10 @@
     "beta": "ベータ",
     "rollback_to": "{v} に戻す",
     "rollback_desc": "{from} から前回の更新前の {to} に戻します。",
-    "with_data": "更新前にバックアップしたパネルデータも復元（以降の変更は別に保存）"
+    "with_data": "更新前にバックアップしたパネルデータも復元（以降の変更は別に保存）",
+    "restart": "再起動",
+    "restart_desc": "パネルを再起動します（サイトとアプリは動き続けます）。約 5 秒かかります。",
+    "restarting": "パネルを再起動しています…"
   },
   "geo": {
     "lan": "LAN",
@@ -1301,7 +1325,8 @@
       "header": "IP ヘッダー",
       "ranges": "CDN の IP 範囲",
       "ranges_hint": "1 行に 1 つの IP または CIDR。ヘッダーと併せて有効になります。"
-    }
+    },
+    "source_multi": "空 = どこからでも。1 行に 1 つの IP / CIDR（最大 50）"
   },
   "waf": {
     "title": "Web アプリケーションファイアウォール",
@@ -1685,7 +1710,11 @@
     "effort": "推論の深さ",
     "effort_hint": "高いほど丁寧ですが、遅く高価になります。",
     "base_url": "API ベース URL（任意）",
-    "base_url_hint": "Anthropic API の前段にゲートウェイがある場合のみ。"
+    "base_url_hint": "Anthropic API の前段にゲートウェイがある場合のみ。",
+    "provider": "プロバイダ",
+    "provider_key": "プロバイダを変えるには新しい API キーが必要です。",
+    "or_key_hint": "openrouter.ai/keys で取得。暗号化して保存し、料金は OpenRouter アカウントに請求されます。",
+    "or_model_hint": "OpenRouter でツールを使えるモデル。openai/gpt-5 のようにモデル ID を直接入力することもできます。思考レベルは Claude モデルのみ有効です。"
   },
   "dash": {
     "running": "稼働中",
@@ -2409,7 +2438,8 @@
     "linode_used": "Linode Cloud Firewall（セキュリティ → クラウド同期）に使います。",
     "linode_hint": "Personal Access Token（権限：Firewalls 読み書き、Linodes 読み書き）。保存前に確認します。",
     "linode_ok": "トークン有効。このサーバーは Linode {name}",
-    "ai_used": "AI アシスタントと各ページの AI 分析ボタンで使います。"
+    "ai_used": "AI アシスタントと各ページの AI 分析ボタンで使います。",
+    "ai_title": "AI（Anthropic / OpenRouter）"
   },
   "tr": {
     "today": "今日",
@@ -2546,7 +2576,8 @@
       "idc": "IDC 拒否",
       "crawler": "スクレイパー",
       "cc": "CC（回 / 10 秒）",
-      "waf": "WAF"
+      "waf": "WAF",
+      "cdn": "CDN"
     },
     "tips": {
       "fake_spider": "検索エンジンや AI クローラーを名乗る User-Agent が公式 IP 範囲外から来た場合に拒否します。「クラウドリスト → ソース」で信頼リストを有効にしたクローラーのみ検査します。",
@@ -2554,7 +2585,8 @@
       "idc": "クラウド / データセンターの IP（AWS、Azure、Alibaba、Tencent、DigitalOcean など）を拒否します（信頼クローラーと許可 IP は除外）。GeoIP の ASN データベースが必要です。",
       "crawler": "一般的なスクレイパーや悪質ボットの User-Agent（python-requests、curl、Scrapy、AhrefsBot など）を拒否します。リストは「保護設定」で変更できます。",
       "cc": "訪問者 IP ごとの 10 秒あたりの最大リクエスト数。超えると 429。0 = オフ。",
-      "waf": "このサイトの OWASP ルール（ModSecurity）。先に WAF を有効にしてください。"
+      "waf": "このサイトの OWASP ルール（ModSecurity）。先に WAF を有効にしてください。",
+      "cdn": "このサイトは CDN 経由でアクセスされます（Cloudflare に限らず任意の CDN）。「Headers」の順に訪問者の実 IP を取得し、ブラックリスト・CC・WAF・ログはこの IP を使います。"
     },
     "off": "オフ",
     "log": "ブロックログ",
@@ -2601,7 +2633,15 @@
     },
     "excluded": "{n} 件除外",
     "excl_title": "{domain}：除外する OWASP ルール",
-    "excl_hint": "このサイトで実行しない CRS ルール ID（例: 誤検知の 942100）。"
+    "excl_hint": "このサイトで実行しない CRS ルール ID（例: 誤検知の 942100）。",
+    "cdn_headers": "CDN ヘッダー",
+    "cdn_headers_of": "{site} の CDN ヘッダー",
+    "cdn_header_name": "ヘッダー名",
+    "cdn_add": "追加",
+    "cdn_note": "上のヘッダーを順に調べ、最初の有効な値を訪問者の IP とします。",
+    "cdn_risk": "注意：CDN を通さずサーバーの IP に直接接続する者はこれらのヘッダーを偽造し、別の IP を装って IP ブラックリストや CC 制限を回避できます。WAF・専用ルール・UA / URL リストは引き続き有効です。完全に防ぐには、Linode Cloud Firewall で 80 / 443 を CDN の IP 範囲だけに許可してください。",
+    "cdn_reset": "既定に戻す",
+    "cdn_bad_header": "ヘッダー名には英数字と - だけを使い、重複させないでください"
   },
   "rules": {
     "title": "専用ルール",
@@ -3292,5 +3332,135 @@
       "old": "MySQL 5.7 はサポート終了のため非対応。",
       "none": "このアプリはコンパイル非対応。"
     }
+  },
+  "logo": {
+    "title": "ロゴ",
+    "text": "テキスト（パネル名）",
+    "image": "画像",
+    "text_hint": "パネル設定のパネル名をロゴとして表示します。",
+    "image_hint": "PNG、SVG または WebP、256 KB まで。高さ 32 px に縮小されます。",
+    "upload": "画像をアップロード",
+    "too_big": "画像が大きすぎます（最大 256 KB）"
+  },
+  "tbx": {
+    "title": "メッセージ",
+    "running": "実行中",
+    "history": "メッセージ",
+    "log": "実行ログ",
+    "none": "実行中のタスクはありません",
+    "no_log": "タスクを選ぶとログを表示します",
+    "cron": "スケジュール",
+    "name": "名前",
+    "created": "作成日時",
+    "took": "所要時間",
+    "result": "結果",
+    "clear": "すべて削除",
+    "clear_confirm": "すべてのメッセージを削除しますか？",
+    "failed_note": "失敗したタスクがあります。行をクリックすると詳細を表示します。",
+    "secs": "{n} 秒",
+    "mins": "{m} 分 {s} 秒",
+    "names": {
+      "app_install": "インストール",
+      "app_update": "更新",
+      "app_build": "コンパイル",
+      "app_uninstall": "アンインストール",
+      "app_config": "ソフト設定",
+      "app_port": "ポート変更",
+      "app_oom": "メモリ設定",
+      "site_create": "サイト作成",
+      "site_delete": "サイト削除",
+      "site_update": "サイト更新",
+      "site_ssl": "SSL 発行",
+      "site_target": "サイトの接続先変更",
+      "site_batch": "サイト一括操作",
+      "web_install": "Web 環境のインストール",
+      "web_apply": "サイト設定の適用",
+      "db_create": "データベース作成",
+      "db_delete": "データベース削除",
+      "docker_pull": "イメージ取得",
+      "docker_create": "コンテナ作成",
+      "docker_recreate": "コンテナ再作成",
+      "docker_upgrade": "コンテナ更新",
+      "docker_commit": "コンテナのコミット",
+      "compose_up": "Compose 起動",
+      "compose_down": "Compose 停止",
+      "compose_delete": "Compose 削除",
+      "crowdsec_install": "CrowdSec インストール",
+      "crowdsec_uninstall": "CrowdSec アンインストール",
+      "wordpress_install": "WordPress インストール",
+      "php_install": "PHP インストール",
+      "php_update": "PHP 更新",
+      "php_build": "PHP コンパイル",
+      "backup_run": "バックアップ",
+      "backup_restore": "バックアップ復元"
+    }
+  },
+  "hc": {
+    "title": "ステータス",
+    "load": "負荷",
+    "smooth": "快適",
+    "normal": "正常",
+    "slow": "やや重い",
+    "blocked": "過負荷",
+    "load_at": "負荷 {n}%",
+    "basic": "基本情報",
+    "load_avg": "平均負荷（1 / 5 / 15 分）",
+    "procs": "実行中 / 全プロセス",
+    "more_load": "詳細な負荷情報",
+    "top_cpu": "CPU 使用率 上位 5 プロセス",
+    "top_mem": "メモリ使用量 上位 5 プロセス",
+    "proc": "プロセス",
+    "cores": "{n} コア",
+    "used": "使用率 {n}%",
+    "cpu_counts": "物理 CPU {s} 個、物理コア {c}、論理コア {l}",
+    "per_core": "コア別使用率",
+    "core": "コア {n}",
+    "memory": "メモリ",
+    "mem_info": "メモリ情報",
+    "free": "空き",
+    "used_mem": "使用中",
+    "total": "合計",
+    "shared": "共有",
+    "available": "利用可能",
+    "release": "今すぐ解放",
+    "released": "{n} 解放しました",
+    "kill": "終了",
+    "kill_confirm": "プロセス {name}（PID {pid}）を終了しますか？",
+    "killed": "{name} を終了しました",
+    "disk_used": "使用率 {n}%",
+    "clean": "今すぐクリーンアップ",
+    "mount": "マウントポイント",
+    "disk_sizes": "合計 {t}、空き {f}、使用 {u}",
+    "device": "デバイス",
+    "inodes": "inode 情報",
+    "usage": "使用率",
+    "alert": "アラート",
+    "settings": "設定",
+    "threshold": "使用率が超えたら（%）",
+    "threshold_load": "1 分間の負荷が超えたら",
+    "minutes": "継続（分）",
+    "need_channel": "先にアラートセンターで通知チャネルを追加してください",
+    "alert_name": {
+      "cpu": "CPU 使用率が高い",
+      "load": "負荷が高い",
+      "mem": "メモリ使用率が高い",
+      "disk": "ディスク容量不足"
+    }
+  },
+  "io": {
+    "traffic": "トラフィック",
+    "disk_io": "ディスク IO",
+    "all": "すべて",
+    "nic": "NIC",
+    "disk": "ディスク",
+    "up": "送信",
+    "down": "受信",
+    "sent": "総送信",
+    "recv": "総受信",
+    "read": "読み取り",
+    "write": "書き込み",
+    "ops": "IOPS",
+    "ops_n": "{n} 回",
+    "latency": "IO 遅延"
   }
 }

@@ -453,6 +453,13 @@ api GET '/logs/firewall?q=18190' | python3 -c "import sys,json; d=json.load(sys.
 [[ "$(probe 80)" == *"404"* ]] || fail "protected port 80 affected by a rule"
 api POST "/firewall/rules/$RLID/delete" >/dev/null
 [[ "$(probe 18190)" == *"Directory listing"* ]] || fail "deleted rule still enforced"
+# One rule, several sources (one per line), both address families.
+RLID="$(api POST /firewall/rules '{"action":"drop","proto":"tcp","ports":"18190","source":"10.99.0.0/16\n172.17.0.0/16\n2001:db8::/32","enabled":true}' | jget "['rule']['id']")"
+api GET /firewall | python3 -c "import sys,json; r=[r for r in json.load(sys.stdin)['rules'] if r['id']==$RLID][0]; assert r['source']=='10.99.0.0/16,172.17.0.0/16,2001:db8::/32', r" || fail "sources not stored"
+[[ "$(probe 18190)" != *"Directory listing"* ]] || fail "second source of a rule not enforced"
+api POST "/firewall/rules/$RLID/delete" >/dev/null
+[[ "$(probe 18190)" == *"Directory listing"* ]] || fail "multi-source rule still enforced after delete"
+pass "port rule with several sources"
 # Deny default without confirmation reverts to allow.
 fwput '{"policy":"drop"}' | grep -q '"confirm":true' || fail "drop policy not guarded"
 nft list chain inet lmcwhm input | grep -q "policy drop" || fail "drop policy not installed"

@@ -59,7 +59,8 @@ func unauthorized(w http.ResponseWriter, status int) {
 				return
 			}
 		}
-		status = http.StatusBadRequest // HTTP/2 cannot be hijacked
+		// HTTP/2 cannot be hijacked: abort the stream without a response.
+		panic(http.ErrAbortHandler)
 	}
 	text := fmt.Sprintf("%d %s", status, http.StatusText(status))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

@@ -27,6 +27,10 @@ export interface PanelSettings {
   basic_auth_password?: string
   language: string
   timezone: string
+  unauth_status: number
+  site_root: string
+  backup_dir: string
+  logo_image: boolean
 }
 
 export interface Overview {
@@ -48,7 +52,16 @@ export interface Overview {
   disks: { mount: string; fs: string; total: number; used: number }[] | null
   net_sent: number
   net_recv: number
+  nics: { name: string; sent: number; recv: number }[] | null
+  disk_io: { name: string; read_bytes: number; write_bytes: number; read_count: number; write_count: number; read_time: number; write_time: number }[] | null
   sampled_at: number
+}
+
+export interface SysDetail {
+  load: { avg: [number, number, number]; procs_running: number; procs_total: number; times: Record<string, number> | null }
+  cpu: { model: string; sockets: number; cores: number; threads: number; per_core: number[] | null; percent: number }
+  mem: { total: number; used: number; free: number; shared: number; available: number; buffers: number; cached: number }
+  disks: { mount: string; device: string; fs: string; total: number; used: number; free: number; percent: number; inodes_total: number; inodes_used: number; inodes_free: number; inodes_percent: number }[] | null
 }
 
 export interface CertInfo {

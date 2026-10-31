@@ -2,6 +2,7 @@
 // 工具箱: swap, hostname, DNS, time, SSH, processes, connections, disks, cleanup.
 import { computed, h, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import {
   NAlert, NButton, NCard, NCheckbox, NDataTable, NDynamicTags, NForm, NFormItem, NGi, NGrid, NInput, NInputNumber, NPopconfirm, NProgress,
   NSelect, NSpace, NSwitch, NTabPane, NTabs, NTag, useMessage, type DataTableColumns,
@@ -190,7 +191,9 @@ function onTab(v: string) {
     loaders[v]?.()
   }
 }
-onMounted(() => onTab('system'))
+// ?tab=cleanup comes from the dashboard's disk card (立即清理).
+const route = useRoute()
+onMounted(() => onTab(typeof route.query.tab === 'string' && route.query.tab in loaders ? route.query.tab : 'system'))
 </script>
 
 <template>

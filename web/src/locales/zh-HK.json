@@ -118,7 +118,22 @@
     "new_password": "新密碼（至少 8 位）",
     "current_password": "當前密碼",
     "change_password": "修改密碼",
-    "restarting": "面板重啟中，即將跳轉…"
+    "restarting": "面板重啟中，即將跳轉…",
+    "site_root": "默認建站目錄",
+    "site_root_hint": "新網站會建立喺呢個目錄（留空 = /www/wwwroot）。改咗之後 nginx 同 PHP 會重建一次，舊網站唔受影響。",
+    "backup_dir": "默認備份目錄",
+    "backup_dir_hint": "新備份寫入呢個目錄（留空 = 面板目錄下嘅 backup）；舊備份留喺原位，照樣列出同還原。",
+    "unauth_status": "未認證響應狀態",
+    "unauth_hint": "陌生 IP 未登入、又未經安全入口（或者授權 IP、綁定域名唔啱）時點樣回應，用嚟隱藏面板特徵。",
+    "unauth": {
+      "404": "404 - 頁面不存在",
+      "403": "403 - 拒絕訪問",
+      "401": "401 - 未授權",
+      "400": "400 - 請求錯誤",
+      "408": "408 - 請求超時",
+      "416": "416 - 範圍無效",
+      "444": "444 - 直接斷開連接"
+    }
   },
   "logs": {
     "tab_login": "面板登入",
@@ -194,7 +209,10 @@
       "invalid_domain": "域名格式錯誤",
       "invalid_language": "不支援的語言",
       "basic_auth_password_required": "請設定 BasicAuth 密碼",
-      "invalid_menu": "選單設定無效"
+      "invalid_menu": "選單設定無效",
+      "invalid_dir": "目錄唔可以用：要係絕對路徑，唔可以係系統目錄（/etc、/usr、/root…）",
+      "invalid_unauth_status": "未認證響應狀態無效",
+      "bad_logo": "Logo 要係 PNG、SVG 或者 WebP，最大 256 KB"
     },
     "ssl": {
       "invalid_pair": "證書與私鑰不匹配或格式錯誤"
@@ -472,6 +490,9 @@
       "not_found": "搵唔到頁面",
       "in_use": "頁面仲用緊，先改對應",
       "builtin": "內置頁面唔可以刪除，可以還原"
+    },
+    "system": {
+      "unsupported": "呢部伺服器唔支援呢個操作"
     }
   },
   "task": {
@@ -975,7 +996,10 @@
     "beta": "測試版",
     "rollback_to": "回滾到 {v}",
     "rollback_desc": "由 {from} 返回上次更新前嘅 {to}。",
-    "with_data": "同時還原更新前備份嘅面板數據（之後嘅改動會另存）"
+    "with_data": "同時還原更新前備份嘅面板數據（之後嘅改動會另存）",
+    "restart": "重啟",
+    "restart_desc": "重新啟動面板程式（網站同軟件唔受影響），大約 5 秒。",
+    "restarting": "面板重新啟動中…"
   },
   "geo": {
     "lan": "內網",
@@ -1301,7 +1325,8 @@
       "header": "IP Header",
       "ranges": "CDN IP 段",
       "ranges_hint": "每行一個 IP 或 CIDR；要同時填 Header 先生效。"
-    }
+    },
+    "source_multi": "留空 = 任何地方；每行一個 IP / CIDR（最多 50 個）"
   },
   "waf": {
     "title": "網站應用防火牆（WAF）",
@@ -1685,7 +1710,11 @@
     "effort": "思考深度",
     "effort_hint": "越高越詳細，但越慢同越貴。",
     "base_url": "API 網址（可選）",
-    "base_url_hint": "只係用 Anthropic API 前面嘅閘道時先要填。"
+    "base_url_hint": "只係用 Anthropic API 前面嘅閘道時先要填。",
+    "provider": "供應商",
+    "provider_key": "換供應商要輸入新嘅 API key。",
+    "or_key_hint": "喺 openrouter.ai/keys 取得；加密儲存，費用由你嘅 OpenRouter 帳戶支付。",
+    "or_model_hint": "OpenRouter 上可以用工具嘅模型；可以直接輸入模型 ID，例如 openai/gpt-5。思考深度只適用於 Claude 模型。"
   },
   "dash": {
     "running": "運行中",
@@ -2409,7 +2438,8 @@
     "linode_used": "用於 Linode Cloud Firewall（安全 → 雲端同步）。",
     "linode_hint": "Personal Access Token，權限：Firewalls 讀寫、Linodes 讀寫。儲存前會先驗證。",
     "linode_ok": "Token 有效；呢部機係 Linode {name}",
-    "ai_used": "用於 AI 助手同各頁面嘅 AI 分析按鈕。"
+    "ai_used": "用於 AI 助手同各頁面嘅 AI 分析按鈕。",
+    "ai_title": "AI（Anthropic / OpenRouter）"
   },
   "tr": {
     "today": "今日",
@@ -2546,7 +2576,8 @@
       "idc": "禁 IDC",
       "crawler": "爬蟲防護",
       "cc": "CC 防禦（次 / 10 秒）",
-      "waf": "WAF"
+      "waf": "WAF",
+      "cdn": "CDN"
     },
     "tips": {
       "fake_spider": "User-Agent 自稱搜尋引擎或 AI 爬蟲，但 IP 唔喺佢嘅官方 IP 段 → 攔截。只檢查已喺「雲端黑白名單 → 來源」開咗信任名單嘅爬蟲。",
@@ -2554,7 +2585,8 @@
       "idc": "攔截雲端 / 機房 IP（AWS、Azure、阿里雲、騰訊雲、DigitalOcean…），信任嘅爬蟲同白名單除外。需要 IP 歸屬地 ASN 資料庫。",
       "crawler": "攔截常見採集器同惡意爬蟲嘅 User-Agent（python-requests、curl、Scrapy、AhrefsBot…），清單喺「防護設定」改。",
       "cc": "每個訪客 IP 喺 10 秒內最多請求幾多次，超過回 429；0 = 關閉。",
-      "waf": "OWASP 規則（ModSecurity）喺呢個網站開關；要先喺 WAF 設定開啟。"
+      "waf": "OWASP 規則（ModSecurity）喺呢個網站開關；要先喺 WAF 設定開啟。",
+      "cdn": "呢個網站經 CDN 連入（任何 CDN，唔止 Cloudflare）：會由「Headers」清單按次序讀訪客真實 IP，黑名單、CC、WAF 同日誌全部用呢個 IP。"
     },
     "off": "關",
     "log": "攔截記錄",
@@ -2601,7 +2633,15 @@
     },
     "excluded": "排除 {n}",
     "excl_title": "{domain}：排除 OWASP 規則",
-    "excl_hint": "喺呢個網站唔執行嘅 CRS 規則 ID（例如誤判嘅 942100）。"
+    "excl_hint": "喺呢個網站唔執行嘅 CRS 規則 ID（例如誤判嘅 942100）。",
+    "cdn_headers": "CDN Headers",
+    "cdn_headers_of": "管理網站 CDN-Headers【{site}】",
+    "cdn_header_name": "header 名稱",
+    "cdn_add": "添加",
+    "cdn_note": "防火牆會按次序喺以上 header 攞訪客真實 IP，第一個有效嘅為準。",
+    "cdn_risk": "注意：直接連伺服器 IP（唔經 CDN）嘅人可以自己作呢啲 header，扮其他 IP 避開 IP 黑名單同 CC 限制；WAF、專屬規則同 UA / URL 黑名單照樣有效。想完全防止，可以喺 Linode 雲防火牆只放 CDN IP 段入 80 / 443。",
+    "cdn_reset": "還原預設",
+    "cdn_bad_header": "header 名稱只可以用英文、數字同 -，而且唔可以重複"
   },
   "rules": {
     "title": "專屬規則",
@@ -3292,5 +3332,135 @@
       "old": "MySQL 5.7 已停止支援，唔提供編譯安裝。",
       "none": "呢個軟件唔支援編譯安裝。"
     }
+  },
+  "logo": {
+    "title": "Logo",
+    "text": "文字（面板別名）",
+    "image": "圖片",
+    "text_hint": "用「面板設定」入面嘅面板別名做文字 Logo。",
+    "image_hint": "PNG、SVG 或 WebP，最大 256 KB；高度會縮到 32 px。",
+    "upload": "上傳圖片",
+    "too_big": "圖片太大（最大 256 KB）"
+  },
+  "tbx": {
+    "title": "消息盒子",
+    "running": "任務列表",
+    "history": "消息列表",
+    "log": "執行日誌",
+    "none": "而家冇任務執行",
+    "no_log": "揀一個任務睇日誌",
+    "cron": "計劃任務",
+    "name": "名稱",
+    "created": "建立時間",
+    "took": "耗時",
+    "result": "結果",
+    "clear": "清空",
+    "clear_confirm": "清空所有消息？",
+    "failed_note": "有任務失敗，撳一行睇詳情。",
+    "secs": "{n} 秒",
+    "mins": "{m} 分 {s} 秒",
+    "names": {
+      "app_install": "安裝",
+      "app_update": "更新",
+      "app_build": "編譯",
+      "app_uninstall": "卸載",
+      "app_config": "軟件設定",
+      "app_port": "更改端口",
+      "app_oom": "記憶體設定",
+      "site_create": "建立網站",
+      "site_delete": "刪除網站",
+      "site_update": "更新網站",
+      "site_ssl": "申請 SSL",
+      "site_target": "更改網站目標",
+      "site_batch": "網站批量操作",
+      "web_install": "安裝網站環境",
+      "web_apply": "套用網站設定",
+      "db_create": "建立數據庫",
+      "db_delete": "刪除數據庫",
+      "docker_pull": "拉取映像",
+      "docker_create": "建立容器",
+      "docker_recreate": "重建容器",
+      "docker_upgrade": "升級容器",
+      "docker_commit": "提交容器",
+      "compose_up": "啟動 Compose",
+      "compose_down": "停止 Compose",
+      "compose_delete": "刪除 Compose",
+      "crowdsec_install": "安裝 CrowdSec",
+      "crowdsec_uninstall": "卸載 CrowdSec",
+      "wordpress_install": "安裝 WordPress",
+      "php_install": "安裝 PHP",
+      "php_update": "更新 PHP",
+      "php_build": "編譯 PHP",
+      "backup_run": "備份",
+      "backup_restore": "還原備份"
+    }
+  },
+  "hc": {
+    "title": "狀態",
+    "load": "負載",
+    "smooth": "運行流暢",
+    "normal": "運行正常",
+    "slow": "運行緩慢",
+    "blocked": "運行堵塞",
+    "load_at": "運行達到 {n}%",
+    "basic": "基礎信息",
+    "load_avg": "最近 1 / 5 / 15 分鐘平均負載",
+    "procs": "活動進程 / 總進程",
+    "more_load": "更多負載信息",
+    "top_cpu": "CPU 佔用率 top 5 進程",
+    "top_mem": "內存佔用 top 5 進程",
+    "proc": "進程名稱",
+    "cores": "{n} 核心",
+    "used": "佔用 {n}%",
+    "cpu_counts": "{s} 個物理 CPU，{c} 個物理核心，{l} 個邏輯核心",
+    "per_core": "核心使用率",
+    "core": "核心 {n}",
+    "memory": "內存",
+    "mem_info": "內存信息",
+    "free": "空閒",
+    "used_mem": "已用",
+    "total": "總共",
+    "shared": "共享",
+    "available": "可分配",
+    "release": "立即釋放",
+    "released": "釋放咗 {n}",
+    "kill": "結束",
+    "kill_confirm": "結束進程 {name}（PID {pid}）？",
+    "killed": "已結束 {name}",
+    "disk_used": "容量佔用 {n}%",
+    "clean": "立即清理",
+    "mount": "掛載點",
+    "disk_sizes": "共 {t}，可用 {f}，已用 {u}",
+    "device": "裝置",
+    "inodes": "Inode 信息",
+    "usage": "使用率",
+    "alert": "告警",
+    "settings": "設置",
+    "threshold": "佔用率超過（%）",
+    "threshold_load": "1 分鐘負載超過",
+    "minutes": "持續（分鐘）",
+    "need_channel": "請先喺告警中心加一個通知渠道",
+    "alert_name": {
+      "cpu": "CPU 佔用過高",
+      "load": "負載過高",
+      "mem": "內存佔用過高",
+      "disk": "磁盤空間不足"
+    }
+  },
+  "io": {
+    "traffic": "流量",
+    "disk_io": "磁盤 IO",
+    "all": "所有",
+    "nic": "網卡",
+    "disk": "磁盤",
+    "up": "上行",
+    "down": "下行",
+    "sent": "總發送",
+    "recv": "總接收",
+    "read": "讀取",
+    "write": "寫入",
+    "ops": "每秒讀寫",
+    "ops_n": "{n} 次",
+    "latency": "IO 延遲"
   }
 }

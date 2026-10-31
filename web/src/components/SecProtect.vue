@@ -11,7 +11,7 @@ import { get, patch, put, ApiError } from '../api/client'
 import SecEvents from './SecEvents.vue'
 import TaskModal from './TaskModal.vue'
 
-interface Prot { on: boolean; fake_spider: boolean; cdn_only: boolean; idc: boolean; crawler: boolean; cc: number }
+interface Prot { on: boolean; fake_spider: boolean; cdn: boolean; cdn_headers?: string[] | null; idc: boolean; crawler: boolean; cc: number }
 interface Row { domain: string; aliases: string[]; type: string; supported: boolean; proxied: boolean; protect: Prot; blocked: number; blocked_24h: number }
 interface Info { rules_on: boolean; spiders: string[]; has_asn: boolean }
 interface Settings { rules_on: boolean; crawlers: string[]; idc: { number: number; name: string }[] }
@@ -135,7 +135,41 @@ const shown = computed(() => {
 })
 const usesFake = computed(() => rows.value.some((r) => r.protect.on && r.protect.fake_spider))
 const usesIDC = computed(() => rows.value.some((r) => r.protect.on && r.protect.idc))
-const box = (r: Row, key: 'fake_spider' | 'cdn_only' | 'idc' | 'crawler') =>
+// CDN (like aaPanel): the site is reached through a CDN; the visitor's
+// address comes from the first of its headers that holds one.
+const DEFAULT_CDN_HEADERS = ['CF-Connecting-IP', 'True-Client-IP', 'Ali-Cdn-Real-Ip', 'Cdn-Src-Ip', 'Cdn-Real-Ip', 'X-Real-IP',
+  'X-Forwarded-For', 'X-Client-IP', 'Client-IP', 'Forwarded-For', 'X-Forwarded', 'Forwarded']
+const cdnEdit = ref<{ row: Row; headers: string[]; add: string } | null>(null)
+const headerOK = (v: string) => /^[A-Za-z0-9-]{1,64}$/.test(v)
+function openCDN(r: Row) {
+  cdnEdit.value = { row: r, headers: [...(r.protect.cdn_headers?.length ? r.protect.cdn_headers : DEFAULT_CDN_HEADERS)], add: '' }
+}
+function addHeader() {
+  const e = cdnEdit.value!
+  const v = e.add.trim()
+  if (!headerOK(v) || e.headers.some((x) => x.toLowerCase() === v.toLowerCase())) return msg.warning(t('prot.cdn_bad_header'))
+  e.headers.push(v)
+  e.add = ''
+}
+function moveHeader(i: number, d: number) {
+  const hs = cdnEdit.value!.headers
+  const j = i + d
+  if (j < 0 || j >= hs.length) return
+  ;[hs[i], hs[j]] = [hs[j], hs[i]]
+}
+async function saveCDN() {
+  const e = cdnEdit.value!
+  const same = e.headers.length === DEFAULT_CDN_HEADERS.length && e.headers.every((x, i) => x === DEFAULT_CDN_HEADERS[i])
+  await set(e.row, { cdn_headers: same ? [] : e.headers })
+  cdnEdit.value = null
+}
+const cdnCell = (r: Row) =>
+  h(NSpace, { size: 4, align: 'center', wrap: false }, () => [
+    h(NCheckbox, { checked: r.protect.cdn, disabled: !r.supported, 'onUpdate:checked': (v: boolean) => set(r, { cdn: v }) }),
+    r.protect.cdn ? h(NButton, { size: 'tiny', quaternary: true, title: t('prot.cdn_headers'), onClick: () => openCDN(r) }, () => 'Headers') : null,
+  ])
+
+const box = (r: Row, key: 'fake_spider' | 'idc' | 'crawler') =>
   h(NCheckbox, { checked: r.protect[key], disabled: !r.supported || !r.protect.on, 'onUpdate:checked': (v: boolean) => set(r, { [key]: v }) })
 const head = (key: string) => () => h(NTooltip, null, { trigger: () => h('span', { style: 'border-bottom: 1px dashed; cursor: help' }, t(`prot.cols.${key}`)), default: () => t(`prot.tips.${key}`) })
 const columns = computed<DataTableColumns<Row>>(() => [
@@ -160,7 +194,7 @@ const columns = computed<DataTableColumns<Row>>(() => [
     render: (r) => h(NTooltip, null, { trigger: () => h('span', { style: r.blocked ? 'color: #d03050' : '' }, r.blocked.toLocaleString()), default: () => t('prot.blocked_24h', { n: r.blocked_24h.toLocaleString() }) }),
   },
   { title: head('fake_spider'), key: 'fake_spider', width: 90, render: (r) => box(r, 'fake_spider') },
-  { title: head('cdn_only'), key: 'cdn_only', width: 90, render: (r) => box(r, 'cdn_only') },
+  { title: head('cdn'), key: 'cdn', width: 120, render: cdnCell },
   { title: head('idc'), key: 'idc', width: 80, render: (r) => box(r, 'idc') },
   { title: head('crawler'), key: 'crawler', width: 90, render: (r) => box(r, 'crawler') },
   {
@@ -262,9 +296,67 @@ const columns = computed<DataTableColumns<Row>>(() => [
       </template>
     </n-card>
   </n-modal>
+
+  <n-modal :show="!!cdnEdit" @update:show="(v: boolean) => !v && (cdnEdit = null)">
+    <n-card v-if="cdnEdit" :title="t('prot.cdn_headers_of', { site: cdnEdit.row.domain })" style="width: min(520px, calc(100vw - 32px))" closable @close="cdnEdit = null">
+      <n-space :wrap="false" style="margin-bottom: 12px">
+        <n-input v-model:value="cdnEdit.add" :placeholder="t('prot.cdn_header_name')" @keyup.enter="addHeader" />
+        <n-button type="primary" @click="addHeader">{{ t('prot.cdn_add') }}</n-button>
+      </n-space>
+      <div class="hdrs">
+        <div v-for="(hd, i) in cdnEdit.headers" :key="hd" class="hdr">
+          <span class="n">{{ i + 1 }}</span>
+          <code>{{ hd }}</code>
+          <n-button size="tiny" quaternary :disabled="i === 0" :aria-label="t('menucfg.up')" @click="moveHeader(i, -1)">↑</n-button>
+          <n-button size="tiny" quaternary :disabled="i === cdnEdit.headers.length - 1" :aria-label="t('menucfg.down')" @click="moveHeader(i, 1)">↓</n-button>
+          <n-button size="tiny" quaternary type="error" :disabled="cdnEdit.headers.length === 1" @click="cdnEdit.headers.splice(i, 1)">{{ t('common.delete') }}</n-button>
+        </div>
+      </div>
+      <p class="note">• {{ t('prot.cdn_note') }}</p>
+      <n-alert type="warning" :show-icon="false" style="margin-top: 8px; font-size: 12px">{{ t('prot.cdn_risk') }}</n-alert>
+      <template #footer>
+        <n-space justify="space-between">
+          <n-button quaternary @click="cdnEdit.headers = [...DEFAULT_CDN_HEADERS]">{{ t('prot.cdn_reset') }}</n-button>
+          <n-space>
+            <n-button @click="cdnEdit = null">{{ t('common.cancel') }}</n-button>
+            <n-button type="primary" @click="saveCDN">{{ t('common.save') }}</n-button>
+          </n-space>
+        </n-space>
+      </template>
+    </n-card>
+  </n-modal>
 </template>
 
 <style scoped>
+.hdrs {
+  max-height: 46vh;
+  overflow: auto;
+  border: 1px solid rgba(128, 128, 128, 0.2);
+  border-radius: 6px;
+}
+.hdr {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.12);
+}
+.hdr code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hdr .n {
+  width: 18px;
+  font-size: 12px;
+  opacity: 0.5;
+}
+.note {
+  font-size: 12px;
+  opacity: 0.75;
+  margin: 10px 0 0;
+}
 .notes {
   font-size: 12px;
   opacity: 0.65;
