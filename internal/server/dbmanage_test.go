@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/wilsonstar90/lmcwhm/internal/appstore"
@@ -39,5 +40,16 @@ func TestPMASignonLinks(t *testing.T) {
 	}
 	if s.signonHeader(httptest.NewRequest("GET", appstore.PMASignon+"?logout=1", nil), "sess-a") != "" {
 		t.Fatal("signed in again on logout")
+	}
+}
+
+func TestKeepCookies(t *testing.T) {
+	keep := func(n string) bool {
+		n = cookieBase(n)
+		return strings.HasPrefix(n, "phpMyAdmin") || n == "LMCWHMSignon"
+	}
+	got := keepCookies([]string{"lmcwhm_session=secret; __Secure-phpMyAdmin_https=ab,cd-ef", "LMCWHMSignon=x1; other=y; __Host-phpMyAdmin=z"}, keep)
+	if got != "__Secure-phpMyAdmin_https=ab,cd-ef; LMCWHMSignon=x1; __Host-phpMyAdmin=z" {
+		t.Fatalf("%q", got)
 	}
 }

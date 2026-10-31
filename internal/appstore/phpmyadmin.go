@@ -80,7 +80,7 @@ if (!is_array($c) || empty($c['user']) || empty($c['server'])) {
 // their token.
 $server = (int) $c['server'];
 if (($_SESSION['lmcwhm_user'][$server] ?? '') !== $c['user']) {
-    foreach (['phpMyAdmin', 'phpMyAdmin_https'] as $name) {
+    foreach (['phpMyAdmin', 'phpMyAdmin_https', '__Secure-phpMyAdmin_https'] as $name) {
         setcookie($name, '', ['expires' => 1, 'path' => '` + PMAPrefix + `/', 'secure' => $https, 'httponly' => true, 'samesite' => 'Lax']);
     }
 }

@@ -405,10 +405,8 @@ func (s *Server) toolProxy(w http.ResponseWriter, r *http.Request, port int, pre
 			if signon != "" {
 				pr.Out.Header.Set(appstore.PMASignonHeader, signon)
 			}
-			for _, ck := range pr.In.Cookies() {
-				if cookie(ck.Name) {
-					pr.Out.AddCookie(ck)
-				}
+			if c := keepCookies(pr.In.Header.Values("Cookie"), cookie); c != "" {
+				pr.Out.Header.Set("Cookie", c)
 			}
 		},
 	}
@@ -417,9 +415,34 @@ func (s *Server) toolProxy(w http.ResponseWriter, r *http.Request, port int, pre
 	rp.ServeHTTP(w, r)
 }
 
+// keepCookies returns the browser's cookies whose name passes keep, exactly
+// as sent: re-encoding them (http.Request.AddCookie) quotes a value with a
+// comma, such as a PHP session id, and the tool then misses its session.
+func keepCookies(headers []string, keep func(string) bool) string {
+	var out []string
+	for _, h := range headers {
+		for _, part := range strings.Split(h, ";") {
+			part = strings.TrimSpace(part)
+			name, _, ok := strings.Cut(part, "=")
+			if ok && name != "" && keep(name) {
+				out = append(out, part)
+			}
+		}
+	}
+	return strings.Join(out, "; ")
+}
+
+// cookieBase drops the __Secure- / __Host- prefix browsers require on some
+// HTTPS cookies: phpMyAdmin names its session __Secure-phpMyAdmin_https, and
+// without it phpMyAdmin started a new session (and token) on every request,
+// so every change failed with "token mismatch".
+func cookieBase(name string) string {
+	return strings.TrimPrefix(strings.TrimPrefix(name, "__Secure-"), "__Host-")
+}
+
 func (s *Server) handleAdminer(w http.ResponseWriter, r *http.Request) {
 	s.toolProxy(w, r, s.Apps.AdminerPort(r.Context()), "/adminer", true, func(n string) bool {
-		return strings.HasPrefix(n, "adminer")
+		return strings.HasPrefix(cookieBase(n), "adminer")
 	}, "")
 }
 
@@ -433,6 +456,7 @@ func (s *Server) handlePMA(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.toolProxy(w, r, s.Apps.PMAPort(r.Context()), appstore.PMAPrefix, false, func(n string) bool {
+		n = cookieBase(n)
 		return strings.HasPrefix(n, "phpMyAdmin") || strings.HasPrefix(strings.ToLower(n), "pma") || n == "LMCWHMSignon"
 	}, signon)
 }
