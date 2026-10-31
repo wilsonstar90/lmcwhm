@@ -12,6 +12,7 @@ import LogsModal from '../components/LogsModal.vue'
 import PhpVersions from '../components/PhpVersions.vue'
 import AppSettings from '../components/AppSettings.vue'
 import UpdateBadge from '../components/UpdateBadge.vue'
+import BuildModeDialog, { type BuildChoice, type SourceInfo } from '../components/BuildModeDialog.vue'
 import { useUpdates } from '../stores/updates'
 import { datetime } from '../format'
 
@@ -33,19 +34,21 @@ const cred = ref<{ app: InstalledApp; host: string; port: number; username: stri
 const removeData = ref(false)
 const hasPMA = computed(() => installed.value.some((i) => i.app === 'phpmyadmin'))
 
-interface PhpVer { version: string; state: string; port: number; sites: number; full_version?: string }
+interface PhpVer { version: string; state: string; port: number; sites: number; full_version?: string; build?: { build_mode: 'fast' | 'source'; build_args: string; build_cflags: string } }
+const source = ref<Record<string, SourceInfo>>({})
 const phps = ref<PhpVer[]>([])
 
 async function load() {
   loading.value = true
   try {
     const [c, i, p] = await Promise.all([
-      get<{ items: CatalogApp[] }>('/apps/catalog'),
+      get<{ items: CatalogApp[]; source: Record<string, SourceInfo> }>('/apps/catalog'),
       get<{ items: InstalledApp[] }>('/apps'),
       get<{ items: PhpVer[] }>('/php').catch(() => ({ items: [] as PhpVer[] })),
       updates.load().catch(() => {}),
     ])
     catalog.value = c.items
+    source.value = c.source ?? {}
     installed.value = i.items
     phps.value = p.items.filter((v) => v.state)
     for (const a of c.items) if (!pick.value[a.key]) pick.value[a.key] = a.versions[0].version
@@ -59,15 +62,39 @@ onMounted(load)
 
 const isInstalled = (key: string, v: string) => installed.value.some((i) => i.app === key && i.version === v)
 
-async function install(a: CatalogApp) {
+// Install and switch go through the 極速 / 編譯 dialog.
+const bm = ref<{ title: string; key: string; current?: BuildChoice; run: (c: BuildChoice) => Promise<{ task_id: string }> } | null>(null)
+function install(a: CatalogApp) {
   const v = pick.value[a.key]
+  bm.value = { title: `${t('app.install')} · ${a.name} ${v}`, key: `${a.key}:${v}`, run: (c) => post('/apps/install', { app: a.key, version: v, ...c }) }
+}
+function switchBuild(i: InstalledApp) {
+  bm.value = {
+    title: `${t('bm.title')} · ${i.name} ${i.version}`, key: `${i.app}:${i.version}`,
+    current: { build_mode: i.build_mode ?? 'fast', build_args: i.build_args ?? '', build_cflags: i.build_cflags ?? '' },
+    run: (c) => post(`/apps/${i.id}/build`, c),
+  }
+}
+function switchPHP(v: PhpVer) {
+  bm.value = {
+    title: `${t('bm.title')} · PHP ${v.version}`, key: `php:${v.version}`,
+    current: v.build ?? { build_mode: 'fast', build_args: '', build_cflags: '' },
+    run: (c) => post(`/php/${v.version}/build`, c),
+  }
+}
+async function runBuild(c: BuildChoice) {
+  const b = bm.value!
   try {
-    const r = await post<{ task_id: string }>('/apps/install', { app: a.key, version: v })
-    task.value = { id: r.task_id, title: `${t('app.install')} · ${a.name} ${v}` }
+    const r = await b.run(c)
+    task.value = { id: r.task_id, title: b.title }
+    bm.value = null
   } catch (e) {
     fail(e)
   }
 }
+const modeTag = (mode: string | undefined, onClick: () => void, can: boolean) =>
+  h(NTag, { size: 'small', bordered: false, type: mode === 'source' ? 'warning' : 'info', style: can ? 'cursor:pointer' : '', onClick: can ? onClick : undefined, title: can ? t('bm.click_switch') : '' },
+    () => `${mode === 'source' ? t('bm.source_short') : t('bm.fast_short')}${can ? ' ⇄' : ''}`)
 
 async function uninstall(i: InstalledApp) {
   try {
@@ -183,6 +210,15 @@ const columns: DataTableColumns<Row> = [
   },
   { title: () => t('app.kind'), key: 'kind', width: 100, render: (r) => t(`app.kinds.${r.app ? r.app.kind : 'runtime'}`) },
   {
+    title: () => t('bm.column'),
+    key: 'build',
+    width: 110,
+    render: (r) =>
+      r.app
+        ? modeTag(r.app.build_mode, () => switchBuild(r.app!), !r.app.source_no || r.app.build_mode === 'source')
+        : modeTag(r.php!.build?.build_mode, () => switchPHP(r.php!), true),
+  },
+  {
     title: () => t('common.status'),
     key: 'state',
     width: 110,
@@ -249,7 +285,7 @@ const versionOptions = (a: CatalogApp) =>
           <n-button size="small" @click="load">{{ t('common.refresh') }}</n-button>
         </n-space>
       </n-space>
-      <n-data-table size="small" :columns="columns" :data="rows" :loading="loading" :row-key="(r: Row) => r.key" :scroll-x="1020" />
+      <n-data-table size="small" :columns="columns" :data="rows" :loading="loading" :row-key="(r: Row) => r.key" :scroll-x="1130" />
       <p class="hint">{{ t('app.updates_hint') }}</p>
     </n-tab-pane>
     <n-tab-pane name="php" tab="PHP" display-directive="show:lazy"><PhpVersions ref="phpRef" @changed="load" /></n-tab-pane>
@@ -287,6 +323,10 @@ const versionOptions = (a: CatalogApp) =>
     </n-card>
   </n-modal>
 
+  <BuildModeDialog
+    :show="!!bm" :title="bm?.title ?? ''" :info="bm ? source[bm.key] ?? null : null" :current="bm?.current ?? null"
+    @close="bm = null" @confirm="runBuild"
+  />
   <AppSettings :app="settings" @close="settings = null" @changed="load" />
   <TaskModal :task-id="task?.id ?? null" :title="task?.title ?? ''" @close="task = null; load()" @done="load" />
   <LogsModal :url="logs?.url ?? null" :title="logs?.title ?? ''" @close="logs = null" />

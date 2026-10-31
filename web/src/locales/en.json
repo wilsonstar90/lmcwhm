@@ -271,7 +271,11 @@
       "wrong_engine": "This setting is not available for this engine",
       "bad_setting": "Invalid value {field}",
       "engine_error": "The database server said: {detail}",
-      "update_failed": "The update failed and the previous version was restored: {detail}"
+      "update_failed": "The update failed and the previous version was restored: {detail}",
+      "no_source_build": "This version cannot be compiled here",
+      "invalid_build_args": "Build options may only use letters, digits and - _ = + , . / : @ %",
+      "invalid_build_mode": "Invalid install method",
+      "build_failed": "The new build did not start and was rolled back"
     },
     "db": {
       "invalid_name": "Name: letters, digits and _, starting with a letter (not a reserved name)",
@@ -3209,6 +3213,35 @@
       "expiry": "Set expiry",
       "category": "Set category",
       "delete": "Delete"
+    }
+  },
+  "bm": {
+    "title": "Install method",
+    "column": "Install",
+    "fast": "Fast install",
+    "fast_hint": "The official pre-built image: done in a minute or two, the most tested.",
+    "source": "Compile from source",
+    "source_hint": "The same version compiled on this server, with your own options. About {n} minutes on 2 cores; needs {mem} MB of memory (with swap).",
+    "warn": "Compiling uses all CPU cores. The current version keeps running and is only replaced once the build works; a failure rolls back.",
+    "advanced": "Build options (advanced)",
+    "defaults": "Always used:",
+    "args": "Extra options",
+    "args_hint": "Added to ./configure (or cmake / make), e.g. --enable-xxx. No quotes or $.",
+    "cflags_hint": "e.g. -O2 -march=native (native suits this CPU only)",
+    "switch_hint": "Data, settings and ports stay; databases are backed up first.",
+    "switch": "Switch",
+    "rebuild": "Compile again",
+    "click_switch": "Click to switch fast / compiled",
+    "fast_short": "Fast",
+    "source_short": "Compiled",
+    "no": {
+      "huge": "MongoDB needs ~40 GB of disk and hours to compile: not offered.",
+      "jdk": "The JDK build needs another JDK and many hours: not offered.",
+      "bytecode": "Tomcat is Java bytecode: nothing to compile.",
+      "closed": "SQL Server has no public source.",
+      "script": "A PHP application: nothing to compile.",
+      "old": "MySQL 5.7 is end-of-life: no compile install.",
+      "none": "No compile install for this app."
     }
   }
 }

@@ -271,7 +271,11 @@
       "wrong_engine": "このエンジンでは使えない設定です",
       "bad_setting": "無効な値 {field}",
       "engine_error": "データベースサーバーの応答：{detail}",
-      "update_failed": "更新に失敗し、元のバージョンに戻しました：{detail}"
+      "update_failed": "更新に失敗し、元のバージョンに戻しました：{detail}",
+      "no_source_build": "この版はコンパイル非対応",
+      "invalid_build_args": "ビルドオプションは英数字と - _ = + , . / : @ % のみ",
+      "invalid_build_mode": "無効なインストール方式",
+      "build_failed": "新しいビルドが起動せず元に戻しました"
     },
     "db": {
       "invalid_name": "名前：英字・数字・_、英字で始まる（予約名は不可）",
@@ -3258,6 +3262,35 @@
       "expiry": "期限を設定",
       "category": "分類を設定",
       "delete": "削除"
+    }
+  },
+  "bm": {
+    "title": "インストール方式",
+    "column": "方式",
+    "fast": "高速インストール",
+    "fast_hint": "公式のビルド済みイメージ。1〜2 分で完了し最も安定。",
+    "source": "ソースからコンパイル",
+    "source_hint": "同じバージョンをこのサーバーでコンパイルします。2 コアで約 {n} 分、メモリ {mem} MB 以上（スワップ込み）。",
+    "warn": "コンパイル中は CPU を使い切ります。現在の版は動作し続け、成功後に切り替わり、失敗時は元に戻ります。",
+    "advanced": "ビルドオプション（上級）",
+    "defaults": "既定のオプション：",
+    "args": "追加オプション",
+    "args_hint": "./configure（cmake / make）に追加（例 --enable-xxx）。引用符と $ は不可。",
+    "cflags_hint": "例 -O2 -march=native（native はこの CPU 専用）",
+    "switch_hint": "データ・設定・ポートはそのまま。DB は先にバックアップされます。",
+    "switch": "切り替え",
+    "rebuild": "再コンパイル",
+    "click_switch": "クリックで切り替え",
+    "fast_short": "高速",
+    "source_short": "コンパイル",
+    "no": {
+      "huge": "MongoDB のコンパイルは約 40 GB と数時間が必要なため非対応。",
+      "jdk": "JDK のビルドは別の JDK と長時間が必要なため非対応。",
+      "bytecode": "Tomcat は Java のためコンパイル不要。",
+      "closed": "SQL Server はソース非公開。",
+      "script": "PHP アプリのためコンパイル不要。",
+      "old": "MySQL 5.7 はサポート終了のため非対応。",
+      "none": "このアプリはコンパイル非対応。"
     }
   }
 }

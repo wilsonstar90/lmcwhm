@@ -300,12 +300,13 @@ wait_task "$(api PATCH "/sites/$PID" '{"index_files":[]}' | jget "['task_id']")"
 pass "website settings: rewrite, index, custom config, run directory, password, path proxy, subdirectory, stop modes, expiry"
 
 # ---------- file manager extras ----------
+touch /www/wwwroot/php.test/wp-config.php
 api PUT /files/remark '{"path":"/www/wwwroot/php.test/home.html","remark":"首頁"}' >/dev/null
 api POST /files/rename '{"from":"/www/wwwroot/php.test/home.html","to":"/www/wwwroot/php.test/home2.html"}' >/dev/null
 api GET '/files/list?path=/www/wwwroot/php.test' | python3 -c "
 import sys,json; it={i['name']:i for i in json.load(sys.stdin)['items']}
 assert it['home2.html'].get('remark')=='首頁', it['home2.html']
-assert it['blog'].get('auto') is None and it['.user.ini']['auto']['code']=='user_ini', it['.user.ini']" || fail "remarks"
+assert it['blog'].get('auto') is None and it['wp-config.php']['auto']['code']=='wp_config', it['wp-config.php']" || fail "remarks"
 api GET '/files/list?path=/www/wwwroot' | grep -q '"code":"site_root","arg":"php.test"' || fail "website root remark"
 [[ "$(api GET '/files/size?path=/www/wwwroot/php.test/blog' | jget "['size']")" == 8 ]] || fail "folder size"
 F=/www/wwwroot/php.test/edit.txt
@@ -326,7 +327,7 @@ api POST /files/delete '{"paths":["/www/wwwroot/php.test/new"]}' >/dev/null
 [[ ! -e /www/wwwroot/php.test/new ]] || fail "delete with the bin off"
 api GET /files/trash | grep -q '/www/wwwroot/php.test/new' && fail "deleted with the bin off but kept in it"
 api PUT /files/trash/settings '{"enabled":true,"db":true}' >/dev/null
-rm -f "$F" /www/wwwroot/php.test/home2.html
+rm -f "$F" /www/wwwroot/php.test/home2.html /www/wwwroot/php.test/wp-config.php
 pass "file manager: remarks, sizes, editor history, resumable and folder upload, recycle bin switch"
 
 # ---------- switch PHP version, stop, delete ----------

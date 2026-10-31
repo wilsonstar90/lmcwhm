@@ -221,39 +221,59 @@ func (sv *Service) update(ctx context.Context, i Installed, log tasks.Logf) erro
 		return dockerx.ErrNoDocker
 	}
 	before := CurrentVersion(ctx, i.Image)
-	oldID := imageID(ctx, i.Image)
+	baseID := imageID(ctx, i.Image)
+	run := i.RunImage()
+	oldID := imageID(ctx, run)
 	log("pulling %s", i.Image)
 	if _, err := dockerx.Run(ctx, "pull", "-q", i.Image); err != nil {
 		return err
 	}
-	if imageID(ctx, i.Image) == oldID && oldID != "" {
+	if imageID(ctx, i.Image) == baseID && baseID != "" && oldID != "" {
 		log("%s %s is already the newest build (%s)", i.Name, i.Version, before)
 		return nil
 	}
 	after := CurrentVersion(ctx, i.Image)
 	log("new image: %s → %s", orUnknown(before), orUnknown(after))
-	if i.Container == "" {
-		// A runtime: website projects are recreated on the new image.
-		if oldID != "" {
-			dockerx.Run(ctx, "rmi", oldID)
-		}
-		if sv.RuntimeUpdated != nil {
-			sv.RuntimeUpdated(ctx, i.App, i.Version, log)
-		}
-		log("%s %s updated", i.Name, i.Version)
-		return nil
-	}
 	keep := rollbackTag(i.App, i.Version)
 	if oldID != "" {
 		if _, err := dockerx.Run(ctx, "tag", oldID, keep); err != nil {
 			return err
 		}
 	}
+	if i.BuildMode == ModeSource {
+		// A compiled version is compiled again on the new release.
+		if err := sv.buildSource(ctx, i, log); err != nil {
+			restoreTag(ctx, oldID, run, keep)
+			return err
+		}
+		if baseID != "" && baseID != imageID(ctx, i.Image) {
+			dockerx.Run(ctx, "rmi", baseID)
+		}
+	}
+	return sv.restartOn(ctx, i, oldID, keep, before, after, log)
+}
+
+// restartOn recreates i's container (or website projects) on its new
+// run image; the previous image, kept as keep, comes back on failure.
+func (sv *Service) restartOn(ctx context.Context, i Installed, oldID, keep, before, after string, log tasks.Logf) error {
+	run := i.RunImage()
+	if i.Container == "" {
+		// A runtime: website projects are recreated on the new image.
+		if oldID != "" {
+			dockerx.Run(ctx, "rmi", keep)
+			dockerx.Run(ctx, "rmi", oldID)
+		}
+		if sv.RuntimeUpdated != nil {
+			sv.RuntimeUpdated(ctx, i.App, i.Version, log)
+		}
+		log("%s %s now runs %s", i.Name, i.Version, orUnknown(after))
+		return nil
+	}
 	if sv.Backup != nil && i.Databases {
 		log("backing up the databases of %s %s", i.Name, i.Version)
 		if err := sv.Backup(ctx, i, log); err != nil {
-			restoreTag(ctx, oldID, i.Image, keep)
-			return fmt.Errorf("backup before the update failed: %w", err)
+			restoreTag(ctx, oldID, run, keep)
+			return fmt.Errorf("backup before the change failed: %w", err)
 		}
 	}
 	log("recreating %s", i.Container)
@@ -271,7 +291,7 @@ func (sv *Service) update(ctx context.Context, i Installed, log tasks.Logf) erro
 				log("phpMyAdmin: %v", err)
 			}
 		}
-		log("%s %s updated to %s", i.Name, i.Version, orUnknown(after))
+		log("%s %s now runs %s", i.Name, i.Version, orUnknown(after))
 		return nil
 	}
 	if oldID == "" {
@@ -279,7 +299,7 @@ func (sv *Service) update(ctx context.Context, i Installed, log tasks.Logf) erro
 	}
 	log("the new version did not start: %v", err)
 	log("restoring %s", orUnknown(before))
-	restoreTag(ctx, oldID, i.Image, keep)
+	restoreTag(ctx, oldID, run, keep)
 	dockerx.Remove(ctx, i.Container)
 	if err2 := sv.start(ctx, i, log); err2 != nil {
 		return fmt.Errorf("update failed (%v) and the previous version did not start: %w", err, err2)

@@ -1,4 +1,17 @@
 FROM php:{{.Version}}-fpm
+{{- if .Source}}
+# Compile install (編譯安裝): PHP is compiled again here from the source the
+# image ships, with its own configure options plus the panel's additions.
+ARG CONFIGURE_ARGS=""
+ARG EXTRA_CFLAGS=""
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends $PHPIZE_DEPS libargon2-dev libcurl4-openssl-dev libonig-dev libreadline-dev \
+      libsodium-dev libsqlite3-dev libssl-dev libxml2-dev zlib1g-dev \
+ && OPTS="$(php-config --configure-options)" && docker-php-source extract && cd /usr/src/php \
+ && CFLAGS="$PHP_CFLAGS ${EXTRA_CFLAGS}" CPPFLAGS="$PHP_CPPFLAGS" LDFLAGS="$PHP_LDFLAGS" ./configure $OPTS ${CONFIGURE_ARGS} \
+ && make -j"$(nproc)" && find -type f -name '*.a' -delete && make install \
+ && cd / && docker-php-source delete && php -v
+{{- end}}
 # Extensions most PHP apps (WordPress, Laravel, ...) expect, plus git/unzip for Composer.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git unzip libzip-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev libicu-dev \

@@ -51,7 +51,24 @@ type Installed struct {
 	OOMProtect bool `json:"oom_protect"`
 	// FullVersion is the exact version of the local image ("11.4.4").
 	FullVersion string `json:"full_version"`
-	secret      string
+	// BuildMode is "fast" (the official pre-built image) or "source"
+	// (compiled here, with extra configure options and compiler flags).
+	BuildMode   string `json:"build_mode"`
+	BuildArgs   string `json:"build_args"`
+	BuildCFlags string `json:"build_cflags"`
+	// Source build support of this version: "" = supported, else why not.
+	SourceNo      string `json:"source_no,omitempty"`
+	SourceMinutes int    `json:"source_minutes,omitempty"`
+	SourceDefault string `json:"source_defaults,omitempty"`
+	secret        string
+}
+
+// RunImage is the image the container (or website project) runs.
+func (i Installed) RunImage() string {
+	if i.BuildMode == ModeSource {
+		return SourceImage(i.App, i.Version)
+	}
+	return i.Image
 }
 
 // AdminUser is the engine's superuser that the panel uses.
@@ -95,7 +112,7 @@ func (sv *Service) dir(app, version string) string {
 // ---- persistence ----
 
 func (sv *Service) list(ctx context.Context, where string, args ...any) ([]Installed, error) {
-	rows, err := sv.st.DB.QueryContext(ctx, `SELECT id, app, version, port, secret, created_at, oom_protect FROM apps `+where+` ORDER BY app, version DESC`, args...)
+	rows, err := sv.st.DB.QueryContext(ctx, `SELECT id, app, version, port, secret, created_at, oom_protect, build_mode, build_args, build_cflags FROM apps `+where+` ORDER BY app, version DESC`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +121,7 @@ func (sv *Service) list(ctx context.Context, where string, args ...any) ([]Insta
 	for rows.Next() {
 		var i Installed
 		var sealed string
-		if err := rows.Scan(&i.ID, &i.App, &i.Version, &i.Port, &sealed, &i.CreatedAt, &i.OOMProtect); err != nil {
+		if err := rows.Scan(&i.ID, &i.App, &i.Version, &i.Port, &sealed, &i.CreatedAt, &i.OOMProtect, &i.BuildMode, &i.BuildArgs, &i.BuildCFlags); err != nil {
 			return nil, err
 		}
 		a, v, ok := Lookup(i.App, i.Version)
@@ -113,6 +130,8 @@ func (sv *Service) list(ctx context.Context, where string, args ...any) ([]Insta
 		}
 		i.Name, i.Kind, i.Image, i.Databases = a.Name, a.Kind, v.Image, a.Databases
 		i.HasConfig = configFile(i.App) != ""
+		r, why := SourceSupport(i.App, i.Version)
+		i.SourceNo, i.SourceMinutes, i.SourceDefault = why, r.Minutes, r.Defaults
 		if a.Kind != KindRuntime {
 			i.Container = ContainerName(i.App, i.Version)
 		}
@@ -175,7 +194,7 @@ func (sv *Service) RuntimeImage(ctx context.Context, app, version string) (strin
 	if i.Kind != KindRuntime {
 		return "", ErrUnknown
 	}
-	return i.Image, nil
+	return i.RunImage(), nil
 }
 
 // UsedPorts lists the loopback ports held by installed services.
@@ -209,10 +228,49 @@ func newPassword() string {
 
 // Install pulls and starts an app version (task). avoid lists ports reserved
 // elsewhere (website projects).
-func (sv *Service) Install(ctx context.Context, key, version string, avoid map[int]bool) (string, error) {
+// BuildOptions choose a fast (pre-built) or a source install.
+type BuildOptions struct {
+	Mode   string `json:"build_mode"` // "" = fast
+	Args   string `json:"build_args"`
+	CFlags string `json:"build_cflags"`
+}
+
+func (o *BuildOptions) normalize(app, version string) error {
+	if o.Mode == "" {
+		o.Mode = ModeFast
+	}
+	o.Args, o.CFlags = strings.TrimSpace(o.Args), strings.TrimSpace(o.CFlags)
+	switch o.Mode {
+	case ModeFast:
+		o.Args, o.CFlags = "", ""
+	case ModeSource:
+		if _, why := SourceSupport(app, version); why != "" {
+			return ErrNoSource
+		}
+		if !ValidBuildArgs(o.Args) || !ValidBuildArgs(o.CFlags) {
+			return ErrBuildArgs
+		}
+	default:
+		return ErrBuildMode
+	}
+	return nil
+}
+
+func (sv *Service) Install(ctx context.Context, key, version string, avoid map[int]bool, opts BuildOptions) (string, error) {
 	a, v, ok := Lookup(key, version)
 	if !ok {
 		return "", ErrUnknown
+	}
+	if err := opts.normalize(key, version); err != nil {
+		return "", err
+	}
+	timeout := time.Hour
+	if opts.Mode == ModeSource {
+		r, _ := SourceSupport(key, version)
+		if err := checkBuildMemory(ctx, r); err != nil {
+			return "", err
+		}
+		timeout = buildTimeout
 	}
 	if _, err := sv.find(ctx, key, version); err == nil {
 		return "", ErrInstalled
@@ -225,7 +283,7 @@ func (sv *Service) Install(ctx context.Context, key, version string, avoid map[i
 			return "", fmt.Errorf("%w: %d", ErrLowMemory, a.MinMemMB)
 		}
 	}
-	return sv.tasks.Start("app.install:"+key+"-"+version, func(ctx context.Context, log tasks.Logf) error {
+	return sv.tasks.StartLong("app.install:"+key+"-"+version, timeout, func(ctx context.Context, log tasks.Logf) error {
 		if !dockerx.Available(ctx) {
 			return dockerx.ErrNoDocker
 		}
@@ -235,7 +293,12 @@ func (sv *Service) Install(ctx context.Context, key, version string, avoid map[i
 				return err
 			}
 		}
-		inst := Installed{App: key, Version: version, Kind: a.Kind, Image: v.Image}
+		inst := Installed{App: key, Name: a.Name, Version: version, Kind: a.Kind, Image: v.Image, BuildMode: opts.Mode, BuildArgs: opts.Args, BuildCFlags: opts.CFlags}
+		if opts.Mode == ModeSource {
+			if err := sv.buildSource(ctx, inst, log); err != nil {
+				return err
+			}
+		}
 		if a.Kind != KindRuntime {
 			inst.Port = sv.pickPort(ctx, a.Port, avoid)
 			if inst.Port == 0 {
@@ -263,8 +326,8 @@ func (sv *Service) Install(ctx context.Context, key, version string, avoid map[i
 				return err
 			}
 		}
-		_, err := sv.st.DB.ExecContext(ctx, `INSERT INTO apps(app, version, port, secret, created_at) VALUES(?,?,?,?,?)`,
-			key, version, inst.Port, sv.box.Seal(inst.secret), time.Now().Unix())
+		_, err := sv.st.DB.ExecContext(ctx, `INSERT INTO apps(app, version, port, secret, created_at, build_mode, build_args, build_cflags) VALUES(?,?,?,?,?,?,?,?)`,
+			key, version, inst.Port, sv.box.Seal(inst.secret), time.Now().Unix(), opts.Mode, opts.Args, opts.CFlags)
 		if err != nil {
 			return err
 		}
@@ -346,7 +409,7 @@ func (sv *Service) Uninstall(ctx context.Context, id int64, removeData bool) (st
 			os.RemoveAll(sv.dir(i.App, i.Version))
 		}
 		// The image (and one kept by an update) frees disk space; it is pulled again on reinstall.
-		for _, ref := range []string{rollbackTag(i.App, i.Version), i.Image} {
+		for _, ref := range []string{rollbackTag(i.App, i.Version), SourceImage(i.App, i.Version), i.Image} {
 			if !dockerx.ImageExists(ctx, ref) {
 				continue
 			}
@@ -494,22 +557,22 @@ func (sv *Service) args(i Installed) []string {
 	var a []string
 	switch i.App {
 	case "mysql":
-		a = append(pub(3306), "-e", "MYSQL_ROOT_PASSWORD="+i.secret, "-v", data+":/var/lib/mysql", "-v", conf+":/etc/mysql/conf.d:ro", i.Image)
+		a = append(pub(3306), "-e", "MYSQL_ROOT_PASSWORD="+i.secret, "-v", data+":/var/lib/mysql", "-v", conf+":/etc/mysql/conf.d:ro", i.RunImage())
 	case "mariadb":
-		a = append(pub(3306), "-e", "MARIADB_ROOT_PASSWORD="+i.secret, "-v", data+":/var/lib/mysql", "-v", conf+":/etc/mysql/conf.d:ro", i.Image)
+		a = append(pub(3306), "-e", "MARIADB_ROOT_PASSWORD="+i.secret, "-v", data+":/var/lib/mysql", "-v", conf+":/etc/mysql/conf.d:ro", i.RunImage())
 	case "postgres":
-		a = append(pub(5432), "-e", "POSTGRES_PASSWORD="+i.secret, "-v", data+":/var/lib/postgresql/data", i.Image)
+		a = append(pub(5432), "-e", "POSTGRES_PASSWORD="+i.secret, "-v", data+":/var/lib/postgresql/data", i.RunImage())
 	case "mongodb":
-		a = append(pub(27017), "-e", "MONGO_INITDB_ROOT_USERNAME=root", "-e", "MONGO_INITDB_ROOT_PASSWORD="+i.secret, "-v", data+":/data/db", i.Image)
+		a = append(pub(27017), "-e", "MONGO_INITDB_ROOT_USERNAME=root", "-e", "MONGO_INITDB_ROOT_PASSWORD="+i.secret, "-v", data+":/data/db", i.RunImage())
 	case "sqlserver":
-		a = append(pub(1433), "-e", "ACCEPT_EULA=Y", "-e", "MSSQL_SA_PASSWORD="+i.secret, "-v", data+":/var/opt/mssql", i.Image)
+		a = append(pub(1433), "-e", "ACCEPT_EULA=Y", "-e", "MSSQL_SA_PASSWORD="+i.secret, "-v", data+":/var/opt/mssql", i.RunImage())
 	case "redis":
-		a = append(pub(6379), "-v", data+":/data", "-v", conf+":/usr/local/etc/redis:ro", i.Image, "redis-server", "/usr/local/etc/redis/redis.conf")
+		a = append(pub(6379), "-v", data+":/data", "-v", conf+":/usr/local/etc/redis:ro", i.RunImage(), "redis-server", "/usr/local/etc/redis/redis.conf")
 	case "memcached":
-		a = append(pub(11211), i.Image, "memcached", "-m", "64")
+		a = append(pub(11211), i.RunImage(), "memcached", "-m", "64")
 	case "adminer":
 		// Host network so it reaches every database on 127.0.0.1; the panel proxies /adminer/ to it.
-		a = []string{"--network", "host", i.Image, "php", "-S", fmt.Sprintf("127.0.0.1:%d", i.Port), "-t", "/var/www/html"}
+		a = []string{"--network", "host", i.RunImage(), "php", "-S", fmt.Sprintf("127.0.0.1:%d", i.Port), "-t", "/var/www/html"}
 	case "phpmyadmin":
 		a = sv.pmaArgs(i)
 	}

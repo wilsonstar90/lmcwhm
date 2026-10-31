@@ -271,7 +271,11 @@
       "wrong_engine": "该引擎没有此设置",
       "bad_setting": "数值无效 {field}",
       "engine_error": "数据库服务器返回：{detail}",
-      "update_failed": "更新失败，已还原旧版本：{detail}"
+      "update_failed": "更新失败，已还原旧版本：{detail}",
+      "no_source_build": "此版本不支持编译安装",
+      "invalid_build_args": "编译参数只能使用字母数字和 - _ = + , . / : @ %",
+      "invalid_build_mode": "安装方式无效",
+      "build_failed": "新版本无法启动，已还原"
     },
     "db": {
       "invalid_name": "名称：字母、数字和 _，以字母开头（不能使用保留名）",
@@ -3258,6 +3262,35 @@
       "expiry": "设置到期时间",
       "category": "设置分类",
       "delete": "删除"
+    }
+  },
+  "bm": {
+    "title": "安装方式",
+    "column": "安装方式",
+    "fast": "极速安装",
+    "fast_hint": "使用官方预编译好的镜像，一两分钟完成，最稳定。",
+    "source": "编译安装",
+    "source_hint": "在本服务器从源码编译同一版本，可添加编译参数。约 {n} 分钟（2 核），至少需要 {mem} MB 内存（含 swap）。",
+    "warn": "编译期间会占满 CPU；原版本继续运行，编译成功后才切换，失败会自动还原。",
+    "advanced": "编译参数（高级）",
+    "defaults": "默认参数：",
+    "args": "额外参数",
+    "args_hint": "添加到 ./configure（或 cmake / make）之后，例如 --enable-xxx。不能使用引号和 $。",
+    "cflags_hint": "例如 -O2 -march=native（native 仅适用本机 CPU）",
+    "switch_hint": "数据、设置和端口保持不变；数据库会先自动备份。",
+    "switch": "切换",
+    "rebuild": "重新编译",
+    "click_switch": "点击切换极速 / 编译安装",
+    "fast_short": "极速",
+    "source_short": "编译",
+    "no": {
+      "huge": "MongoDB 编译需约 40 GB 磁盘和数小时，不支持。",
+      "jdk": "JDK 编译需要另一个 JDK 和数小时，不支持。",
+      "bytecode": "Tomcat 是 Java 程序，无需编译。",
+      "closed": "SQL Server 没有公开源码。",
+      "script": "这是 PHP 程序，无需编译。",
+      "old": "MySQL 5.7 已停止支持，不提供编译安装。",
+      "none": "此软件不支持编译安装。"
     }
   }
 }

@@ -128,3 +128,20 @@ func TestVarnish(t *testing.T) {
 		t.Fatal("bad exclude accepted")
 	}
 }
+
+func TestPHPSourceDockerfile(t *testing.T) {
+	fast, _ := render("php.Dockerfile.tmpl", map[string]any{"Version": "8.3"})
+	src, _ := render("php.Dockerfile.tmpl", map[string]any{"Version": "8.3", "Source": true})
+	if strings.Contains(string(fast), "./configure") || !strings.Contains(string(src), "./configure $OPTS ${CONFIGURE_ARGS}") ||
+		!strings.Contains(string(src), "docker-php-ext-install") {
+		t.Fatalf("fast:\n%s\nsource:\n%s", fast, src)
+	}
+	e := New(t.TempDir())
+	if b := e.PHPBuildOf("8.3"); b.Mode != "fast" {
+		t.Fatalf("default %+v", b)
+	}
+	e.WritePHPBuild("8.3", PHPBuild{Mode: "source", Args: "--enable-debug"})
+	if b := e.PHPBuildOf("8.3"); b.Mode != "source" || b.Args != "--enable-debug" {
+		t.Fatalf("stored %+v", b)
+	}
+}

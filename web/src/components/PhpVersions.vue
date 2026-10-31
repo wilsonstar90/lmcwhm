@@ -12,9 +12,10 @@ import TaskModal from './TaskModal.vue'
 import LogsModal from './LogsModal.vue'
 import { CodeEditor } from './code-editor'
 import UpdateBadge from './UpdateBadge.vue'
+import BuildModeDialog, { type BuildChoice } from './BuildModeDialog.vue'
 import { useUpdates } from '../stores/updates'
 
-interface Ver { version: string; eol: boolean; state: string; port: number; extensions: string[]; sites: number; full_version?: string }
+interface Ver { version: string; eol: boolean; state: string; port: number; extensions: string[]; sites: number; full_version?: string; build?: BuildChoice; source_minutes?: number }
 interface Ext { name: string; desc: string; min?: string; max?: string; slow?: boolean }
 interface Pool { pm: string; max_children: number; start_servers: number; min_spare: number; max_spare: number; max_requests: number; request_timeout: number; slowlog_timeout: number }
 interface Conf { extensions: string[]; ini: Record<string, string>; disable_functions: string[]; custom_ini: string; fpm: Pool }
@@ -67,6 +68,16 @@ const cols = computed<DataTableColumns<Ver>>(() => [
   },
   { title: () => t('common.status'), key: 'state', width: 110, render: (v) => h(NTag, { size: 'small', type: v.state === 'running' ? 'success' : v.state ? 'warning' : 'default' }, () => v.state || t('php.not_installed')) },
   { title: () => t('php.sites'), key: 'sites', width: 80 },
+  {
+    title: () => t('bm.column'),
+    key: 'build',
+    width: 100,
+    render: (v) =>
+      v.state
+        ? h(NTag, { size: 'small', bordered: false, type: v.build?.build_mode === 'source' ? 'warning' : 'info', style: 'cursor:pointer', onClick: () => openBuild(v, true), title: t('bm.click_switch') },
+          () => `${v.build?.build_mode === 'source' ? t('bm.source_short') : t('bm.fast_short')} ⇄`)
+        : '—',
+  },
   { title: () => t('php.extensions'), key: 'extensions', ellipsis: { tooltip: true }, render: (v) => v.extensions.join(', ') || '—' },
   {
     title: () => t('common.actions'),
@@ -75,7 +86,7 @@ const cols = computed<DataTableColumns<Ver>>(() => [
     render: (v) =>
       h(NSpace, { size: 4 }, () =>
         !v.state
-          ? [h(NButton, { size: 'tiny', type: 'primary', onClick: () => action(v, 'install') }, () => t('php.install'))]
+          ? [h(NButton, { size: 'tiny', type: 'primary', onClick: () => openBuild(v, false) }, () => t('php.install'))]
           : [
               h(NButton, { size: 'tiny', type: 'primary', onClick: () => openSettings(v) }, () => t('php.settings')),
               v.state === 'running'
@@ -94,6 +105,20 @@ const cols = computed<DataTableColumns<Ver>>(() => [
       ),
   },
 ])
+
+// ---- install / switch: 極速 or 編譯 ----
+const bm = ref<{ v: Ver; installed: boolean } | null>(null)
+const openBuild = (v: Ver, installed: boolean) => (bm.value = { v, installed })
+async function runBuild(c: BuildChoice) {
+  const { v, installed } = bm.value!
+  try {
+    const r = await post<{ task_id: string }>(`/php/${v.version}/${installed ? 'build' : 'install'}`, c)
+    task.value = { id: r.task_id, title: `PHP ${v.version}` }
+    bm.value = null
+  } catch (e) {
+    fail(e)
+  }
+}
 
 // ---- settings modal ----
 const cur = ref<{ v: Ver; conf: Conf; modules: string[]; status?: Record<string, number | string>; statusError?: string } | null>(null)
@@ -223,6 +248,12 @@ const statusKeys = ['pool', 'process manager', 'accepted conn', 'listen queue', 
       </template>
     </n-card>
   </n-modal>
+  <BuildModeDialog
+    :show="!!bm" :title="bm ? `${bm.installed ? t('bm.title') : t('php.install')} · PHP ${bm.v.version}` : ''"
+    :info="bm ? { minutes: bm.v.source_minutes ?? 15, min_mem_mb: 1024, defaults: 'php-config --configure-options' } : null"
+    :current="bm?.installed ? bm.v.build ?? { build_mode: 'fast', build_args: '', build_cflags: '' } : null"
+    @close="bm = null" @confirm="runBuild"
+  />
   <TaskModal :task-id="task?.id ?? null" :title="task?.title ?? ''" @close="task = null; load(); emit('changed')" @done="load" />
   <LogsModal :url="logs?.url ?? null" :title="logs?.title ?? ''" @close="logs = null" />
 </template>

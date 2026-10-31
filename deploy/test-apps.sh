@@ -210,6 +210,25 @@ code="$(api POST "/apps/$RID/port" '{"port":22}' | jget "['code']")"
 task POST "/apps/$RID/port" '{"port":6379}'
 pass "Redis: key browser, settings applied live, port moved"
 
+# ---------- compile install: switch Redis to a source build and back, data kept ----------
+code="$(api POST "/apps/$RID/build" '{"build_mode":"source","build_args":"x; rm -rf /"}' | jget "['code']")"
+[[ "$code" == app.invalid_build_args ]] || fail "shell characters in build options accepted: $code"
+code="$(api POST /apps/install '{"app":"sqlserver","version":"2022","build_mode":"source"}' | jget "['code']")"
+[[ "$code" == app.no_source_build ]] || fail "SQL Server compile install accepted: $code"
+task POST "/apps/$RID/build" '{"build_mode":"source","build_cflags":"-O2"}'
+[[ "$(docker inspect -f '{{.Config.Image}}' lmcwhm-redis74)" == lmcwhm/src-redis:7.4 ]] || fail "redis not on the compiled image"
+docker image inspect -f '{{index .Config.Labels "lmcwhm.build"}}' lmcwhm/src-redis:7.4 | grep -q source || fail "compiled image not labelled"
+docker exec lmcwhm-redis74 redis-server --version | grep -q 'v=7.4.0' || fail "compiled redis version"
+api GET "/apps/$RID/redis/key?db=3&key=lmc:a" | grep -q '"value":"hello"' || fail "redis lost data on the compile switch"
+api GET /apps | python3 -c "import sys,json; a=[a for a in json.load(sys.stdin)['items'] if a['app']=='redis'][0]; assert a['build_mode']=='source' and a['build_cflags']=='-O2', a" \
+  || fail "build mode not stored"
+ls /opt/lmcwhm/logs/build/redis-7.4.log >/dev/null || fail "no build log"
+task POST "/apps/$RID/build" '{"build_mode":"fast"}'
+[[ "$(docker inspect -f '{{.Config.Image}}' lmcwhm-redis74)" == redis:7.4 ]] || fail "redis not back on the official image"
+api GET "/apps/$RID/redis/key?db=3&key=lmc:a" | grep -q '"value":"hello"' || fail "redis lost data switching back"
+docker image inspect lmcwhm/src-redis:7.4 >/dev/null 2>&1 && fail "compiled image left behind"
+pass "compile install: Redis compiled from source and back to the pre-built image, data kept"
+
 # ---------- software updates: exact versions, patch update with data kept ----------
 api GET /apps | python3 -c "import sys,json; a=[a for a in json.load(sys.stdin)['items'] if a['app']=='redis'][0]; assert a['full_version']=='7.4.0', a" \
   || fail "redis full version"

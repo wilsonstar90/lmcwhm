@@ -8,7 +8,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os/exec"
+	"sort"
 	"strings"
 )
 
@@ -78,6 +80,30 @@ func Remove(ctx context.Context, name string) error {
 func Build(ctx context.Context, tag, dockerfile string) error {
 	_, err := RunInput(ctx, []byte(dockerfile), "build", "-t", tag, "-")
 	return err
+}
+
+// BuildStream builds tag from a Dockerfile on stdin with build arguments,
+// writing the full output to w as it comes (compiles can take an hour).
+func BuildStream(ctx context.Context, tag, dockerfile string, args map[string]string, w io.Writer) error {
+	a := []string{"build", "--progress=plain", "-t", tag}
+	keys := make([]string, 0, len(args))
+	for k := range args {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		a = append(a, "--build-arg", k+"="+args[k])
+	}
+	cmd := exec.CommandContext(ctx, "docker", append(a, "-")...)
+	cmd.Stdin = strings.NewReader(dockerfile)
+	cmd.Stdout, cmd.Stderr = w, w
+	if err := cmd.Run(); err != nil {
+		if errors.Is(err, exec.ErrNotFound) {
+			return ErrNoDocker
+		}
+		return fmt.Errorf("docker build %s: %w", tag, err)
+	}
+	return nil
 }
 
 // Logs returns the last n lines of a container's stdout and stderr.

@@ -31,6 +31,7 @@ func (s *Server) phpRoutes(r chi.Router) {
 	r.Put("/php/{v}", s.handlePHPSave)
 	r.Post("/php/{v}/{action:install|start|stop|restart|reload|remove|update}", s.handlePHPAction)
 	r.Get("/php/{v}/logs", s.handlePHPLogs)
+	r.Post("/php/{v}/build", s.handlePHPBuild)
 	r.Get("/varnish", s.handleVarnish)
 	r.Put("/varnish", s.handleVarnishSave)
 	r.Post("/varnish/purge", s.handleVarnishPurge)
@@ -65,6 +66,7 @@ func (s *Server) handlePHPList(w http.ResponseWriter, r *http.Request) {
 		info := webenv.PHPVersionInfo{
 			Version: v, EOL: webenv.EOLPHP(v), State: dockerx.State(r.Context(), webenv.PHPName(v)), Port: webenv.PHPPort(v),
 			Extensions: s.Sites.Env.PHPConfig(v).Extensions, Sites: count[v],
+			Build: s.Sites.Env.PHPBuildOf(v), SourceMinutes: webenv.PHPSourceMinutes,
 		}
 		if info.State != "" {
 			if img, err := dockerx.Run(r.Context(), "inspect", "-f", "{{.Config.Image}}", webenv.PHPName(v)); err == nil {
@@ -144,7 +146,23 @@ func (s *Server) handlePHPAction(w http.ResponseWriter, r *http.Request) {
 	name := webenv.PHPName(v)
 	switch action {
 	case "install":
-		id := s.Tasks.StartLong("PHP "+v, 30*time.Minute, func(ctx context.Context, log tasks.Logf) error {
+		// The body may ask for a compile install.
+		var b webenv.PHPBuild
+		decode(r, &b)
+		if err := phpBuildValid(&b); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		timeout := 30 * time.Minute
+		if b.Mode == appstore.ModeSource {
+			timeout = 3 * time.Hour
+		}
+		id := s.Tasks.StartLong("PHP "+v, timeout, func(ctx context.Context, log tasks.Logf) error {
+			if dockerx.State(ctx, webenv.PHPName(v)) == "" {
+				if err := s.Sites.Env.WritePHPBuild(v, b); err != nil {
+					return err
+				}
+			}
 			return s.Sites.Env.EnsurePHP(ctx, v, log)
 		})
 		writeJSON(w, http.StatusAccepted, map[string]any{"task_id": id})
@@ -276,4 +294,56 @@ func (s *Server) handleVarnishPurge(w http.ResponseWriter, r *http.Request) {
 	}
 	s.auditCat(r, "site", "varnish.purge", strings.Join(hosts, " "))
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// phpBuildValid checks a PHP build choice like an App Store one.
+func phpBuildValid(b *webenv.PHPBuild) error {
+	o := appstore.BuildOptions{Mode: b.Mode, Args: b.Args, CFlags: b.CFlags}
+	if o.Mode == "" {
+		o.Mode = appstore.ModeFast
+	}
+	if o.Mode != appstore.ModeFast && o.Mode != appstore.ModeSource {
+		return appstore.ErrBuildMode
+	}
+	if o.Mode == appstore.ModeFast {
+		*b = webenv.PHPBuild{Mode: appstore.ModeFast}
+		return nil
+	}
+	b.Args, b.CFlags = strings.TrimSpace(b.Args), strings.TrimSpace(b.CFlags)
+	if !appstore.ValidBuildArgs(b.Args) || !appstore.ValidBuildArgs(b.CFlags) {
+		return appstore.ErrBuildArgs
+	}
+	return nil
+}
+
+// handlePHPBuild switches a PHP version between the fast and the source build.
+func (s *Server) handlePHPBuild(w http.ResponseWriter, r *http.Request) {
+	v, ok := phpVersion(w, r)
+	if !ok {
+		return
+	}
+	var b webenv.PHPBuild
+	if err := decode(r, &b); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := phpBuildValid(&b); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if dockerx.State(r.Context(), webenv.PHPName(v)) == "" {
+		writeErr(w, http.StatusBadRequest, errors.New("php.not_installed"))
+		return
+	}
+	s.auditCat(r, "app", "php.build", v+" "+b.Mode)
+	id := s.Tasks.StartLong("PHP "+v, 3*time.Hour, func(ctx context.Context, log tasks.Logf) error {
+		if err := s.Sites.Env.SetPHPBuild(ctx, v, b, log); err != nil {
+			return err
+		}
+		if s.Apps != nil {
+			s.Apps.RefreshPHP(ctx, v)
+		}
+		return nil
+	})
+	writeJSON(w, http.StatusAccepted, map[string]any{"task_id": id})
 }

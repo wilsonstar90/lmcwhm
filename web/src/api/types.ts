@@ -221,6 +221,12 @@ export interface InstalledApp {
   created_at: number
   oom_protect?: boolean
   full_version?: string
+  build_mode?: 'fast' | 'source'
+  build_args?: string
+  build_cflags?: string
+  source_no?: string
+  source_minutes?: number
+  source_defaults?: string
 }
 
 export interface AppUpdate {

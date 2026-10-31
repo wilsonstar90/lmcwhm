@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -15,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/wilsonstar90/lmcwhm/internal/dockerx"
 )
@@ -311,11 +313,7 @@ const PHPInstallerImage = "mlocati/php-extension-installer:latest"
 func (e *Env) buildPHP(ctx context.Context, v string, exts []string, log func(string, ...any)) (string, error) {
 	if !dockerx.ImageExists(ctx, PHPImage(v)) {
 		log("building PHP %s image (first time, a few minutes)", v)
-		df, err := render("php.Dockerfile.tmpl", map[string]any{"Version": v})
-		if err != nil {
-			return "", err
-		}
-		if err := dockerx.Build(ctx, PHPImage(v), string(df)); err != nil {
+		if err := e.buildPHPBase(ctx, v, log); err != nil {
 			return "", err
 		}
 	}
@@ -472,6 +470,9 @@ type PHPVersionInfo struct {
 	Sites      int      `json:"sites"`
 	// FullVersion is the exact version of the running build ("8.3.14").
 	FullVersion string `json:"full_version,omitempty"`
+	// Build says whether it is the fast or the source build.
+	Build         PHPBuild `json:"build"`
+	SourceMinutes int      `json:"source_minutes"`
 }
 
 // EOLPHP reports versions without upstream security support.
@@ -510,6 +511,12 @@ func phpImages(ctx context.Context, v string) []string {
 // (php:8.3-fpm) with the same extensions, tests it with php-fpm -t and only
 // then replaces the running container; on failure the previous build stays (task context).
 func (e *Env) UpdatePHP(ctx context.Context, v string, log func(string, ...any)) error {
+	return e.rebuildPHP(ctx, v, true, log)
+}
+
+// rebuildPHP builds a version again (after pulling a newer base when pull),
+// tests it and restarts FPM on it; a failure puts the previous build back.
+func (e *Env) rebuildPHP(ctx context.Context, v string, pull bool, log func(string, ...any)) error {
 	if !ValidPHP(v) {
 		return fmt.Errorf("unsupported PHP version %q", v)
 	}
@@ -520,13 +527,19 @@ func (e *Env) UpdatePHP(ctx context.Context, v string, log func(string, ...any))
 	c := e.PHPConfig(v)
 	img := PHPImageFor(v, c.Extensions)
 	oldBase := imageID(ctx, base)
-	log("pulling %s", base)
-	if _, err := dockerx.Run(ctx, "pull", "-q", base); err != nil {
-		return err
+	if pull {
+		log("pulling %s", base)
+		if _, err := dockerx.Run(ctx, "pull", "-q", base); err != nil {
+			return err
+		}
+	} else if oldBase == "" {
+		if _, err := dockerx.Run(ctx, "pull", "-q", base); err != nil {
+			return err
+		}
 	}
 	// Up to date when nothing new was pulled and the build carries the base's
 	// version (an earlier update that failed after its pull leaves an old build).
-	if imageID(ctx, base) == oldBase && dockerx.State(ctx, PHPName(v)) == "running" &&
+	if pull && imageID(ctx, base) == oldBase && dockerx.State(ctx, PHPName(v)) == "running" &&
 		phpImageVersion(ctx, img) != "" && phpImageVersion(ctx, img) == phpImageVersion(ctx, base) {
 		log("PHP %s is already built on the newest image", v)
 		return nil
@@ -544,11 +557,7 @@ func (e *Env) UpdatePHP(ctx context.Context, v string, log func(string, ...any))
 		}
 	}
 	log("rebuilding PHP %s", v)
-	df, err := render("php.Dockerfile.tmpl", map[string]any{"Version": v})
-	if err != nil {
-		return err
-	}
-	if err := dockerx.Build(ctx, PHPImage(v), string(df)); err != nil {
+	if err := e.buildPHPBase(ctx, v, log); err != nil {
 		restore()
 		return err
 	}
@@ -606,4 +615,141 @@ func phpImageVersion(ctx context.Context, ref string) string {
 func imageID(ctx context.Context, ref string) string {
 	id, _ := dockerx.Run(ctx, "image", "inspect", "-f", "{{.Id}}", ref)
 	return id
+}
+
+// PHPBuild is how a PHP version is built: "fast" (the official image with
+// the usual extensions) or "source" (PHP compiled again on this server).
+type PHPBuild struct {
+	Mode   string `json:"build_mode"`
+	Args   string `json:"build_args"`
+	CFlags string `json:"build_cflags"`
+}
+
+// PHPSourceMinutes is about how long a PHP compile takes on 2 cores.
+const PHPSourceMinutes = 15
+
+func (e *Env) phpBuildPath(v string) string { return filepath.Join(e.PHPDir(v), "build.json") }
+
+func (e *Env) PHPBuildOf(v string) PHPBuild {
+	b := PHPBuild{Mode: "fast"}
+	if raw, err := os.ReadFile(e.phpBuildPath(v)); err == nil {
+		json.Unmarshal(raw, &b)
+	}
+	if b.Mode != "source" {
+		b = PHPBuild{Mode: "fast"}
+	}
+	return b
+}
+
+// WritePHPBuild records how a version not yet installed will be built.
+func (e *Env) WritePHPBuild(v string, b PHPBuild) error {
+	if err := os.MkdirAll(e.PHPDir(v), 0o755); err != nil {
+		return err
+	}
+	raw, _ := json.MarshalIndent(b, "", "  ")
+	return os.WriteFile(e.phpBuildPath(v), raw, 0o644)
+}
+
+// buildPHPBase builds lmcwhm/php:<v> (compiled again in source mode).
+func (e *Env) buildPHPBase(ctx context.Context, v string, log func(string, ...any)) error {
+	b := e.PHPBuildOf(v)
+	df, err := render("php.Dockerfile.tmpl", map[string]any{"Version": v, "Source": b.Mode == "source"})
+	if err != nil {
+		return err
+	}
+	if b.Mode != "source" {
+		return dockerx.Build(ctx, PHPImage(v), string(df))
+	}
+	log("compiling PHP %s from source (about %d minutes on 2 cores)", v, PHPSourceMinutes)
+	dir := filepath.Join(e.Home, "logs", "build")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	path := filepath.Join(dir, "php-"+v+".log")
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	log("full build log: %s", path)
+	w := NewProgressWriter(f, log)
+	if err := dockerx.BuildStream(ctx, PHPImage(v), string(df), map[string]string{"CONFIGURE_ARGS": b.Args, "EXTRA_CFLAGS": b.CFlags}, w); err != nil {
+		w.DumpTail()
+		return fmt.Errorf("the PHP source build failed (see %s): %w", path, err)
+	}
+	return nil
+}
+
+// SetPHPBuild switches a version between the fast and the source build (or
+// compiles it again with other options), then rebuilds and restarts it;
+// the previous build and settings come back when that fails.
+func (e *Env) SetPHPBuild(ctx context.Context, v string, b PHPBuild, log func(string, ...any)) error {
+	if !ValidPHP(v) {
+		return fmt.Errorf("unsupported PHP version %q", v)
+	}
+	prev := e.PHPBuildOf(v)
+	raw, _ := json.MarshalIndent(b, "", "  ")
+	if err := os.MkdirAll(e.PHPDir(v), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(e.phpBuildPath(v), raw, 0o644); err != nil {
+		return err
+	}
+	if err := e.rebuildPHP(ctx, v, false, log); err != nil {
+		old, _ := json.MarshalIndent(prev, "", "  ")
+		os.WriteFile(e.phpBuildPath(v), old, 0o644)
+		return err
+	}
+	log("PHP %s now runs the %s build", v, b.Mode)
+	return nil
+}
+
+// ProgressWriter keeps a build's output in a file and shows a line of it in
+// the task log now and then, and the last lines when the build fails.
+type ProgressWriter struct {
+	w    io.Writer
+	log  func(string, ...any)
+	last time.Time
+	buf  string
+	tail []string
+}
+
+func (p *ProgressWriter) Write(b []byte) (int, error) {
+	p.w.Write(b)
+	p.buf += string(b)
+	for {
+		i := strings.IndexByte(p.buf, '\n')
+		if i < 0 {
+			break
+		}
+		line := strings.TrimSpace(p.buf[:i])
+		p.buf = p.buf[i+1:]
+		if line == "" {
+			continue
+		}
+		p.tail = append(p.tail, line)
+		if len(p.tail) > 30 {
+			p.tail = p.tail[1:]
+		}
+		if strings.Contains(line, "] RUN ") || time.Since(p.last) >= 20*time.Second {
+			p.last = time.Now()
+			if len(line) > 200 {
+				line = line[:200] + "…"
+			}
+			p.log("[build] %s", line)
+		}
+	}
+	return len(b), nil
+}
+
+func NewProgressWriter(w io.Writer, log func(string, ...any)) *ProgressWriter {
+	return &ProgressWriter{w: w, log: log, last: time.Now()}
+}
+
+// DumpTail shows the last lines of the output (after a failure).
+func (p *ProgressWriter) DumpTail() {
+	p.log("last lines of the build:")
+	for _, l := range p.tail {
+		p.log("  %s", l)
+	}
 }

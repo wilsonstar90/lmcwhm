@@ -17,6 +17,7 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/appstore"
 	"github.com/wilsonstar90/lmcwhm/internal/database"
 	"github.com/wilsonstar90/lmcwhm/internal/site"
+	"github.com/wilsonstar90/lmcwhm/internal/webenv"
 )
 
 func (s *Server) appRoutes(r chi.Router) {
@@ -25,6 +26,7 @@ func (s *Server) appRoutes(r chi.Router) {
 	r.Post("/apps/install", s.handleInstallApp)
 	r.Post("/apps/{id}/uninstall", s.handleUninstallApp)
 	r.Post("/apps/{id}/update", s.handleUpdateApp)
+	r.Post("/apps/{id}/build", s.handleAppBuild)
 	r.Get("/apps/updates", s.handleAppUpdates)
 	r.Post("/apps/updates/check", s.handleCheckAppUpdates)
 	r.Post("/apps/{id}/{action:start|stop|restart}", s.handleControlApp)
@@ -71,8 +73,26 @@ func (s *Server) auditCat(r *http.Request, category, action, detail string) {
 
 // ---- App Store ----
 
+// sourceInfo is what the install dialog shows about a compile install.
+type sourceInfo struct {
+	No       string `json:"no,omitempty"` // why not ("" = supported)
+	Minutes  int    `json:"minutes,omitempty"`
+	MinMemMB int    `json:"min_mem_mb,omitempty"`
+	Defaults string `json:"defaults,omitempty"`
+}
+
 func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"items": appstore.Catalog})
+	src := map[string]sourceInfo{}
+	for _, a := range appstore.Catalog {
+		for _, v := range a.Versions {
+			rc, why := appstore.SourceSupport(a.Key, v.Version)
+			src[a.Key+":"+v.Version] = sourceInfo{No: why, Minutes: rc.Minutes, MinMemMB: rc.MinMemMB, Defaults: rc.Defaults}
+		}
+	}
+	for _, v := range webenv.PHPVersions {
+		src["php:"+v] = sourceInfo{Minutes: webenv.PHPSourceMinutes, MinMemMB: 1024, Defaults: "php-config --configure-options"}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": appstore.Catalog, "source": src})
 }
 
 func (s *Server) handleApps(w http.ResponseWriter, r *http.Request) {
@@ -85,7 +105,11 @@ func (s *Server) handleApps(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleInstallApp(w http.ResponseWriter, r *http.Request) {
-	var in struct{ App, Version string }
+	var in struct {
+		App     string `json:"app"`
+		Version string `json:"version"`
+		appstore.BuildOptions
+	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
@@ -99,12 +123,12 @@ func (s *Server) handleInstallApp(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	id, err := s.Apps.Install(r.Context(), in.App, in.Version, avoid)
+	id, err := s.Apps.Install(r.Context(), in.App, in.Version, avoid, in.BuildOptions)
 	if err != nil {
 		writeCodedErr(w, err)
 		return
 	}
-	s.auditCat(r, "app", "app.install", in.App+" "+in.Version)
+	s.auditCat(r, "app", "app.install", strings.TrimSpace(in.App+" "+in.Version+" "+in.Mode))
 	writeJSON(w, http.StatusOK, map[string]string{"task_id": id})
 }
 
@@ -398,4 +422,21 @@ func (s *Server) handlePMA(w http.ResponseWriter, r *http.Request) {
 	s.toolProxy(w, r, s.Apps.PMAPort(r.Context()), appstore.PMAPrefix, false, func(n string) bool {
 		return strings.HasPrefix(n, "phpMyAdmin") || strings.HasPrefix(strings.ToLower(n), "pma") || n == "LMCWHMSignon"
 	}, signon)
+}
+
+// handleAppBuild switches an installed version between the pre-built image
+// and a compile install (or compiles it again with other options).
+func (s *Server) handleAppBuild(w http.ResponseWriter, r *http.Request) {
+	var in appstore.BuildOptions
+	if err := decode(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	id, err := s.Apps.SetBuild(r.Context(), idParam(r), in)
+	if err != nil {
+		writeCodedErr(w, err, appstore.ErrNotFound)
+		return
+	}
+	s.auditCat(r, "app", "app.build", strconv.FormatInt(idParam(r), 10)+" "+in.Mode)
+	writeJSON(w, http.StatusOK, map[string]string{"task_id": id})
 }

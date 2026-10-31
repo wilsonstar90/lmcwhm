@@ -271,7 +271,11 @@
       "wrong_engine": "此引擎沒有此設定",
       "bad_setting": "數值無效 {field}",
       "engine_error": "資料庫伺服器回應：{detail}",
-      "update_failed": "更新失敗，已還原舊版本：{detail}"
+      "update_failed": "更新失敗，已還原舊版本：{detail}",
+      "no_source_build": "此版本不支援編譯安裝",
+      "invalid_build_args": "編譯參數只能使用英數字與 - _ = + , . / : @ %",
+      "invalid_build_mode": "安裝方式無效",
+      "build_failed": "新版本無法啟動，已還原"
     },
     "db": {
       "invalid_name": "名稱：英文字母、數字與 _，以字母開頭（不可使用保留名稱）",
@@ -3258,6 +3262,35 @@
       "expiry": "設定到期時間",
       "category": "設定分類",
       "delete": "刪除"
+    }
+  },
+  "bm": {
+    "title": "安裝方式",
+    "column": "安裝方式",
+    "fast": "極速安裝",
+    "fast_hint": "使用官方預先編譯好的映像，一兩分鐘完成，最穩定。",
+    "source": "編譯安裝",
+    "source_hint": "在本伺服器由原始碼編譯同一版本，可加入編譯參數。約 {n} 分鐘（2 核），需要至少 {mem} MB 記憶體（含 swap）。",
+    "warn": "編譯期間會佔滿 CPU；原本的版本會繼續運行，編譯成功後才切換，失敗會自動還原。",
+    "advanced": "編譯參數（進階）",
+    "defaults": "預設參數：",
+    "args": "額外參數",
+    "args_hint": "加在 ./configure（或 cmake / make）後面，例如 --enable-xxx。不可使用引號與 $。",
+    "cflags_hint": "例如 -O2 -march=native（native 只適用本機 CPU）",
+    "switch_hint": "資料、設定與連接埠保持不變；資料庫會先自動備份。",
+    "switch": "切換",
+    "rebuild": "重新編譯",
+    "click_switch": "點擊切換極速 / 編譯安裝",
+    "fast_short": "極速",
+    "source_short": "編譯",
+    "no": {
+      "huge": "MongoDB 編譯需約 40 GB 磁碟與數小時，不支援。",
+      "jdk": "JDK 編譯需另一個 JDK 與數小時，不支援。",
+      "bytecode": "Tomcat 是 Java 程式，無需編譯。",
+      "closed": "SQL Server 沒有公開原始碼。",
+      "script": "這是 PHP 程式，無需編譯。",
+      "old": "MySQL 5.7 已停止支援，不提供編譯安裝。",
+      "none": "此軟體不支援編譯安裝。"
     }
   }
 }
