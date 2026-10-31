@@ -26,7 +26,8 @@
     "actions": "操作",
     "confirm_delete": "確定刪除？",
     "create": "建立",
-    "created": "建立時間"
+    "created": "建立時間",
+    "deleted": "已刪除"
   },
   "login": {
     "title": "登入面板",
@@ -380,7 +381,10 @@
       "auth_expired": "授權代碼已過期",
       "remote_not_found": "雲端上已經冇呢個檔案",
       "invalid_snapshot": "呢個唔係面板快照",
-      "trash_not_found": "回收站入面搵唔到"
+      "trash_not_found": "回收站入面搵唔到",
+      "import_unsupported": "呢個數據庫引擎唔支援匯入（只支援 MySQL、MariaDB、PostgreSQL）",
+      "import_format": "檔案格式唔支援或者已損壞（支援 sql、sql.gz、zip、tar.gz、tgz）",
+      "import_no_sql": "壓縮包入面搵唔到 .sql 檔案"
     },
     "ai": {
       "no_key": "未設定 Anthropic API key",
@@ -3462,5 +3466,49 @@
     "ops": "每秒讀寫",
     "ops_n": "{n} 次",
     "latency": "IO 延遲"
+  },
+  "dbb": {
+    "col": "備份",
+    "has": "有備份({n})",
+    "none": "無備份",
+    "title": "數據庫【{name}】備份",
+    "backup": "備份數據庫",
+    "backup_to": "揀儲存位置",
+    "local": "本地",
+    "file": "檔案名稱",
+    "dest": "儲存對象",
+    "size": "大小",
+    "time": "備份時間",
+    "note": "備註",
+    "ops": "操作",
+    "by_cron": "計劃任務",
+    "by_hand": "手動",
+    "download": "下載",
+    "restore": "還原",
+    "restore_confirm": "用 {file} 還原數據庫 {db}？現有數據會被覆蓋。",
+    "backup_first": "先備份現有數據",
+    "delete_confirm": "刪除 {file}？",
+    "delete_n": "刪除已選 ({n})",
+    "delete_n_confirm": "刪除已選嘅 {n} 個備份？",
+    "cron_hint": "定時備份請去「計劃任務」加「備份數據庫」。",
+    "cron_link": "設定定時備份 →"
+  },
+  "dbi": {
+    "title": "匯入數據庫【{name}】",
+    "upload": "從本地上傳",
+    "from_server": "從本機匯入",
+    "show_log": "顯示日誌",
+    "search": "搜尋檔案名稱",
+    "file": "檔案名稱",
+    "mtime": "修改時間",
+    "bad_type": "只支援 sql、sql.gz、zip、tar.gz、tgz",
+    "uploaded": "已上傳 {name}",
+    "uploading": "上傳中：{name}",
+    "confirm": "將 {file} 匯入數據庫 {db}？同名資料表會被覆蓋。",
+    "unsupported": "呢個數據庫引擎唔支援匯入，只支援 MySQL、MariaDB 同 PostgreSQL。",
+    "note_formats": "支援 sql、sql.gz、zip、tar.gz（tgz）。",
+    "note_archive": "zip、tar.gz 壓縮包入面要有 .sql（或 .sql.gz）檔案，例如 test.zip 入面有 test.sql。",
+    "note_large": "檔案太大可以用 SFTP 上傳到 {dir}，再喺呢度匯入；亦可以撳「從本機匯入」揀伺服器上任何檔案。",
+    "import": "匯入"
   }
 }

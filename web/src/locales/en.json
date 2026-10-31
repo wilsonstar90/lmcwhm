@@ -26,7 +26,8 @@
     "actions": "Actions",
     "confirm_delete": "Delete this?",
     "create": "Create",
-    "created": "Created"
+    "created": "Created",
+    "deleted": "Deleted"
   },
   "login": {
     "title": "Sign in",
@@ -380,7 +381,10 @@
       "auth_expired": "The authorisation code expired",
       "remote_not_found": "The file no longer exists on the cloud storage",
       "invalid_snapshot": "This is not a panel snapshot",
-      "trash_not_found": "Not in the recycle bin"
+      "trash_not_found": "Not in the recycle bin",
+      "import_unsupported": "This database engine cannot import (MySQL, MariaDB and PostgreSQL only)",
+      "import_format": "Unsupported or damaged file (sql, sql.gz, zip, tar.gz, tgz)",
+      "import_no_sql": "No .sql file in the archive"
     },
     "ai": {
       "no_key": "No Anthropic API key configured",
@@ -3413,5 +3417,49 @@
     "ops": "Operations / s",
     "ops_n": "{n}",
     "latency": "IO latency"
+  },
+  "dbb": {
+    "col": "Backups",
+    "has": "{n} backups",
+    "none": "No backup",
+    "title": "Backups of {name}",
+    "backup": "Back up now",
+    "backup_to": "Choose where",
+    "local": "Local",
+    "file": "File",
+    "dest": "Stored in",
+    "size": "Size",
+    "time": "Time",
+    "note": "Note",
+    "ops": "Actions",
+    "by_cron": "Scheduled",
+    "by_hand": "Manual",
+    "download": "Download",
+    "restore": "Restore",
+    "restore_confirm": "Restore database {db} from {file}? Its current data is replaced.",
+    "backup_first": "Back up the current data first",
+    "delete_confirm": "Delete {file}?",
+    "delete_n": "Delete selected ({n})",
+    "delete_n_confirm": "Delete the {n} selected backups?",
+    "cron_hint": "For scheduled backups, add a \"Back up databases\" task in Cron.",
+    "cron_link": "Schedule backups →"
+  },
+  "dbi": {
+    "title": "Import into {name}",
+    "upload": "Upload from computer",
+    "from_server": "From the server",
+    "show_log": "Show log",
+    "search": "Search file names",
+    "file": "File",
+    "mtime": "Modified",
+    "bad_type": "Only sql, sql.gz, zip, tar.gz and tgz files",
+    "uploaded": "Uploaded {name}",
+    "uploading": "Uploading {name}",
+    "confirm": "Import {file} into database {db}? Tables of the same name are replaced.",
+    "unsupported": "This database engine cannot import; MySQL, MariaDB and PostgreSQL can.",
+    "note_formats": "Accepts sql, sql.gz, zip and tar.gz (tgz).",
+    "note_archive": "A zip or tar.gz must contain a .sql (or .sql.gz) file, e.g. test.zip holding test.sql.",
+    "note_large": "For a large file, copy it with SFTP to {dir} and import it here, or pick any file on the server with \"From the server\".",
+    "import": "Import"
   }
 }

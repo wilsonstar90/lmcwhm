@@ -344,16 +344,8 @@ func restoreDB(ctx context.Context, eng appstore.Installed, name string, r io.Re
 		return ErrBadArchive
 	}
 	switch eng.App {
-	case "mysql", "mariadb":
-		bin := "mysql"
-		if eng.App == "mariadb" {
-			bin = "mariadb"
-		}
-		return dockerStream(ctx, gz, io.Discard, "exec", "-i", "-e", "MYSQL_PWD="+eng.Password(), eng.Container, bin,
-			"-uroot", "-h127.0.0.1", "-P3306", "--default-character-set=utf8mb4", name)
-	case "postgres":
-		return dockerStream(ctx, gz, io.Discard, "exec", "-i", "-e", "PGPASSWORD="+eng.Password(), eng.Container,
-			"psql", "-h", "127.0.0.1", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-q", "-d", name)
+	case "mysql", "mariadb", "postgres":
+		return loadSQL(ctx, eng, name, gz)
 	case "mongodb":
 		return dockerStream(ctx, gz, io.Discard, "exec", "-i", eng.Container, "mongorestore", "--quiet", "--host", "127.0.0.1",
 			"-u", "root", "-p", eng.Password(), "--authenticationDatabase", "admin", "--archive", "--drop",
@@ -368,6 +360,27 @@ RESTORE DATABASE [%[1]s] FROM DISK = N'%[2]s' WITH REPLACE;
 ALTER DATABASE [%[1]s] SET MULTI_USER;`, name, mssqlFile))
 	}
 	return database.ErrNoEngine
+}
+
+// loadSQL runs plain SQL statements in database name (MySQL / MariaDB /
+// PostgreSQL); the client's error output is the error.
+func loadSQL(ctx context.Context, eng appstore.Installed, name string, r io.Reader) error {
+	if !database.ValidName(name) {
+		return ErrBadTarget
+	}
+	switch eng.App {
+	case "mysql", "mariadb":
+		bin := "mysql"
+		if eng.App == "mariadb" {
+			bin = "mariadb"
+		}
+		return dockerStream(ctx, r, io.Discard, "exec", "-i", "-e", "MYSQL_PWD="+eng.Password(), eng.Container, bin,
+			"-uroot", "-h127.0.0.1", "-P3306", "--default-character-set=utf8mb4", name)
+	case "postgres":
+		return dockerStream(ctx, r, io.Discard, "exec", "-i", "-e", "PGPASSWORD="+eng.Password(), eng.Container,
+			"psql", "-h", "127.0.0.1", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-q", "-d", name)
+	}
+	return ErrImportUnsupported
 }
 
 // ---- panel state ----

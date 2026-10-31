@@ -2,6 +2,7 @@ package server
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -87,10 +88,17 @@ func (s *Server) respondTask(w http.ResponseWriter, r *http.Request, action, det
 // ---- phpMyAdmin sign-on ----
 
 // pmaLinks holds one-time sign-on links: they live a minute and work once.
+// It also remembers, per panel session, the credentials of the last link
+// used, so phpMyAdmin can sign in again by itself when its own session
+// expires (it sends the browser back to the sign-on script without a link).
 type pmaLinks struct {
-	mu sync.Mutex
-	m  map[string]pmaLink
+	mu   sync.Mutex
+	m    map[string]pmaLink
+	last map[string]pmaLink // by a hash of the panel session
 }
+
+// pmaRemember is how long a panel session may sign phpMyAdmin in again.
+const pmaRemember = 12 * time.Hour
 
 type pmaLink struct {
 	creds   appstore.PMACredentials
@@ -126,12 +134,51 @@ func (l *pmaLinks) take(t string) (appstore.PMACredentials, bool) {
 	return v.creds, true
 }
 
-// signonHeader is the header value the proxy adds for a valid link ("" = none).
-func (s *Server) signonHeader(r *http.Request) string {
-	if r.URL.Path != appstore.PMASignon {
+func (l *pmaLinks) remember(session string, c appstore.PMACredentials) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.last == nil {
+		l.last = map[string]pmaLink{}
+	}
+	for k, v := range l.last {
+		if time.Now().After(v.expires) {
+			delete(l.last, k)
+		}
+	}
+	l.last[pmaSessionKey(session)] = pmaLink{creds: c, expires: time.Now().Add(pmaRemember)}
+}
+
+func (l *pmaLinks) recall(session string) (appstore.PMACredentials, bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	v, ok := l.last[pmaSessionKey(session)]
+	if !ok || time.Now().After(v.expires) {
+		return appstore.PMACredentials{}, false
+	}
+	return v.creds, true
+}
+
+func pmaSessionKey(session string) string {
+	h := sha256.Sum256([]byte("pma:" + session))
+	return hex.EncodeToString(h[:])
+}
+
+// signonHeader is the header value the proxy adds on the sign-on script for
+// a signed-in panel user: a valid one-time link, or (phpMyAdmin's own session
+// expired) the credentials this panel session used last. "" = none.
+func (s *Server) signonHeader(r *http.Request, session string) string {
+	if r.URL.Path != appstore.PMASignon || r.URL.Query().Has("logout") {
 		return ""
 	}
-	c, ok := s.pmaLinks.take(r.URL.Query().Get("t"))
+	var c appstore.PMACredentials
+	var ok bool
+	if t := r.URL.Query().Get("t"); t != "" {
+		if c, ok = s.pmaLinks.take(t); ok {
+			s.pmaLinks.remember(session, c)
+		}
+	} else {
+		c, ok = s.pmaLinks.recall(session)
+	}
 	if !ok {
 		return ""
 	}

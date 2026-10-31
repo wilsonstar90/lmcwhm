@@ -15,6 +15,7 @@ import (
 
 	"github.com/wilsonstar90/lmcwhm/internal/alert"
 	"github.com/wilsonstar90/lmcwhm/internal/appstore"
+	"github.com/wilsonstar90/lmcwhm/internal/backup"
 	"github.com/wilsonstar90/lmcwhm/internal/database"
 	"github.com/wilsonstar90/lmcwhm/internal/site"
 	"github.com/wilsonstar90/lmcwhm/internal/webenv"
@@ -37,6 +38,9 @@ func (s *Server) appRoutes(r chi.Router) {
 	s.dbManageRoutes(r)
 
 	r.Get("/databases", s.handleDatabases)
+	if s.Backup != nil {
+		s.dbBackupRoutes(r)
+	}
 	r.Post("/databases", s.handleCreateDatabase)
 	r.Post("/databases/{id}/delete", s.handleDeleteDatabase)
 	if s.Backup != nil {
@@ -269,8 +273,17 @@ func (s *Server) handleDatabases(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
+	// Backups per database for the 備份 column.
+	backups := map[int64]int{}
+	if s.Backup != nil {
+		if recs, err := s.Backup.List(r.Context(), backup.KindDatabase); err == nil {
+			for _, rec := range recs {
+				backups[rec.TargetID]++
+			}
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"items": list, "adminer": s.Apps.AdminerPort(r.Context()) > 0, "phpmyadmin": s.Apps.PMAServers(r.Context()),
+		"items": list, "adminer": s.Apps.AdminerPort(r.Context()) > 0, "phpmyadmin": s.Apps.PMAServers(r.Context()), "backups": backups,
 	})
 }
 
@@ -416,7 +429,7 @@ func (s *Server) handlePMA(w http.ResponseWriter, r *http.Request) {
 	signon := ""
 	if c, err := r.Cookie(sessionCookie); err == nil {
 		if _, err := s.Auth.Resolve(r.Context(), c.Value); err == nil {
-			signon = s.signonHeader(r) // only for a signed-in panel user
+			signon = s.signonHeader(r, c.Value) // only for a signed-in panel user
 		}
 	}
 	s.toolProxy(w, r, s.Apps.PMAPort(r.Context()), appstore.PMAPrefix, false, func(n string) bool {

@@ -26,7 +26,8 @@
     "actions": "操作",
     "confirm_delete": "确定删除？",
     "create": "创建",
-    "created": "创建时间"
+    "created": "创建时间",
+    "deleted": "已删除"
   },
   "login": {
     "title": "登录面板",
@@ -380,7 +381,10 @@
       "auth_expired": "授权代码已过期",
       "remote_not_found": "云端已无此文件",
       "invalid_snapshot": "这不是面板快照",
-      "trash_not_found": "回收站中找不到"
+      "trash_not_found": "回收站中找不到",
+      "import_unsupported": "此数据库引擎不支持导入（仅支持 MySQL、MariaDB、PostgreSQL）",
+      "import_format": "文件格式不支持或已损坏（支持 sql、sql.gz、zip、tar.gz、tgz）",
+      "import_no_sql": "压缩包中找不到 .sql 文件"
     },
     "ai": {
       "no_key": "未设置 Anthropic API key",
@@ -3462,5 +3466,49 @@
     "ops": "每秒读写",
     "ops_n": "{n} 次",
     "latency": "IO 延迟"
+  },
+  "dbb": {
+    "col": "备份",
+    "has": "有备份({n})",
+    "none": "无备份",
+    "title": "数据库【{name}】备份",
+    "backup": "备份数据库",
+    "backup_to": "选择存储位置",
+    "local": "本地",
+    "file": "文件名称",
+    "dest": "存储对象",
+    "size": "大小",
+    "time": "备份时间",
+    "note": "备注",
+    "ops": "操作",
+    "by_cron": "计划任务",
+    "by_hand": "手动",
+    "download": "下载",
+    "restore": "恢复",
+    "restore_confirm": "用 {file} 恢复数据库 {db}？现有数据将被覆盖。",
+    "backup_first": "先备份现有数据",
+    "delete_confirm": "删除 {file}？",
+    "delete_n": "删除选中 ({n})",
+    "delete_n_confirm": "删除选中的 {n} 个备份？",
+    "cron_hint": "定时备份请前往【计划任务】增加【备份数据库】。",
+    "cron_link": "设置定时备份 →"
+  },
+  "dbi": {
+    "title": "导入数据库【{name}】",
+    "upload": "从本地上传",
+    "from_server": "从本机导入",
+    "show_log": "显示日志",
+    "search": "请输入搜索关键字",
+    "file": "文件名",
+    "mtime": "修改时间",
+    "bad_type": "仅支持 sql、sql.gz、zip、tar.gz、tgz",
+    "uploaded": "已上传 {name}",
+    "uploading": "上传中：{name}",
+    "confirm": "将 {file} 导入数据库 {db}？同名表将被覆盖。",
+    "unsupported": "此数据库引擎不支持导入，仅支持 MySQL、MariaDB 和 PostgreSQL。",
+    "note_formats": "仅支持 sql、zip、sql.gz、tar.gz（tgz）。",
+    "note_archive": "zip、tar.gz 压缩包结构：test.zip 或 test.tar.gz 压缩包内必须包含 test.sql。",
+    "note_large": "若文件过大，您还可以使用 SFTP 工具将数据库文件上传到 {dir}，再在此导入；也可以点击「从本机导入」选择服务器上的任意文件。",
+    "import": "导入"
   }
 }

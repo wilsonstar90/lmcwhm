@@ -26,7 +26,8 @@
     "actions": "操作",
     "confirm_delete": "確定刪除？",
     "create": "建立",
-    "created": "建立時間"
+    "created": "建立時間",
+    "deleted": "已刪除"
   },
   "login": {
     "title": "登入面板",
@@ -380,7 +381,10 @@
       "auth_expired": "授權代碼已過期",
       "remote_not_found": "雲端上已無此檔案",
       "invalid_snapshot": "這不是面板快照",
-      "trash_not_found": "回收站中找不到"
+      "trash_not_found": "回收站中找不到",
+      "import_unsupported": "此資料庫引擎不支援匯入（僅支援 MySQL、MariaDB、PostgreSQL）",
+      "import_format": "檔案格式不支援或已損毀（支援 sql、sql.gz、zip、tar.gz、tgz）",
+      "import_no_sql": "壓縮檔中找不到 .sql 檔案"
     },
     "ai": {
       "no_key": "未設定 Anthropic API key",
@@ -3462,5 +3466,49 @@
     "ops": "每秒讀寫",
     "ops_n": "{n} 次",
     "latency": "IO 延遲"
+  },
+  "dbb": {
+    "col": "備份",
+    "has": "有備份({n})",
+    "none": "無備份",
+    "title": "資料庫【{name}】備份",
+    "backup": "備份資料庫",
+    "backup_to": "選擇儲存位置",
+    "local": "本機",
+    "file": "檔案名稱",
+    "dest": "儲存位置",
+    "size": "大小",
+    "time": "備份時間",
+    "note": "備註",
+    "ops": "操作",
+    "by_cron": "排程任務",
+    "by_hand": "手動",
+    "download": "下載",
+    "restore": "還原",
+    "restore_confirm": "以 {file} 還原資料庫 {db}？現有資料會被覆蓋。",
+    "backup_first": "先備份現有資料",
+    "delete_confirm": "刪除 {file}？",
+    "delete_n": "刪除已選 ({n})",
+    "delete_n_confirm": "刪除已選的 {n} 個備份？",
+    "cron_hint": "定時備份請到「排程任務」新增「備份資料庫」。",
+    "cron_link": "設定定時備份 →"
+  },
+  "dbi": {
+    "title": "匯入資料庫【{name}】",
+    "upload": "從本機電腦上傳",
+    "from_server": "從伺服器匯入",
+    "show_log": "顯示日誌",
+    "search": "搜尋檔案名稱",
+    "file": "檔案名稱",
+    "mtime": "修改時間",
+    "bad_type": "僅支援 sql、sql.gz、zip、tar.gz、tgz",
+    "uploaded": "已上傳 {name}",
+    "uploading": "上傳中：{name}",
+    "confirm": "將 {file} 匯入資料庫 {db}？同名資料表會被覆蓋。",
+    "unsupported": "此資料庫引擎不支援匯入，僅支援 MySQL、MariaDB 與 PostgreSQL。",
+    "note_formats": "支援 sql、sql.gz、zip、tar.gz（tgz）。",
+    "note_archive": "zip、tar.gz 壓縮檔中須包含 .sql（或 .sql.gz）檔案，例如 test.zip 內含 test.sql。",
+    "note_large": "檔案太大可用 SFTP 上傳至 {dir}，再於此處匯入；也可點選「從伺服器匯入」選擇伺服器上的任何檔案。",
+    "import": "匯入"
   }
 }

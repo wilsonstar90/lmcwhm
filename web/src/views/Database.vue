@@ -12,6 +12,8 @@ import TaskModal from '../components/TaskModal.vue'
 import AppSettings from '../components/AppSettings.vue'
 import RedisKeys from '../components/RedisKeys.vue'
 import UpdateBadge from '../components/UpdateBadge.vue'
+import DbBackups from '../components/DbBackups.vue'
+import DbImport from '../components/DbImport.vue'
 import { useUpdates } from '../stores/updates'
 
 const { t } = useI18n()
@@ -27,6 +29,12 @@ const settings = ref<InstalledApp | null>(null)
 const adminer = ref(false)
 // phpMyAdmin server number per engine app id (empty = phpMyAdmin not installed)
 const pma = ref<Record<number, number>>({})
+// Backups per database (備份 column), and the database whose backups / import window is open.
+const backups = ref<Record<number, number>>({})
+const backupsOf = ref<Database | null>(null)
+const importInto = ref<Database | null>(null)
+const onTask = (id: string, title: string) => (task.value = { id, title })
+const bk = ref<InstanceType<typeof DbBackups> | null>(null)
 const loading = ref(false)
 const engine = ref<number | null>(null)
 const current = computed(() => services.value.find((e) => e.id === engine.value) ?? null)
@@ -51,10 +59,11 @@ const f = ref(blank())
 async function load() {
   loading.value = true
   try {
-    const [d, a] = await Promise.all([get<{ items: Database[]; adminer: boolean; phpmyadmin: Record<number, number> }>('/databases'), get<{ items: InstalledApp[] }>('/apps')])
+    const [d, a] = await Promise.all([get<{ items: Database[]; adminer: boolean; phpmyadmin: Record<number, number>; backups?: Record<number, number> }>('/databases'), get<{ items: InstalledApp[] }>('/apps')])
     dbs.value = d.items
     adminer.value = d.adminer
     pma.value = d.phpmyadmin ?? {}
+    backups.value = d.backups ?? {}
     services.value = a.items.filter((i) => i.kind === 'database')
     if (!services.value.some((e) => e.id === engine.value)) engine.value = services.value[0]?.id ?? null
   } catch (e) {
@@ -155,6 +164,17 @@ const columns: DataTableColumns<Database> = [
         h(NButton, { text: true, type: 'primary', onClick: () => copy(d.password) }, () => t('common.copy')),
       ]),
   },
+  {
+    title: () => t('dbb.col'),
+    key: 'backups',
+    width: 150,
+    render: (d) =>
+      h('span', { class: 'bk' }, [
+        h('a', { class: backups.value[d.id] ? 'link' : 'link none', onClick: () => (backupsOf.value = d) }, backups.value[d.id] ? t('dbb.has', { n: backups.value[d.id] }) : t('dbb.none')),
+        ' | ',
+        h('a', { class: 'link', onClick: () => (importInto.value = d) }, t('dbi.import')),
+      ]),
+  },
   { title: () => t('db.host'), key: 'host', width: 140, render: (d) => `${d.host}:${d.port}` },
   {
     title: () => t('site.remark'),
@@ -253,10 +273,22 @@ const columns: DataTableColumns<Database> = [
   </n-modal>
 
   <AppSettings :app="settings" @close="settings = null" @changed="load" />
-  <TaskModal :task-id="task?.id ?? null" :title="task?.title ?? ''" @close="task = null; load()" @done="load" />
+  <DbBackups ref="bk" :db="backupsOf" @close="backupsOf = null; load()" @task="onTask" />
+  <DbImport :db="importInto" @close="importInto = null; load()" @task="onTask" />
+  <TaskModal :task-id="task?.id ?? null" :title="task?.title ?? ''" @close="task = null; load(); bk?.load()" @done="load" />
 </template>
 
 <style scoped>
+.bk {
+  white-space: nowrap;
+}
+:deep(.link) {
+  color: #20a53a;
+  cursor: pointer;
+}
+:deep(.link.none) {
+  color: #d03050;
+}
 .hint {
   font-size: 12px;
   opacity: 0.65;

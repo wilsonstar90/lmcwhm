@@ -153,6 +153,31 @@ J2="$(mktemp)"; curl -sk -c "$J2" -o /dev/null "$P/console" # security entry pas
 [[ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8091/phpmyadmin/)" =~ ^(200|302)$ ]] || fail "phpMyAdmin not on loopback 8091"
 pass "phpMyAdmin: per-database sign-on shows only that database; root link; one-time links; MariaDB and MySQL 8.4"
 
+# A change (POST) keeps its token: signing the same user in again (another tab)
+# keeps phpMyAdmin's session, and an expired session signs in again by itself.
+PMS="$(pma_server "$MYID")"
+pma_token() { curl -sk -b "$PJ" -c "$PJ" "$P/phpmyadmin/index.php?route=/database/sql&db=pmtest&server=$PMS" | grep -o 'name="token" value="[^"]*"' | head -1 | cut -d'"' -f4; }
+pma_sql() { # token sql
+  curl -sk -b "$PJ" -c "$PJ" "$P/phpmyadmin/index.php?route=/sql" --data-urlencode "server=$PMS" --data-urlencode "db=pmtest" \
+    --data-urlencode "token=$1" --data-urlencode "sql_query=$2" --data-urlencode "ajax_request=true"
+}
+[[ "$(pma_signon "/databases/$(db_id pmtest)/phpmyadmin")" == 200 ]] || fail "phpMyAdmin sign-on (POST test)"
+TOK="$(pma_token)"
+[[ -n "$TOK" ]] || fail "no phpMyAdmin token on the SQL page"
+out="$(pma_sql "$TOK" "CREATE TABLE e2e_one (id INT)")"
+[[ "$out" == *'"success":true'* ]] || { echo "$out" | head -c 600; fail "phpMyAdmin change refused"; }
+[[ "$(pma_signon "/databases/$(db_id pmtest)/phpmyadmin")" == 200 ]] || fail "second sign-on, same user"
+out="$(pma_sql "$TOK" "CREATE TABLE e2e_two (id INT)")"
+[[ "$out" == *'"success":true'* ]] || { echo "$out" | head -c 600; fail "token of an open page lost after signing in again (token mismatch)"; }
+PMAC="$(api GET /apps | python3 -c "import sys,json; print([a['container'] for a in json.load(sys.stdin)['items'] if a['app']=='phpmyadmin'][0])")"
+docker exec "$PMAC" sh -c 'rm -f /sessions/sess_* /tmp/sess_*'
+loc="$(curl -sk -b "$PJ" -c "$PJ" -o /dev/null -w '%{http_code} %{redirect_url}' "$P/phpmyadmin/lmcwhm-signon.php")"
+[[ "$loc" == 302*index.php* ]] || fail "expired phpMyAdmin session not signed in again: $loc"
+TOK="$(pma_token)"
+out="$(pma_sql "$TOK" "DROP TABLE e2e_one, e2e_two")"
+[[ "$out" == *'"success":true'* ]] || { echo "$out" | head -c 600; fail "phpMyAdmin change after signing in again"; }
+pass "phpMyAdmin: changes keep their token across sign-ins and session expiry"
+
 # Database settings window: MySQL status, slow log, binary logs, tuning with restart.
 api GET "/apps/$MYID/mysql/status" | python3 -c "import sys,json; s=json.load(sys.stdin); assert s['uptime']>0 and s['vars']['max_connections'] and s['status']['connections'], s" || fail "mysql status"
 api POST "/apps/$MYID/mysql/slowlog" '{"on":true,"seconds":0.1}' | grep -q '"ok":true' || fail "slow log on"
@@ -578,6 +603,57 @@ grep -q '"status":"success"' <<<"$(api GET "/cron/$CJ/runs")" || { api GET "/cro
 grep -q "panel_" <<<"$(lmcwhm backup panel)" || fail "lmcwhm backup panel"
 grep -q panel <<<"$(lmcwhm backup list)" || fail "lmcwhm backup list"
 pass "backups: site, MariaDB, Docker volume and panel; restore; download; scheduled job with pruning"
+
+# ---------- database page: backups and import (like aaPanel) ----------
+mdb() { docker exec -e MYSQL_PWD=Shop-pass-123 lmcwhm-mariadb114 mariadb -ushop -h127.0.0.1 shop -N -e "$1"; }
+n0="$(api GET "/databases/$SHOPID/backups" | python3 -c "import sys,json; print(len(json.load(sys.stdin)['items']))")"
+task POST "/databases/$SHOPID/backups/run" '{"dests":["local"]}'
+n1="$(api GET "/databases/$SHOPID/backups" | python3 -c "import sys,json; print(len(json.load(sys.stdin)['items']))")"
+[[ "$n1" == $((n0 + 1)) ]] || fail "database backup from its page: $n0 -> $n1"
+api GET /databases | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['backups'][str($SHOPID)] == $n1, d['backups']" || fail "backup count in the list"
+B1="$(api GET "/databases/$SHOPID/backups" | jget "['items'][0]['id']")"
+[[ "$(curl -sk -b "$JAR" "$P/api/v1/databases/$SHOPID/backups/$B1/download" | head -c 2 | od -An -tx1 | tr -d ' ')" == 1f8b ]] || fail "database backup download"
+[[ "$(curl -sk -b "$JAR" -o /dev/null -w '%{http_code}' "$P/api/v1/databases/$(db_id pmtest)/backups/$B1/download")" != 200 ]] || fail "another database's backup downloaded through this one"
+# Upload a zip holding an SQL file in two chunks, then import it (backing up first).
+W="$(mktemp -d)"
+printf 'CREATE TABLE imported (id INT);\nINSERT INTO imported VALUES (7);\n' > "$W/dump.sql"
+(cd "$W" && python3 -c "import zipfile; z=zipfile.ZipFile('dump.zip','w'); z.write('dump.sql','inner/dump.sql'); z.close()")
+SZ="$(stat -c %s "$W/dump.zip")"; HALF=$((SZ / 2))
+head -c "$HALF" "$W/dump.zip" | curl -sk -b "$JAR" -H "X-CSRF-Token: $CSRF" --data-binary @- "$P/api/v1/databases/import-upload?name=e2e-dump.zip&offset=0" | grep -q "\"size\":$HALF" || fail "upload first chunk"
+[[ "$(api GET '/databases/import-upload?name=e2e-dump.zip' | jget "['size']")" == "$HALF" ]] || fail "upload resume size"
+tail -c +$((HALF + 1)) "$W/dump.zip" | curl -sk -b "$JAR" -H "X-CSRF-Token: $CSRF" --data-binary @- "$P/api/v1/databases/import-upload?name=e2e-dump.zip&offset=$HALF&last=1" | grep -q "\"size\":$SZ" || fail "upload last chunk"
+[[ "$(curl -sk -b "$JAR" -H "X-CSRF-Token: $CSRF" -o /dev/null -w '%{http_code}' --data-binary x "$P/api/v1/databases/import-upload?name=../evil.sql&offset=0")" == 400 ]] || fail "upload name with a path accepted"
+UP="$(api GET '/databases/import-files?q=e2e-dump' | jget "['items'][0]['path']")"
+[[ "$UP" == */database/upload/e2e-dump.zip ]] || fail "uploaded file not listed: $UP"
+task POST "/databases/$SHOPID/import" "{\"path\":\"$UP\",\"backup_first\":true}"
+[[ "$(mdb 'SELECT id FROM imported')" == 7 ]] || fail "zip import"
+n2="$(api GET "/databases/$SHOPID/backups" | python3 -c "import sys,json; print(len(json.load(sys.stdin)['items']))")"
+[[ "$n2" == $((n1 + 1)) ]] || fail "no backup before the import"
+# A plain .sql anywhere on the server; a .tar.gz with a .sql.gz inside.
+printf 'INSERT INTO imported VALUES (8);\n' > "$W/more.sql"
+task POST "/databases/$SHOPID/import" "{\"path\":\"$W/more.sql\"}"
+gzip -c "$W/more.sql" > "$W/again.sql.gz" && (cd "$W" && tar czf again.tar.gz again.sql.gz)
+task POST "/databases/$SHOPID/import" "{\"path\":\"$W/again.tar.gz\"}"
+[[ "$(mdb 'SELECT COUNT(*) FROM imported')" == 3 ]] || fail "sql / tar.gz import"
+# A broken file fails the task; the backup taken before the import restores.
+echo 'NOT SQL;' > "$W/bad.sql"
+TID="$(api POST "/databases/$SHOPID/import" "{\"path\":\"$W/bad.sql\"}" | jget "['task_id']")"
+for _ in $(seq 1 60); do st="$(api GET "/tasks/$TID" | jget "['status']")"; [[ "$st" != running ]] && break; sleep 1; done
+[[ "$st" == failed ]] || fail "a broken dump was imported ($st)"
+PREB="$(api GET "/databases/$SHOPID/backups" | jget "['items'][0]['id']")"
+mdb 'DELETE FROM t'
+task POST "/databases/$SHOPID/backups/$PREB/restore" '{"backup_first":true}'
+[[ "$(mdb 'SELECT x FROM t')" == 42 ]] || fail "restore from the database page"
+# PostgreSQL takes a plain .sql.
+printf 'CREATE TABLE pg_imported (id int);\n' > "$W/pg.sql"
+task POST "/databases/$(db_id blog)/import" "{\"path\":\"$W/pg.sql\"}"
+docker exec -e PGPASSWORD="$NEWPW" lmcwhm-postgres17 psql -h 127.0.0.1 -U blog -d blog -tAc "SELECT to_regclass('pg_imported')" | grep -q pg_imported || fail "postgres import"
+api POST /databases/import-files/delete "{\"path\":\"$UP\"}" | grep -q '"ok":true' || fail "delete uploaded file"
+[[ ! -e "$UP" ]] || fail "uploaded file still there"
+[[ "$(api POST /databases/import-files/delete '{"path":"/etc/passwd"}' | jget ".get('code','')")" != "" ]] || fail "deleted a file outside the import folder"
+api POST "/databases/$SHOPID/backups/delete" "{\"ids\":[$B1]}" | grep -q '"ok":true' || fail "delete database backup"
+rm -rf "$W"
+pass "database page: backups, upload with resume, import of zip / sql / tar.gz with backup first, restore, PostgreSQL"
 
 # ---------- M7: MCP ----------
 TOK="$(api POST /tokens '{"name":"ci","scope":"read","ips":[],"ttl_days":1}' | jget "['secret']")"

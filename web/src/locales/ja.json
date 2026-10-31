@@ -26,7 +26,8 @@
     "actions": "操作",
     "confirm_delete": "削除しますか？",
     "create": "作成",
-    "created": "作成日時"
+    "created": "作成日時",
+    "deleted": "削除しました"
   },
   "login": {
     "title": "ログイン",
@@ -380,7 +381,10 @@
       "auth_expired": "承認コードの期限切れ",
       "remote_not_found": "クラウド上にファイルがありません",
       "invalid_snapshot": "パネルのスナップショットではありません",
-      "trash_not_found": "ごみ箱にありません"
+      "trash_not_found": "ごみ箱にありません",
+      "import_unsupported": "このデータベースエンジンはインポートできません（MySQL・MariaDB・PostgreSQL のみ）",
+      "import_format": "対応していないか壊れたファイルです（sql、sql.gz、zip、tar.gz、tgz）",
+      "import_no_sql": "アーカイブに .sql ファイルがありません"
     },
     "ai": {
       "no_key": "Anthropic API キーが未設定です",
@@ -3462,5 +3466,49 @@
     "ops": "IOPS",
     "ops_n": "{n} 回",
     "latency": "IO 遅延"
+  },
+  "dbb": {
+    "col": "バックアップ",
+    "has": "バックアップ {n} 件",
+    "none": "バックアップなし",
+    "title": "{name} のバックアップ",
+    "backup": "今すぐバックアップ",
+    "backup_to": "保存先を選択",
+    "local": "ローカル",
+    "file": "ファイル名",
+    "dest": "保存先",
+    "size": "サイズ",
+    "time": "日時",
+    "note": "備考",
+    "ops": "操作",
+    "by_cron": "スケジュール",
+    "by_hand": "手動",
+    "download": "ダウンロード",
+    "restore": "復元",
+    "restore_confirm": "{file} でデータベース {db} を復元しますか？現在のデータは置き換えられます。",
+    "backup_first": "先に現在のデータをバックアップ",
+    "delete_confirm": "{file} を削除しますか？",
+    "delete_n": "選択を削除 ({n})",
+    "delete_n_confirm": "選択した {n} 件のバックアップを削除しますか？",
+    "cron_hint": "定期バックアップは「スケジュール」で「データベースのバックアップ」を追加してください。",
+    "cron_link": "定期バックアップを設定 →"
+  },
+  "dbi": {
+    "title": "{name} にインポート",
+    "upload": "PC からアップロード",
+    "from_server": "サーバーから",
+    "show_log": "ログを表示",
+    "search": "ファイル名で検索",
+    "file": "ファイル名",
+    "mtime": "更新日時",
+    "bad_type": "sql、sql.gz、zip、tar.gz、tgz のみ対応しています",
+    "uploaded": "{name} をアップロードしました",
+    "uploading": "アップロード中：{name}",
+    "confirm": "{file} をデータベース {db} にインポートしますか？同名のテーブルは置き換えられます。",
+    "unsupported": "このデータベースエンジンはインポートできません。MySQL・MariaDB・PostgreSQL に対応しています。",
+    "note_formats": "sql、sql.gz、zip、tar.gz（tgz）に対応しています。",
+    "note_archive": "zip・tar.gz には .sql（または .sql.gz）ファイルを含めてください。例：test.zip に test.sql。",
+    "note_large": "大きなファイルは SFTP で {dir} に置いてからここでインポートするか、「サーバーから」でサーバー上の任意のファイルを選べます。",
+    "import": "インポート"
   }
 }

@@ -526,7 +526,8 @@ function taskDone() {
           <!-- logs -->
           <template v-else-if="name === 'logs' || name === 'errorlog'">
             <n-space style="margin-bottom: 8px"><n-button size="small" @click="loadLogs">{{ t('common.refresh') }}</n-button></n-space>
-            <pre ref="logEl" class="log">{{ logs }}</pre>
+            <!-- A function ref: inside the tabs v-for a plain ref would be an array. -->
+            <pre :ref="(el) => (logEl = el as HTMLElement | null)" class="log">{{ logs }}</pre>
           </template>
 
           <!-- slow log -->
