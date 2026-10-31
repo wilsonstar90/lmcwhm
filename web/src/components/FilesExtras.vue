@@ -137,13 +137,12 @@ const shareCols = computed<DataTableColumns<Share>>(() => [
   },
 ])
 
-defineExpose({ share })
+defineExpose({ share, remote: () => (fetchForm.value = { url: '', name: '' }) })
 </script>
 
 <template>
   <n-dropdown :options="favMenu" trigger="click" @select="onFav"><n-button size="small">{{ isFav ? '★' : '☆' }} {{ t('fx.favorites') }}</n-button></n-dropdown>
   <n-button size="small" @click="openSearch">{{ t('fx.search') }}</n-button>
-  <n-button size="small" @click="fetchForm = { url: '', name: '' }">{{ t('fx.remote') }}</n-button>
   <n-button size="small" @click="openShares">{{ t('fx.shares') }}</n-button>
 
   <n-modal :show="!!search" @update:show="(v: boolean) => !v && (search = null)">

@@ -12,7 +12,7 @@ import { get, patch, post, ApiError } from '../api/client'
 import type { Route, RouteResolution, Site, WebConfig, WebStatus } from '../api/types'
 import { datetime } from '../format'
 import SiteCreate from '../components/SiteCreate.vue'
-import SiteDrawer from '../components/SiteDrawer.vue'
+import SiteSettings from '../components/SiteSettings.vue'
 import TaskModal from '../components/TaskModal.vue'
 import DnsZones from '../components/DnsZones.vue'
 import DomainEditor from '../components/DomainEditor.vue'
@@ -319,7 +319,7 @@ const columns = computed<DataTableColumns<Entry>>(() => [
     @changed="load()"
     @task="(id: string, title: string) => (task = { id, title })"
   />
-  <SiteDrawer
+  <SiteSettings
     :site="selected"
     :php-versions="status?.php_versions ?? []"
     :has-c-f="!!cfg?.has_cf_token"

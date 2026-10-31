@@ -58,7 +58,7 @@ func (s *Server) handleFileList(w http.ResponseWriter, r *http.Request) {
 		writeFileErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"path": dir, "items": list})
+	writeJSON(w, http.StatusOK, map[string]any{"path": dir, "items": s.decorate(r.Context(), dir, list)})
 }
 
 func (s *Server) handleFileStat(w http.ResponseWriter, r *http.Request) {
@@ -129,6 +129,7 @@ func (s *Server) handleFileRename(w http.ResponseWriter, r *http.Request) {
 		writeFileErr(w, err)
 		return
 	}
+	s.moveRemarks(r.Context(), in.From, in.To)
 	s.fileAudit(r, "files.rename", files.Clean(in.From)+" → "+files.Clean(in.To))
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -156,9 +157,17 @@ func (s *Server) handleFileDelete(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
+	if !s.trashSettings(r.Context()).Enabled {
+		in.Permanent = true
+	}
 	if err := s.Files.Delete(in.Paths, in.Permanent); err != nil {
 		writeFileErr(w, err)
 		return
+	}
+	if in.Permanent {
+		for _, p := range in.Paths {
+			s.moveRemarks(r.Context(), p, "")
+		}
 	}
 	action := "files.trash"
 	if in.Permanent {
@@ -258,6 +267,11 @@ func (s *Server) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]int64{"size": size})
 }
 
+var inlineImages = map[string]string{
+	".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp",
+	".bmp": "image/bmp", ".ico": "image/x-icon", ".avif": "image/avif",
+}
+
 func (s *Server) handleFileDownload(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.Query().Get("path")
 	f, fi, err := s.Files.Open(p)
@@ -266,7 +280,17 @@ func (s *Server) handleFileDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer f.Close()
-	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": path.Base(files.Clean(p))}))
+	name := path.Base(files.Clean(p))
+	// Previews (thumbnails, the image viewer) show raster images inline;
+	// anything else, and SVG (which can carry script), is a download.
+	if ct, ok := inlineImages[strings.ToLower(path.Ext(name))]; ok && r.URL.Query().Get("inline") == "1" {
+		w.Header().Set("Content-Type", ct)
+		w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		http.ServeContent(w, r, "", fi.ModTime(), f)
+		return
+	}
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
 	w.Header().Set("Content-Type", "application/octet-stream")
 	http.ServeContent(w, r, "", fi.ModTime(), f)
 }
@@ -277,7 +301,7 @@ func (s *Server) handleTrash(w http.ResponseWriter, r *http.Request) {
 		writeFileErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "dir": s.Files.Trash})
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "dir": s.Files.Trash, "settings": s.trashSettings(r.Context())})
 }
 
 func (s *Server) handleTrashRestore(w http.ResponseWriter, r *http.Request) {

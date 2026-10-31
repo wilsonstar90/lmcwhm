@@ -297,7 +297,7 @@ func serveCmd() *cobra.Command {
 				Paths: a.paths, Settings: a.settings, Auth: a.auth, Audit: a.audit,
 				WebFS: web.FS(), Log: log, Sites: sites, Web: webCfg, Tasks: tm,
 				Apps: apps, DBs: dbs, Docker: dockermgr.New(tm, a.paths.Home),
-				Files: files.New(os.Getenv("LMCWHM_FILES_ROOT")), Term: terminal.New(),
+				Files: filesFS(a.paths.Home), Term: terminal.New(),
 				Store: a.st, Monitor: mon, Cron: jobs, GeoIP: geo, Firewall: fw, Protect: prot, ErrPages: errp, WAF: waf, CrowdSec: crowdsec, Backup: bk,
 				Tokens: apitoken.New(a.st), AI: ai.New(a.st, box, nil),
 				Alerts: alerts, Probes: probes, Stats: stats, Procs: procs, WP: wordpress.New(sites, dbs, env, tm), FTP: ftpSvc,
@@ -362,4 +362,11 @@ func (l logWriter) Write(p []byte) (int, error) {
 		}
 	}
 	return len(p), nil
+}
+
+// filesFS is the file manager, keeping editor history in the panel data.
+func filesFS(home string) *files.FS {
+	f := files.New(os.Getenv("LMCWHM_FILES_ROOT"))
+	f.HistDir = filepath.Join(home, "data", "filehist")
+	return f
 }

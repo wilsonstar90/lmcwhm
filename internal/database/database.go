@@ -60,6 +60,8 @@ type Service struct {
 	box   *secrets.Box
 	apps  *appstore.Service
 	tasks *tasks.Manager
+	// BeforeDrop runs before a database is dropped (the recycle bin keeps a dump).
+	BeforeDrop func(ctx context.Context, d Database, log tasks.Logf) error
 }
 
 func New(st *store.Store, box *secrets.Box, apps *appstore.Service, tm *tasks.Manager) *Service {
@@ -196,6 +198,11 @@ func (sv *Service) Delete(ctx context.Context, id int64) (string, error) {
 		return "", err
 	}
 	return sv.tasks.Start("db.delete:"+d.Name, func(ctx context.Context, log tasks.Logf) error {
+		if sv.BeforeDrop != nil {
+			if err := sv.BeforeDrop(ctx, d, log); err != nil {
+				return err
+			}
+		}
 		log("dropping database %s and user %s", d.Name, d.Username)
 		if err := sv.exec(ctx, eng, dropScript(eng.App, d.Name, d.Username)); err != nil {
 			return err

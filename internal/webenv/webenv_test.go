@@ -57,8 +57,8 @@ func TestRender(t *testing.T) {
 	if b := string(ng["conf.d/b.org.conf"]); strings.Contains(b, "fastcgi_pass") {
 		t.Errorf("static site has php:\n%s", b)
 	}
-	if c := string(ng["conf.d/c.net.conf"]); !strings.Contains(c, "return 503") {
-		t.Errorf("stopped site not 503:\n%s", c)
+	if c := string(ng["conf.d/c.net.conf"]); !strings.Contains(c, "location / {\n        return 404;") {
+		t.Errorf("stopped site not 404:\n%s", c)
 	}
 }
 

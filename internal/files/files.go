@@ -41,6 +41,8 @@ type FS struct {
 	Root string
 	// Trash is the recycle bin, a path inside Root.
 	Trash string
+	// HistDir keeps earlier versions of files saved in the editor ("" = none).
+	HistDir string
 }
 
 // New returns the manager for root (default "/"), with the recycle bin at
@@ -254,6 +256,11 @@ func (f *FS) WriteText(p, body string) error {
 			return ErrIsDir
 		}
 		mode = fi.Mode().Perm()
+		if fi.Size() <= MaxEdit {
+			if old, err := root.ReadFile(r); err == nil && string(old) != body {
+				f.keepVersion(p, old)
+			}
+		}
 	}
 	return mapErr(root.WriteFile(r, []byte(body), mode))
 }
@@ -321,6 +328,12 @@ func (f *FS) WriteChunk(p string, offset int64, body io.Reader) (int64, error) {
 	flags := os.O_CREATE | os.O_WRONLY
 	if offset == 0 {
 		flags |= os.O_TRUNC
+		// Folder uploads name files below directories that may not exist yet.
+		if d := path.Dir(r); d != "." {
+			if err := root.MkdirAll(d, 0o755); err != nil {
+				return 0, mapErr(err)
+			}
+		}
 	}
 	fh, err := root.OpenFile(r, flags, 0o644)
 	if err != nil {

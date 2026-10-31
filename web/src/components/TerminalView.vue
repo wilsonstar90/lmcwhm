@@ -9,7 +9,7 @@ import { post, ApiError } from '../api/client'
 
 // container: "" opens a host shell, otherwise `docker exec` into it
 // (with shell "bash" / "sh", optionally as root).
-const props = defineProps<{ container?: string; shell?: string; root?: boolean }>()
+const props = defineProps<{ container?: string; shell?: string; root?: boolean; cwd?: string }>()
 const { t } = useI18n()
 
 const password = ref('')
@@ -54,7 +54,11 @@ function open(ticket: string) {
     const scheme = location.protocol === 'https:' ? 'wss' : 'ws'
     ws = new WebSocket(`${scheme}://${location.host}/api/v1/terminal/ws?ticket=${encodeURIComponent(ticket)}`)
     ws.binaryType = 'arraybuffer'
-    ws.onopen = () => send({ t: 'r', c: term!.cols, r: term!.rows })
+    ws.onopen = () => {
+      send({ t: 'r', c: term!.cols, r: term!.rows })
+      // Opened from the file manager: start in that directory.
+      if (props.cwd && !props.container) send({ t: 'i', d: `cd -- '${props.cwd.replace(/'/g, "'\\''")}' && clear\r` })
+    }
     ws.onmessage = (ev) => term!.write(new Uint8Array(ev.data as ArrayBuffer))
     ws.onclose = () => {
       closed.value = true

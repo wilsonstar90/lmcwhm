@@ -4,14 +4,18 @@ package site
 
 import (
 	"context"
+	"crypto/tls"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -69,6 +73,19 @@ type Site struct {
 	Redirect     string `json:"redirect"`
 	RedirectCode int    `json:"redirect_code"`
 	RedirectPath bool   `json:"redirect_path"`
+	// TargetSubdir is the directory of the linked website a bound domain serves (子目錄綁定).
+	TargetSubdir string `json:"target_subdir"`
+	// What a stopped site answers: "404", or "page" (error page StopPage, status 503).
+	StopMode string `json:"stop_mode"`
+	StopPage int64  `json:"stop_page"`
+	// ExpiresAt stops the site on that day (0 = never).
+	ExpiresAt int64  `json:"expires_at"`
+	Category  string `json:"category"`
+	// RunDir is served instead of the root (e.g. /public).
+	RunDir     string   `json:"run_dir"`
+	Rewrite    string   `json:"rewrite"`
+	IndexFiles []string `json:"index_files"`
+	CustomConf string   `json:"custom_conf"`
 }
 
 // IsProject reports a runtime project type.
@@ -94,6 +111,11 @@ var (
 	ErrBadPort     = errors.New("site.invalid_port")
 	ErrPortTaken   = errors.New("site.port_taken")
 	ErrBadTarget   = errors.New("site.invalid_target")
+	ErrBadSubdir   = errors.New("site.invalid_subdir")
+	ErrBadStop     = errors.New("site.invalid_stop_mode")
+	ErrBadExpiry   = errors.New("site.invalid_expiry")
+	ErrBadCategory = errors.New("site.invalid_category")
+	ErrBadIndex    = errors.New("site.invalid_index")
 	ErrBadCommand  = errors.New("site.invalid_command")
 	ErrPassSSL     = errors.New("site.passthrough_no_ssl")
 	ErrNotProject  = errors.New("site.not_project")
@@ -147,22 +169,25 @@ func NewService(st *store.Store, env *webenv.Env, cfg *webcfg.Store, issuer *acm
 const cols = `id, domain, aliases, type, php_version, root, stopped, force_https, hsts, ssl_mode, ssl_challenge,
 	ssl_wildcard, cert_issuer, cert_not_after, cert_error, dns_managed, dns_proxied, remark, created_at, updated_at,
 	runtime_version, command, app_port, proxy_target, passthrough, waf_off, waf_exclude, advanced,
-	target, target_site, container, redirect, redirect_code, redirect_path`
+	target, target_site, container, redirect, redirect_code, redirect_path,
+	target_subdir, stop_mode, stop_page, expires_at, category, run_dir, rewrite, index_files, custom_conf`
 
 func scan(row interface{ Scan(...any) error }) (Site, error) {
 	var s Site
-	var aliases, wafEx, adv string
+	var aliases, wafEx, adv, index string
 	err := row.Scan(&s.ID, &s.Domain, &aliases, &s.Type, &s.PHPVersion, &s.Root, &s.Stopped, &s.ForceHTTPS, &s.HSTS,
 		&s.SSLMode, &s.SSLChallenge, &s.SSLWildcard, &s.CertIssuer, &s.CertNotAfter, &s.CertError,
 		&s.DNSManaged, &s.DNSProxied, &s.Remark, &s.CreatedAt, &s.UpdatedAt,
 		&s.RuntimeVersion, &s.Command, &s.AppPort, &s.ProxyTarget, &s.Passthrough, &s.WAFOff, &wafEx, &adv,
-		&s.Target, &s.TargetSite, &s.Container, &s.Redirect, &s.RedirectCode, &s.RedirectPath)
+		&s.Target, &s.TargetSite, &s.Container, &s.Redirect, &s.RedirectCode, &s.RedirectPath,
+		&s.TargetSubdir, &s.StopMode, &s.StopPage, &s.ExpiresAt, &s.Category, &s.RunDir, &s.Rewrite, &index, &s.CustomConf)
 	if err != nil {
 		return s, err
 	}
 	json.Unmarshal([]byte(adv), &s.Advanced)
 	s.Advanced.Normalize()
 	s.WAFExclude = strings.Fields(wafEx)
+	s.IndexFiles = strings.Fields(index)
 	json.Unmarshal([]byte(aliases), &s.Aliases)
 	if s.Aliases == nil {
 		s.Aliases = []string{}
@@ -204,12 +229,14 @@ func (sv *Service) save(ctx context.Context, s *Site) error {
 		res, err := sv.st.DB.ExecContext(ctx, `INSERT INTO sites(domain, aliases, type, php_version, root, stopped, force_https, hsts,
 			ssl_mode, ssl_challenge, ssl_wildcard, cert_issuer, cert_not_after, cert_error, dns_managed, dns_proxied, remark, created_at, updated_at,
 			runtime_version, command, app_port, proxy_target, passthrough, waf_off, waf_exclude, advanced,
-			target, target_site, container, redirect, redirect_code, redirect_path)
-			VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			target, target_site, container, redirect, redirect_code, redirect_path,
+			target_subdir, stop_mode, stop_page, expires_at, category, run_dir, rewrite, index_files, custom_conf)
+			VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			s.Domain, string(aliases), s.Type, s.PHPVersion, s.Root, s.Stopped, s.ForceHTTPS, s.HSTS, s.SSLMode, s.SSLChallenge,
 			s.SSLWildcard, s.CertIssuer, s.CertNotAfter, s.CertError, s.DNSManaged, s.DNSProxied, s.Remark, s.CreatedAt, s.UpdatedAt,
 			s.RuntimeVersion, s.Command, s.AppPort, s.ProxyTarget, s.Passthrough, s.WAFOff, strings.Join(s.WAFExclude, " "), advJSON(s.Advanced),
-			s.Target, s.TargetSite, s.Container, s.Redirect, s.RedirectCode, s.RedirectPath)
+			s.Target, s.TargetSite, s.Container, s.Redirect, s.RedirectCode, s.RedirectPath,
+			s.TargetSubdir, stopMode(s.StopMode), s.StopPage, s.ExpiresAt, s.Category, s.RunDir, s.Rewrite, strings.Join(s.IndexFiles, " "), s.CustomConf)
 		if err != nil {
 			return err
 		}
@@ -219,12 +246,30 @@ func (sv *Service) save(ctx context.Context, s *Site) error {
 	_, err := sv.st.DB.ExecContext(ctx, `UPDATE sites SET aliases=?, type=?, php_version=?, root=?, stopped=?, force_https=?, hsts=?,
 		ssl_mode=?, ssl_challenge=?, ssl_wildcard=?, cert_issuer=?, cert_not_after=?, cert_error=?, dns_managed=?, dns_proxied=?,
 		remark=?, updated_at=?, runtime_version=?, command=?, app_port=?, proxy_target=?, passthrough=?, waf_off=?, waf_exclude=?, advanced=?,
-		target=?, target_site=?, container=?, redirect=?, redirect_code=?, redirect_path=? WHERE id=?`,
+		target=?, target_site=?, container=?, redirect=?, redirect_code=?, redirect_path=?,
+		target_subdir=?, stop_mode=?, stop_page=?, expires_at=?, category=?, run_dir=?, rewrite=?, index_files=?, custom_conf=? WHERE id=?`,
 		string(aliases), s.Type, s.PHPVersion, s.Root, s.Stopped, s.ForceHTTPS, s.HSTS, s.SSLMode, s.SSLChallenge, s.SSLWildcard,
 		s.CertIssuer, s.CertNotAfter, s.CertError, s.DNSManaged, s.DNSProxied, s.Remark, s.UpdatedAt,
 		s.RuntimeVersion, s.Command, s.AppPort, s.ProxyTarget, s.Passthrough, s.WAFOff, strings.Join(s.WAFExclude, " "), advJSON(s.Advanced),
-		s.Target, s.TargetSite, s.Container, s.Redirect, s.RedirectCode, s.RedirectPath, s.ID)
+		s.Target, s.TargetSite, s.Container, s.Redirect, s.RedirectCode, s.RedirectPath,
+		s.TargetSubdir, stopMode(s.StopMode), s.StopPage, s.ExpiresAt, s.Category, s.RunDir, s.Rewrite, strings.Join(s.IndexFiles, " "), s.CustomConf, s.ID)
 	return err
+}
+
+func stopMode(m string) string {
+	if m == "page" {
+		return m
+	}
+	return "404"
+}
+
+// Public is the site as the browser sees it (no password hashes).
+func (s Site) Public() Site {
+	s.Advanced = s.Advanced.Public()
+	if s.IndexFiles == nil {
+		s.IndexFiles = []string{}
+	}
+	return s
 }
 
 func advJSON(a webenv.Advanced) string {
@@ -349,6 +394,9 @@ func (sv *Service) specOf(s Site, byID map[int64]Site) webenv.Site {
 		Domain: s.Domain, Aliases: s.Aliases, Stopped: s.Stopped, ForceHTTPS: s.ForceHTTPS, HSTS: s.HSTS, HasCert: has,
 		Root: s.Root, // nginx needs one even when it only proxies or redirects
 	}
+	if s.Stopped && s.StopMode == "page" && s.StopPage > 0 {
+		ws.StopPage = "p" + strconv.FormatInt(s.StopPage, 10) // errpages file name
+	}
 	if ws.Root == "" {
 		ws.Root = sv.Env.SiteRoot(s.Domain)
 	}
@@ -376,8 +424,12 @@ func (sv *Service) specOf(s Site, byID map[int64]Site) webenv.Site {
 		ws.Type, ws.Redirect, ws.RedirectCode, ws.RedirectPath = "static", s.Redirect, s.RedirectCode, s.RedirectPath
 		return ws
 	}
-	ws.Type, ws.PHPVersion, ws.Root = content.Type, content.PHPVersion, content.Root
+	ws.Type, ws.PHPVersion, ws.Root = content.Type, content.PHPVersion, content.Root+content.RunDir
+	if s.target() == TargetLink && s.TargetSubdir != "" {
+		ws.Root = content.Root + s.TargetSubdir
+	}
 	ws.WAFOff, ws.WAFExclude, ws.Advanced = content.WAFOff, content.WAFExclude, content.Advanced
+	ws.Index, ws.Rewrite, ws.Custom = content.IndexFiles, content.Rewrite, content.CustomConf
 	if IsProject(content.Type) {
 		ws.Upstream = fmt.Sprintf("http://127.0.0.1:%d", content.AppPort)
 	}
@@ -570,6 +622,7 @@ type CreateInput struct {
 	Redirect     string `json:"redirect"`
 	RedirectCode int    `json:"redirect_code"`
 	RedirectPath bool   `json:"redirect_path"`
+	TargetSubdir string `json:"target_subdir"` // link: a directory of the website
 }
 
 func (sv *Service) Create(ctx context.Context, in CreateInput) (string, error) {
@@ -629,7 +682,7 @@ func (sv *Service) Create(ctx context.Context, in CreateInput) (string, error) {
 			return "", ErrNoContent
 		}
 		if err := sv.applyTarget(ctx, &s, TargetInput{Target: t, TargetSite: in.TargetSite, Container: in.Container, ProxyTarget: in.ProxyTarget,
-			Redirect: in.Redirect, RedirectCode: in.RedirectCode, RedirectPath: in.RedirectPath}); err != nil {
+			Redirect: in.Redirect, RedirectCode: in.RedirectCode, RedirectPath: in.RedirectPath, TargetSubdir: in.TargetSubdir}); err != nil {
 			return "", err
 		}
 		if s.Passthrough && in.SSL != "none" && in.SSL != "" {
@@ -996,6 +1049,94 @@ type UpdateInput struct {
 	WAFExclude *[]string `json:"waf_exclude"`
 	// Advanced nginx settings (replaced as a whole).
 	Advanced *webenv.Advanced `json:"advanced"`
+	// aaPanel-style website settings.
+	StopMode   *string   `json:"stop_mode"`
+	StopPage   *int64    `json:"stop_page"`
+	ExpiresAt  *int64    `json:"expires_at"`
+	Category   *string   `json:"category"`
+	RunDir     *string   `json:"run_dir"`
+	Rewrite    *string   `json:"rewrite"`
+	IndexFiles *[]string `json:"index_files"`
+	CustomConf *string   `json:"custom_conf"`
+}
+
+var (
+	indexRe    = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
+	categoryRe = regexp.MustCompile(`^[^\x00-\x1f<>]{0,32}$`)
+	subdirRe   = regexp.MustCompile(`^(/[A-Za-z0-9._-]+)+$`)
+)
+
+// cleanSubdir checks a path below a website root ("" = the root itself).
+func cleanSubdir(d string) (string, error) {
+	d = strings.TrimRight(strings.TrimSpace(d), "/")
+	if d == "" {
+		return "", nil
+	}
+	if !strings.HasPrefix(d, "/") {
+		d = "/" + d
+	}
+	if !subdirRe.MatchString(d) || strings.Contains(d, "/..") || strings.Contains(d, "/./") || strings.HasSuffix(d, "/.") {
+		return "", ErrBadSubdir
+	}
+	return d, nil
+}
+
+// applySettings validates the aaPanel-style settings of in and sets them on s.
+func applySettings(s *Site, in UpdateInput) error {
+	if in.StopMode != nil {
+		if *in.StopMode != "404" && *in.StopMode != "page" {
+			return ErrBadStop
+		}
+		s.StopMode = *in.StopMode
+	}
+	if in.StopPage != nil {
+		s.StopPage = *in.StopPage
+	}
+	if in.ExpiresAt != nil {
+		if *in.ExpiresAt < 0 {
+			return ErrBadExpiry
+		}
+		s.ExpiresAt = *in.ExpiresAt
+	}
+	if in.Category != nil {
+		c := strings.TrimSpace(*in.Category)
+		if !categoryRe.MatchString(c) {
+			return ErrBadCategory
+		}
+		s.Category = c
+	}
+	if in.RunDir != nil {
+		d, err := cleanSubdir(*in.RunDir)
+		if err != nil {
+			return err
+		}
+		s.RunDir = d
+	}
+	if in.IndexFiles != nil {
+		idx := []string{}
+		for _, f := range *in.IndexFiles {
+			if f = strings.TrimSpace(f); f == "" {
+				continue
+			}
+			if !indexRe.MatchString(f) || len(idx) >= 20 {
+				return ErrBadIndex
+			}
+			idx = append(idx, f)
+		}
+		s.IndexFiles = idx
+	}
+	for dst, src := range map[*string]*string{&s.Rewrite: in.Rewrite, &s.CustomConf: in.CustomConf} {
+		if src != nil {
+			if err := webenv.CheckDirectives(*src); err != nil {
+				return err
+			}
+			*dst = strings.TrimSpace(strings.ReplaceAll(*src, "\r\n", "\n"))
+		}
+	}
+	if (in.Rewrite != nil || in.CustomConf != nil || in.IndexFiles != nil || in.RunDir != nil) && !s.HasContent() {
+		return ErrNoContent
+	}
+	return nil
 }
 
 // Update changes settings; it returns a task id because a new PHP version may
@@ -1005,6 +1146,7 @@ func (sv *Service) Update(ctx context.Context, id int64, in UpdateInput) (string
 	if err != nil {
 		return "", err
 	}
+	old := s
 	if in.Aliases != nil {
 		s.Aliases = cleanHosts(*in.Aliases)
 		if err := sv.checkHosts(ctx, s.ID, s.Hosts()); err != nil {
@@ -1058,8 +1200,15 @@ func (sv *Service) Update(ctx context.Context, id int64, in UpdateInput) (string
 		}
 		s.AppPort = *in.AppPort
 	}
+	if err := applySettings(&s, in); err != nil {
+		return "", err
+	}
+	if in.Stopped != nil && !*in.Stopped && s.ExpiresAt > 0 && s.ExpiresAt <= time.Now().Unix() {
+		s.ExpiresAt = 0 // starting an expired site clears the expiry
+	}
 	if in.Advanced != nil {
 		a := *in.Advanced
+		a.KeepHashes(s.Advanced)
 		if err := a.Normalize(); err != nil {
 			return "", err
 		}
@@ -1108,7 +1257,12 @@ func (sv *Service) Update(ctx context.Context, id int64, in UpdateInput) (string
 			}
 		}
 		log("applying configuration")
-		return sv.Apply(ctx)
+		if err := sv.Apply(ctx); err != nil {
+			// nginx refused it: keep the previous settings.
+			sv.save(ctx, &old)
+			return err
+		}
+		return nil
 	}), nil
 }
 
@@ -1263,4 +1417,135 @@ func (sv *Service) RenewDue(ctx context.Context, out io.Writer) error {
 		return fmt.Errorf("renewal failed: %s", strings.Join(failed, ", "))
 	}
 	return nil
+}
+
+// ExpireDue stops websites whose expiry date has passed (the "site_expiry"
+// scheduled task) and returns them.
+func (sv *Service) ExpireDue(ctx context.Context, out io.Writer) ([]Site, error) {
+	all, err := sv.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().Unix()
+	var stopped []Site
+	for _, s := range all {
+		if s.ExpiresAt == 0 || s.ExpiresAt > now || s.Stopped {
+			continue
+		}
+		s.Stopped = true
+		if err := sv.save(ctx, &s); err != nil {
+			return stopped, err
+		}
+		fmt.Fprintf(out, "%s expired on %s: stopped\n", s.Domain, time.Unix(s.ExpiresAt, 0).Format("2006-01-02"))
+		stopped = append(stopped, s)
+	}
+	if len(stopped) == 0 {
+		fmt.Fprintln(out, "no website has expired")
+		return nil, nil
+	}
+	return stopped, sv.Apply(ctx)
+}
+
+// BatchInput applies one change to several websites.
+type BatchInput struct {
+	IDs       []int64 `json:"ids"`
+	Action    string  `json:"action"` // start | stop | expiry | category
+	ExpiresAt int64   `json:"expires_at"`
+	Category  string  `json:"category"`
+	StopMode  string  `json:"stop_mode"`
+	StopPage  int64   `json:"stop_page"`
+}
+
+var ErrBadBatch = errors.New("site.invalid_batch")
+
+// Batch changes the websites and reloads the stack once (task).
+func (sv *Service) Batch(ctx context.Context, in BatchInput) (string, error) {
+	if len(in.IDs) == 0 || len(in.IDs) > 500 {
+		return "", ErrBadBatch
+	}
+	var list []Site
+	for _, id := range in.IDs {
+		s, err := sv.Get(ctx, id)
+		if err != nil {
+			return "", err
+		}
+		up := UpdateInput{}
+		switch in.Action {
+		case "start", "stop":
+			stop := in.Action == "stop"
+			s.Stopped = stop
+			if stop && in.StopMode != "" {
+				up.StopMode, up.StopPage = &in.StopMode, &in.StopPage
+			}
+			if !stop && s.ExpiresAt > 0 && s.ExpiresAt <= time.Now().Unix() {
+				s.ExpiresAt = 0
+			}
+		case "expiry":
+			up.ExpiresAt = &in.ExpiresAt
+		case "category":
+			up.Category = &in.Category
+		default:
+			return "", ErrBadBatch
+		}
+		if err := applySettings(&s, up); err != nil {
+			return "", err
+		}
+		list = append(list, s)
+	}
+	return sv.tasks.Start("site.batch:"+in.Action, func(ctx context.Context, log tasks.Logf) error {
+		for i := range list {
+			log("%s: %s", list[i].Domain, in.Action)
+			if err := sv.save(ctx, &list[i]); err != nil {
+				return err
+			}
+		}
+		return sv.Apply(ctx)
+	}), nil
+}
+
+// Categories are the website categories in use.
+func (sv *Service) Categories(ctx context.Context) ([]string, error) {
+	rows, err := sv.st.DB.QueryContext(ctx, `SELECT DISTINCT category FROM sites WHERE category != '' ORDER BY category`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var c string
+		rows.Scan(&c)
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// ProbeHost requests http(s)://host/ through the local edge and reports the
+// status and time to first byte (域名測速).
+func ProbeHost(ctx context.Context, host string, https bool) (status int, ms int64, err error) {
+	host = normHost(host)
+	if !hostRe.MatchString(host) {
+		return 0, 0, ErrBadDomain
+	}
+	scheme, port := "http", "80"
+	if https {
+		scheme, port = "https", "443"
+	}
+	dialer := &net.Dialer{Timeout: 5 * time.Second}
+	tr := &http.Transport{
+		DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			return dialer.DialContext(ctx, network, "127.0.0.1:"+port)
+		},
+		TLSClientConfig: &tls.Config{ServerName: host, InsecureSkipVerify: true}, // the edge answers locally; only timing matters
+	}
+	defer tr.CloseIdleConnections()
+	c := &http.Client{Transport: tr, Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, scheme+"://"+host+"/", nil)
+	req.Header.Set("User-Agent", "lmcwhm-probe")
+	start := time.Now()
+	resp, err := c.Do(req)
+	if err != nil {
+		return 0, 0, err
+	}
+	resp.Body.Close()
+	return resp.StatusCode, time.Since(start).Milliseconds(), nil
 }

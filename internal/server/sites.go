@@ -35,6 +35,12 @@ func (s *Server) siteRoutes(r chi.Router) {
 	r.Post("/sites/{id}/ssl/disable", s.handleDisableSSL)
 	r.Get("/sites/{id}/vhost", s.handleVhost)
 	r.Post("/sites/{id}/target", s.handleSiteTarget)
+	r.Get("/sites/overview", s.handleSitesOverview)
+	r.Get("/sites/categories", s.handleSiteCategories)
+	r.Get("/sites/rewrites", s.handleRewrites)
+	r.Put("/sites/rewrites", s.handleSaveRewrite)
+	r.Post("/sites/batch", s.handleSitesBatch)
+	r.Post("/sites/{id}/probe", s.handleSiteProbe)
 }
 
 // writeSiteErr maps service errors (some wrapped with a detail) to API codes.
@@ -188,7 +194,7 @@ func (s *Server) handleSites(w http.ResponseWriter, r *http.Request) {
 	out := list[:0]
 	for _, st := range list {
 		if u.CanSite(st.ID) {
-			out = append(out, st)
+			out = append(out, st.Public())
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": out})
@@ -200,7 +206,7 @@ func (s *Server) handleSite(w http.ResponseWriter, r *http.Request) {
 		writeSiteErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, st)
+	writeJSON(w, http.StatusOK, st.Public())
 }
 
 func (s *Server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
@@ -222,6 +228,11 @@ func (s *Server) handleUpdateSite(w http.ResponseWriter, r *http.Request) {
 	var in site.UpdateInput
 	if err := decode(r, &in); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	// Raw nginx directives can read any file nginx can: administrators only.
+	if (in.Rewrite != nil || in.CustomConf != nil) && !sessionFrom(r).User.IsAdmin {
+		writeErr(w, http.StatusForbidden, errForbidden)
 		return
 	}
 	id, err := s.Sites.Update(r.Context(), idParam(r), in)

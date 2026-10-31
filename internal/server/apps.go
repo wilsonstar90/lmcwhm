@@ -37,6 +37,9 @@ func (s *Server) appRoutes(r chi.Router) {
 	r.Get("/databases", s.handleDatabases)
 	r.Post("/databases", s.handleCreateDatabase)
 	r.Post("/databases/{id}/delete", s.handleDeleteDatabase)
+	if s.Backup != nil {
+		s.dbTrashRoutes(r)
+	}
 	r.Post("/databases/{id}/password", s.handleDatabasePassword)
 	r.Patch("/databases/{id}", s.handleDatabaseRemark)
 

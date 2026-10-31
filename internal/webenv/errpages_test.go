@@ -29,7 +29,7 @@ func TestErrorPages(t *testing.T) {
 	}
 	a := string(ng["conf.d/a.com.conf"])
 	for _, want := range []string{"error_page 403 /__lmcwhm_err/p1.html;", "error_page 404 /__lmcwhm_err/p2.html;", "error_page 502 /__lmcwhm_err/p2.html;",
-		"location ^~ /__lmcwhm_err/ {\n        internal;\n        ssi on;\n        alias /etc/nginx/lmcwhm/errors/;"} {
+		"location ^~ /__lmcwhm_err/ {\n        internal;\n        ssi on;\n        auth_basic off;\n        alias /etc/nginx/lmcwhm/errors/;"} {
 		if !strings.Contains(a, want) {
 			t.Errorf("a.com missing %q:\n%s", want, a)
 		}

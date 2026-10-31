@@ -112,6 +112,9 @@ func New(d Deps) (*Server, error) {
 	}
 	s := &Server{Deps: d, secret: secret, restart: make(chan struct{}, 1)}
 	s.MCP = s.buildMCP()
+	if s.DBs != nil && s.Backup != nil {
+		s.DBs.BeforeDrop = s.keepDroppedDB
+	}
 	if s.AI != nil {
 		s.AI.MCP = s.MCP
 	}

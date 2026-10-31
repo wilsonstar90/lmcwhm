@@ -20,7 +20,7 @@ import (
 // Built-in scheduled tasks: the panel's own maintenance runs as cron jobs
 // the user can see, run, reschedule or switch off (aaPanel's default tasks).
 
-var systemCommands = map[string]bool{"ssl_renew": true, "time_sync": true, "release_memory": true, "security_scan": true, "app_updates": true}
+var systemCommands = map[string]bool{"ssl_renew": true, "time_sync": true, "release_memory": true, "security_scan": true, "app_updates": true, "site_expiry": true}
 
 // malwareTask is the command of a "malware_scan" job.
 type malwareTask struct {
@@ -67,6 +67,17 @@ func (s *Server) RunTask(ctx context.Context, typ, cmd string, out io.Writer) er
 		return s.securityScanTask(ctx, out)
 	case "app_updates":
 		return s.appUpdatesTask(ctx, out)
+	case "site_expiry":
+		if s.Sites == nil {
+			return errors.New("websites are not available")
+		}
+		stopped, err := s.Sites.ExpireDue(ctx, out)
+		for _, st := range stopped {
+			if s.Alerts != nil {
+				s.Alerts.Emit(ctx, alert.KindSiteExpiry, st.Domain, "warning", "Website expired and stopped: "+st.Domain, st.Root, false)
+			}
+		}
+		return err
 	}
 	return cron.ErrCommand
 }
@@ -220,6 +231,8 @@ var defaultJobs = []defaultJob{
 		"en": "Security scan", "zh-HK": "安全掃描", "zh-TW": "安全掃描", "zh-CN": "安全扫描", "ja": "セキュリティスキャン"}},
 	{"app_updates", "system", "app_updates", "25 5 * * *", 600, map[string]string{
 		"en": "Check software updates", "zh-HK": "檢查軟件更新", "zh-TW": "檢查軟體更新", "zh-CN": "检查软件更新", "ja": "ソフトウェア更新の確認"}},
+	{"site_expiry", "system", "site_expiry", "5 0 * * *", 600, map[string]string{
+		"en": "Stop expired websites", "zh-HK": "停用已到期網站", "zh-TW": "停用已到期網站", "zh-CN": "停用已到期网站", "ja": "期限切れサイトの停止"}},
 	{"malware_scan", "malware_scan", `{"paths":[],"clamav":false}`, "30 2 * * 0", 7200, map[string]string{
 		"en": "Webshell scan of websites", "zh-HK": "網站木馬掃描", "zh-TW": "網站木馬掃描", "zh-CN": "网站木马扫描", "ja": "サイトの Webshell スキャン"}},
 }

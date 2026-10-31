@@ -224,6 +224,111 @@ pass "force HTTPS redirect"
 [[ "$(get443 static.test /.well-known/acme-challenge/nope)" == "404 page not found" ]] || fail "acme path over https not routed to responder"
 pass "ACME challenge path routed on HTTPS"
 
+# ---------- website settings like aaPanel ----------
+wait_fail() { # task_id: the task must fail
+  for _ in $(seq 1 300); do
+    st="$(api GET "/tasks/$1" | jget "['status']")"
+    [[ "$st" == running ]] || { [[ "$st" != success ]] || fail "task $1 should have failed"; return; }
+    sleep 1
+  done
+  fail "task $1 timed out"
+}
+adv_with() { # python expression on the site's advanced settings "a" -> PATCH body
+  api GET "/sites/$PID" | python3 -c "import sys,json; a=json.load(sys.stdin)['advanced']; $1; print(json.dumps({'advanced':a}))"
+}
+PID="$(site_id php.test)"
+R=/www/wwwroot/php.test
+mkdir -p "$R/blog" "$R/pub"
+echo blog-ok > "$R/blog/index.html"; echo home-ok > "$R/home.html"; echo pub-ok > "$R/pub/index.html"
+chown -R 33:33 "$R"
+# Rewrite rules replace "location /"; the WordPress template sends pretty links to index.php.
+wait_task "$(api PATCH "/sites/$PID" '{"rewrite":"location / {\n    return 418;\n}"}' | jget "['task_id']")"
+[[ "$(code --resolve php.test:80:127.0.0.1 http://php.test/hello-world/)" == 418 ]] || fail "custom rewrite"
+WP="$(api GET /sites/rewrites | jget "['builtin']['wordpress']")"
+wait_task "$(api PATCH "/sites/$PID" "$(python3 -c 'import sys,json; print(json.dumps({"rewrite": sys.argv[1]}))' "$WP")" | jget "['task_id']")"
+[[ "$(get80 php.test /hello-world/)" == php-ok-8.3* ]] || fail "wordpress rewrite: $(get80 php.test /hello-world/)"
+# Index files and custom directives.
+wait_task "$(api PATCH "/sites/$PID" '{"index_files":["home.html","index.html"],"custom_conf":"add_header X-Lmcwhm-Test custom-ok always;"}' | jget "['task_id']")"
+[[ "$(get80 php.test /)" == home-ok ]] || fail "index files: $(get80 php.test /)"
+curl -sI --resolve php.test:80:127.0.0.1 http://php.test/home.html | grep -qi "x-lmcwhm-test: custom-ok" || fail "custom directives not applied"
+# nginx refuses a broken directive: the task fails, the site keeps working and the old config stays.
+wait_fail "$(api PATCH "/sites/$PID" '{"custom_conf":"add_header;"}' | jget "['task_id']")"
+[[ "$(get80 php.test /)" == home-ok ]] || fail "site broken by a refused directive"
+api GET "/sites/$PID" | grep -q 'X-Lmcwhm-Test' || fail "refused directive was stored"
+# Run directory.
+wait_task "$(api PATCH "/sites/$PID" '{"run_dir":"/pub"}' | jget "['task_id']")"
+[[ "$(get80 php.test /)" == pub-ok ]] || fail "run directory: $(get80 php.test /)"
+wait_task "$(api PATCH "/sites/$PID" '{"run_dir":"","rewrite":"","custom_conf":""}' | jget "['task_id']")"
+# Password for the site; hashes never reach the browser.
+wait_task "$(api PATCH "/sites/$PID" "$(adv_with "a['basic_auth']={'user':'boss','password':'s3cret'}")" | jget "['task_id']")"
+[[ "$(code --resolve php.test:80:127.0.0.1 http://php.test/)" == 401 ]] || fail "basic auth not asked"
+[[ "$(curl -s -u boss:s3cret --resolve php.test:80:127.0.0.1 http://php.test/)" == home-ok ]] || fail "basic auth password refused"
+api GET "/sites/$PID" | grep -q SSHA && fail "password hash sent to the browser"
+# Saving other settings keeps the stored password.
+wait_task "$(api PATCH "/sites/$PID" "$(adv_with "a['limit_rate_kb']=2048")" | jget "['task_id']")"
+[[ "$(curl -s -u boss:s3cret --resolve php.test:80:127.0.0.1 http://php.test/)" == home-ok ]] || fail "password lost on save"
+wait_task "$(api PATCH "/sites/$PID" "$(adv_with "a['basic_auth']=None; a['limit_rate_kb']=0")" | jget "['task_id']")"
+# Reverse proxy for a path.
+mkdir -p /tmp/upstream/api && echo proxied-ok > /tmp/upstream/api/x.txt
+(cd /tmp/upstream && python3 -m http.server 18081 --bind 127.0.0.1 >/dev/null 2>&1 &)
+sleep 1
+wait_task "$(api PATCH "/sites/$PID" "$(adv_with "a['proxies']=[{'name':'api','path':'/api/','target':'http://127.0.0.1:18081','host':'','enabled':True}]")" | jget "['task_id']")"
+[[ "$(get80 php.test /api/x.txt)" == proxied-ok ]] || fail "path reverse proxy: $(get80 php.test /api/x.txt)"
+wait_task "$(api PATCH "/sites/$PID" "$(adv_with "a['proxies']=[]")" | jget "['task_id']")"
+# Subdirectory binding: blog.test serves php.test/blog.
+wait_task "$(api POST /sites "{\"domain\":\"blog.test\",\"type\":\"proxy\",\"target\":\"link\",\"target_site\":$PID,\"target_subdir\":\"/blog\",\"ssl\":\"none\"}" | jget "['task_id']")"
+[[ "$(get80 blog.test /)" == blog-ok ]] || fail "subdirectory binding: $(get80 blog.test /)"
+wait_task "$(api POST "/sites/$(site_id blog.test)/delete" '{}' | jget "['task_id']")"
+# Stopped: 404, or an error page (503).
+wait_task "$(api POST /sites/batch "{\"ids\":[$PID],\"action\":\"stop\",\"stop_mode\":\"404\"}" | jget "['task_id']")"
+[[ "$(code --resolve php.test:80:127.0.0.1 http://php.test/)" == 404 ]] || fail "stopped site not 404"
+PAGE="$(api GET /errpages | python3 -c "import sys,json; print([p['id'] for p in json.load(sys.stdin)['pages'] if p['code']=='maintenance'][0])")"
+wait_task "$(api POST /sites/batch "{\"ids\":[$PID],\"action\":\"stop\",\"stop_mode\":\"page\",\"stop_page\":$PAGE}" | jget "['task_id']")"
+[[ "$(code --resolve php.test:80:127.0.0.1 http://php.test/)" == 503 ]] || fail "stopped site with a page not 503"
+get80 php.test / | grep -q "503" || fail "stop page not served: $(get80 php.test /)"
+wait_task "$(api POST /sites/batch "{\"ids\":[$PID],\"action\":\"start\"}" | jget "['task_id']")"
+[[ "$(get80 php.test /)" == home-ok ]] || fail "started again"
+# Expiry: the daily task stops an expired site.
+wait_task "$(api PATCH "/sites/$PID" "{\"expires_at\":$(( $(date +%s) - 60 ))}" | jget "['task_id']")"
+JOB="$(api GET /cron | python3 -c "import sys,json; print([j['id'] for j in json.load(sys.stdin)['items'] if j['command']=='site_expiry'][0])")"
+api POST "/cron/$JOB/run" >/dev/null
+for _ in $(seq 1 30); do api GET "/sites/$PID" | grep -q '"stopped":true' && break; sleep 1; done
+api GET "/sites/$PID" | grep -q '"stopped":true' || fail "expired site not stopped"
+wait_task "$(api POST /sites/batch "{\"ids\":[$PID],\"action\":\"start\"}" | jget "['task_id']")"
+api GET "/sites/$PID" | grep -q '"expires_at":0' || fail "starting an expired site keeps the expiry"
+wait_task "$(api PATCH "/sites/$PID" '{"index_files":[]}' | jget "['task_id']")"
+pass "website settings: rewrite, index, custom config, run directory, password, path proxy, subdirectory, stop modes, expiry"
+
+# ---------- file manager extras ----------
+api PUT /files/remark '{"path":"/www/wwwroot/php.test/home.html","remark":"首頁"}' >/dev/null
+api POST /files/rename '{"from":"/www/wwwroot/php.test/home.html","to":"/www/wwwroot/php.test/home2.html"}' >/dev/null
+api GET '/files/list?path=/www/wwwroot/php.test' | python3 -c "
+import sys,json; it={i['name']:i for i in json.load(sys.stdin)['items']}
+assert it['home2.html'].get('remark')=='首頁', it['home2.html']
+assert it['blog'].get('auto') is None and it['.user.ini']['auto']['code']=='user_ini', it['.user.ini']" || fail "remarks"
+api GET '/files/list?path=/www/wwwroot' | grep -q '"code":"site_root","arg":"php.test"' || fail "website root remark"
+[[ "$(api GET '/files/size?path=/www/wwwroot/php.test/blog' | jget "['size']")" == 8 ]] || fail "folder size"
+F=/www/wwwroot/php.test/edit.txt
+api PUT /files/write "{\"path\":\"$F\",\"content\":\"v1\"}" >/dev/null
+api PUT /files/write "{\"path\":\"$F\",\"content\":\"v2\"}" >/dev/null
+V="$(api GET "/files/history?path=$F" | jget "['items'][0]['id']")"
+api POST /files/history/restore "{\"path\":\"$F\",\"id\":\"$V\"}" >/dev/null
+[[ "$(cat $F)" == v1 ]] || fail "history restore"
+# Chunked upload resumes from the size on the server; a folder upload creates its directories.
+head -c 3000 /dev/urandom > /tmp/up.bin
+head -c 1000 /tmp/up.bin | curl -sk -b "$JAR" -H "X-CSRF-Token: $CSRF" --data-binary @- "$P/api/v1/files/upload?path=/www/wwwroot/php.test/new/dir/up.bin&offset=0" >/dev/null
+OFF="$(api GET '/files/stat?path=/www/wwwroot/php.test/new/dir/up.bin' | jget "['size']")"
+tail -c +$((OFF + 1)) /tmp/up.bin | curl -sk -b "$JAR" -H "X-CSRF-Token: $CSRF" --data-binary @- "$P/api/v1/files/upload?path=/www/wwwroot/php.test/new/dir/up.bin&offset=$OFF&last=1" >/dev/null
+cmp -s /tmp/up.bin /www/wwwroot/php.test/new/dir/up.bin || fail "resumed upload differs"
+# With the recycle bin off, deleting removes at once.
+api PUT /files/trash/settings '{"enabled":false,"db":true}' >/dev/null
+api POST /files/delete '{"paths":["/www/wwwroot/php.test/new"]}' >/dev/null
+[[ ! -e /www/wwwroot/php.test/new ]] || fail "delete with the bin off"
+api GET /files/trash | grep -q '/www/wwwroot/php.test/new' && fail "deleted with the bin off but kept in it"
+api PUT /files/trash/settings '{"enabled":true,"db":true}' >/dev/null
+rm -f "$F" /www/wwwroot/php.test/home2.html
+pass "file manager: remarks, sizes, editor history, resumable and folder upload, recycle bin switch"
+
 # ---------- switch PHP version, stop, delete ----------
 PID="$(site_id php.test)"
 wait_task "$(api PATCH "/sites/$PID" '{"php_version":"8.2"}' | jget "['task_id']")"
@@ -231,7 +336,7 @@ wait_task "$(api PATCH "/sites/$PID" '{"php_version":"8.2"}' | jget "['task_id']
 pass "switch PHP 8.3 -> 8.2"
 
 wait_task "$(api PATCH "/sites/$PID" '{"stopped":true}' | jget "['task_id']")"
-[[ "$(curl -s -o /dev/null -w '%{http_code}' --resolve php.test:80:127.0.0.1 http://php.test/)" == 503 ]] || fail "stopped site"
+[[ "$(curl -s -o /dev/null -w '%{http_code}' --resolve php.test:80:127.0.0.1 http://php.test/)" == 404 ]] || fail "stopped site"
 wait_task "$(api PATCH "/sites/$PID" '{"stopped":false}' | jget "['task_id']")"
 pass "stop / start site"
 

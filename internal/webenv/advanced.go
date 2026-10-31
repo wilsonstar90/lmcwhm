@@ -1,6 +1,9 @@
 package webenv
 
 import (
+	"crypto/rand"
+	"crypto/sha1"
+	"encoding/base64"
 	"errors"
 	"net/netip"
 	"regexp"
@@ -27,19 +30,66 @@ type Advanced struct {
 	Varnish        bool     `json:"varnish"`
 	VarnishTTL     int      `json:"varnish_ttl"`
 	VarnishExclude []string `json:"varnish_exclude"`
+	// Access log off (aaPanel "write access log"); on by default.
+	NoAccessLog bool `json:"no_access_log"`
+	// Password for the whole site, and for directories.
+	BasicAuth *AuthUser `json:"basic_auth"`
+	AuthDirs  []AuthDir `json:"auth_dirs"`
+	// Traffic: concurrent connections for the whole site, and the
+	// bandwidth of one response (KB/s).
+	ServerConn  int `json:"server_conn"`
+	LimitRateKB int `json:"limit_rate_kb"`
+	// Hotlink protection: file extensions checked, and whether requests
+	// without a Referer are refused too.
+	HotlinkExt       []string `json:"hotlink_ext"`
+	HotlinkDenyEmpty bool     `json:"hotlink_deny_empty"`
+	// Reverse proxies for path prefixes of the site.
+	Proxies []PathProxy `json:"proxies"`
 }
 
 type Redirect struct {
-	From string `json:"from"` // exact path, e.g. /old
-	To   string `json:"to"`   // path or URL
-	Code int    `json:"code"` // 301 | 302
+	From     string `json:"from"`      // exact path, e.g. /old
+	To       string `json:"to"`        // path or URL
+	Code     int    `json:"code"`      // 301 | 302 | 307 | 308
+	KeepPath bool   `json:"keep_path"` // append the rest of the request URI
 }
+
+// AuthUser is a user name and its {SSHA} hash; Password is only accepted
+// on input (hashed by Normalize, never stored or returned).
+type AuthUser struct {
+	User     string `json:"user"`
+	Hash     string `json:"hash,omitempty"`
+	Password string `json:"password,omitempty"`
+}
+
+type AuthDir struct {
+	Name string `json:"name"`
+	Path string `json:"path"` // e.g. /admin/
+	AuthUser
+}
+
+// PathProxy forwards a path prefix to a URL.
+type PathProxy struct {
+	Name    string `json:"name"`
+	Path    string `json:"path"`
+	Target  string `json:"target"` // http(s)://host[:port][/path]
+	Host    string `json:"host"`   // Host header sent ("" = $host)
+	Enabled bool   `json:"enabled"`
+}
+
+var DefaultHotlinkExt = []string{"jpg", "jpeg", "gif", "png", "webp", "svg", "ico", "mp4", "webm", "mp3", "pdf"}
 
 var (
 	ErrAdvanced = errors.New("site.invalid_advanced")
 	uaRe        = regexp.MustCompile(`^[A-Za-z0-9 ._/()+-]{2,64}$`)
 	refRe       = regexp.MustCompile(`^(\*\.)?[A-Za-z0-9.-]{1,253}$`)
 	pathRe      = regexp.MustCompile(`^/[A-Za-z0-9._~!$&'()*+,=:@%/-]*$`)
+	authUserRe  = regexp.MustCompile(`^[A-Za-z0-9._-]{1,32}$`)
+	sshaRe      = regexp.MustCompile(`^\{SSHA\}[A-Za-z0-9+/=]{20,64}$`)
+	extRe       = regexp.MustCompile(`^[a-z0-9]{1,10}$`)
+	proxyURLRe  = regexp.MustCompile(`^https?://[A-Za-z0-9.\-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~!$&'()*+,=:@%/-]*)?$|^https?://\[[0-9a-fA-F:]+\](:[0-9]{1,5})?(/[A-Za-z0-9._~%/-]*)?$`)
+	proxyHostRe = regexp.MustCompile(`^[A-Za-z0-9.\-]{1,253}(:[0-9]{1,5})?$`)
+	nameRe      = regexp.MustCompile(`^[^\x00-\x1f"'{};\\]{0,64}$`)
 	targetRe    = regexp.MustCompile(`^(/|https?://)[A-Za-z0-9._~!$&'()*+,=:@%/?#\[\]-]*$`)
 )
 
@@ -118,10 +168,60 @@ func (a *Advanced) Normalize() error {
 		if r.Code == 0 {
 			r.Code = 301
 		}
-		if !pathRe.MatchString(r.From) || !targetRe.MatchString(r.To) || r.Code != 301 && r.Code != 302 || seen[r.From] {
+		if !pathRe.MatchString(r.From) || !targetRe.MatchString(r.To) || redirectCode(r.Code) != r.Code || seen[r.From] {
 			return ErrAdvanced
 		}
 		seen[r.From] = true
+	}
+	if a.ServerConn < 0 || a.ServerConn > 1000000 || a.LimitRateKB < 0 || a.LimitRateKB > 10000000 ||
+		len(a.AuthDirs) > 50 || len(a.Proxies) > 50 || len(a.HotlinkExt) > 50 {
+		return ErrAdvanced
+	}
+	if a.BasicAuth != nil {
+		if a.BasicAuth.User == "" {
+			a.BasicAuth = nil
+		} else if err := a.BasicAuth.normalize(); err != nil {
+			return err
+		}
+	}
+	seen = map[string]bool{}
+	for i := range a.AuthDirs {
+		d := &a.AuthDirs[i]
+		if !pathRe.MatchString(d.Path) || !nameRe.MatchString(d.Name) || seen[d.Path] {
+			return ErrAdvanced
+		}
+		seen[d.Path] = true
+		if err := d.AuthUser.normalize(); err != nil {
+			return err
+		}
+	}
+	ext := []string{}
+	for _, e := range a.HotlinkExt {
+		if e = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(e), ".")); e == "" {
+			continue
+		}
+		if !extRe.MatchString(e) {
+			return ErrAdvanced
+		}
+		ext = append(ext, e)
+	}
+	a.HotlinkExt = ext
+	seen = map[string]bool{}
+	for i := range a.Proxies {
+		p := &a.Proxies[i]
+		p.Target = strings.TrimSpace(p.Target)
+		p.Host = strings.TrimSpace(p.Host)
+		if !pathRe.MatchString(p.Path) || !proxyURLRe.MatchString(p.Target) || p.Host != "" && !proxyHostRe.MatchString(p.Host) ||
+			!nameRe.MatchString(p.Name) || seen[p.Path] {
+			return ErrAdvanced
+		}
+		seen[p.Path] = true
+	}
+	if a.AuthDirs == nil {
+		a.AuthDirs = []AuthDir{}
+	}
+	if a.Proxies == nil {
+		a.Proxies = []PathProxy{}
 	}
 	if a.AllowIPs == nil {
 		a.AllowIPs = []string{}
@@ -133,6 +233,74 @@ func (a *Advanced) Normalize() error {
 		a.Redirects = []Redirect{}
 	}
 	return nil
+}
+
+// normalize hashes a new password, or keeps the stored hash.
+func (u *AuthUser) normalize() error {
+	if !authUserRe.MatchString(u.User) {
+		return ErrAdvanced
+	}
+	if u.Password != "" {
+		if len(u.Password) > 128 {
+			return ErrAdvanced
+		}
+		u.Hash, u.Password = SSHA(u.Password), ""
+	}
+	if !sshaRe.MatchString(u.Hash) {
+		return ErrAdvanced
+	}
+	return nil
+}
+
+// SSHA is the salted SHA-1 password format nginx's auth_basic reads natively.
+func SSHA(pass string) string {
+	salt := make([]byte, 8)
+	rand.Read(salt)
+	h := sha1.Sum(append([]byte(pass), salt...))
+	return "{SSHA}" + base64.StdEncoding.EncodeToString(append(h[:], salt...))
+}
+
+// hotlinkExt is the extension alternation of the hotlink location.
+func (a Advanced) hotlinkExt() string {
+	if len(a.HotlinkExt) == 0 {
+		return strings.Join(DefaultHotlinkExt, "|")
+	}
+	return strings.Join(a.HotlinkExt, "|")
+}
+
+// KeepHashes carries stored password hashes over to settings sent back by
+// the browser (which never sees them) for the same user and path.
+func (a *Advanced) KeepHashes(old Advanced) {
+	if u := a.BasicAuth; u != nil && u.Hash == "" && u.Password == "" && old.BasicAuth != nil && old.BasicAuth.User == u.User {
+		u.Hash = old.BasicAuth.Hash
+	}
+	for i := range a.AuthDirs {
+		d := &a.AuthDirs[i]
+		if d.Hash != "" || d.Password != "" {
+			continue
+		}
+		for _, o := range old.AuthDirs {
+			if o.Path == d.Path && o.User == d.User {
+				d.Hash = o.Hash
+			}
+		}
+	}
+}
+
+// Public drops the password hashes before settings are sent to the browser.
+func (a Advanced) Public() Advanced {
+	if a.BasicAuth != nil {
+		u := *a.BasicAuth
+		u.Hash = ""
+		a.BasicAuth = &u
+	}
+	dirs := make([]AuthDir, len(a.AuthDirs))
+	for i, d := range a.AuthDirs {
+		d.Hash = ""
+		dirs[i] = d
+	}
+	a.AuthDirs = dirs
+	return a
 }
 
 // zone names an nginx shared memory zone after the site.

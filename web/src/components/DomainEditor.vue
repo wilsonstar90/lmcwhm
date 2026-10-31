@@ -12,7 +12,7 @@ import type { Site } from '../api/types'
 import { datetime } from '../format'
 import TargetFields, { type TargetValue } from './TargetFields.vue'
 
-const props = defineProps<{ siteId: number | null; hasCF: boolean }>()
+const props = defineProps<{ siteId: number | null; hasCF: boolean; initialTab?: string }>()
 const emit = defineEmits<{ close: []; task: [id: string, title: string]; changed: [] }>()
 const { t, locale } = useI18n()
 const msg = useMessage()
@@ -47,7 +47,7 @@ async function load() {
     fail(e)
   }
 }
-watch(() => props.siteId, (id) => { site.value = null; tab.value = 'target'; if (id) load() }, { immediate: true })
+watch(() => props.siteId, (id) => { site.value = null; tab.value = props.initialTab || 'target'; if (id) load() }, { immediate: true })
 
 const run = async (p: Promise<{ task_id: string }>, title: string) => {
   try {

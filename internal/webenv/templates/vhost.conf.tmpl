@@ -5,13 +5,20 @@ limit_req_zone $binary_remote_addr zone={{.ReqZone}}:10m rate={{.Adv.RateLimit}}
 {{- if .Adv.ConnLimit}}
 limit_conn_zone $binary_remote_addr zone={{.ConnZone}}:10m;
 {{- end}}
+{{- if .Adv.ServerConn}}
+limit_conn_zone $server_name zone={{.SrvZone}}:1m;
+{{- end}}
 server {
     listen 127.0.0.1:{{.NginxPort}};
     server_name {{.ServerNames}};
     root {{.Root}};
-    index index.php index.html index.htm;
+    index {{.Index}};
 
+{{- if .Adv.NoAccessLog}}
+    access_log off;
+{{- else}}
     access_log {{.LogDir}}/{{.Domain}}.log main;
+{{- end}}
     error_log  {{.LogDir}}/{{.Domain}}.error.log;
     # Refused at the edge (blacklists, website protection, dedicated rules);
     # the header names the reason, logged with the request.
@@ -22,6 +29,7 @@ server {
     location ^~ /__lmcwhm_err/ {
         internal;
         ssi on;
+        auth_basic off;
         alias {{.ErrDir}}/;
     }
 {{- end}}
@@ -66,7 +74,19 @@ server {
 {{- end}}
 {{- if .Adv.ConnLimit}}
     limit_conn {{.ConnZone}} {{.Adv.ConnLimit}};
+{{- end}}
+{{- if .Adv.ServerConn}}
+    limit_conn {{.SrvZone}} {{.Adv.ServerConn}};
+{{- end}}
+{{- if or .Adv.ConnLimit .Adv.ServerConn}}
     limit_conn_status 429;
+{{- end}}
+{{- if .Adv.LimitRateKB}}
+    limit_rate {{.Adv.LimitRateKB}}k;
+{{- end}}
+{{- if .Adv.BasicAuth}}
+    auth_basic "{{.Domain}}";
+    auth_basic_user_file {{.AuthDir}}/{{.Domain}}.htpasswd;
 {{- end}}
 {{- if .Adv.Autoindex}}
     autoindex on;
@@ -78,10 +98,22 @@ server {
     error_page 500 502 503 504 /50x.html;
 {{- end}}
 {{if .Stopped}}
-    location / {
-        default_type text/html;
-        return 503 "<h1>Site stopped</h1>";
+{{- if .StopPage}}
+    error_page 503 /__lmcwhm_stop/{{.StopPage}}.html;
+    location ^~ /__lmcwhm_stop/ {
+        internal;
+        ssi on;
+        auth_basic off;
+        alias {{.ErrDir}}/;
     }
+    location / {
+        return 503;
+    }
+{{- else}}
+    location / {
+        return 404;
+    }
+{{- end}}
 {{else if .Redirect}}
     location / {
         return {{.RedirectCode}} {{.Redirect}}{{if .RedirectPath}}$request_uri{{end}};
@@ -92,12 +124,37 @@ server {
     }
 {{- range .Adv.Redirects}}
     location = {{.From}} {
-        return {{.Code}} {{.To}};
+        return {{.Code}} {{.To}}{{if .KeepPath}}$is_args$args{{end}};
     }
 {{- end}}
 {{- if .Adv.BlockXMLRPC}}
     location = /xmlrpc.php {
         deny all;
+    }
+{{- end}}
+{{- range .Proxies}}
+    # {{.Name}}
+    location ^~ {{.Path}} {
+        proxy_pass {{.Target}};
+        proxy_http_version 1.1;
+        proxy_ssl_server_name on;
+        proxy_set_header Host {{if .Host}}{{.Host}}{{else}}$host{{end}};
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $fwd_proto;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+    }
+{{- end}}
+{{- range $i, $d := .Adv.AuthDirs}}
+    location ^~ {{$d.Path}} {
+        auth_basic "{{$d.Path}}";
+        auth_basic_user_file {{$.AuthDir}}/{{$.Domain}}.{{$i}}.htpasswd;
+{{- if $.PHPPort}}
+        location ~ \.php$ {
+{{- template "php" $}}
+        }
+{{- end}}
     }
 {{- end}}
 {{if .Upstream}}
@@ -115,21 +172,21 @@ server {
         proxy_buffering off;
     }
 {{else if .PHPPort}}
+{{- if .Rewrite}}
+    # Rewrite rules (偽靜態)
+{{.Rewrite}}
+{{- else}}
     location / {
         try_files $uri $uri/ /index.php?$query_string;
     }
+{{- end}}
 
     location ~ \.php$ {
-        try_files $uri =404;
-        fastcgi_split_path_info ^(.+\.php)(/.+)$;
-        fastcgi_pass 127.0.0.1:{{.PHPPort}};
-        fastcgi_index index.php;
-        include /etc/nginx/fastcgi_params;
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-        fastcgi_param PATH_INFO $fastcgi_path_info;
-        fastcgi_param HTTPS $fwd_https;
-        fastcgi_read_timeout 300;
+{{- template "php" .}}
     }
+{{else if .Rewrite}}
+    # Rewrite rules (偽靜態)
+{{.Rewrite}}
 {{else}}
     location / {
         try_files $uri $uri/ =404;
@@ -137,8 +194,8 @@ server {
 {{end}}
 {{- if not .Upstream}}
 {{- if .Adv.Hotlink}}
-    location ~* \.(?:jpg|jpeg|gif|png|webp|svg|ico|mp4|webm|mp3|pdf)$ {
-        valid_referers none blocked server_names {{range .Adv.Hotlink}}{{.}} {{end}};
+    location ~* \.(?:{{.HotlinkExt}})$ {
+        valid_referers {{if not .Adv.HotlinkDenyEmpty}}none {{end}}blocked server_names {{range .Adv.Hotlink}}{{.}} {{end}};
         if ($invalid_referer) {
             return 403;
         }
@@ -152,4 +209,19 @@ server {
     }
 {{- end}}
 {{end}}
+{{- if .Custom}}
+    # Custom configuration (自訂配置)
+{{.Custom}}
+{{- end}}
 }
+{{- define "php"}}
+            try_files $uri =404;
+            fastcgi_split_path_info ^(.+\.php)(/.+)$;
+            fastcgi_pass 127.0.0.1:{{.PHPPort}};
+            fastcgi_index index.php;
+            include /etc/nginx/fastcgi_params;
+            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+            fastcgi_param PATH_INFO $fastcgi_path_info;
+            fastcgi_param HTTPS $fwd_https;
+            fastcgi_read_timeout 300;
+{{- end}}

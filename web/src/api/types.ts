@@ -94,6 +94,15 @@ export interface Site {
   redirect: string
   redirect_code: number
   redirect_path: boolean
+  target_subdir?: string
+  stop_mode?: '404' | 'page'
+  stop_page?: number
+  expires_at?: number
+  category?: string
+  run_dir?: string
+  rewrite?: string
+  index_files?: string[]
+  custom_conf?: string
 }
 
 // What a domain entry serves (its own website, another website, a container, …).
@@ -126,10 +135,32 @@ export interface SiteAdvanced {
   open_basedir: boolean
   hotlink: string[]
   max_body_mb: number
-  redirects: { from: string; to: string; code: number }[]
+  redirects: { from: string; to: string; code: number; keep_path?: boolean }[]
   varnish?: boolean
   varnish_ttl?: number
   varnish_exclude?: string[]
+  no_access_log?: boolean
+  basic_auth?: AuthUser | null
+  auth_dirs?: (AuthUser & { name: string; path: string })[]
+  server_conn?: number
+  limit_rate_kb?: number
+  hotlink_ext?: string[]
+  hotlink_deny_empty?: boolean
+  proxies?: PathProxy[]
+}
+
+// A user for HTTP password protection; the password is only sent, never returned.
+export interface AuthUser {
+  user: string
+  password?: string
+}
+
+export interface PathProxy {
+  name: string
+  path: string
+  target: string
+  host: string
+  enabled: boolean
 }
 
 export interface ServiceStatus {
@@ -337,6 +368,9 @@ export interface FileEntry {
   owner: string
   group: string
   link?: string
+  remark?: string
+  auto?: { code: string; arg?: string }
+  protected?: boolean
 }
 
 export interface TrashItem {

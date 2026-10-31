@@ -19,7 +19,10 @@ type errLine struct {
 	Page string
 }
 
-const errDir = nginxConfDir + "/errors"
+const (
+	errDir  = nginxConfDir + "/errors"
+	authDir = nginxConfDir + "/auth"
+)
 
 func (e *Env) errorPages() ErrorPages {
 	if e.ErrorPages == nil {

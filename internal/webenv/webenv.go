@@ -90,7 +90,18 @@ type Site struct {
 	RedirectCode int
 	RedirectPath bool
 	Advanced     Advanced
+	// StopPage is the error page (file name, without ".html") a stopped
+	// site answers with (503); "" answers 404.
+	StopPage string
+	// Index files, rewrite rules (偽靜態) replacing the default "location /",
+	// and directives added to the server block.
+	Index   []string
+	Rewrite string
+	Custom  string
 }
+
+// DefaultIndex is the index directive when a site sets none.
+var DefaultIndex = []string{"index.php", "index.html", "index.htm", "default.php", "default.htm", "default.html"}
 
 func (s Site) Hosts() []string { return append([]string{s.Domain}, s.Aliases...) }
 
@@ -584,7 +595,29 @@ func (e *Env) nginxFiles(sites []Site) (map[string][]byte, error) {
 		if s.Type == "php" {
 			port = PHPPort(s.PHPVersion)
 		}
+		index := s.Index
+		if len(index) == 0 {
+			index = DefaultIndex
+		}
+		var proxies []PathProxy
+		for _, p := range s.Advanced.Proxies {
+			if p.Enabled {
+				proxies = append(proxies, p)
+			}
+		}
+		stopPage := s.StopPage
+		if ep.Pages[stopPage] == nil {
+			stopPage = ""
+		}
+		if u := s.Advanced.BasicAuth; u != nil {
+			files[filepath.Join("auth", s.Domain+".htpasswd")] = []byte(u.User + ":" + u.Hash + "\n")
+		}
+		for i, d := range s.Advanced.AuthDirs {
+			files[filepath.Join("auth", fmt.Sprintf("%s.%d.htpasswd", s.Domain, i))] = []byte(d.User + ":" + d.Hash + "\n")
+		}
 		v, err := render("vhost.conf.tmpl", map[string]any{
+			"Index": strings.Join(index, " "), "Rewrite": indent(s.Rewrite), "Custom": indent(s.Custom), "Proxies": proxies,
+			"StopPage": stopPage, "AuthDir": authDir, "SrvZone": zone("srv", s.Domain), "HotlinkExt": s.Advanced.hotlinkExt(),
 			"Domain": s.Domain, "ServerNames": strings.Join(s.Hosts(), " "), "Root": s.Root,
 			"LogDir": e.WWWLogs, "NginxPort": NginxPort, "PHPPort": port, "Stopped": s.Stopped,
 			"Upstream": s.Upstream, "WAFOff": w.Enabled && s.WAFOff, "WAFExclude": wafExclusions(w.Enabled, s.WAFExclude),
@@ -632,7 +665,7 @@ func (e *Env) writeNginx(sites []Site) error {
 		return err
 	}
 	// Remove vhosts of deleted sites and deleted error pages.
-	for _, dir := range []string{"conf.d", "errors"} {
+	for _, dir := range []string{"conf.d", "errors", "auth"} {
 		entries, _ := os.ReadDir(filepath.Join(e.NginxDir(), dir))
 		for _, ent := range entries {
 			if _, keep := files[filepath.Join(dir, ent.Name())]; !keep {

@@ -86,8 +86,11 @@ func allowed(u auth.User, r *http.Request) bool {
 		if r.Method == http.MethodGet && (p == "/sites" || p == "/web/status") {
 			return true // the handler filters the list
 		}
-		if p == "/varnish/purge" {
+		if p == "/varnish/purge" || p == "/sites/batch" {
 			return true // checked in the handler
+		}
+		if r.Method == http.MethodGet && (p == "/sites/overview" || p == "/sites/categories" || p == "/sites/rewrites") {
+			return true // nothing site-specific or only counts
 		}
 		mm := siteScoped.FindStringSubmatch(p)
 		if mm == nil {

@@ -58,6 +58,7 @@ type TargetInput struct {
 	Redirect     string `json:"redirect"`
 	RedirectCode int    `json:"redirect_code"`
 	RedirectPath bool   `json:"redirect_path"`
+	TargetSubdir string `json:"target_subdir"` // link: serve this directory of the website
 }
 
 var containerRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
@@ -75,6 +76,11 @@ func (sv *Service) applyTarget(ctx context.Context, s *Site, in TargetInput) err
 			return ErrNoContent
 		}
 		s.TargetSite = t.ID
+		d, err := cleanSubdir(in.TargetSubdir)
+		if err != nil {
+			return err
+		}
+		s.TargetSubdir = d
 	case TargetDocker, TargetURL:
 		target := strings.TrimRight(strings.TrimSpace(in.ProxyTarget), "/")
 		if !validTarget(target, false) {
@@ -113,7 +119,7 @@ func (sv *Service) applyTarget(ctx context.Context, s *Site, in TargetInput) err
 		s.Container = ""
 	}
 	if in.Target != TargetLink {
-		s.TargetSite = 0
+		s.TargetSite, s.TargetSubdir = 0, ""
 	}
 	return nil
 }

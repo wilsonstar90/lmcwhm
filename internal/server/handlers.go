@@ -104,6 +104,7 @@ func (s *Server) handler() http.Handler {
 			}
 			if s.Files != nil {
 				s.fileRoutes(r)
+				s.fileExtraRoutes(r)
 			}
 			s.m4Routes(r)
 			s.m5Routes(r)
