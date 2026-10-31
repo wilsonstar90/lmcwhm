@@ -23,9 +23,9 @@ api() { # method path [json]
 }
 jget() { python3 -c "import sys,json; d=json.load(sys.stdin); print(eval('d'+sys.argv[1]))" "$1"; }
 
-wait_task() { # task_id
+wait_task() { # task_id [seconds]
   [[ -n "$1" ]] || fail "no task id"
-  for _ in $(seq 1 900); do
+  for _ in $(seq 1 "${2:-900}"); do
     t="$(api GET "/tasks/$1")"
     st="$(jget "['status']" <<<"$t")"
     if [[ "$st" != running ]]; then
@@ -228,6 +228,20 @@ task POST "/apps/$RID/build" '{"build_mode":"fast"}'
 api GET "/apps/$RID/redis/key?db=3&key=lmc:a" | grep -q '"value":"hello"' || fail "redis lost data switching back"
 docker image inspect lmcwhm/src-redis:7.4 >/dev/null 2>&1 && fail "compiled image left behind"
 pass "compile install: Redis compiled from source and back to the pre-built image, data kept"
+
+# PHP compiled from source keeps the official configure options (a quoting
+# bug once passed the image's CFLAGS to ./configure) and still runs a site.
+wait_task "$(api POST /php/8.4/install '{"build_mode":"source","build_cflags":"-O2"}' | jget "['task_id']")" 2400
+docker exec lmcwhm-php84 php -v | grep -q '^PHP 8\.4' || fail "compiled PHP 8.4 does not run"
+docker exec lmcwhm-php84 php -m | grep -qx mysqli || fail "compiled PHP 8.4 lacks the panel's extensions"
+docker exec lmcwhm-php84 php-config --configure-options | grep -q -- '--enable-fpm' || fail "compiled PHP 8.4 lost the official options"
+task POST /sites '{"domain":"src84.test","type":"php","php_version":"8.4","ssl":"none"}'
+echo '<?php echo "src-" . PHP_MAJOR_VERSION . PHP_MINOR_VERSION;' > /www/wwwroot/src84.test/index.php
+[[ "$(get80 src84.test /index.php)" == src-84 ]] || fail "site on compiled PHP 8.4: $(get80 src84.test /index.php)"
+task POST "/sites/$(site_id src84.test)/delete" '{"files":true}'
+api POST /php/8.4/remove >/dev/null
+docker inspect lmcwhm-php84 >/dev/null 2>&1 && fail "PHP 8.4 not removed"
+pass "compile install: PHP 8.4 compiled from source runs a site"
 
 # ---------- software updates: exact versions, patch update with data kept ----------
 api GET /apps | python3 -c "import sys,json; a=[a for a in json.load(sys.stdin)['items'] if a['app']=='redis'][0]; assert a['full_version']=='7.4.0', a" \

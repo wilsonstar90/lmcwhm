@@ -6,6 +6,9 @@ import (
 	"net"
 	"net/http"
 	"net/http/fcgi"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -130,11 +133,25 @@ func TestVarnish(t *testing.T) {
 }
 
 func TestPHPSourceDockerfile(t *testing.T) {
-	fast, _ := render("php.Dockerfile.tmpl", map[string]any{"Version": "8.3"})
-	src, _ := render("php.Dockerfile.tmpl", map[string]any{"Version": "8.3", "Source": true})
-	if strings.Contains(string(fast), "./configure") || !strings.Contains(string(src), "./configure $OPTS ${CONFIGURE_ARGS}") ||
-		!strings.Contains(string(src), "docker-php-ext-install") {
+	fast, _ := PHPDockerfile("8.3", false)
+	src, _ := PHPDockerfile("8.3", true)
+	if strings.Contains(fast, "./configure") || !strings.Contains(src, "./configure $OPTS ${CONFIGURE_ARGS}") ||
+		!strings.Contains(src, "docker-php-ext-install") || !strings.Contains(fast, "archive.debian.org") {
 		t.Fatalf("fast:\n%s\nsource:\n%s", fast, src)
+	}
+	// The official images record their exported CFLAGS among the configure
+	// options, and php-config prints them without quotes: only the "--"
+	// options may reach ./configure.
+	i := strings.Index(src, `OPTS="$(`)
+	j := strings.Index(src[i:], `)" &&`)
+	pipe := src[i+len(`OPTS="$(`) : i+j]
+	bin := t.TempDir()
+	os.WriteFile(filepath.Join(bin, "php-config"), []byte("#!/bin/sh\necho ' --build=x86_64-linux-gnu --with-config-file-path=/usr/local/etc/php --enable-fpm CFLAGS=-fstack-protector-strong -fpic -fpie -O2 - LDFLAGS=-Wl,-O1 -pie'\n"), 0o755)
+	cmd := exec.Command("sh", "-c", pipe)
+	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
+	out, err := cmd.Output()
+	if got := strings.TrimSpace(string(out)); err != nil || got != "--build=x86_64-linux-gnu --with-config-file-path=/usr/local/etc/php --enable-fpm" {
+		t.Fatalf("options %q (%v) from %s", got, err, pipe)
 	}
 	e := New(t.TempDir())
 	if b := e.PHPBuildOf("8.3"); b.Mode != "fast" {
