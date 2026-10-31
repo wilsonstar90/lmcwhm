@@ -162,6 +162,20 @@ func serveCmd() *cobra.Command {
 			tm := tasks.NewManager()
 			sites := site.NewService(a.st, env, webCfg, &acme.Issuer{Cfg: webCfg, HTTP: responder}, tm)
 			sites.RebuildMarker = server.RebuildMarker(a.paths)
+			env.SiteDir = func() string { return a.settings.Get().SiteRoot }
+			// nginx and PHP also see the configured site directory and every
+			// directory holding a site outside the web root.
+			env.ExtraRoots = func() []string {
+				roots := []string{a.settings.Get().SiteRoot}
+				if all, err := sites.List(context.Background()); err == nil {
+					for _, s := range all {
+						if s.Root != "" && !strings.HasPrefix(s.Root, env.WWWRoot+"/") {
+							roots = append(roots, filepath.Dir(s.Root))
+						}
+					}
+				}
+				return roots
+			}
 			waf := security.NewWAF(a.st, env) // before the stack boots: it picks the nginx image
 			fw := firewall.New(a.st, box, log.Error)
 			fw.PanelPort = func() int { return a.settings.Get().PanelPort }
@@ -212,6 +226,7 @@ func serveCmd() *cobra.Command {
 			dbs := database.New(a.st, box, apps, tm)
 			bk := backup.New(a.st, box, a.paths.Home)
 			bk.WWWRoot, bk.Sites, bk.DBs, bk.Apps = env.WWWRoot, sites, dbs, apps
+			bk.DirFn = func() string { return a.settings.Get().BackupDir }
 			jobs.Backups = bk
 			apps.RuntimeUpdated = sites.RecreateProjects
 			apps.Backup = func(ctx context.Context, i appstore.Installed, log tasks.Logf) error {

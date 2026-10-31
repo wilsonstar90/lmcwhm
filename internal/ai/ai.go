@@ -9,7 +9,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"slices"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -34,12 +39,21 @@ var (
 	efforts    = map[string]bool{"low": true, "medium": true, "high": true, "xhigh": true, "max": true}
 )
 
+// Providers: Anthropic, or OpenRouter (many models) through its
+// Anthropic-compatible Messages API.
+const (
+	ProviderAnthropic  = "anthropic"
+	ProviderOpenRouter = "openrouter"
+	OpenRouterURL      = "https://openrouter.ai/api"
+)
+
 // Config is stored in the settings table; the key is sealed.
 type Config struct {
-	APIKey  string `json:"api_key,omitempty"`
-	Model   string `json:"model"`
-	Effort  string `json:"effort"`
-	BaseURL string `json:"base_url,omitempty"` // optional gateway in front of the Anthropic API
+	Provider string `json:"provider,omitempty"` // "" = anthropic
+	APIKey   string `json:"api_key,omitempty"`
+	Model    string `json:"model"`
+	Effort   string `json:"effort"`
+	BaseURL  string `json:"base_url,omitempty"` // optional gateway in front of the Anthropic API
 }
 
 type Service struct {
@@ -52,7 +66,13 @@ type Service struct {
 
 func New(st *store.Store, box *secrets.Box, srv *mcp.Server) *Service {
 	return &Service{st: st, box: box, MCP: srv, newClient: func(cfg Config) anthropic.Client {
-		opts := []option.RequestOption{option.WithAPIKey(cfg.APIKey), option.WithRequestTimeout(5 * time.Minute)}
+		opts := []option.RequestOption{option.WithRequestTimeout(5 * time.Minute)}
+		if cfg.Provider == ProviderOpenRouter {
+			// OpenRouter takes its key as a bearer token.
+			opts = append(opts, option.WithAuthToken(cfg.APIKey), option.WithBaseURL(OpenRouterURL))
+		} else {
+			opts = append(opts, option.WithAPIKey(cfg.APIKey))
+		}
 		if cfg.BaseURL != "" {
 			opts = append(opts, option.WithBaseURL(cfg.BaseURL))
 		}
@@ -88,6 +108,13 @@ func (sv *Service) Save(ctx context.Context, in Config, clear bool) error {
 		return err
 	}
 	in.Model, in.Effort, in.BaseURL = strings.TrimSpace(in.Model), strings.TrimSpace(in.Effort), strings.TrimSpace(in.BaseURL)
+	if in.Provider != "" && in.Provider != ProviderAnthropic && in.Provider != ProviderOpenRouter {
+		return ErrConfig
+	}
+	// A key belongs to its provider: switching needs a new one.
+	if in.Provider != cur.Provider && strings.TrimSpace(in.APIKey) == "" {
+		clear = true
+	}
 	if in.Model == "" {
 		in.Model = DefaultModel
 	}
@@ -185,21 +212,26 @@ func (sv *Service) Ask(ctx context.Context, turns []Turn, lang string, caller mc
 	sys := system + "\nPanel language: " + lang + ". Server time: " + time.Now().Format(time.RFC3339) + "."
 	ans.Model = cfg.Model
 	for step := 0; step < maxSteps; step++ {
-		resp, err := client.Beta.Messages.New(ctx, anthropic.BetaMessageNewParams{
-			Model:        anthropic.Model(cfg.Model),
-			MaxTokens:    16000,
-			System:       []anthropic.BetaTextBlockParam{{Text: sys, CacheControl: anthropic.NewBetaCacheControlEphemeralParam()}},
-			Messages:     msgs,
-			Tools:        tools,
-			OutputConfig: anthropic.BetaOutputConfigParam{Effort: anthropic.BetaOutputConfigEffort(cfg.Effort)},
+		params := anthropic.BetaMessageNewParams{
+			Model:     anthropic.Model(cfg.Model),
+			MaxTokens: 16000,
+			System:    []anthropic.BetaTextBlockParam{{Text: sys, CacheControl: anthropic.NewBetaCacheControlEphemeralParam()}},
+			Messages:  msgs,
+			Tools:     tools,
+		}
+		if cfg.Provider != ProviderOpenRouter || isClaude(cfg.Model) {
+			params.OutputConfig = anthropic.BetaOutputConfigParam{Effort: anthropic.BetaOutputConfigEffort(cfg.Effort)}
+		}
+		if cfg.Provider != ProviderOpenRouter {
 			// A policy decline is re-served by the model's default fallback.
-			Betas:     []anthropic.AnthropicBeta{anthropic.AnthropicBetaServerSideFallback2026_07_01},
-			Fallbacks: anthropic.BetaFallbacksParamUnion{OfDefault: constant.ValueOf[constant.Default]()},
-		})
+			params.Betas = []anthropic.AnthropicBeta{anthropic.AnthropicBetaServerSideFallback2026_07_01}
+			params.Fallbacks = anthropic.BetaFallbacksParamUnion{OfDefault: constant.ValueOf[constant.Default]()}
+		}
+		resp, err := client.Beta.Messages.New(ctx, params)
 		if err != nil {
 			var apiErr *anthropic.Error
 			if errors.As(err, &apiErr) {
-				return ans, fmt.Errorf("Claude API HTTP %d: %s", apiErr.StatusCode, apiErr.Error())
+				return ans, fmt.Errorf("AI API HTTP %d: %s", apiErr.StatusCode, apiErr.Error())
 			}
 			return ans, err
 		}
@@ -254,4 +286,62 @@ func resultText(v any) string {
 		s = s[:max] + "\n[truncated]"
 	}
 	return s
+}
+
+// isClaude reports whether an OpenRouter model id is one of Anthropic's,
+// the only ones that take the effort setting.
+func isClaude(model string) bool {
+	return strings.HasPrefix(model, "anthropic/") || strings.HasPrefix(model, "claude")
+}
+
+// Model is one entry of OpenRouter's catalogue.
+type Model struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Context int    `json:"context"`
+}
+
+var (
+	modelsMu    sync.Mutex
+	modelsCache []Model
+	modelsAt    time.Time
+)
+
+// OpenRouterModels lists the models that can use tools (the assistant needs
+// them), cached for an hour.
+func OpenRouterModels(ctx context.Context) ([]Model, error) {
+	modelsMu.Lock()
+	defer modelsMu.Unlock()
+	if modelsCache != nil && time.Since(modelsAt) < time.Hour {
+		return modelsCache, nil
+	}
+	req, _ := http.NewRequestWithContext(ctx, "GET", OpenRouterURL+"/v1/models", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("openrouter models: HTTP %d", resp.StatusCode)
+	}
+	var body struct {
+		Data []struct {
+			ID                  string   `json:"id"`
+			Name                string   `json:"name"`
+			ContextLength       int      `json:"context_length"`
+			SupportedParameters []string `json:"supported_parameters"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 32<<20)).Decode(&body); err != nil {
+		return nil, err
+	}
+	out := []Model{}
+	for _, m := range body.Data {
+		if slices.Contains(m.SupportedParameters, "tools") {
+			out = append(out, Model{ID: m.ID, Name: m.Name, Context: m.ContextLength})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	modelsCache, modelsAt = out, time.Now()
+	return out, nil
 }

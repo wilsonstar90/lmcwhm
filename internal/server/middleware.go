@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"fmt"
 	"net"
 	"net/http"
 	"strings"
@@ -43,6 +44,29 @@ func notFound(w http.ResponseWriter) {
 	w.Write([]byte("<html><head><title>404 Not Found</title></head><body><center><h1>404 Not Found</h1></center><hr><center>nginx</center></body></html>"))
 }
 
+// unauthorized answers a visitor who has not passed the gates, as the panel
+// settings say (未認證響應狀態): a plain web server's error page, or for 444
+// a closed connection.
+func unauthorized(w http.ResponseWriter, status int) {
+	if status == 0 || status == http.StatusNotFound {
+		notFound(w)
+		return
+	}
+	if status == 444 {
+		if hj, ok := w.(http.Hijacker); ok {
+			if c, _, err := hj.Hijack(); err == nil {
+				c.Close()
+				return
+			}
+		}
+		status = http.StatusBadRequest // HTTP/2 cannot be hijacked
+	}
+	text := fmt.Sprintf("%d %s", status, http.StatusText(status))
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	fmt.Fprintf(w, "<html><head><title>%s</title></head><body><center><h1>%s</h1></center><hr><center>nginx</center></body></html>", text, text)
+}
+
 // gate applies, in aaPanel order: authorized IPs → bound domain → BasicAuth →
 // security entry. Only after all pass does a request reach the router.
 func (s *Server) gate(next http.Handler) http.Handler {
@@ -50,7 +74,7 @@ func (s *Server) gate(next http.Handler) http.Handler {
 		cfg := s.Settings.Get()
 
 		if !cfg.IPAllowed(net.ParseIP(clientIP(r))) {
-			notFound(w)
+			unauthorized(w, cfg.UnauthStatus)
 			return
 		}
 
@@ -70,7 +94,7 @@ func (s *Server) gate(next http.Handler) http.Handler {
 				host = h
 			}
 			if !strings.EqualFold(host, cfg.BindDomain) {
-				notFound(w)
+				unauthorized(w, cfg.UnauthStatus)
 				return
 			}
 		}
@@ -95,7 +119,7 @@ func (s *Server) gate(next http.Handler) http.Handler {
 				return
 			}
 			if !s.hasEntry(r, cfg.SecurityEntry) {
-				notFound(w)
+				unauthorized(w, cfg.UnauthStatus)
 				return
 			}
 		}

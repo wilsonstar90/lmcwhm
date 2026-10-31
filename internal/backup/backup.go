@@ -79,15 +79,28 @@ type Record struct {
 }
 
 type Service struct {
-	st      *store.Store
-	box     *secrets.Box
-	Home    string // panel home: panel backups and the default storage directory
-	Dir     string // local storage
+	st   *store.Store
+	box  *secrets.Box
+	Home string // panel home: panel backups and the default storage directory
+	Dir  string // local storage (default; see LocalDir)
+	// DirFn, when it returns a path, overrides Dir (面板設定 → 默認備份目錄).
+	// Backups keep their full path, so older ones stay where they are.
+	DirFn   func() string
 	WWWRoot string
 	Sites   *site.Service
 	DBs     *database.Service
 	Apps    *appstore.Service
 	now     func() time.Time
+}
+
+// LocalDir is where new local backups are written.
+func (sv *Service) LocalDir() string {
+	if sv.DirFn != nil {
+		if d := sv.DirFn(); d != "" {
+			return d
+		}
+	}
+	return sv.Dir
 }
 
 func New(st *store.Store, box *secrets.Box, home string) *Service {
@@ -150,7 +163,7 @@ func (sv *Service) ParsePlan(ctx context.Context, cmd string) (Plan, error) {
 		}
 	case KindPath:
 		p.Target = filepath.Clean(p.Target)
-		if !filepath.IsAbs(p.Target) || p.Target == "/" || strings.HasPrefix(p.Target, sv.Dir) {
+		if !filepath.IsAbs(p.Target) || p.Target == "/" || strings.HasPrefix(p.Target, sv.LocalDir()) {
 			return p, ErrBadTarget
 		}
 	default:
@@ -276,7 +289,7 @@ func (sv *Service) Run(ctx context.Context, p Plan, jobID int64, out io.Writer) 
 
 func (sv *Service) runUnit(ctx context.Context, p Plan, u unit, jobID int64, out io.Writer) error {
 	start := sv.now()
-	tmpDir := filepath.Join(sv.Dir, ".tmp")
+	tmpDir := filepath.Join(sv.LocalDir(), ".tmp")
 	if err := os.MkdirAll(tmpDir, 0o700); err != nil {
 		return err
 	}
@@ -324,7 +337,7 @@ func (sv *Service) runUnit(ctx context.Context, p Plan, u unit, jobID int64, out
 
 func (sv *Service) store(ctx context.Context, dest string, u unit, name, tmp string, size int64) (string, error) {
 	if dest == DestLocal {
-		dir := filepath.Join(sv.Dir, u.kind, safeName(u.target))
+		dir := filepath.Join(sv.LocalDir(), u.kind, safeName(u.target))
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return "", err
 		}
@@ -484,7 +497,7 @@ func (sv *Service) Import(ctx context.Context, kind, target string, targetID int
 	default:
 		return Record{}, ErrBadPlan
 	}
-	dir := filepath.Join(sv.Dir, kind, safeName(target))
+	dir := filepath.Join(sv.LocalDir(), kind, safeName(target))
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return Record{}, err
 	}

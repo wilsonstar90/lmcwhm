@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -72,6 +73,7 @@ func (s *Server) handler() http.Handler {
 
 	s.api = r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/public/meta", s.handleMeta)
+		r.Get("/public/logo", s.handleLogo)
 		r.Post("/auth/login", s.handleLogin)
 
 		r.Group(func(r chi.Router) {
@@ -95,6 +97,8 @@ func (s *Server) handler() http.Handler {
 			r.Post("/settings/2fa/disable", s.handle2FADisable)
 			r.Get("/settings/ssl", s.handleGetSSL)
 			r.Post("/settings/ssl", s.handlePutSSL)
+			r.Post("/settings/logo", s.handleUploadLogo)
+			r.Post("/settings/logo/delete", s.handleDeleteLogo)
 
 			if s.Sites != nil {
 				s.siteRoutes(r)
@@ -205,7 +209,7 @@ func (s *Server) handleManifest(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleMeta(w http.ResponseWriter, r *http.Request) {
 	cfg := s.Settings.Get()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"alias": cfg.PanelAlias, "language": cfg.Language, "version": config.Version,
+		"alias": cfg.PanelAlias, "language": cfg.Language, "version": config.Version, "logo_image": cfg.LogoImage,
 	})
 }
 
@@ -296,9 +300,28 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusConflict, apiError{Code: "settings.port_in_use", Params: map[string]any{"port": next.PanelPort}})
 		return
 	}
+	if err := next.Validate(); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	for _, d := range []struct {
+		path string
+		mode os.FileMode
+	}{{next.SiteRoot, 0o755}, {next.BackupDir, 0o700}} {
+		if d.path != "" {
+			if err := os.MkdirAll(d.path, d.mode); err != nil {
+				writeErr(w, http.StatusBadRequest, err)
+				return
+			}
+		}
+	}
 	if err := s.Settings.Save(r.Context(), next); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
+	}
+	// nginx and PHP must see a new site directory: recreate them with the mount.
+	if next.SiteRoot != old.SiteRoot && s.Sites != nil {
+		s.Sites.Reapply("web.apply")
 	}
 	sess := sessionFrom(r)
 	s.Audit.Record(r.Context(), sess.User.Username, clientIP(r), "panel", "settings.update", diffSettings(old, next))

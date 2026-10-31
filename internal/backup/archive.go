@@ -378,7 +378,7 @@ ALTER DATABASE [%[1]s] SET MULTI_USER;`, name, mssqlFile))
 var panelDirs = []string{"data", "edge", "web"}
 
 func (sv *Service) writePanel(ctx context.Context, w io.Writer) error {
-	snap := filepath.Join(sv.Dir, ".tmp", "panel-"+strconv.FormatInt(time.Now().UnixNano(), 36)+".db")
+	snap := filepath.Join(sv.LocalDir(), ".tmp", "panel-"+strconv.FormatInt(time.Now().UnixNano(), 36)+".db")
 	os.MkdirAll(filepath.Dir(snap), 0o700)
 	defer os.Remove(snap)
 	// VACUUM INTO makes a consistent copy while the panel keeps writing.

@@ -86,3 +86,44 @@ func mustJSON(v any) string {
 	b, _ := json.Marshal(v)
 	return string(b)
 }
+
+func TestOpenRouter(t *testing.T) {
+	var got *http.Request
+	var body map[string]any
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r
+		b, _ := io.ReadAll(r.Body)
+		json.Unmarshal(b, &body)
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"id":"m1","type":"message","role":"assistant","model":"openai/gpt-5","stop_reason":"end_turn",
+			"content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":1,"output_tokens":1}}`)
+	}))
+	defer fake.Close()
+	dir := t.TempDir()
+	st, _ := store.Open(filepath.Join(dir, "p.db"))
+	defer st.Close()
+	box, _ := secrets.Open(dir)
+	sv := New(st, box, mcp.NewServer("t", "1", ""))
+	real := sv.newClient
+	sv.newClient = func(cfg Config) anthropic.Client { cfg.BaseURL = fake.URL; return real(cfg) }
+	if err := sv.Save(context.Background(), Config{Provider: "other", APIKey: "k"}, false); err != ErrConfig {
+		t.Fatalf("unknown provider: %v", err)
+	}
+	if err := sv.Save(context.Background(), Config{Provider: ProviderOpenRouter, APIKey: "or-key", Model: "openai/gpt-5"}, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sv.Ask(context.Background(), []Turn{{Role: "user", Text: "hi"}}, "en", mcp.Caller{}); err != nil {
+		t.Fatal(err)
+	}
+	if got.Header.Get("Authorization") != "Bearer or-key" || got.Header.Get("X-Api-Key") != "" || got.URL.Path != "/v1/messages" {
+		t.Fatalf("auth %q / %q, path %s", got.Header.Get("Authorization"), got.Header.Get("X-Api-Key"), got.URL.Path)
+	}
+	if _, ok := body["output_config"]; ok || got.Header.Get("Anthropic-Beta") != "" {
+		t.Fatalf("Anthropic-only options sent to a non-Claude model: %v %q", body["output_config"], got.Header.Get("Anthropic-Beta"))
+	}
+	// Switching provider without a key drops the old one.
+	sv.Save(context.Background(), Config{Provider: ProviderAnthropic}, false)
+	if c, _ := sv.Config(context.Background()); c.APIKey != "" {
+		t.Fatal("OpenRouter key kept for Anthropic")
+	}
+}

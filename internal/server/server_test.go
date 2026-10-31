@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -113,6 +114,21 @@ func TestSecurityEntryGate(t *testing.T) {
 	e.srv.Settings.Update(context.Background(), func(s *settings.Settings) { s.SecurityEntry = "/other1" })
 	if r, _ := e.do("GET", "/api/v1/public/meta", nil, nil); r.StatusCode != 404 {
 		t.Fatalf("old entry cookie still accepted: %d", r.StatusCode)
+	}
+}
+
+func TestUnauthStatus(t *testing.T) {
+	e := newEnv(t, func(s *settings.Settings) { s.SecurityEntry = "/console"; s.UnauthStatus = 403 })
+	r, _ := e.do("GET", "/login", nil, nil)
+	if r.StatusCode != 403 {
+		t.Fatalf("got %d want 403", r.StatusCode)
+	}
+	e.srv.Settings.Update(context.Background(), func(s *settings.Settings) { s.UnauthStatus = 444 })
+	if _, err := e.c.Get(e.ts.URL + "/login"); err == nil {
+		t.Fatal("444 answered instead of closing the connection")
+	}
+	if _, err := e.srv.Settings.Update(context.Background(), func(s *settings.Settings) { s.UnauthStatus = 302 }); err == nil {
+		t.Fatal("302 accepted as an unauthenticated response")
 	}
 }
 
@@ -228,5 +244,34 @@ func TestTOTPBeginRefusedWhenEnabled(t *testing.T) {
 	}
 	if u, _ := e.srv.Auth.PrimaryAdmin(ctx); !u.TOTPEnabled {
 		t.Fatal("2FA was disabled by begin")
+	}
+}
+
+func TestLogo(t *testing.T) {
+	e := newEnv(t, nil)
+	_, body := e.do("POST", "/api/v1/auth/login", map[string]string{"username": "admin", "password": "password123"}, nil)
+	csrf, _ := body["csrf"].(string)
+	if r, _ := e.do("GET", "/api/v1/public/logo", nil, nil); r.StatusCode != 404 {
+		t.Fatalf("no logo: %d", r.StatusCode)
+	}
+	up := func(body string) int {
+		req, _ := http.NewRequest("POST", e.ts.URL+"/api/v1/settings/logo", strings.NewReader(body))
+		req.Header.Set("X-CSRF-Token", csrf)
+		r, err := e.c.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.Body.Close()
+		return r.StatusCode
+	}
+	if c := up("<html><script>alert(1)</script>"); c != 400 {
+		t.Fatalf("HTML accepted as a logo: %d", c)
+	}
+	if c := up(`<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`); c != 200 {
+		t.Fatalf("svg upload: %d", c)
+	}
+	r, _ := e.do("GET", "/api/v1/public/logo", nil, nil)
+	if r.StatusCode != 200 || r.Header.Get("Content-Type") != "image/svg+xml" || !strings.Contains(r.Header.Get("Content-Security-Policy"), "sandbox") {
+		t.Fatalf("logo: %d %v", r.StatusCode, r.Header)
 	}
 }

@@ -1298,7 +1298,10 @@ func (sv *Service) Delete(ctx context.Context, id int64, in DeleteInput) (string
 		if in.DNS && s.DNSManaged {
 			sv.removeDNS(ctx, s, log)
 		}
-		if in.Files && strings.HasPrefix(s.Root, sv.Env.WWWRoot+string(os.PathSeparator)) {
+		// Only a directory the panel created: under the web root, or named
+		// after the site in a configured site directory.
+		if in.Files && (strings.HasPrefix(s.Root, sv.Env.WWWRoot+string(os.PathSeparator)) ||
+			filepath.Base(s.Root) == s.Domain && filepath.Dir(s.Root) != "/") {
 			log("removing %s", s.Root)
 			if err := os.RemoveAll(s.Root); err != nil {
 				return err

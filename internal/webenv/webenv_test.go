@@ -172,3 +172,24 @@ func TestRedirectVhost(t *testing.T) {
 		t.Errorf("redirect without path:\n%s", v)
 	}
 }
+
+func TestSiteDirs(t *testing.T) {
+	e := New(t.TempDir())
+	before := strings.Join(e.nginxArgs(), " ")
+	if e.SiteRoot("a.com") != "/www/wwwroot/a.com" {
+		t.Fatal(e.SiteRoot("a.com"))
+	}
+	e.SiteDir = func() string { return "/data/sites" }
+	e.ExtraRoots = func() []string { return []string{"/data/sites", "/www/wwwroot/x", "/data/sites", ""} }
+	if e.SiteRoot("a.com") != "/data/sites/a.com" {
+		t.Fatal(e.SiteRoot("a.com"))
+	}
+	a := strings.Join(e.nginxArgs(), " ")
+	if strings.Count(a, "/data/sites:/data/sites") != 1 || strings.Contains(a, "/www/wwwroot/x:") {
+		t.Fatalf("mounts: %s", a)
+	}
+	e.ExtraRoots = func() []string { return nil }
+	if strings.Join(e.nginxArgs(), " ") != before {
+		t.Fatal("nginx arguments changed without extra roots (the container would be recreated on upgrade)")
+	}
+}

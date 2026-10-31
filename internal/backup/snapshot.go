@@ -77,7 +77,7 @@ func (sv *Service) pauseApps(ctx context.Context) func() {
 }
 
 func (sv *Service) writeSnapshot(ctx context.Context, w io.Writer) error {
-	tmp := filepath.Join(sv.Dir, ".tmp")
+	tmp := filepath.Join(sv.LocalDir(), ".tmp")
 	os.MkdirAll(tmp, 0o700)
 	db := filepath.Join(tmp, "snapshot-"+strconv.FormatInt(time.Now().UnixNano(), 36)+".db")
 	defer os.Remove(db)
@@ -91,7 +91,7 @@ func (sv *Service) writeSnapshot(ctx context.Context, w io.Writer) error {
 	inBackup := func(base string) func(string) bool {
 		return func(rel string) bool {
 			p := filepath.Join(base, rel)
-			return p == sv.Dir || strings.HasPrefix(p, sv.Dir+"/")
+			return p == sv.LocalDir() || strings.HasPrefix(p, sv.LocalDir()+"/")
 		}
 	}
 	homeSkip := inBackup(sv.Home)

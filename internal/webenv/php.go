@@ -432,14 +432,14 @@ func (e *Env) EnsurePHP(ctx context.Context, v string, log func(string, ...any))
 		return err
 	}
 	running := dockerx.State(ctx, PHPName(v)) == "running"
-	if err := EnsureContainer(ctx, log, PHPName(v), []string{
-		"--network", "host",
-		"-v", e.WWWRoot + ":" + e.WWWRoot,
-		"-v", slowDir + ":/var/log/lmcwhm-php",
-		"-v", filepath.Join(dir, "zz-docker.conf") + ":/usr/local/etc/php-fpm.d/zz-docker.conf:ro",
-		"-v", filepath.Join(dir, "zz-lmcwhm.ini") + ":/usr/local/etc/php/conf.d/zz-lmcwhm.ini:ro",
+	args := append([]string{"--network", "host"}, e.rootMounts()...)
+	args = append(args,
+		"-v", slowDir+":/var/log/lmcwhm-php",
+		"-v", filepath.Join(dir, "zz-docker.conf")+":/usr/local/etc/php-fpm.d/zz-docker.conf:ro",
+		"-v", filepath.Join(dir, "zz-lmcwhm.ini")+":/usr/local/etc/php/conf.d/zz-lmcwhm.ini:ro",
 		img,
-	}, []int{PHPPort(v)}, true); err != nil {
+	)
+	if err := EnsureContainer(ctx, log, PHPName(v), args, []int{PHPPort(v)}, true); err != nil {
 		return err
 	}
 	if changed && running && dockerx.State(ctx, PHPName(v)) == "running" {

@@ -688,6 +688,7 @@ func (s *Server) m7Routes(r chi.Router) {
 	if s.AI != nil {
 		r.Get("/ai/config", s.handleAIConfig)
 		r.Put("/ai/config", s.handleAISave)
+		r.Get("/ai/models", s.handleAIModels)
 		r.Post("/ai/ask", s.handleAIAsk)
 	}
 }
@@ -751,7 +752,21 @@ func (s *Server) handleAIConfig(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"model": c.Model, "effort": c.Effort, "base_url": c.BaseURL, "has_key": c.APIKey != "", "default_model": ai.DefaultModel})
+	provider := c.Provider
+	if provider == "" {
+		provider = ai.ProviderAnthropic
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"provider": provider, "model": c.Model, "effort": c.Effort, "base_url": c.BaseURL, "has_key": c.APIKey != "", "default_model": ai.DefaultModel})
+}
+
+// handleAIModels lists OpenRouter's models that can use tools.
+func (s *Server) handleAIModels(w http.ResponseWriter, r *http.Request) {
+	ms, err := ai.OpenRouterModels(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": ms})
 }
 
 func (s *Server) handleAISave(w http.ResponseWriter, r *http.Request) {

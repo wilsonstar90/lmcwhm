@@ -57,7 +57,7 @@ func (s *Server) handleBackups(w http.ResponseWriter, r *http.Request) {
 			total += rec.Size
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": recs, "dir": s.Backup.Dir, "local_bytes": total})
+	writeJSON(w, http.StatusOK, map[string]any{"items": recs, "dir": s.Backup.LocalDir(), "local_bytes": total})
 }
 
 // handleBackupTargets lists what can be backed up, for the plan form.

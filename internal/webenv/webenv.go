@@ -117,6 +117,11 @@ type Env struct {
 	WWWRoot  string // /www/wwwroot
 	WWWLogs  string // /www/wwwlogs
 	Timezone string
+	// SiteDir returns where new sites are created ("" or nil = WWWRoot).
+	SiteDir func() string
+	// ExtraRoots are further site directories outside WWWRoot; nginx and PHP
+	// see each at the same path.
+	ExtraRoots func() []string
 	// WAF returns the current WAF settings (nil = off).
 	WAF func() WAFSettings
 	// CDN returns the proxies trusted for the visitor's address (nil = Cloudflare only).
@@ -169,9 +174,9 @@ func (e *Env) nginxArgs() []string {
 	a := []string{
 		"--network", "host",
 		"-v", e.NginxDir() + ":" + nginxConfDir + ":ro",
-		"-v", e.WWWRoot + ":" + e.WWWRoot,
-		"-v", e.WWWLogs + ":" + e.WWWLogs,
 	}
+	// Same order as before extra roots existed, so upgrades keep the container.
+	a = append(append(a, e.rootMounts()...), "-v", e.WWWLogs+":"+e.WWWLogs)
 	image := NginxImage
 	if w := e.waf(); w.Enabled {
 		image = WAFImage
@@ -209,7 +214,34 @@ func (e *Env) PHPDir(v string) string {
 func (e *Env) CertPath(domain string) string { return filepath.Join(e.CertDir(), domain+".pem") }
 
 // SiteRoot is the default document root for a domain.
-func (e *Env) SiteRoot(domain string) string { return filepath.Join(e.WWWRoot, domain) }
+func (e *Env) SiteRoot(domain string) string {
+	base := e.WWWRoot
+	if e.SiteDir != nil {
+		if d := e.SiteDir(); d != "" {
+			base = d
+		}
+	}
+	return filepath.Join(base, domain)
+}
+
+// rootMounts mounts WWWRoot and every extra site directory not inside it.
+func (e *Env) rootMounts() []string {
+	a := []string{"-v", e.WWWRoot + ":" + e.WWWRoot}
+	if e.ExtraRoots == nil {
+		return a
+	}
+	roots := e.ExtraRoots()
+	sort.Strings(roots)
+	seen := map[string]bool{}
+	for _, r := range roots {
+		if r == "" || seen[r] || r == e.WWWRoot || strings.HasPrefix(r, e.WWWRoot+"/") {
+			continue
+		}
+		seen[r] = true
+		a = append(a, "-v", r+":"+r)
+	}
+	return a
+}
 
 func render(name string, data any) ([]byte, error) {
 	var b bytes.Buffer

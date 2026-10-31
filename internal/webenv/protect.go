@@ -22,9 +22,9 @@ type SiteProtect struct {
 	// holds one, from any connection (like aaPanel).
 	CDN        bool     `json:"cdn"`
 	CDNHeaders []string `json:"cdn_headers,omitempty"`
-	IDC        bool `json:"idc"`         // refuse data-centre addresses
-	Crawler    bool `json:"crawler"`     // refuse scraper / bad bot User-Agents
-	CC         int  `json:"cc"`          // max requests per visitor in 10 s (0 = off)
+	IDC        bool     `json:"idc"`     // refuse data-centre addresses
+	Crawler    bool     `json:"crawler"` // refuse scraper / bad bot User-Agents
+	CC         int      `json:"cc"`      // max requests per visitor in 10 s (0 = off)
 }
 
 // DefaultCDNHeaders are tried in order for a site behind a CDN.
