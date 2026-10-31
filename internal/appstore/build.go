@@ -65,7 +65,8 @@ var SourceUnsupported = map[string]string{
 	"adminer":    "script",
 }
 
-const aptDeps = `RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates wget xz-utils bzip2 build-essential pkg-config `
+// aptDeps starts the build dependencies of the Debian / Ubuntu based images.
+var aptDeps = webenv.AptFallback + "\n" + `RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates wget xz-utils bzip2 build-essential pkg-config `
 
 // Recipes per catalog key ("php" is built by webenv with the same options).
 var Recipes = map[string]Recipe{
@@ -73,7 +74,9 @@ var Recipes = map[string]Recipe{
 		Minutes: 3, MinMemMB: 512, Defaults: "BUILD_TLS=yes",
 		Deps: aptDeps + `libssl-dev`,
 		Build: `RUN wget -qO- "https://download.redis.io/releases/redis-${VERSION}.tar.gz" | tar xz \
- && cd "redis-${VERSION}" && make -j"$(nproc)" BUILD_TLS=yes REDIS_CFLAGS="${EXTRA_CFLAGS}" ${CONFIGURE_ARGS} \
+ && cd "redis-${VERSION}" \
+ && if [ "$CHECK_ONLY" = 1 ]; then mkdir -p /out; exit 0; fi \
+ && make -j"$(nproc)" BUILD_TLS=yes REDIS_CFLAGS="${EXTRA_CFLAGS}" ${CONFIGURE_ARGS} \
  && make PREFIX=/out/usr/local install`,
 	},
 	"memcached": {
@@ -81,15 +84,17 @@ var Recipes = map[string]Recipe{
 		Deps: aptDeps + `libevent-dev libssl-dev perl`,
 		Build: `RUN wget -qO- "https://memcached.org/files/memcached-${VERSION}.tar.gz" | tar xz \
  && cd "memcached-${VERSION}" && ./configure --prefix=/usr/local --enable-tls CFLAGS="-O2 ${EXTRA_CFLAGS}" ${CONFIGURE_ARGS} \
+ && if [ "$CHECK_ONLY" = 1 ]; then mkdir -p /out; exit 0; fi \
  && make -j"$(nproc)" && make DESTDIR=/out install`,
 	},
 	"postgres": {
 		Minutes: 12, MinMemMB: 1024, Defaults: "--with-openssl --with-icu --with-lz4 --with-zstd --with-libxml --with-uuid=e2fs",
-		Deps: aptDeps + `bison flex libreadline-dev zlib1g-dev libssl-dev libxml2-dev libxslt1-dev libicu-dev liblz4-dev libzstd-dev uuid-dev`,
+		Deps: aptDeps + `perl bison flex libreadline-dev zlib1g-dev libssl-dev libxml2-dev libxslt1-dev libicu-dev liblz4-dev libzstd-dev uuid-dev`,
 		Build: `RUN M="${VERSION%%.*}" && wget -qO- "https://ftp.postgresql.org/pub/source/v${VERSION}/postgresql-${VERSION}.tar.bz2" | tar xj \
  && cd "postgresql-${VERSION}" \
  && ./configure --prefix="/usr/lib/postgresql/$M" --datadir="/usr/share/postgresql/$M" --sysconfdir=/etc/postgresql-common \
       --with-openssl --with-icu --with-lz4 --with-zstd --with-libxml --with-uuid=e2fs CFLAGS="-O2 ${EXTRA_CFLAGS}" ${CONFIGURE_ARGS} \
+ && if [ "$CHECK_ONLY" = 1 ]; then mkdir -p /out; exit 0; fi \
  && make -j"$(nproc)" && make -C contrib -j"$(nproc)" \
  && make DESTDIR=/out install && make -C contrib DESTDIR=/out install`,
 	},
@@ -101,18 +106,24 @@ var Recipes = map[string]Recipe{
  && cmake -S . -B b -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DINSTALL_LAYOUT=DEB -DWITH_SSL=system \
       -DPLUGIN_ROCKSDB=NO -DPLUGIN_MROONGA=NO -DPLUGIN_SPIDER=NO -DPLUGIN_CONNECT=NO -DPLUGIN_S3=NO -DPLUGIN_COLUMNSTORE=NO \
       -DWITH_UNIT_TESTS=OFF -DCMAKE_C_FLAGS="${EXTRA_CFLAGS}" -DCMAKE_CXX_FLAGS="${EXTRA_CFLAGS}" ${CONFIGURE_ARGS} \
+ && if [ "$CHECK_ONLY" = 1 ]; then mkdir -p /out; exit 0; fi \
  && cmake --build b -j"$(nproc)" && DESTDIR=/out cmake --install b \
  && rm -rf /out/etc /out/usr/share/mysql-test /out/usr/share/mariadb-test`,
 	},
 	"mysql": {
 		Minutes: 90, MinMemMB: 4000, Defaults: "-DINSTALL_LAYOUT=RPM -DWITH_SSL=system -DWITH_ROUTER=OFF",
-		Deps: `RUN microdnf install -y --enablerepo=ol9_codeready_builder gcc gcc-c++ make cmake bison wget tar gzip openssl-devel ncurses-devel libtirpc-devel rpcgen zlib-devel pkgconf-pkg-config`,
-		Build: `RUN S="mysql-${VERSION}"; MM="$(echo "$VERSION" | cut -d. -f1-2)"; B=""; \
- if [ "$MM" = "8.0" ]; then S="mysql-boost-${VERSION}"; B="-DWITH_BOOST=boost"; fi \
- && wget -qO- "https://cdn.mysql.com/Downloads/MySQL-${MM}/${S}.tar.gz" | tar xz \
- && cd "mysql-${VERSION}" \
+		Deps: `RUN microdnf install -y --enablerepo=ol9_codeready_builder gcc gcc-c++ gcc-toolset-13-gcc gcc-toolset-13-gcc-c++ gcc-toolset-13-binutils make cmake bison wget tar gzip openssl-devel ncurses-devel libaio-devel libtirpc-devel rpcgen zlib-devel pkgconf-pkg-config`,
+		// The system GCC 11 is too old for current releases; 8.0 needs its
+		// bundled Boost; the CDN keeps only the latest release, older ones
+		// are in the archives.
+		Build: `RUN S="mysql-${VERSION}"; MM="$(echo "$VERSION" | cut -d. -f1-2)"; B=""; T=/opt/rh/gcc-toolset-13/root/usr/bin; \
+ if [ "$MM" = "8.0" ]; then S="mysql-boost-${VERSION}"; B=1; fi \
+ && { wget -qO src.tar.gz "https://cdn.mysql.com/Downloads/MySQL-${MM}/${S}.tar.gz" \
+      || wget -qO src.tar.gz "https://downloads.mysql.com/archives/get/p/23/file/${S}.tar.gz"; } \
+ && tar xzf src.tar.gz && rm src.tar.gz && cd "mysql-${VERSION}" \
  && cmake -S . -B b -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DINSTALL_LAYOUT=RPM -DWITH_SSL=system -DWITH_ROUTER=OFF \
-      -DWITH_UNIT_TESTS=OFF $B -DCMAKE_C_FLAGS="${EXTRA_CFLAGS}" -DCMAKE_CXX_FLAGS="${EXTRA_CFLAGS}" ${CONFIGURE_ARGS} \
+      -DWITH_UNIT_TESTS=OFF ${B:+-DWITH_BOOST=$PWD/boost} -DCMAKE_C_COMPILER="$T/gcc" -DCMAKE_CXX_COMPILER="$T/g++" -DCMAKE_C_FLAGS="${EXTRA_CFLAGS}" -DCMAKE_CXX_FLAGS="${EXTRA_CFLAGS}" ${CONFIGURE_ARGS} \
+ && if [ "$CHECK_ONLY" = 1 ]; then mkdir -p /out; exit 0; fi \
  && cmake --build b -j"$(nproc)" && DESTDIR=/out cmake --install b \
  && rm -rf /out/etc /out/usr/mysql-test /out/usr/share/mysql-test`,
 	},
@@ -121,15 +132,17 @@ var Recipes = map[string]Recipe{
 		Deps: aptDeps + `python3 g++ make`,
 		Build: `RUN wget -qO- "https://nodejs.org/dist/v${VERSION}/node-v${VERSION}.tar.xz" | tar xJ \
  && cd "node-v${VERSION}" && CFLAGS="${EXTRA_CFLAGS}" CXXFLAGS="${EXTRA_CFLAGS}" ./configure --prefix=/usr/local ${CONFIGURE_ARGS} \
+ && if [ "$CHECK_ONLY" = 1 ]; then mkdir -p /out; exit 0; fi \
  && make -j"$(nproc)" && make DESTDIR=/out install`,
 	},
 	"python": {
 		Minutes: 10, MinMemMB: 1024, Defaults: "--prefix=/usr/local --enable-shared --enable-loadable-sqlite-extensions --with-ensurepip=install",
-		Deps: aptDeps + `libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev libffi-dev liblzma-dev libgdbm-dev libgdbm-compat-dev uuid-dev libncursesw5-dev libexpat1-dev`,
+		Deps: aptDeps + `libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev libffi-dev liblzma-dev libgdbm-dev libgdbm-compat-dev uuid-dev libncurses-dev libexpat1-dev`,
 		Build: `RUN wget -qO- "https://www.python.org/ftp/python/${VERSION}/Python-${VERSION}.tar.xz" | tar xJ \
  && cd "Python-${VERSION}" \
  && ./configure --prefix=/usr/local --enable-shared --enable-loadable-sqlite-extensions --with-ensurepip=install \
       LDFLAGS="-Wl,-rpath=/usr/local/lib" CFLAGS="${EXTRA_CFLAGS}" ${CONFIGURE_ARGS} \
+ && if [ "$CHECK_ONLY" = 1 ]; then mkdir -p /out; exit 0; fi \
  && make -j"$(nproc)" && make DESTDIR=/out install`,
 	},
 }
@@ -159,6 +172,7 @@ USER root
 ARG VERSION
 ARG CONFIGURE_ARGS=""
 ARG EXTRA_CFLAGS=""
+ARG CHECK_ONLY=""
 {{.Deps}}
 WORKDIR /usr/src/lmcwhm
 {{.Build}}

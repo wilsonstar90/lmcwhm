@@ -1,0 +1,43 @@
+name: source-check
+
+# Compile-install recipes against the current official images: packages,
+# source downloads and configure must work for every app and version.
+on:
+  push:
+    paths:
+      - internal/appstore/build.go
+      - internal/appstore/catalog.go
+      - internal/appstore/srccheck_test.go
+      - internal/webenv/php.go
+      - internal/webenv/templates/php.Dockerfile.tmpl
+      - .github/workflows/source-check.yml
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+
+jobs:
+  list:
+    runs-on: ubuntu-latest
+    outputs:
+      targets: ${{ steps.m.outputs.targets }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - id: m
+        run: SRC_MATRIX="$GITHUB_OUTPUT" go test -tags srccheck -run TestSourceMatrix ./internal/appstore/
+
+  configure:
+    needs: list
+    strategy:
+      fail-fast: false
+      matrix:
+        src: ${{ fromJson(needs.list.outputs.targets) }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: SRC='${{ matrix.src }}' go test -tags srccheck -run TestSourceConfigure -timeout 60m -v ./internal/appstore/

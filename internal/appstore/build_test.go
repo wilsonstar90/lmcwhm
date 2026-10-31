@@ -19,7 +19,7 @@ func TestSourceRecipes(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%s: %v", a.Key, err)
 			}
-			for _, want := range []string{"FROM " + v.Image + " AS build", "ARG VERSION", "COPY --from=build /out/ /", "${VERSION}", "${CONFIGURE_ARGS}", "${EXTRA_CFLAGS}"} {
+			for _, want := range []string{"FROM " + v.Image + " AS build", "ARG VERSION", "COPY --from=build /out/ /", "${VERSION}", "${CONFIGURE_ARGS}", "${EXTRA_CFLAGS}", `if [ "$CHECK_ONLY" = 1 ]`} {
 				if !strings.Contains(df, want) {
 					t.Errorf("%s: Dockerfile lacks %q:\n%s", a.Key, want, df)
 				}
@@ -28,6 +28,21 @@ func TestSourceRecipes(t *testing.T) {
 				t.Errorf("%s: no estimate or defaults", a.Key)
 			}
 		}
+	}
+	// Packages and downloads that broke builds.
+	for app, want := range map[string][]string{
+		"python":   {"libncurses-dev", "archive.debian.org"},
+		"postgres": {" perl "},
+		"mysql":    {"libaio-devel", "downloads.mysql.com/archives/", "$PWD/boost", "gcc-toolset-13"},
+	} {
+		for _, w := range want {
+			if !strings.Contains(Recipes[app].Deps+Recipes[app].Build, w) {
+				t.Errorf("%s recipe lacks %q", app, w)
+			}
+		}
+	}
+	if strings.Contains(Recipes["python"].Deps, "libncursesw5-dev") || strings.Contains(Recipes["mysql"].Deps, "apt-get") {
+		t.Error("python still asks for libncursesw5-dev, or mysql (Oracle Linux) for apt")
 	}
 	if _, why := SourceSupport("mysql", "5.7"); why != "old" {
 		t.Errorf("mysql 5.7: %q", why)

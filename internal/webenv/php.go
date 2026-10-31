@@ -307,6 +307,15 @@ func PHPImageFor(v string, exts []string) string {
 	return PHPImage(v) + "-x" + hex.EncodeToString(sum[:4])
 }
 
+// AptFallback is a Dockerfile step that points apt at archive.debian.org on
+// Debian releases that have left the mirrors (the PHP 7.4 and 8.0 images are
+// on bullseye, whose packages deb.debian.org still lists but no longer
+// serves). The change stays in the image, so extensions installed on top of
+// it later find their packages too.
+const AptFallback = `RUN . /etc/os-release && case "$VERSION_CODENAME" in stretch|buster|bullseye) \
+      sed -i 's|//deb.debian.org|//archive.debian.org|; s|//security.debian.org|//archive.debian.org|' /etc/apt/sources.list $(ls /etc/apt/sources.list.d/* 2>/dev/null) \
+      && echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99lmcwhm-archive ;; esac`
+
 // PHPInstallerImage provides install-php-extensions.
 const PHPInstallerImage = "mlocati/php-extension-installer:latest"
 
@@ -650,15 +659,22 @@ func (e *Env) WritePHPBuild(v string, b PHPBuild) error {
 	return os.WriteFile(e.phpBuildPath(v), raw, 0o644)
 }
 
+// PHPDockerfile renders the build of lmcwhm/php:<v>, compiled again from
+// source when source is set.
+func PHPDockerfile(v string, source bool) (string, error) {
+	df, err := render("php.Dockerfile.tmpl", map[string]any{"Version": v, "Source": source, "AptFallback": AptFallback})
+	return string(df), err
+}
+
 // buildPHPBase builds lmcwhm/php:<v> (compiled again in source mode).
 func (e *Env) buildPHPBase(ctx context.Context, v string, log func(string, ...any)) error {
 	b := e.PHPBuildOf(v)
-	df, err := render("php.Dockerfile.tmpl", map[string]any{"Version": v, "Source": b.Mode == "source"})
+	df, err := PHPDockerfile(v, b.Mode == "source")
 	if err != nil {
 		return err
 	}
 	if b.Mode != "source" {
-		return dockerx.Build(ctx, PHPImage(v), string(df))
+		return dockerx.Build(ctx, PHPImage(v), df)
 	}
 	log("compiling PHP %s from source (about %d minutes on 2 cores)", v, PHPSourceMinutes)
 	dir := filepath.Join(e.Home, "logs", "build")
@@ -673,7 +689,7 @@ func (e *Env) buildPHPBase(ctx context.Context, v string, log func(string, ...an
 	defer f.Close()
 	log("full build log: %s", path)
 	w := NewProgressWriter(f, log)
-	if err := dockerx.BuildStream(ctx, PHPImage(v), string(df), map[string]string{"CONFIGURE_ARGS": b.Args, "EXTRA_CFLAGS": b.CFlags}, w); err != nil {
+	if err := dockerx.BuildStream(ctx, PHPImage(v), df, map[string]string{"CONFIGURE_ARGS": b.Args, "EXTRA_CFLAGS": b.CFlags}, w); err != nil {
 		w.DumpTail()
 		return fmt.Errorf("the PHP source build failed (see %s): %w", path, err)
 	}
