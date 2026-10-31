@@ -112,16 +112,17 @@ var Recipes = map[string]Recipe{
 	},
 	"mysql": {
 		Minutes: 90, MinMemMB: 4000, Defaults: "-DINSTALL_LAYOUT=RPM -DWITH_SSL=system -DWITH_ROUTER=OFF",
-		Deps: `RUN microdnf install -y --enablerepo=ol9_codeready_builder gcc gcc-c++ make cmake bison wget tar gzip openssl-devel ncurses-devel libaio-devel libtirpc-devel rpcgen zlib-devel pkgconf-pkg-config`,
-		// 8.0 needs its bundled Boost; the CDN keeps only the latest release,
-		// older ones are in the archives.
-		Build: `RUN S="mysql-${VERSION}"; MM="$(echo "$VERSION" | cut -d. -f1-2)"; B=""; \
+		Deps: `RUN microdnf install -y --enablerepo=ol9_codeready_builder gcc gcc-c++ gcc-toolset-13-gcc gcc-toolset-13-gcc-c++ gcc-toolset-13-binutils make cmake bison wget tar gzip openssl-devel ncurses-devel libaio-devel libtirpc-devel rpcgen zlib-devel pkgconf-pkg-config`,
+		// The system GCC 11 is too old for current releases; 8.0 needs its
+		// bundled Boost; the CDN keeps only the latest release, older ones
+		// are in the archives.
+		Build: `RUN S="mysql-${VERSION}"; MM="$(echo "$VERSION" | cut -d. -f1-2)"; B=""; T=/opt/rh/gcc-toolset-13/root/usr/bin; \
  if [ "$MM" = "8.0" ]; then S="mysql-boost-${VERSION}"; B=1; fi \
  && { wget -qO src.tar.gz "https://cdn.mysql.com/Downloads/MySQL-${MM}/${S}.tar.gz" \
       || wget -qO src.tar.gz "https://downloads.mysql.com/archives/get/p/23/file/${S}.tar.gz"; } \
  && tar xzf src.tar.gz && rm src.tar.gz && cd "mysql-${VERSION}" \
  && cmake -S . -B b -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DINSTALL_LAYOUT=RPM -DWITH_SSL=system -DWITH_ROUTER=OFF \
-      -DWITH_UNIT_TESTS=OFF ${B:+-DWITH_BOOST=$PWD/boost} -DCMAKE_C_FLAGS="${EXTRA_CFLAGS}" -DCMAKE_CXX_FLAGS="${EXTRA_CFLAGS}" ${CONFIGURE_ARGS} \
+      -DWITH_UNIT_TESTS=OFF ${B:+-DWITH_BOOST=$PWD/boost} -DCMAKE_C_COMPILER="$T/gcc" -DCMAKE_CXX_COMPILER="$T/g++" -DCMAKE_C_FLAGS="${EXTRA_CFLAGS}" -DCMAKE_CXX_FLAGS="${EXTRA_CFLAGS}" ${CONFIGURE_ARGS} \
  && if [ "$CHECK_ONLY" = 1 ]; then mkdir -p /out; exit 0; fi \
  && cmake --build b -j"$(nproc)" && DESTDIR=/out cmake --install b \
  && rm -rf /out/etc /out/usr/mysql-test /out/usr/share/mysql-test`,

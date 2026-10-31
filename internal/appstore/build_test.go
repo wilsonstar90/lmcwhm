@@ -33,7 +33,7 @@ func TestSourceRecipes(t *testing.T) {
 	for app, want := range map[string][]string{
 		"python":   {"libncurses-dev", "archive.debian.org"},
 		"postgres": {" perl "},
-		"mysql":    {"libaio-devel", "downloads.mysql.com/archives/", "$PWD/boost"},
+		"mysql":    {"libaio-devel", "downloads.mysql.com/archives/", "$PWD/boost", "gcc-toolset-13"},
 	} {
 		for _, w := range want {
 			if !strings.Contains(Recipes[app].Deps+Recipes[app].Build, w) {

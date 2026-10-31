@@ -307,16 +307,14 @@ func PHPImageFor(v string, exts []string) string {
 	return PHPImage(v) + "-x" + hex.EncodeToString(sum[:4])
 }
 
-// AptFallback is a Dockerfile step that points apt at archive.debian.org when
-// the image's Debian release has left the mirrors (the PHP 7.4 and 8.0 images
-// are on bullseye). The change stays in the image, so extensions installed on
-// top of it later find their packages too.
-const AptFallback = `RUN apt-get update >/dev/null 2>&1 || { \
-      if [ -f /etc/apt/sources.list ]; then sed -i -e 's|//deb.debian.org|//archive.debian.org|; s|//security.debian.org|//archive.debian.org|' -e '/-updates/d' /etc/apt/sources.list; fi; \
-      for f in /etc/apt/sources.list.d/*.sources; do [ -f "$f" ] && sed -i -e 's|//deb.debian.org|//archive.debian.org|; s|//security.debian.org|//archive.debian.org|; s/ [a-z]*-updates//' "$f"; done; \
-      echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99lmcwhm-archive; \
-      apt-get update; \
-    } && rm -rf /var/lib/apt/lists/*`
+// AptFallback is a Dockerfile step that points apt at archive.debian.org on
+// Debian releases that have left the mirrors (the PHP 7.4 and 8.0 images are
+// on bullseye, whose packages deb.debian.org still lists but no longer
+// serves). The change stays in the image, so extensions installed on top of
+// it later find their packages too.
+const AptFallback = `RUN . /etc/os-release && case "$VERSION_CODENAME" in stretch|buster|bullseye) \
+      sed -i 's|//deb.debian.org|//archive.debian.org|; s|//security.debian.org|//archive.debian.org|' /etc/apt/sources.list $(ls /etc/apt/sources.list.d/* 2>/dev/null) \
+      && echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99lmcwhm-archive ;; esac`
 
 // PHPInstallerImage provides install-php-extensions.
 const PHPInstallerImage = "mlocati/php-extension-installer:latest"
