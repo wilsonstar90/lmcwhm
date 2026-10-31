@@ -268,46 +268,20 @@ func (s *Server) handleImportUpload(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, backup.ErrBadName)
 		return
 	}
-	dir := s.Backup.UploadDir()
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	last := q.Get("last") == "1"
+	size, err := s.Backup.WriteChunk(name, offset, maxImportUpload, r.Body, last)
+	switch {
+	case errors.Is(err, backup.ErrOffset):
+		writeJSON(w, http.StatusConflict, map[string]any{"code": "files.bad_offset", "size": size})
+		return
+	case errors.Is(err, backup.ErrBadName):
+		writeErr(w, http.StatusRequestEntityTooLarge, err)
+		return
+	case err != nil:
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	part := filepath.Join(dir, name+".part")
-	flags := os.O_CREATE | os.O_WRONLY
-	if offset == 0 {
-		flags |= os.O_TRUNC
-	}
-	f, err := os.OpenFile(part, flags, 0o600)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
-	}
-	fi, _ := f.Stat()
-	if fi.Size() != offset {
-		f.Close()
-		writeJSON(w, http.StatusConflict, map[string]any{"code": "files.bad_offset", "size": fi.Size()})
-		return
-	}
-	n, err := io.Copy(f, io.LimitReader(r.Body, maxImportUpload-offset+1))
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
-	size := offset + n
-	if err == nil && size > maxImportUpload {
-		os.Remove(part)
-		writeErr(w, http.StatusRequestEntityTooLarge, backup.ErrBadName)
-		return
-	}
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
-	}
-	if q.Get("last") == "1" {
-		if err := os.Rename(part, filepath.Join(dir, name)); err != nil {
-			writeErr(w, http.StatusInternalServerError, err)
-			return
-		}
+	if last {
 		s.auditCat(r, "database", "db.import_upload", name)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"size": size})

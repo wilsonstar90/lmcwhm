@@ -105,6 +105,57 @@ func UploadName(name string) (string, bool) {
 	return name, true
 }
 
+// ErrOffset: an upload chunk does not start where the stored part ends.
+var ErrOffset = errors.New("files.bad_offset")
+
+// WriteChunk appends a chunk at offset to <UploadDir>/<name>.part (offset 0
+// starts over) and, with last, moves it into place. It returns the size
+// stored; on ErrOffset that size tells the client where to resume.
+func (sv *Service) WriteChunk(name string, offset, max int64, r io.Reader, last bool) (int64, error) {
+	dir := sv.UploadDir()
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return 0, err
+	}
+	part := filepath.Join(dir, name+".part")
+	flags := os.O_CREATE | os.O_WRONLY
+	if offset == 0 {
+		flags |= os.O_TRUNC
+	}
+	f, err := os.OpenFile(part, flags, 0o600)
+	if err != nil {
+		return 0, err
+	}
+	fi, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return 0, err
+	}
+	if fi.Size() != offset {
+		f.Close()
+		return fi.Size(), ErrOffset
+	}
+	if _, err := f.Seek(offset, io.SeekStart); err != nil {
+		f.Close()
+		return offset, err
+	}
+	n, err := io.Copy(f, io.LimitReader(r, max-offset+1))
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	size := offset + n
+	if err != nil {
+		return size, err
+	}
+	if size > max {
+		os.Remove(part)
+		return 0, ErrBadName
+	}
+	if last {
+		return size, os.Rename(part, filepath.Join(dir, name))
+	}
+	return size, nil
+}
+
 // OpenSQL opens a dump as a stream of SQL: .sql as it is, .sql.gz unpacked,
 // and from a .zip / .tar.gz / .tgz the first .sql or .sql.gz inside.
 func OpenSQL(path string) (io.ReadCloser, error) {

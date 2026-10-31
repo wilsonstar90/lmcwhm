@@ -100,3 +100,23 @@ func TestImportFiles(t *testing.T) {
 		}
 	}
 }
+
+func TestWriteChunk(t *testing.T) {
+	sv := &Service{Dir: t.TempDir()}
+	if n, err := sv.WriteChunk("a.sql", 0, 100, bytes.NewReader([]byte("hello ")), false); err != nil || n != 6 {
+		t.Fatal(n, err)
+	}
+	// A chunk at the wrong offset is refused with where to resume.
+	if n, err := sv.WriteChunk("a.sql", 3, 100, bytes.NewReader([]byte("x")), false); err != ErrOffset || n != 6 {
+		t.Fatal(n, err)
+	}
+	if n, err := sv.WriteChunk("a.sql", 6, 100, bytes.NewReader([]byte("world")), true); err != nil || n != 11 {
+		t.Fatal(n, err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(sv.UploadDir(), "a.sql")); string(b) != "hello world" {
+		t.Fatalf("%q", b)
+	}
+	if _, err := sv.WriteChunk("big.sql", 0, 4, bytes.NewReader([]byte("too long")), true); err != ErrBadName {
+		t.Fatal("over the limit accepted")
+	}
+}
