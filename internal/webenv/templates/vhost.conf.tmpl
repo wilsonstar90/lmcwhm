@@ -29,6 +29,10 @@ server {
     proxy_intercept_errors on;
     fastcgi_intercept_errors on;
 {{- end}}
+    # Serving an error page is an internal redirect that runs these again: skip them.
+    if ($uri ~ ^/__lmcwhm_err/) {
+        break;
+    }
 {{- range .BlockStatuses}}
     if ($lmcwhm_block_status = {{.}}) {
         return {{.}};

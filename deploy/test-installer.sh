@@ -65,8 +65,9 @@ login /rescue1 admin NewPass123 || fail "data not restored after rollback"
 pass "rollback"
 
 # ---------- 5. lmcwhm update / repair CLI wiring ----------
-lmcwhm update --help | grep -q -- --version || fail "update command"
-lmcwhm repair --help | grep -q -- --reset-panel || fail "repair command"
+# grep reads everything (no -q): an early exit would SIGPIPE lmcwhm and trip pipefail.
+lmcwhm update --help 2>&1 | grep -- --version >/dev/null || fail "update command"
+lmcwhm repair --help 2>&1 | grep -- --reset-panel >/dev/null || fail "repair command"
 pass "cli commands"
 
 # ---------- 6. real downloads from GitHub Releases ----------

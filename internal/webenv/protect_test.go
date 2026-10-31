@@ -59,7 +59,7 @@ func TestProtectionConfig(t *testing.T) {
 		t.Error("pattern files")
 	}
 	ng, _ := e.nginxFiles(sites)
-	if v := string(ng["conf.d/a.com.conf"]); !strings.Contains(v, "if ($lmcwhm_block_status = 429) {\n        return 429;") || !strings.Contains(v, "if ($lmcwhm_block_status = 404) {\n        return 404;") || !strings.Contains(v, "if ($lmcwhm_block_status = 444) {\n        return 444;") {
+	if v := string(ng["conf.d/a.com.conf"]); !strings.Contains(v, "if ($uri ~ ^/__lmcwhm_err/) {\n        break;") || strings.Index(v, "__lmcwhm_err/) {") > strings.Index(v, "$lmcwhm_block_status = 400") || !strings.Contains(v, "if ($lmcwhm_block_status = 429) {\n        return 429;") || !strings.Contains(v, "if ($lmcwhm_block_status = 404) {\n        return 404;") || !strings.Contains(v, "if ($lmcwhm_block_status = 444) {\n        return 444;") {
 		t.Errorf("vhost does not answer edge blocks:\n%s", v)
 	}
 	if p := e.RulePreview(EdgeRule{Code: "new", All: true, Conds: []EdgeCond{{Field: "ua", Op: "regex", Values: []string{"bot"}}}}); !strings.Contains(p, "req.hdr(user-agent) -m reg -i") || !strings.Contains(p, "\nbot\n") {
