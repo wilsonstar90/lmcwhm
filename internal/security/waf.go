@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -17,7 +18,10 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/webenv"
 )
 
-var ErrBadWAF = errors.New("waf.invalid_settings")
+var (
+	ErrBadWAF = errors.New("waf.invalid_settings")
+	ruleIDRe  = regexp.MustCompile(`^\d{1,7}$`)
+)
 
 const wafKey = "waf"
 
@@ -41,9 +45,21 @@ func (w *WAF) Settings() webenv.WAFSettings { return w.cur }
 
 // Save stores new settings; the caller then rebuilds the nginx container.
 func (w *WAF) Save(ctx context.Context, s webenv.WAFSettings) error {
-	if s.Engine != "On" && s.Engine != "DetectionOnly" || s.Paranoia < 1 || s.Paranoia > 4 || s.Anomaly < 1 || s.Anomaly > 100 {
+	if s.Engine != "On" && s.Engine != "DetectionOnly" || s.Paranoia < 1 || s.Paranoia > 4 || s.Anomaly < 1 || s.Anomaly > 100 || len(s.Disabled) > 2000 {
 		return ErrBadWAF
 	}
+	seen := map[string]bool{}
+	ids := []string{}
+	for _, id := range s.Disabled {
+		if id = strings.TrimSpace(id); !ruleIDRe.MatchString(id) {
+			return ErrBadWAF
+		}
+		if !seen[id] {
+			seen[id] = true
+			ids = append(ids, id)
+		}
+	}
+	s.Disabled = ids
 	b, _ := json.Marshal(s)
 	if _, err := w.st.DB.ExecContext(ctx, `INSERT INTO settings(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, wafKey, string(b)); err != nil {
 		return err

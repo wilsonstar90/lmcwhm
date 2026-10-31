@@ -1,17 +1,19 @@
 <script setup lang="ts">
-import { computed, h, ref } from 'vue'
+import { computed, h, onMounted, ref } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu, NButton, NSpace, type MenuOption } from 'naive-ui'
 import { useSession } from '../stores/session'
 import LangSwitch from '../components/LangSwitch.vue'
 import ThemeSwitch from '../components/ThemeSwitch.vue'
+import { arrange, loadMenu, menuConfig } from '../menu'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const session = useSession()
-const collapsed = ref(window.innerWidth < 768)
+// The menu folds away on phones and iPads in portrait.
+const collapsed = ref(window.innerWidth < 900)
 
 const items = ['home', 'website', 'domains', 'database', 'docker', 'appstore', 'files', 'ftp', 'terminal', 'cron', 'processes', 'backup', 'security', 'monitor', 'uptime', 'alerts', 'logs', 'mail', 'toolbox', 'ai', 'settings']
 // Sub-users see the modules they were granted (the API enforces it too).
@@ -21,8 +23,9 @@ const can = (key: string) => {
   if (key === 'settings') return true // the account tab
   return (u.perms ?? []).includes(key)
 }
+onMounted(loadMenu)
 const menu = computed<MenuOption[]>(() =>
-  items.filter(can).map((key) => ({
+  arrange(items, menuConfig.value).filter((k) => can(k) && !menuConfig.value.hidden.includes(k)).map((key) => ({
     key,
     label: () => h(RouterLink, { to: { name: key } }, { default: () => t(`menu.${key}`) }),
   })),
@@ -35,7 +38,7 @@ async function logout() {
 </script>
 
 <template>
-  <n-layout has-sider style="height: 100vh">
+  <n-layout has-sider class="shell">
     <n-layout-sider
       bordered
       collapse-mode="width"
@@ -58,7 +61,7 @@ async function logout() {
           <n-button size="small" quaternary @click="logout">{{ t('menu.logout') }}</n-button>
         </n-space>
       </n-layout-header>
-      <n-layout-content content-style="padding: 16px;" :native-scrollbar="false" style="height: calc(100vh - 53px)">
+      <n-layout-content content-style="padding: 16px;" :native-scrollbar="false" class="content">
         <router-view />
       </n-layout-content>
     </n-layout>
@@ -66,6 +69,15 @@ async function logout() {
 </template>
 
 <style scoped>
+/* dvh follows the iOS address bar; vh is the fallback. */
+.shell {
+  height: 100vh;
+  height: 100dvh;
+}
+.content {
+  height: calc(100vh - 53px);
+  height: calc(100dvh - 53px);
+}
 .brand {
   font-weight: 600;
   font-size: 18px;

@@ -193,7 +193,8 @@
       "invalid_ip": "Invalid authorized IP",
       "invalid_domain": "Invalid domain",
       "invalid_language": "Unsupported language",
-      "basic_auth_password_required": "Set a BasicAuth password"
+      "basic_auth_password_required": "Set a BasicAuth password",
+      "invalid_menu": "Invalid menu settings"
     },
     "ssl": {
       "invalid_pair": "Certificate and key do not match or are invalid"
@@ -330,7 +331,8 @@
       "forward_port_taken": "Port {port} is already in use"
     },
     "waf": {
-      "invalid_settings": "Invalid WAF settings"
+      "invalid_settings": "Invalid WAF settings",
+      "crs_unavailable": "The WAF is off or nginx is not running: the OWASP rules cannot be read"
     },
     "crowdsec": {
       "not_installed": "CrowdSec is not running",
@@ -451,6 +453,13 @@
       "invalid_settings": "Invalid settings",
       "not_found": "Rule not found",
       "builtin": "Built-in rules cannot be deleted; switch them off or reset them"
+    },
+    "errpages": {
+      "invalid_page": "Invalid page: it needs a name and content (up to 256 KB)",
+      "invalid_mapping": "Invalid mapping: statuses 400–599 and existing pages only",
+      "not_found": "Page not found",
+      "in_use": "The page is in use; change the mapping first",
+      "builtin": "Built-in pages cannot be deleted; reset them instead"
     }
   },
   "task": {
@@ -1313,7 +1322,26 @@
     "no_site": "No website serves {host}",
     "host": "Host",
     "http_status": "HTTP status",
-    "rule": "Rule"
+    "rule": "Rule",
+    "tabs": {
+      "settings": "Settings",
+      "rules": "Dedicated rules",
+      "crs": "OWASP rules",
+      "events": "Blocked log",
+      "pages": "Error pages"
+    },
+    "engine_hint": "Applies to the OWASP rules only; each dedicated rule blocks or only detects on its own.",
+    "pl_hint": {
+      "1": "Basic protection, fewest false positives.",
+      "2": "More rules; suits most sites.",
+      "3": "Strict: exclude false positives from the blocked log.",
+      "4": "Very strict, for high-risk sites only."
+    },
+    "pl_rules": "Dedicated rules active at this level: {n}.",
+    "rules_switch_hint": "Run at the edge (HAProxy), with or without OWASP; only rules at or below the paranoia level run.",
+    "block_status": "Refusal status",
+    "block_status_hint": "What IP / UA / URL block lists and site protection answer (CC is always 429; dedicated rules set their own). 444 closes the connection.",
+    "layers": "Two layers: the edge (HAProxy) applies the lists, site protection and dedicated rules first, then the OWASP rules (ModSecurity) run in nginx. Both appear in the blocked log."
   },
   "cs": {
     "intro": "CrowdSec reads website and SSH logs, detects attacks (brute force, scans, CVE probes) and issues bans, which the panel enforces in its firewall.",
@@ -2505,14 +2533,16 @@
       "cdn_only": "CDN only",
       "idc": "No IDC",
       "crawler": "Scrapers",
-      "cc": "CC (requests / 10 s)"
+      "cc": "CC (requests / 10 s)",
+      "waf": "WAF"
     },
     "tips": {
       "fake_spider": "A User-Agent claiming a search engine or AI crawler from outside its official ranges is refused. Only crawlers whose trusted list is on (Cloud lists → Sources) are checked.",
       "cdn_only": "Only requests through a CDN (Cloudflare or the CDN you set) are accepted, so nobody can bypass it by calling the server's IP. Turn on only for proxied sites.",
       "idc": "Refuse cloud and hosting addresses (AWS, Azure, Alibaba, Tencent, DigitalOcean, …), except trusted crawlers and allowed IPs. Needs the GeoIP ASN database.",
       "crawler": "Refuse common scraper and bad-bot User-Agents (python-requests, curl, Scrapy, AhrefsBot, …); the list is under Protection settings.",
-      "cc": "Most requests a visitor IP may make in 10 seconds; over it gets 429. 0 = off."
+      "cc": "Most requests a visitor IP may make in 10 seconds; over it gets 429. 0 = off.",
+      "waf": "OWASP rules (ModSecurity) on this site; turn the WAF on first."
     },
     "off": "off",
     "log": "Blocked log",
@@ -2556,7 +2586,10 @@
       "rule": "rule {code}",
       "rate": "rate limit",
       "site": "website / WAF"
-    }
+    },
+    "excluded": "{n} excluded",
+    "excl_title": "{domain}: excluded OWASP rules",
+    "excl_hint": "CRS rule IDs not run on this site (e.g. a false positive 942100)."
   },
   "rules": {
     "title": "Dedicated rules",
@@ -2615,7 +2648,13 @@
       "cookie": "e.g. wordpress_test",
       "body": "e.g. give_title"
     },
-    "builtin": {}
+    "builtin": {},
+    "level": "Level",
+    "inactive": "inactive",
+    "action": "Action",
+    "block": "Block",
+    "detect": "Detect only",
+    "status": "Status"
   },
   "dom": {
     "intro": "One row per domain (its aliases and subdomains with it). Manage sets where it goes (a website, Docker, a URL, passthrough, a redirect), its aliases, SSL and DNS; a website's own PHP, runtime and rewrite settings stay in the website settings.",
@@ -2690,5 +2729,113 @@
     "note_proto": "TCP, UDP or both; the visitor IP is kept (to a local port).",
     "note_firewall": "The firewall lets forwarded connections through; with a Linode Cloud Firewall, open the listen port there too.",
     "note_remote": "Forwarding to another server is IPv4 only and masqueraded (it sees this server as the source)."
+  },
+  "crs": {
+    "cats": {
+      "913": "Scanner detection",
+      "920": "Protocol enforcement",
+      "921": "Protocol attacks",
+      "922": "Multipart attacks",
+      "930": "Local file inclusion",
+      "931": "Remote file inclusion",
+      "932": "Remote command execution",
+      "933": "PHP injection",
+      "934": "Generic attacks (Node.js, Ruby, …)",
+      "941": "Cross-site scripting (XSS)",
+      "942": "SQL injection",
+      "943": "Session fixation",
+      "944": "Java attacks",
+      "950": "Data leakage",
+      "951": "SQL error leakage",
+      "952": "Java leakage",
+      "953": "PHP leakage",
+      "954": "IIS leakage",
+      "955": "Web shells"
+    },
+    "disable": "Rule off",
+    "enable": "Rule on",
+    "severity": "Severity",
+    "hits": "Hits (24 h)",
+    "excluded_on": "Excluded on",
+    "all_sites": "All sites",
+    "exclude_site": "Exclude on a site…",
+    "exclude_title": "Exclude rule {id} on a site",
+    "unavailable": "The rules are listed when the WAF (OWASP) is on and nginx is running.",
+    "any_level": "Any level",
+    "search": "Search ID / description",
+    "hit_only": "Hits only",
+    "hint": "Rules switched off for all sites never run ({n} now); \"exclude on a site\" skips a rule on that site only. Greyed levels are above the paranoia level and do not run."
+  },
+  "evt": {
+    "title": "Blocked log",
+    "all_sources": "All sources",
+    "all_actions": "All results",
+    "all_sites": "All sites",
+    "sources": {
+      "waf": "OWASP",
+      "rule": "Dedicated rule",
+      "list": "UA / URL block list",
+      "ip": "IP block list",
+      "protection": "Site protection",
+      "cc": "CC"
+    },
+    "actions": {
+      "blocked": "Blocked",
+      "detected": "Detected",
+      "limited": "Limited"
+    },
+    "request": "Request",
+    "action": "Result",
+    "reason": "Reason",
+    "ops": "Actions",
+    "search": "IP / URL / rule",
+    "exclude_on": "Exclude CRS {id} on {site}",
+    "rule_off": "Switch this rule off",
+    "rule_block": "Make it block",
+    "rule_detect": "Make it detect only",
+    "block_ip": "Block {ip}",
+    "allow_url": "Allow URL {path}"
+  },
+  "ep": {
+    "library": "Pages",
+    "new_name": "New page",
+    "add": "Add page",
+    "copy": "Copy",
+    "reset_confirm": "Restore the built-in content?",
+    "delete_confirm": "Delete this page?",
+    "preview": "Preview",
+    "vars": {
+      "status": "Status",
+      "host": "Domain",
+      "request_uri": "URL",
+      "remote_addr": "Visitor IP",
+      "time_local": "Time",
+      "request_id": "Request ID",
+      "lmcwhm_block_reason": "Block reason"
+    },
+    "builtin": {
+      "generic": "General error",
+      "blocked": "Request blocked",
+      "notfound": "Page not found",
+      "limit": "Too many requests",
+      "maintenance": "Unavailable / maintenance"
+    },
+    "mapping": "Page per status",
+    "all_sites": "All sites (default)",
+    "intercept": "Replace the backend's own error pages (PHP / project / proxy) too",
+    "site_hint": "This site only; \"inherit\" uses the default above.",
+    "global_hint": "The default for every site; each site can override it. A site with \"custom error pages\" on keeps its own 404.html / 50x.html.",
+    "inherit": "Inherit",
+    "nginx_default": "nginx default",
+    "other_code": "Other status",
+    "add_code": "Add"
+  },
+  "menucfg": {
+    "tab": "Interface",
+    "title": "Main menu",
+    "hint": "Drag or use ↑↓ to reorder; the switch shows or hides an entry. Home and Panel settings always show; hidden pages still open by their address.",
+    "up": "Up",
+    "down": "Down",
+    "default": "Reset to default"
   }
 }

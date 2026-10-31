@@ -1,50 +1,54 @@
 <script setup lang="ts">
-import { computed, h, onMounted, ref } from 'vue'
+// WAF: OWASP CRS (ModSecurity) and the dedicated rules at the edge in one
+// place: settings, the dedicated rules, the CRS rule list, every blocked or
+// detected request, and the error pages refusals answer with.
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import {
-  NAlert, NButton, NCard, NDataTable, NDynamicTags, NForm, NFormItem, NInput, NInputNumber, NRadioButton, NRadioGroup, NSelect,
-  NSpace, NSwitch, NTag, NTooltip, useMessage, type DataTableColumns,
-} from 'naive-ui'
-import { get, patch, put, ApiError } from '../api/client'
-import { datetime } from '../format'
-import IpGeo from './IpGeo.vue'
-import DetailDrawer, { type DetailRow } from './DetailDrawer.vue'
+import { useRoute, useRouter } from 'vue-router'
+import { NAlert, NButton, NCard, NInputNumber, NRadioButton, NRadioGroup, NSelect, NSwitch, NTabPane, NTabs, useMessage } from 'naive-ui'
+import { get, put, ApiError } from '../api/client'
 import TaskModal from './TaskModal.vue'
-import AiButton from './AiButton.vue'
+import SecRules from './SecRules.vue'
+import SecCRS from './SecCRS.vue'
+import SecEvents from './SecEvents.vue'
+import SecErrPages from './SecErrPages.vue'
 
-interface Settings { enabled: boolean; engine: 'On' | 'DetectionOnly'; paranoia: number; anomaly: number }
-interface SiteWAF { id: number; domain: string; waf_off: boolean; waf_exclude: string[] | null }
-interface Rule { id: string; message: string; severity: string; data?: string }
-interface Event { time: number; ip: string; host: string; method: string; uri: string; status: number; blocked: boolean; messages: Rule[] }
+interface Settings { enabled: boolean; engine: 'On' | 'DetectionOnly'; paranoia: number; anomaly: number; disabled: string[] | null }
+interface ProtSettings { rules_on: boolean; block_status: number; crawlers: string[]; idc: unknown[] }
+interface Rule { enabled: boolean; level: number }
 
-const { t, locale } = useI18n()
+const emit = defineEmits<{ changed: [] }>()
+const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
 const msg = useMessage()
 const fail = (e: unknown) => msg.error(e instanceof ApiError ? e.text : String(e))
+
+const tabs = ['settings', 'rules', 'crs', 'events', 'pages'] as const
+type Tab = (typeof tabs)[number]
+const tab = ref<Tab>(tabs.includes(route.query.sub as Tab) ? (route.query.sub as Tab) : 'settings')
+watch(tab, (v) => router.replace({ query: { ...route.query, sub: v } }))
+
 const s = ref<Settings | null>(null)
+const ps = ref<ProtSettings | null>(null)
 const image = ref('')
-const sites = ref<SiteWAF[]>([])
-const events = ref<Event[]>([])
-const q = ref('')
-const loading = ref(false)
+const rules = ref<Rule[]>([])
 const task = ref<{ id: string; title: string } | null>(null)
+const focusRule = ref('')
 
 async function load() {
   try {
-    const r = await get<{ settings: Settings; image: string; sites: SiteWAF[] }>('/waf')
-    s.value = r.settings
-    image.value = r.image
-    sites.value = r.sites.map((x) => ({ ...x, waf_exclude: x.waf_exclude ?? [] }))
+    const [w, p, r] = await Promise.all([
+      get<{ settings: Settings; image: string }>('/waf'),
+      get<{ settings: ProtSettings }>('/protect/settings'),
+      get<{ rules: Rule[] }>('/protect/rules'),
+    ])
+    s.value = w.settings
+    image.value = w.image
+    ps.value = p.settings
+    rules.value = r.rules
   } catch (e) {
     fail(e)
-  }
-  loadEvents()
-}
-async function loadEvents() {
-  loading.value = true
-  try {
-    events.value = (await get<{ items: Event[] }>(`/waf/events?lines=500&q=${encodeURIComponent(q.value)}`)).items
-  } finally {
-    loading.value = false
   }
 }
 onMounted(load)
@@ -52,123 +56,104 @@ defineExpose({ load })
 
 async function save() {
   try {
+    await put('/protect/settings', ps.value)
     const r = await put<{ task_id: string }>('/waf', s.value)
     task.value = { id: r.task_id, title: t('waf.apply') }
+    emit('changed')
   } catch (e) {
     fail(e)
   }
 }
-async function saveSite(x: SiteWAF) {
-  try {
-    const r = await patch<{ task_id: string }>(`/sites/${x.id}`, { waf_off: x.waf_off, waf_exclude: x.waf_exclude })
-    task.value = { id: r.task_id, title: `WAF · ${x.domain}` }
-  } catch (e) {
-    fail(e)
-  }
+const activeRules = computed(() => rules.value.filter((r) => r.enabled && r.level <= (s.value?.paranoia ?? 1)).length)
+const statusOptions = [400, 401, 403, 404, 405, 406, 410, 418, 429, 444, 451, 500, 502, 503].map((c) => ({ label: c === 444 ? '444 (close)' : String(c), value: c }))
+function openRule(id: string) {
+  focusRule.value = id
+  tab.value = 'crs'
 }
-function exclude(e: Event, id: string) {
-  const host = e.host.split(':')[0]
-  const x = sites.value.find((st) => st.domain === host) ?? sites.value.find((st) => host.endsWith('.' + st.domain))
-  if (!x) return msg.warning(t('waf.no_site', { host }))
-  if (!x.waf_exclude!.includes(id)) x.waf_exclude!.push(id)
-  saveSite(x)
-}
-
-const siteCols: DataTableColumns<SiteWAF> = [
-  { title: () => t('route.site'), key: 'domain', width: 220, render: (x) => h('b', x.domain) },
-  { title: 'WAF', key: 'waf_off', width: 80, render: (x) => h(NSwitch, { size: 'small', value: !x.waf_off, 'onUpdate:value': (on: boolean) => { x.waf_off = !on; saveSite(x) } }) },
-  {
-    title: () => t('waf.excluded'),
-    key: 'waf_exclude',
-    render: (x) => h(NDynamicTags, { size: 'small', value: x.waf_exclude!, 'onUpdate:value': (v: string[]) => { x.waf_exclude = v.filter((id) => /^\d{1,7}$/.test(id)); saveSite(x) } }),
-  },
-]
-const sevType = (sv: string) => (['EMERGENCY', 'ALERT', 'CRITICAL'].includes(sv) ? 'error' : sv === 'ERROR' || sv === 'WARNING' ? 'warning' : 'default')
-const ev = ref<Event | null>(null)
-const evRows = computed<DetailRow[]>(() => {
-  const e = ev.value
-  if (!e) return []
-  return [
-    { label: t('common.time'), value: e.time ? datetime(e.time, locale.value) : '' },
-    { label: t('common.ip'), value: () => h(IpGeo, { ip: e.ip }) },
-    { label: t('waf.host'), value: e.host },
-    { label: t('logs.request'), value: `${e.method} ${e.uri}`, mono: true },
-    { label: t('waf.http_status'), value: e.status },
-    { label: t('common.status'), value: e.blocked ? t('waf.blocked') : t('waf.detected') },
-    ...e.messages.map((m) => ({ label: `${t('waf.rule')} ${m.id}`, value: `[${m.severity}] ${m.message}${m.data ? `\n${m.data}` : ''}`, mono: true })),
-  ]
-})
-const evCols: DataTableColumns<Event> = [
-  { title: () => t('common.time'), key: 'time', width: 170, render: (e) => (e.time ? datetime(e.time, locale.value) : '') },
-  { title: () => t('common.ip'), key: 'ip', width: 270, render: (e) => h(IpGeo, { ip: e.ip }) },
-  { title: () => t('logs.request'), key: 'uri', ellipsis: { tooltip: true }, render: (e) => `${e.host} ${e.method} ${e.uri}` },
-  { title: () => t('common.status'), key: 'status', width: 110, render: (e) => h(NTag, { size: 'small', type: e.blocked ? 'error' : 'warning' }, () => (e.blocked ? t('waf.blocked') : t('waf.detected'))) },
-  {
-    title: () => t('waf.rules'),
-    key: 'messages',
-    width: 360,
-    render: (e) =>
-      h(NSpace, { size: 4, vertical: true }, () =>
-        e.messages.map((m) =>
-          h(NSpace, { size: 4, align: 'center', wrap: false }, () => [
-            h(NTooltip, null, { trigger: () => h(NTag, { size: 'tiny', type: sevType(m.severity) }, () => m.id), default: () => [m.message, m.data ? h('div', { style: 'opacity:.7' }, m.data) : null] }),
-            h('span', { style: 'font-size:12px' }, m.message.slice(0, 50)),
-            h(NButton, { size: 'tiny', quaternary: true, onClick: () => exclude(e, m.id) }, () => t('waf.exclude')),
-          ]),
-        ),
-      ),
-  },
-]
 </script>
 
 <template>
-  <n-card v-if="s" size="small" :title="t('waf.title')">
-    <template #header-extra><n-tag :type="s.enabled ? 'success' : 'default'" size="small">{{ s.enabled ? t('fw.on') : t('fw.off') }}</n-tag></template>
-    <n-form label-placement="left" label-width="140">
-      <n-form-item :label="t('waf.enable')">
-        <n-switch v-model:value="s.enabled" />
-        <span class="hint">{{ t('waf.enable_hint', { image }) }}</span>
-      </n-form-item>
-      <n-form-item :label="t('waf.engine')">
-        <n-radio-group v-model:value="s.engine">
-          <n-radio-button value="On">{{ t('waf.engines.On') }}</n-radio-button>
-          <n-radio-button value="DetectionOnly">{{ t('waf.engines.DetectionOnly') }}</n-radio-button>
-        </n-radio-group>
-      </n-form-item>
-      <n-form-item :label="t('waf.paranoia')">
-        <n-select v-model:value="s.paranoia" :options="[1, 2, 3, 4].map((n) => ({ label: t(`waf.pl.${n}`), value: n }))" style="width: 320px" />
-      </n-form-item>
-      <n-form-item :label="t('waf.anomaly')">
-        <n-input-number v-model:value="s.anomaly" :min="1" :max="100" style="width: 120px" />
-        <span class="hint">{{ t('waf.anomaly_hint') }}</span>
-      </n-form-item>
-      <n-button type="primary" @click="save">{{ t('waf.save_apply') }}</n-button>
-    </n-form>
-  </n-card>
-
-  <n-card size="small" :title="t('waf.sites')" style="margin-top: 16px">
-    <n-alert v-if="s && !s.enabled" type="default" :show-icon="false" style="margin-bottom: 8px">{{ t('waf.sites_off') }}</n-alert>
-    <n-data-table size="small" :columns="siteCols" :data="sites" :row-key="(x: SiteWAF) => x.id" />
-  </n-card>
-
-  <n-card size="small" :title="t('waf.events')" style="margin-top: 16px">
-    <template #header-extra>
-      <n-space>
-        <n-input v-model:value="q" size="small" clearable :placeholder="t('logs.filter_kw')" style="width: 200px" @keyup.enter="loadEvents" />
-        <n-button size="small" @click="loadEvents">{{ t('common.refresh') }}</n-button>
-        <AiButton :prompt="t('ai.prompt_waf')" />
-      </n-space>
-    </template>
-    <n-data-table size="small" :columns="evCols" :data="events" :loading="loading" :pagination="{ pageSize: 20 }" :row-props="(e: Event) => ({ style: 'cursor: pointer', onClick: () => (ev = e) })" :scroll-x="1200" />
-  </n-card>
+  <n-tabs v-model:value="tab" type="line" animated>
+    <n-tab-pane name="settings" :tab="t('waf.tabs.settings')">
+      <n-card v-if="s && ps" size="small">
+        <div class="rows">
+          <div class="row">
+            <div class="label"><b>{{ t('waf.enable') }}</b><span>{{ t('waf.enable_hint', { image }) }}</span></div>
+            <n-switch v-model:value="s.enabled" />
+          </div>
+          <div class="row">
+            <div class="label"><b>{{ t('waf.engine') }}</b><span>{{ t('waf.engine_hint') }}</span></div>
+            <n-radio-group v-model:value="s.engine" size="small">
+              <n-radio-button value="On">{{ t('waf.engines.On') }}</n-radio-button>
+              <n-radio-button value="DetectionOnly">{{ t('waf.engines.DetectionOnly') }}</n-radio-button>
+            </n-radio-group>
+          </div>
+          <div class="row">
+            <div class="label"><b>{{ t('waf.paranoia') }}</b><span>{{ t(`waf.pl_hint.${s.paranoia}`) }} {{ t('waf.pl_rules', { n: activeRules }) }}</span></div>
+            <n-select v-model:value="s.paranoia" :options="[1, 2, 3, 4].map((n) => ({ label: t(`waf.pl.${n}`), value: n }))" size="small" class="ctl" />
+          </div>
+          <div class="row">
+            <div class="label"><b>{{ t('waf.anomaly') }}</b><span>{{ t('waf.anomaly_hint') }}</span></div>
+            <n-input-number v-model:value="s.anomaly" :min="1" :max="100" size="small" style="width: 110px" />
+          </div>
+          <div class="row">
+            <div class="label"><b>{{ t('rules.title') }}</b><span>{{ t('waf.rules_switch_hint') }}</span></div>
+            <n-switch v-model:value="ps.rules_on" />
+          </div>
+          <div class="row">
+            <div class="label"><b>{{ t('waf.block_status') }}</b><span>{{ t('waf.block_status_hint') }}</span></div>
+            <n-select v-model:value="ps.block_status" :options="statusOptions" size="small" style="width: 130px" />
+          </div>
+        </div>
+        <n-button type="primary" style="margin-top: 12px" @click="save">{{ t('waf.save_apply') }}</n-button>
+      </n-card>
+      <n-alert type="default" :show-icon="false" style="margin-top: 12px">{{ t('waf.layers') }}</n-alert>
+    </n-tab-pane>
+    <n-tab-pane name="rules" :tab="t('waf.tabs.rules')" display-directive="show:lazy">
+      <SecRules :paranoia="s?.paranoia ?? 1" @changed="load(); emit('changed')" />
+    </n-tab-pane>
+    <n-tab-pane name="crs" :tab="t('waf.tabs.crs')" display-directive="show:lazy">
+      <SecCRS :focus="focusRule" @task="(id: string, title: string) => (task = { id, title })" />
+    </n-tab-pane>
+    <n-tab-pane name="events" :tab="t('waf.tabs.events')" display-directive="show:lazy">
+      <SecEvents @crs="openRule" @changed="emit('changed')" @task="(id: string, title: string) => (task = { id, title })" />
+    </n-tab-pane>
+    <n-tab-pane name="pages" :tab="t('waf.tabs.pages')" display-directive="show:lazy">
+      <SecErrPages />
+    </n-tab-pane>
+  </n-tabs>
   <TaskModal :task-id="task?.id ?? null" :title="task?.title ?? ''" @close="task = null; load()" @done="load" />
-  <DetailDrawer :show="!!ev" :title="ev ? `${ev.method} ${ev.host}` : ''" :rows="evRows" :width="600" @close="ev = null" />
 </template>
 
 <style scoped>
-.hint {
-  margin-left: 12px;
+.rows {
+  display: flex;
+  flex-direction: column;
+}
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.14);
+}
+.row:last-child {
+  border-bottom: 0;
+}
+.label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 280px;
+}
+.label span {
   font-size: 12px;
   opacity: 0.65;
+}
+.ctl {
+  width: min(320px, 100%);
 }
 </style>

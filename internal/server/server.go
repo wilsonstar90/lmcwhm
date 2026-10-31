@@ -27,6 +27,7 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/cron"
 	"github.com/wilsonstar90/lmcwhm/internal/database"
 	"github.com/wilsonstar90/lmcwhm/internal/dockermgr"
+	"github.com/wilsonstar90/lmcwhm/internal/errpages"
 	"github.com/wilsonstar90/lmcwhm/internal/files"
 	"github.com/wilsonstar90/lmcwhm/internal/fileshare"
 	"github.com/wilsonstar90/lmcwhm/internal/firewall"
@@ -75,6 +76,7 @@ type Deps struct {
 	GeoIP    *geoip.DB
 	Firewall *firewall.Service
 	Protect  *protect.Service
+	ErrPages *errpages.Service
 	WAF      *security.WAF
 	CrowdSec *security.CrowdSec
 	Backup   *backup.Service

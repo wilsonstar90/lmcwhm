@@ -22,7 +22,8 @@ var errForbidden = errors.New("auth.forbidden")
 var moduleOf = map[string]string{
 	"auth": "", "tasks": "", "geoip": "", "openapi.json": "",
 	"sites": "website", "routes": "website", "web": "website", "wordpress": "website", "sitestats": "website", "varnish": "website",
-	"dns":       "domains",
+	"dns": "domains", "forwards": "domains",
+	"ui":        "",
 	"databases": "database",
 	"docker":    "docker",
 	"apps":      "appstore", "php": "appstore",
@@ -35,7 +36,7 @@ var moduleOf = map[string]string{
 	"logs":      "logs",
 	"probes":    "uptime",
 	"alerts":    "alerts",
-	"firewall":  "security", "security": "security", "crowdsec": "security", "waf": "security", "tamper": "security", "malware": "security", "secscan": "security",
+	"firewall":  "security", "security": "security", "crowdsec": "security", "waf": "security", "protect": "security", "errpages": "security", "tamper": "security", "malware": "security", "secscan": "security",
 	"backups": "backup", "snapshots": "backup",
 	"toolbox": "toolbox",
 	"mail":    "mail",

@@ -193,7 +193,8 @@
       "invalid_ip": "許可 IP の形式が不正",
       "invalid_domain": "ドメイン形式が不正",
       "invalid_language": "未対応の言語",
-      "basic_auth_password_required": "BasicAuth パスワードを設定してください"
+      "basic_auth_password_required": "BasicAuth パスワードを設定してください",
+      "invalid_menu": "メニュー設定が無効です"
     },
     "ssl": {
       "invalid_pair": "証明書と鍵が一致しないか不正です"
@@ -330,7 +331,8 @@
       "forward_port_taken": "ポート {port} は使用中です"
     },
     "waf": {
-      "invalid_settings": "WAF 設定が無効です"
+      "invalid_settings": "WAF 設定が無効です",
+      "crs_unavailable": "WAF がオフか nginx が停止中のため OWASP ルールを読めません"
     },
     "crowdsec": {
       "not_installed": "CrowdSec が動作していません",
@@ -451,6 +453,13 @@
       "invalid_settings": "無効な設定",
       "not_found": "ルールが見つかりません",
       "builtin": "組み込みルールは削除できません。オフにするか元に戻してください"
+    },
+    "errpages": {
+      "invalid_page": "無効なページ：名前と内容（最大 256 KB）が必要です",
+      "invalid_mapping": "無効な割り当て：ステータスは 400–599、ページは既存のもののみ",
+      "not_found": "ページが見つかりません",
+      "in_use": "使用中のページです。先に割り当てを変更してください",
+      "builtin": "組み込みページは削除できません。元に戻してください"
     }
   },
   "task": {
@@ -1313,7 +1322,26 @@
     "no_site": "{host} を処理するサイトがありません",
     "host": "ホスト",
     "http_status": "HTTP ステータス",
-    "rule": "ルール"
+    "rule": "ルール",
+    "tabs": {
+      "settings": "設定",
+      "rules": "専用ルール",
+      "crs": "OWASP ルール",
+      "events": "ブロックログ",
+      "pages": "エラーページ"
+    },
+    "engine_hint": "OWASP ルールのみに影響します。専用ルールはそれぞれブロックか検知のみかを選べます。",
+    "pl_hint": {
+      "1": "基本保護。誤検知が最も少ない。",
+      "2": "ルールを追加。ほとんどのサイト向け。",
+      "3": "厳格。ブロックログから誤検知を除外して調整します。",
+      "4": "非常に厳格。高リスクのサイトのみ。"
+    },
+    "pl_rules": "このレベルで有効な専用ルール：{n} 件。",
+    "rules_switch_hint": "入口（HAProxy）で実行し、OWASP がオフでも動作します。パラノイアレベル以下のルールのみ有効です。",
+    "block_status": "拒否時のステータス",
+    "block_status_hint": "IP / UA / URL ブロックリストとサイト保護が返すステータス（CC は常に 429、専用ルールは個別設定）。444 は接続を切断します。",
+    "layers": "2 層構成：入口（HAProxy）でリスト・サイト保護・専用ルールを先に適用し、その後 nginx 内の OWASP ルール（ModSecurity）が動作します。両方の記録がブロックログに表示されます。"
   },
   "cs": {
     "intro": "CrowdSec はサイトと SSH のログを読み、攻撃（総当たり、スキャン、CVE 探索）を検知してブロックを発行し、パネルのファイアウォールが実施します。",
@@ -2505,14 +2533,16 @@
       "cdn_only": "CDN 限定",
       "idc": "IDC 拒否",
       "crawler": "スクレイパー",
-      "cc": "CC（回 / 10 秒）"
+      "cc": "CC（回 / 10 秒）",
+      "waf": "WAF"
     },
     "tips": {
       "fake_spider": "検索エンジンや AI クローラーを名乗る User-Agent が公式 IP 範囲外から来た場合に拒否します。「クラウドリスト → ソース」で信頼リストを有効にしたクローラーのみ検査します。",
       "cdn_only": "CDN（Cloudflare または設定した CDN）経由のリクエストのみ受け付け、サーバー IP への直接アクセスを防ぎます。プロキシ有効のサイトでのみ使用してください。",
       "idc": "クラウド / データセンターの IP（AWS、Azure、Alibaba、Tencent、DigitalOcean など）を拒否します（信頼クローラーと許可 IP は除外）。GeoIP の ASN データベースが必要です。",
       "crawler": "一般的なスクレイパーや悪質ボットの User-Agent（python-requests、curl、Scrapy、AhrefsBot など）を拒否します。リストは「保護設定」で変更できます。",
-      "cc": "訪問者 IP ごとの 10 秒あたりの最大リクエスト数。超えると 429。0 = オフ。"
+      "cc": "訪問者 IP ごとの 10 秒あたりの最大リクエスト数。超えると 429。0 = オフ。",
+      "waf": "このサイトの OWASP ルール（ModSecurity）。先に WAF を有効にしてください。"
     },
     "off": "オフ",
     "log": "ブロックログ",
@@ -2556,7 +2586,10 @@
       "rule": "専用ルール {code}",
       "rate": "レート制限",
       "site": "サイト / WAF"
-    }
+    },
+    "excluded": "{n} 件除外",
+    "excl_title": "{domain}：除外する OWASP ルール",
+    "excl_hint": "このサイトで実行しない CRS ルール ID（例: 誤検知の 942100）。"
   },
   "rules": {
     "title": "専用ルール",
@@ -2664,7 +2697,13 @@
         "name": "CVE-2023-4634",
         "desc": "既定でオン。Media Library Assistant ≤ 3.09 の mla-stream-image.php による RCE をブロック"
       }
-    }
+    },
+    "level": "レベル",
+    "inactive": "無効",
+    "action": "動作",
+    "block": "ブロック",
+    "detect": "検知のみ",
+    "status": "ステータス"
   },
   "dom": {
     "intro": "ドメインごとに 1 行（エイリアスとサブドメインも同じ行）。「管理」で接続先（サイト・Docker・URL・パススルー・リダイレクト）、エイリアス、SSL、DNS を変更します。サイト自体の PHP・実行環境・リライトはサイト設定で行います。",
@@ -2739,5 +2778,113 @@
     "note_proto": "TCP・UDP・両方に対応。ローカルへの転送では訪問者の実 IP を保持します。",
     "note_firewall": "ファイアウォールは転送された接続を自動で許可します。Linode Cloud Firewall を使う場合は待ち受けポートを開放してください。",
     "note_remote": "他サーバーへの転送は IPv4 のみで、SNAT されます（相手からはこのサーバーが送信元に見えます）。"
+  },
+  "crs": {
+    "cats": {
+      "913": "スキャナー検知",
+      "920": "プロトコル準拠",
+      "921": "プロトコル攻撃",
+      "922": "マルチパート攻撃",
+      "930": "ローカルファイルインクルージョン",
+      "931": "リモートファイルインクルージョン",
+      "932": "リモートコマンド実行",
+      "933": "PHP インジェクション",
+      "934": "汎用攻撃（Node.js・Ruby など）",
+      "941": "クロスサイトスクリプティング",
+      "942": "SQL インジェクション",
+      "943": "セッション固定",
+      "944": "Java 攻撃",
+      "950": "情報漏えい",
+      "951": "SQL エラー漏えい",
+      "952": "Java 漏えい",
+      "953": "PHP 漏えい",
+      "954": "IIS 漏えい",
+      "955": "Web シェル"
+    },
+    "disable": "ルールをオフ",
+    "enable": "ルールをオン",
+    "severity": "重大度",
+    "hits": "24 時間の検知",
+    "excluded_on": "除外しているサイト",
+    "all_sites": "全サイト",
+    "exclude_site": "サイトで除外…",
+    "exclude_title": "ルール {id} をサイトで除外",
+    "unavailable": "WAF（OWASP）が有効で nginx が動作中のときに表示されます。",
+    "any_level": "全レベル",
+    "search": "ID / 説明で検索",
+    "hit_only": "検知ありのみ",
+    "hint": "全サイトでオフのルールはどのサイトでも実行されません（現在 {n} 件）。「サイトで除外」はそのサイトでのみ除外します。灰色のレベルは現在のパラノイアレベルより高く、実行されません。"
+  },
+  "evt": {
+    "title": "ブロックログ",
+    "all_sources": "すべてのソース",
+    "all_actions": "すべての結果",
+    "all_sites": "すべてのサイト",
+    "sources": {
+      "waf": "OWASP",
+      "rule": "専用ルール",
+      "list": "UA / URL ブロック",
+      "ip": "IP ブロック",
+      "protection": "サイト保護",
+      "cc": "CC"
+    },
+    "actions": {
+      "blocked": "ブロック",
+      "detected": "検知",
+      "limited": "制限"
+    },
+    "request": "リクエスト",
+    "action": "結果",
+    "reason": "理由",
+    "ops": "操作",
+    "search": "IP / URL / ルール",
+    "exclude_on": "{site} で CRS {id} を除外",
+    "rule_off": "このルールをオフ",
+    "rule_block": "ブロックに変更",
+    "rule_detect": "検知のみに変更",
+    "block_ip": "{ip} をブロック",
+    "allow_url": "{path} を URL 許可リストに追加"
+  },
+  "ep": {
+    "library": "ページ一覧",
+    "new_name": "新しいページ",
+    "add": "ページを追加",
+    "copy": "複製",
+    "reset_confirm": "組み込みの内容に戻しますか？",
+    "delete_confirm": "このページを削除しますか？",
+    "preview": "プレビュー",
+    "vars": {
+      "status": "ステータス",
+      "host": "ドメイン",
+      "request_uri": "URL",
+      "remote_addr": "訪問者 IP",
+      "time_local": "時刻",
+      "request_id": "リクエスト ID",
+      "lmcwhm_block_reason": "ブロック理由"
+    },
+    "builtin": {
+      "generic": "一般エラー",
+      "blocked": "リクエストをブロック",
+      "notfound": "ページが見つかりません",
+      "limit": "リクエストが多すぎます",
+      "maintenance": "利用不可 / メンテナンス"
+    },
+    "mapping": "ステータスごとのページ",
+    "all_sites": "全サイト（既定）",
+    "intercept": "バックエンド自身のエラーページ（PHP・プロジェクト・プロキシ）も置き換える",
+    "site_hint": "このサイトのみ。「継承」は上の既定を使います。",
+    "global_hint": "全サイトの既定。サイトごとに上書きできます。「カスタムエラーページ」がオンのサイトは自身の 404.html / 50x.html を優先します。",
+    "inherit": "継承",
+    "nginx_default": "nginx 既定",
+    "other_code": "その他のステータス",
+    "add_code": "追加"
+  },
+  "menucfg": {
+    "tab": "インターフェース",
+    "title": "メインメニュー",
+    "hint": "ドラッグまたは ↑↓ で並べ替え、スイッチで表示 / 非表示を切り替えます。ホームとパネル設定は非表示にできません。非表示のページも URL で開けます。",
+    "up": "上へ",
+    "down": "下へ",
+    "default": "既定に戻す"
   }
 }

@@ -193,7 +193,8 @@
       "invalid_ip": "授權 IP 格式錯誤",
       "invalid_domain": "網域格式錯誤",
       "invalid_language": "不支援的語言",
-      "basic_auth_password_required": "請設定 BasicAuth 密碼"
+      "basic_auth_password_required": "請設定 BasicAuth 密碼",
+      "invalid_menu": "選單設定無效"
     },
     "ssl": {
       "invalid_pair": "憑證與私鑰不相符或格式錯誤"
@@ -330,7 +331,8 @@
       "forward_port_taken": "連接埠 {port} 已被使用"
     },
     "waf": {
-      "invalid_settings": "WAF 設定無效"
+      "invalid_settings": "WAF 設定無效",
+      "crs_unavailable": "WAF 未開啟或 nginx 未執行，無法讀取 OWASP 規則"
     },
     "crowdsec": {
       "not_installed": "CrowdSec 未執行",
@@ -451,6 +453,13 @@
       "invalid_settings": "設定無效",
       "not_found": "找不到規則",
       "builtin": "內建規則不可刪除，可關閉或還原"
+    },
+    "errpages": {
+      "invalid_page": "頁面無效：需有名稱與內容（最多 256 KB）",
+      "invalid_mapping": "對應無效：狀態碼需為 400–599，頁面需存在",
+      "not_found": "找不到頁面",
+      "in_use": "頁面仍在使用中，請先修改對應",
+      "builtin": "內建頁面不可刪除，可還原"
     }
   },
   "task": {
@@ -1313,7 +1322,26 @@
     "no_site": "沒有網站處理 {host}",
     "host": "主機",
     "http_status": "HTTP 狀態碼",
-    "rule": "規則"
+    "rule": "規則",
+    "tabs": {
+      "settings": "設定",
+      "rules": "專屬規則",
+      "crs": "OWASP 規則",
+      "events": "攔截記錄",
+      "pages": "錯誤頁面"
+    },
+    "engine_hint": "只影響 OWASP 規則；專屬規則每條可自行選擇攔截或只偵測。",
+    "pl_hint": {
+      "1": "基本保護，誤判最少。",
+      "2": "加入更多規則，適合大部分網站。",
+      "3": "嚴格，需依攔截記錄排除誤判。",
+      "4": "極嚴格，只適合高風險網站。"
+    },
+    "pl_rules": "此等級下生效的專屬規則：{n} 條。",
+    "rules_switch_hint": "在入口（HAProxy）執行，OWASP 關閉也照用；只有等級 ≤ 偏執等級的規則會生效。",
+    "block_status": "攔截回應狀態碼",
+    "block_status_hint": "IP / UA / URL 黑名單與網站防護攔截時的狀態碼（CC 固定 429，專屬規則各自設定）。444 會直接斷線。",
+    "layers": "攔截分兩層：入口（HAProxy）先執行黑白名單、網站防護與專屬規則，再到 nginx 內的 OWASP 規則（ModSecurity）。兩層的記錄都在「攔截記錄」。"
   },
   "cs": {
     "intro": "CrowdSec 讀取網站與 SSH 日誌，偵測攻擊（暴力破解、掃描、CVE 探測）並發出封鎖，由面板防火牆執行。",
@@ -2505,14 +2533,16 @@
       "cdn_only": "僅限 CDN",
       "idc": "禁 IDC",
       "crawler": "爬蟲防護",
-      "cc": "CC 防禦（次 / 10 秒）"
+      "cc": "CC 防禦（次 / 10 秒）",
+      "waf": "WAF"
     },
     "tips": {
       "fake_spider": "User-Agent 自稱搜尋引擎或 AI 爬蟲，但 IP 不在其官方 IP 段 → 攔截。只檢查已在「雲端黑白名單 → 來源」開啟信任名單的爬蟲。",
       "cdn_only": "只接受經 CDN（Cloudflare 或你設定的 CDN）連入的請求，防止繞過 CDN 直接存取伺服器 IP。網站需開啟橘雲。",
       "idc": "攔截雲端 / 機房 IP（AWS、Azure、阿里雲、騰訊雲、DigitalOcean…），信任的爬蟲與白名單除外。需要 IP 歸屬地 ASN 資料庫。",
       "crawler": "攔截常見採集器與惡意爬蟲的 User-Agent（python-requests、curl、Scrapy、AhrefsBot…），清單在「防護設定」修改。",
-      "cc": "每個訪客 IP 在 10 秒內最多請求次數，超過回 429；0 = 關閉。"
+      "cc": "每個訪客 IP 在 10 秒內最多請求次數，超過回 429；0 = 關閉。",
+      "waf": "此網站的 OWASP 規則（ModSecurity）開關；需先在 WAF 設定開啟。"
     },
     "off": "關",
     "log": "攔截記錄",
@@ -2556,7 +2586,10 @@
       "rule": "專屬規則 {code}",
       "rate": "限流",
       "site": "網站 / WAF"
-    }
+    },
+    "excluded": "排除 {n}",
+    "excl_title": "{domain}：排除 OWASP 規則",
+    "excl_hint": "在此網站不執行的 CRS 規則 ID（例如誤判的 942100）。"
   },
   "rules": {
     "title": "專屬規則",
@@ -2664,7 +2697,13 @@
         "name": "CVE-2023-4634",
         "desc": "預設開啟，攔截 Media Library Assistant ≤ 3.09 經 mla-stream-image.php 的遠端程式碼執行"
       }
-    }
+    },
+    "level": "等級",
+    "inactive": "未生效",
+    "action": "動作",
+    "block": "攔截",
+    "detect": "只偵測",
+    "status": "狀態碼"
   },
   "dom": {
     "intro": "每個網域一列（別名與子網域在同一列）。按「管理」修改它連到哪裡（網站、Docker、網址、直通、轉址）、別名、SSL 與 DNS；網站本身的 PHP、執行環境、偽靜態等則在網站設定。",
@@ -2739,5 +2778,113 @@
     "note_proto": "支援 TCP、UDP 或兩者；保留訪客真實 IP（轉到本機時）。",
     "note_firewall": "防火牆會自動放行轉發的連線；如果使用 Linode Cloud Firewall，記得在那裡開放監聽連接埠。",
     "note_remote": "轉到其他伺服器只支援 IPv4，並會做 SNAT（對方看到的來源是此伺服器）。"
+  },
+  "crs": {
+    "cats": {
+      "913": "掃描器偵測",
+      "920": "協議規範",
+      "921": "協議攻擊",
+      "922": "Multipart 攻擊",
+      "930": "本地檔案包含（LFI）",
+      "931": "遠端檔案包含（RFI）",
+      "932": "遠端命令執行",
+      "933": "PHP 注入",
+      "934": "通用攻擊（Node.js、Ruby…）",
+      "941": "跨站腳本（XSS）",
+      "942": "SQL 注入",
+      "943": "Session 固定",
+      "944": "Java 攻擊",
+      "950": "資料洩露",
+      "951": "SQL 錯誤洩露",
+      "952": "Java 洩露",
+      "953": "PHP 洩露",
+      "954": "IIS 洩露",
+      "955": "Web shell"
+    },
+    "disable": "停用規則",
+    "enable": "啟用規則",
+    "severity": "嚴重性",
+    "hits": "24 小時命中",
+    "excluded_on": "已排除的網站",
+    "all_sites": "全站",
+    "exclude_site": "此站排除…",
+    "exclude_title": "在網站排除規則 {id}",
+    "unavailable": "開啟 WAF（OWASP）且 nginx 執行中才會列出規則。",
+    "any_level": "所有等級",
+    "search": "搜尋 ID / 說明",
+    "hit_only": "只看有命中",
+    "hint": "關閉「全站」的規則不會在任何網站執行（目前 {n} 條）；「此站排除」只在該網站不執行。灰色等級高於目前偏執等級，不會執行。"
+  },
+  "evt": {
+    "title": "攔截記錄",
+    "all_sources": "所有來源",
+    "all_actions": "所有結果",
+    "all_sites": "所有網站",
+    "sources": {
+      "waf": "OWASP",
+      "rule": "專屬規則",
+      "list": "UA / URL 黑名單",
+      "ip": "IP 黑名單",
+      "protection": "網站防護",
+      "cc": "CC"
+    },
+    "actions": {
+      "blocked": "已攔截",
+      "detected": "已偵測",
+      "limited": "已限流"
+    },
+    "request": "請求",
+    "action": "結果",
+    "reason": "原因",
+    "ops": "操作",
+    "search": "IP / 網址 / 規則",
+    "exclude_on": "在 {site} 排除 CRS {id}",
+    "rule_off": "停用此專屬規則",
+    "rule_block": "改為攔截",
+    "rule_detect": "改為只偵測",
+    "block_ip": "封鎖 {ip}",
+    "allow_url": "將 {path} 加入 URL 白名單"
+  },
+  "ep": {
+    "library": "頁面庫",
+    "new_name": "新頁面",
+    "add": "新增頁面",
+    "copy": "複製",
+    "reset_confirm": "還原為內建內容？",
+    "delete_confirm": "刪除此頁面？",
+    "preview": "預覽",
+    "vars": {
+      "status": "狀態碼",
+      "host": "網域",
+      "request_uri": "網址",
+      "remote_addr": "訪客 IP",
+      "time_local": "時間",
+      "request_id": "請求 ID",
+      "lmcwhm_block_reason": "攔截原因"
+    },
+    "builtin": {
+      "generic": "通用錯誤",
+      "blocked": "請求已被攔截",
+      "notfound": "找不到頁面",
+      "limit": "請求過於頻繁",
+      "maintenance": "暫停服務 / 維護"
+    },
+    "mapping": "狀態碼對應頁面",
+    "all_sites": "全站預設",
+    "intercept": "接管後端錯誤頁（PHP / 專案 / 反向代理自己的錯誤頁也換成這裡設定的）",
+    "site_hint": "只修改此網站；「沿用全站」使用上方全站預設。",
+    "global_hint": "所有網站的預設；每個網站可再覆寫。網站開啟「自訂錯誤頁」時會優先使用它自己的 404.html / 50x.html。",
+    "inherit": "沿用全站",
+    "nginx_default": "nginx 預設",
+    "other_code": "其他狀態碼",
+    "add_code": "加入"
+  },
+  "menucfg": {
+    "tab": "介面",
+    "title": "主選單",
+    "hint": "拖曳或用 ↑↓ 排序，開關控制是否在選單顯示。首頁與面板設定不可隱藏；隱藏的頁面直接輸入網址仍可進入。",
+    "up": "上移",
+    "down": "下移",
+    "default": "還原預設"
   }
 }

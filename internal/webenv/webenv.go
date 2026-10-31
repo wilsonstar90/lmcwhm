@@ -114,6 +114,8 @@ type Env struct {
 	Patterns func() []PatternList
 	// Protection returns the website protection and dedicated rules.
 	Protection func() Protection
+	// ErrorPages returns the custom 4xx / 5xx pages.
+	ErrorPages func() ErrorPages
 }
 
 // WAFSettings drive ModSecurity + OWASP CRS in the nginx container.
@@ -122,6 +124,8 @@ type WAFSettings struct {
 	Engine   string `json:"engine"`   // On | DetectionOnly
 	Paranoia int    `json:"paranoia"` // 1-4
 	Anomaly  int    `json:"anomaly"`  // inbound anomaly score threshold (CRS default 5)
+	// Disabled CRS rule IDs (every site).
+	Disabled []string `json:"disabled"`
 }
 
 func (e *Env) waf() WAFSettings {
@@ -467,6 +471,7 @@ type edgeData struct {
 	CDNHeader   string // the custom CDN's address header ("" = none)
 	Rules       []ruleData
 	Body        bool // a rule reads the request body
+	BlockStatus int
 }
 
 type passBackend struct {
@@ -526,6 +531,7 @@ func (e *Env) edgeFiles(sites []Site, pass []Passthrough) (map[string][]byte, er
 	files["maps/cdn_cf.lst"], files["maps/cdn_custom.lst"] = cdnLists(c)
 	e.patternFiles(files)
 	data.Rules, data.Body = e.protectFiles(sites, files)
+	data.BlockStatus = BlockStatus(e.protection().BlockStatus)
 	if len(c.Ranges) > 0 && ValidHeader(c.Header) {
 		data.CDNHeader = c.Header
 	}
@@ -560,7 +566,12 @@ func (e *Env) writeEdge(sites []Site, pass []Passthrough) error {
 func (e *Env) nginxFiles(sites []Site) (map[string][]byte, error) {
 	files := map[string][]byte{}
 	w := e.waf()
-	main, err := render("nginx.conf.tmpl", map[string]any{"NginxPort": NginxPort, "WAF": w.Enabled, "ConfDir": nginxConfDir})
+	ep := e.errorPages()
+	for name, html := range ep.Pages {
+		files["errors/"+name+".html"] = html
+	}
+	main, err := render("nginx.conf.tmpl", map[string]any{"NginxPort": NginxPort, "WAF": w.Enabled, "ConfDir": nginxConfDir,
+		"ErrorPages": errorLines(ep, "", false), "ErrDir": errDir, "WAFDisabled": wafExclusions(w.Enabled, w.Disabled)})
 	if err != nil {
 		return nil, err
 	}
@@ -579,6 +590,8 @@ func (e *Env) nginxFiles(sites []Site) (map[string][]byte, error) {
 			"Upstream": s.Upstream, "WAFOff": w.Enabled && s.WAFOff, "WAFExclude": wafExclusions(w.Enabled, s.WAFExclude),
 			"Adv": s.Advanced, "ReqZone": zone("req", s.Domain), "ConnZone": zone("conn", s.Domain), "DenyUA": uaRegex(s.Advanced.DenyUA),
 			"Redirect": s.Redirect, "RedirectCode": redirectCode(s.RedirectCode), "RedirectPath": s.RedirectPath,
+			"BlockStatuses": BlockStatuses,
+			"ErrorPages":    errorLines(ep, s.Domain, s.Advanced.ErrorPages), "ErrDir": errDir, "Intercept": ep.Intercept[s.Domain],
 		})
 		if err != nil {
 			return nil, err
@@ -618,12 +631,13 @@ func (e *Env) writeNginx(sites []Site) error {
 	if err != nil {
 		return err
 	}
-	confd := filepath.Join(e.NginxDir(), "conf.d")
-	// Remove vhosts of deleted sites.
-	entries, _ := os.ReadDir(confd)
-	for _, ent := range entries {
-		if _, keep := files[filepath.Join("conf.d", ent.Name())]; !keep {
-			os.Remove(filepath.Join(confd, ent.Name()))
+	// Remove vhosts of deleted sites and deleted error pages.
+	for _, dir := range []string{"conf.d", "errors"} {
+		entries, _ := os.ReadDir(filepath.Join(e.NginxDir(), dir))
+		for _, ent := range entries {
+			if _, keep := files[filepath.Join(dir, ent.Name())]; !keep {
+				os.Remove(filepath.Join(e.NginxDir(), dir, ent.Name()))
+			}
 		}
 	}
 	for name, body := range files {

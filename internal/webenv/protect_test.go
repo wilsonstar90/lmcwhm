@@ -17,6 +17,9 @@ func TestProtectionConfig(t *testing.T) {
 				{Code: "wp-1002", All: true, Conds: []EdgeCond{{Field: "path", Op: "suffix", Values: []string{"/xmlrpc.php"}}}},
 				{Code: "wp-1001", Conds: []EdgeCond{{Field: "path", Op: "prefix", Values: []string{"/wp-json/wp/v2/users"}}, {Field: "query", Op: "contains", Values: []string{"rest_route=/wp/v2/users"}}}},
 				{Code: "c7", All: true, Conds: []EdgeCond{{Field: "body", Op: "contains", Values: []string{"give_title"}}, {Field: "path", Op: "prefix", Negate: true, Values: []string{"/wp-admin/"}}}},
+				{Code: "c9", Detect: true, Conds: []EdgeCond{{Field: "ua", Op: "contains", Values: []string{"probe"}}}},
+				{Code: "c10", Status: 404, Conds: []EdgeCond{{Field: "path", Op: "prefix", Values: []string{"/old"}}}},
+				{Code: "c11", Status: 999, Conds: []EdgeCond{{Field: "path", Op: "prefix", Values: []string{"/x"}}}},
 				{Code: "BAD CODE", Conds: []EdgeCond{{Field: "path", Op: "equals", Values: []string{"/x"}}}},
 				{Code: "c8", Conds: []EdgeCond{{Field: "host", Op: "equals", Values: []string{"/x"}}}},
 			},
@@ -36,12 +39,14 @@ func TestProtectionConfig(t *testing.T) {
 	cfg := string(edge["haproxy.cfg"])
 	d := e.EdgeDir()
 	for _, want := range []string{
-		"str(rule-wp-1002) if !blocked guard !ip_allow !list_pass !acme { path -m end -i -f " + d + "/maps/rules/wp-1002_0.lst }",
-		"str(rule-wp-1001) if !blocked guard !ip_allow !list_pass !acme { path -m beg -i -f " + d + "/maps/rules/wp-1001_0.lst }",
-		"str(rule-wp-1001) if !blocked guard !ip_allow !list_pass !acme { query -m sub -i -f " + d + "/maps/rules/wp-1001_1.lst }",
+		"str(403:rule-wp-1002) if !blocked guard !ip_allow !list_pass !acme { path -m end -i -f " + d + "/maps/rules/wp-1002_0.lst }",
+		"str(403:rule-wp-1001) if !blocked guard !ip_allow !list_pass !acme { path -m beg -i -f " + d + "/maps/rules/wp-1001_0.lst }",
+		"str(403:rule-wp-1001) if !blocked guard !ip_allow !list_pass !acme { query -m sub -i -f " + d + "/maps/rules/wp-1001_1.lst }",
 		"{ req.body -m sub -i -f " + d + "/maps/rules/c7_0.lst } !{ path -m beg -i -f " + d + "/maps/rules/c7_1.lst }",
 		"option http-buffer-request", "stick-table type ipv6", "sc_http_req_rate(0),sub(txn.cc) gt 0",
-		"use_backend be_web if blocked", "http-request set-header X-Lmcwhm-Block %[var(txn.block)] if blocked",
+		"use_backend be_web if blocked",
+		"set-var(txn.detect) str(rule-c9) if !{ var(txn.detect) -m found } !blocked guard",
+		"str(404:rule-c10) if", "str(403:rule-c11) if", "str(429:cc) if", "set-header X-Lmcwhm-Detect %[var(txn.detect)]", "http-request set-header X-Lmcwhm-Block %[var(txn.block)] if blocked",
 	} {
 		if !strings.Contains(cfg, want) {
 			t.Errorf("haproxy.cfg missing %q", want)
@@ -54,7 +59,7 @@ func TestProtectionConfig(t *testing.T) {
 		t.Error("pattern files")
 	}
 	ng, _ := e.nginxFiles(sites)
-	if v := string(ng["conf.d/a.com.conf"]); !strings.Contains(v, "if ($http_x_lmcwhm_block = cc) {\n        return 429;") || !strings.Contains(v, "if ($http_x_lmcwhm_block) {\n        return 403;") {
+	if v := string(ng["conf.d/a.com.conf"]); !strings.Contains(v, "if ($lmcwhm_block_status = 429) {\n        return 429;") || !strings.Contains(v, "if ($lmcwhm_block_status = 404) {\n        return 404;") || !strings.Contains(v, "if ($lmcwhm_block_status = 444) {\n        return 444;") {
 		t.Errorf("vhost does not answer edge blocks:\n%s", v)
 	}
 	if p := e.RulePreview(EdgeRule{Code: "new", All: true, Conds: []EdgeCond{{Field: "ua", Op: "regex", Values: []string{"bot"}}}}); !strings.Contains(p, "req.hdr(user-agent) -m reg -i") || !strings.Contains(p, "\nbot\n") {

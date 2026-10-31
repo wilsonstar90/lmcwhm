@@ -31,13 +31,31 @@ type Protection struct {
 	CrawlerUA []string
 	IDC       []string // data-centre ranges
 	Rules     []EdgeRule
+	// BlockStatus answers IP / list / protection refusals (default 403).
+	BlockStatus int
+}
+
+// BlockStatuses are the codes a refusal may answer with; 444 closes the
+// connection without a response.
+var BlockStatuses = []int{400, 401, 403, 404, 405, 406, 410, 418, 429, 444, 451, 500, 502, 503}
+
+// BlockStatus returns s when refusals may use it, else 403.
+func BlockStatus(s int) int {
+	for _, c := range BlockStatuses {
+		if c == s {
+			return s
+		}
+	}
+	return 403
 }
 
 // EdgeRule is a dedicated rule: refused when all (or any) conditions match.
 type EdgeRule struct {
-	Code  string
-	All   bool
-	Conds []EdgeCond
+	Code   string
+	All    bool
+	Conds  []EdgeCond
+	Detect bool // log a match, never refuse
+	Status int  // response when refusing (BlockStatuses; default 403)
 }
 
 // EdgeCond compares one part of the request with values (one must match).
@@ -69,8 +87,10 @@ func (e *Env) protection() Protection {
 }
 
 type ruleData struct {
-	Code  string
-	Lines []string // conditions after "if"
+	Code   string
+	Lines  []string // conditions after "if"
+	Detect bool
+	Status int
 }
 
 func lines(v []string) []byte {
@@ -136,7 +156,7 @@ func (e *Env) protectFiles(sites []Site, files map[string][]byte) (rules []ruleD
 // RuleConfig turns a rule into its edge conditions (after "if") and pattern
 // files (relative to dir); no lines when the rule cannot be expressed.
 func RuleConfig(dir string, r EdgeRule) (rd ruleData, files map[string][]byte, body bool) {
-	rd.Code, files = r.Code, map[string][]byte{}
+	rd.Code, rd.Detect, rd.Status, files = r.Code, r.Detect, BlockStatus(r.Status), map[string][]byte{}
 	if !ValidCode(r.Code) || len(r.Conds) == 0 {
 		return rd, nil, false
 	}
@@ -171,7 +191,11 @@ func (e *Env) RulePreview(r EdgeRule) string {
 	}
 	var b strings.Builder
 	for _, l := range rd.Lines {
-		fmt.Fprintf(&b, "http-request set-var(txn.block) str(rule-%s) if guard !ip_allow !list_pass !acme %s\n", rd.Code, l)
+		if rd.Detect {
+			fmt.Fprintf(&b, "http-request set-var(txn.detect) str(rule-%s) if guard !ip_allow !list_pass !acme %s\n", rd.Code, l)
+		} else {
+			fmt.Fprintf(&b, "http-request set-var(txn.block) str(%d:rule-%s) if guard !ip_allow !list_pass !acme %s\n", rd.Status, rd.Code, l)
+		}
 	}
 	names := make([]string, 0, len(files))
 	for n := range files {

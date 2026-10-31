@@ -463,10 +463,19 @@ task PATCH "/sites/$DBSITE" '{"waf_off":true}'
 code="$(curl -s -o /dev/null -w '%{http_code}' --resolve db.test:80:127.0.0.1 "http://db.test/index.php?id=1%27%20OR%20%271%27=%271")"
 [[ "$code" == 200 ]] || fail "per-site WAF off ignored: $code"
 task PATCH "/sites/$DBSITE" '{"waf_off":false}'
-task PUT /waf '{"enabled":false,"engine":"On","paranoia":1,"anomaly":5}'
+# The CRS rule list, the merged blocked log, and switching the rules that fired off for every site.
+api GET /waf/crs | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['available'], d; c=[x for x in d['categories'] if x['code']=='942'][0]; assert any(r['level']>1 for r in c['rules']) and any(r['hits']>0 for r in c['rules']), c['rules'][:3]" || fail "CRS rule list: $(api GET /waf/crs | head -c 300)"
+api GET '/security/events?source=waf&site=db.test' | python3 -c "import sys,json; e=json.load(sys.stdin)['items']; assert e and e[0]['source']=='waf' and e[0]['site']=='db.test' and e[0]['rule'].startswith('9'), e[:1]" || fail "WAF event not in the merged log"
+FIRED="$(api GET '/waf/events?lines=50' | python3 -c "import sys,json; e=[x for x in json.load(sys.stdin)['items'] if x['blocked']][0]; print(json.dumps([m['id'] for m in e['messages']]))")"
+task PUT /waf/crs/disabled "{\"ids\":$FIRED}"
+grep -q "SecRuleRemoveById" /opt/lmcwhm/web/nginx/nginx.conf || fail "disabled rules not in nginx.conf"
+code="$(curl -s -o /dev/null -w '%{http_code}' --resolve db.test:80:127.0.0.1 "http://db.test/index.php?id=1%27%20OR%20%271%27=%271")"
+[[ "$code" == 200 ]] || fail "rules switched off for every site still block: $code (ids $FIRED)"
+task PUT /waf/crs/disabled '{"ids":[]}'
+task PUT /waf '{"enabled":false,"engine":"On","paranoia":1,"anomaly":5,"disabled":[]}'
 [[ "$(docker inspect -f '{{.Config.Image}}' lmcwhm-nginx)" == nginx:stable ]] || fail "nginx not switched back"
 [[ "$(get80 db.test /index.php)" == "db-ok-42" ]] || fail "site down after WAF off"
-pass "WAF: CRS blocks SQL injection, events, per-site opt-out, switch back"
+pass "WAF: CRS blocks SQL injection, events, rule list, merged log, rules off for all sites, per-site opt-out, switch back"
 
 # CrowdSec: decisions are enforced in the firewall's ban sets.
 task POST /crowdsec/install '{"community":false}'

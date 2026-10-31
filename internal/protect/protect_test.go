@@ -113,3 +113,53 @@ func TestSites(t *testing.T) {
 		t.Fatalf("%+v", m)
 	}
 }
+
+func TestRuleLevelAndAction(t *testing.T) {
+	sv := newSvc(t)
+	ctx := context.Background()
+	level := 1
+	sv.Paranoia = func() int { return level }
+	sv.SaveSettings(ctx, Settings{RulesOn: true, IDC: defaultIDC})
+	strict, err := sv.SaveRule(ctx, Rule{Name: "strict", Enabled: true, All: true, Level: 3, Status: 410, Conds: []Cond{{Field: "path", Op: "prefix", Values: []string{"/a"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	probe, _ := sv.SaveRule(ctx, Rule{Name: "probe", Enabled: true, All: true, Action: "detect", Conds: []Cond{{Field: "ua", Op: "contains", Values: []string{"probe"}}}})
+	find := func() (s, p *webenv.EdgeRule) {
+		rules := sv.Edge(ctx).Rules
+		for i := range rules {
+			switch rules[i].Code {
+			case strict.Code:
+				s = &rules[i]
+			case probe.Code:
+				p = &rules[i]
+			}
+		}
+		return
+	}
+	if s, p := find(); s != nil || p == nil || !p.Detect {
+		t.Fatalf("level 1: strict %+v probe %+v", s, p)
+	}
+	level = 3
+	if s, _ := find(); s == nil || s.Status != 410 || s.Detect {
+		t.Fatalf("level 3: strict %+v", s)
+	}
+	for _, bad := range []Rule{
+		{Name: "x", Level: 5, Conds: []Cond{{Field: "path", Op: "prefix", Values: []string{"/a"}}}},
+		{Name: "x", Action: "log", Conds: []Cond{{Field: "path", Op: "prefix", Values: []string{"/a"}}}},
+		{Name: "x", Status: 200, Conds: []Cond{{Field: "path", Op: "prefix", Values: []string{"/a"}}}},
+	} {
+		if _, err := sv.SaveRule(ctx, bad); err == nil {
+			t.Errorf("accepted %+v", bad)
+		}
+	}
+	if err := sv.SetAction(ctx, strict.ID, "detect"); err != nil {
+		t.Fatal(err)
+	}
+	if s, _ := find(); !s.Detect {
+		t.Error("action not switched")
+	}
+	if _, err := sv.SaveSettings(ctx, Settings{BlockStatus: 302}); err == nil {
+		t.Error("block status 302 accepted")
+	}
+}

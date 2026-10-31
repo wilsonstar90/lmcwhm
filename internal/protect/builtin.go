@@ -69,3 +69,13 @@ var spiderUA = map[string][]string{
 	"perplexitybot": {"PerplexityBot"}, "perplexity_user": {"Perplexity-User"},
 	"all_ai": {"GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "PerplexityBot", "Perplexity-User"},
 }
+
+// levelOf is a built-in rule's paranoia level: hardening that can get in an
+// administrator's way starts at 2.
+func levelOf(r Rule) int {
+	switch r.Code {
+	case "wp-1004", "wp-1005", "wp-1006", "wp-1010":
+		return 2
+	}
+	return 1
+}

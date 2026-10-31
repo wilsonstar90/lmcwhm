@@ -4,13 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/wilsonstar90/lmcwhm/internal/logcenter"
 	"github.com/wilsonstar90/lmcwhm/internal/protect"
 	"github.com/wilsonstar90/lmcwhm/internal/webenv"
 )
@@ -23,13 +21,14 @@ func (s *Server) protectRoutes(r chi.Router) {
 	}
 	r.Get("/protect/sites", s.handleProtectSites)
 	r.Put("/protect/sites", s.handlePutProtectSites)
-	r.Get("/protect/sites/{domain}/blocked", s.handleProtectBlocked)
+	r.Get("/security/events", s.handleSecEvents)
 	r.Get("/protect/settings", s.handleProtectSettings)
 	r.Put("/protect/settings", s.handlePutProtectSettings)
 	r.Get("/protect/rules", s.handleProtectRules)
 	r.Post("/protect/rules", s.handleSaveProtectRule)
 	r.Put("/protect/rules/{id}", s.handleSaveProtectRule)
 	r.Post("/protect/rules/{id}/enabled", s.handleProtectRuleEnabled)
+	r.Post("/protect/rules/{id}/action", s.handleProtectRuleAction)
 	r.Post("/protect/rules/{id}/delete", s.handleDeleteProtectRule)
 	r.Post("/protect/rules/{id}/reset", s.handleResetProtectRule)
 	r.Post("/protect/rules/preview", s.handlePreviewProtectRule)
@@ -115,34 +114,6 @@ func (s *Server) handlePutProtectSites(w http.ResponseWriter, r *http.Request) {
 	s.applyPatterns(w, r, map[string]bool{"ok": true})
 }
 
-// handleProtectBlocked: the latest refused requests of one site, from its access log.
-func (s *Server) handleProtectBlocked(w http.ResponseWriter, r *http.Request) {
-	domain := chi.URLParam(r, "domain")
-	sites, err := s.Sites.List(r.Context())
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
-	}
-	known := false
-	for _, x := range sites {
-		known = known || x.Domain == domain
-	}
-	if !known {
-		writeErr(w, http.StatusNotFound, protect.ErrNotFound)
-		return
-	}
-	lines, _ := logcenter.Tail(filepath.Join(s.Sites.Env.WWWLogs, domain+".log"), 20000, "")
-	out := []logcenter.Access{}
-	for i := len(lines) - 1; i >= 0 && len(out) < 500; i-- {
-		a := logcenter.ParseAccess(lines[i])
-		if a.Status == 403 || a.Status == 429 || a.Status == 444 {
-			a.Raw = ""
-			out = append(out, a)
-		}
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": out})
-}
-
 func (s *Server) handleProtectSettings(w http.ResponseWriter, r *http.Request) {
 	st := s.Protect.Settings(r.Context())
 	writeJSON(w, http.StatusOK, map[string]any{"settings": st, "idc_ranges": s.Protect.IDCCount(r.Context())})
@@ -213,6 +184,22 @@ func (s *Server) handleProtectRuleEnabled(w http.ResponseWriter, r *http.Request
 	s.applyPatterns(w, r, map[string]bool{"ok": true})
 }
 
+func (s *Server) handleProtectRuleAction(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Action string `json:"action"`
+	}
+	if err := decode(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := s.Protect.SetAction(r.Context(), idParam(r), in.Action); err != nil {
+		writeProtectErr(w, err)
+		return
+	}
+	s.auditCat(r, "security", "protect.rule_action", strconv.FormatInt(idParam(r), 10)+"="+in.Action)
+	s.applyPatterns(w, r, map[string]bool{"ok": true})
+}
+
 func (s *Server) handleDeleteProtectRule(w http.ResponseWriter, r *http.Request) {
 	if err := s.Protect.DeleteRule(r.Context(), idParam(r)); err != nil {
 		writeProtectErr(w, err)
@@ -242,7 +229,7 @@ func (s *Server) handlePreviewProtectRule(w http.ResponseWriter, r *http.Request
 	if code == "" {
 		code = "new"
 	}
-	er := webenv.EdgeRule{Code: code, All: in.All}
+	er := webenv.EdgeRule{Code: code, All: in.All, Detect: in.Action == "detect", Status: in.Status}
 	for _, c := range in.Conds {
 		er.Conds = append(er.Conds, webenv.EdgeCond{Field: c.Field, Op: c.Op, Negate: c.Negate, Values: c.Values})
 	}

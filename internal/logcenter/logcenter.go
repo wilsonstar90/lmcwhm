@@ -96,11 +96,12 @@ type Access struct {
 	Referer string `json:"referer"`
 	UA      string `json:"ua"`
 	Host    string `json:"host"`
-	Block   string `json:"block,omitempty"` // why the edge refused it (ip, list, rule-1002, cc, …)
-	Raw     string `json:"raw,omitempty"`   // unparsed line
+	Block   string `json:"block,omitempty"`  // why the edge refused it (ip, list, rule-wp-1002, cc, …)
+	Detect  string `json:"detect,omitempty"` // a rule that only detects and matched
+	Raw     string `json:"raw,omitempty"`    // unparsed line
 }
 
-var accessRe = regexp.MustCompile(`^(\S+) - (\S+) \[([^\]]+)\] "([^"]*)" (\d{3}) (\d+) "([^"]*)" "([^"]*)"(?: "([^"]*)")?(?: "([^"]*)")?`)
+var accessRe = regexp.MustCompile(`^(\S+) - (\S+) \[([^\]]+)\] "([^"]*)" (\d{3}) (\d+) "([^"]*)" "([^"]*)"(?: "([^"]*)")?(?: "([^"]*)")?(?: "([^"]*)")?`)
 
 func ParseAccess(line string) Access {
 	m := accessRe.FindStringSubmatch(line)
@@ -110,6 +111,13 @@ func ParseAccess(line string) Access {
 	a := Access{IP: m[1], Referer: m[7], UA: m[8], Host: m[9], Block: m[10]}
 	if a.Block == "-" {
 		a.Block = ""
+	}
+	// Older lines may carry the raw "<status>:<reason>" header.
+	if len(a.Block) > 4 && a.Block[3] == ':' && a.Block[0] >= '0' && a.Block[0] <= '9' {
+		a.Block = a.Block[4:]
+	}
+	if a.Detect = m[11]; a.Detect == "-" {
+		a.Detect = ""
 	}
 	if t, err := time.Parse("02/Jan/2006:15:04:05 -0700", m[3]); err == nil {
 		a.Time = t.Unix()

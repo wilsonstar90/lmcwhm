@@ -234,7 +234,7 @@ func (sv *Service) Ingest(ctx context.Context, domain string) error {
 		case 5:
 			h.s5++
 		}
-		if Blocked(a.Status) {
+		if Blocked(a.Status) || a.Block != "" {
 			h.blocked++
 			addKey(day, "blocked_ip", a.IP, a.Bytes)
 		}

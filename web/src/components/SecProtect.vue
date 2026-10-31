@@ -4,17 +4,16 @@
 import { computed, h, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-  NAlert, NButton, NCard, NCheckbox, NDataTable, NDrawer, NDrawerContent, NInput, NInputNumber, NModal, NSelect, NSpace, NSwitch, NTag, NTooltip,
+  NAlert, NButton, NCard, NCheckbox, NDataTable, NDrawer, NDrawerContent, NDynamicTags, NInput, NInputNumber, NModal, NSelect, NSpace, NSwitch, NTag, NTooltip,
   useMessage, type DataTableColumns,
 } from 'naive-ui'
-import { get, put, ApiError } from '../api/client'
-import { datetime } from '../format'
-import IpGeo from './IpGeo.vue'
+import { get, patch, put, ApiError } from '../api/client'
+import SecEvents from './SecEvents.vue'
+import TaskModal from './TaskModal.vue'
 
 interface Prot { on: boolean; fake_spider: boolean; cdn_only: boolean; idc: boolean; crawler: boolean; cc: number }
 interface Row { domain: string; aliases: string[]; type: string; supported: boolean; proxied: boolean; protect: Prot; blocked: number; blocked_24h: number }
 interface Info { rules_on: boolean; spiders: string[]; has_asn: boolean }
-interface Access { time: number; ip: string; method: string; path: string; status: number; ua: string; block?: string }
 interface Settings { rules_on: boolean; crawlers: string[]; idc: { number: number; name: string }[] }
 
 const emit = defineEmits<{ changed: [] }>()
@@ -40,7 +39,7 @@ async function load() {
     loading.value = false
   }
 }
-onMounted(load)
+onMounted(() => { load(); loadWAF() })
 
 async function save(items: Record<string, Prot>) {
   try {
@@ -70,29 +69,31 @@ function applyBatch() {
 
 // ---- refused requests of one site ----
 const logSite = ref<string | null>(null)
-const logRows = ref<Access[]>([])
-async function openLog(d: string) {
-  logSite.value = d
-  logRows.value = []
+const openLog = (d: string) => (logSite.value = d)
+
+// ---- WAF (OWASP) per site ----
+interface SiteWAF { id: number; domain: string; waf_off: boolean; waf_exclude: string[] }
+const waf = ref<Record<string, SiteWAF>>({})
+const wafOn = ref(false)
+async function loadWAF() {
   try {
-    logRows.value = (await get<{ items: Access[] }>(`/protect/sites/${encodeURIComponent(d)}/blocked`)).items
+    const r = await get<{ settings: { enabled: boolean }; sites: (Omit<SiteWAF, 'waf_exclude'> & { waf_exclude: string[] | null })[] }>('/waf')
+    wafOn.value = r.settings.enabled
+    waf.value = Object.fromEntries(r.sites.map((x) => [x.domain, { ...x, waf_exclude: x.waf_exclude ?? [] }]))
+  } catch {
+    waf.value = {}
+  }
+}
+const task = ref<{ id: string; title: string } | null>(null)
+async function saveWAF(x: SiteWAF) {
+  try {
+    const r = await patch<{ task_id: string }>(`/sites/${x.id}`, { waf_off: x.waf_off, waf_exclude: x.waf_exclude })
+    task.value = { id: r.task_id, title: `WAF · ${x.domain}` }
   } catch (e) {
     fail(e)
   }
 }
-const reason = (a: Access) => {
-  const b = a.block ?? ''
-  if (b.startsWith('rule-')) return t('prot.reasons.rule', { code: b.slice(5) })
-  if (b) return t(`prot.reasons.${b}`)
-  return a.status === 429 ? t('prot.reasons.rate') : t('prot.reasons.site')
-}
-const logCols: DataTableColumns<Access> = [
-  { title: () => t('common.time'), key: 'time', width: 170, render: (a) => datetime(a.time, locale.value) },
-  { title: () => t('common.ip'), key: 'ip', width: 240, render: (a) => h(IpGeo, { ip: a.ip }) },
-  { title: () => t('prot.reason'), key: 'block', width: 160, render: (a) => h(NTag, { size: 'small', type: 'error', bordered: false }, () => reason(a)) },
-  { title: () => t('prot.request'), key: 'path', minWidth: 240, ellipsis: { tooltip: true }, render: (a) => `${a.method} ${a.path}` },
-  { title: 'User-Agent', key: 'ua', minWidth: 200, ellipsis: { tooltip: true } },
-]
+const exclEdit = ref<SiteWAF | null>(null)
 
 // ---- panel-wide settings ----
 const settingsOpen = ref(false)
@@ -173,6 +174,19 @@ const columns = computed<DataTableColumns<Row>>(() => [
         onBlur: () => set(r, { cc: r.protect.cc }),
       }),
   },
+  {
+    title: head('waf'),
+    key: 'waf',
+    width: 140,
+    render: (r) => {
+      const x = waf.value[r.domain]
+      if (!x || !r.supported) return '—'
+      return h(NSpace, { size: 6, align: 'center', wrap: false }, () => [
+        h(NSwitch, { size: 'small', value: !x.waf_off, disabled: !wafOn.value, 'onUpdate:value': (on: boolean) => { x.waf_off = !on; saveWAF(x) } }),
+        h(NButton, { size: 'tiny', quaternary: true, onClick: () => (exclEdit.value = { ...x, waf_exclude: [...x.waf_exclude] }) }, () => t('prot.excluded', { n: x.waf_exclude.length })),
+      ])
+    },
+  },
   { title: () => t('common.status'), key: 'on', width: 80, render: (r) => h(NSwitch, { size: 'small', value: r.protect.on, disabled: !r.supported, 'onUpdate:value': (v: boolean) => set(r, { on: v }) }) },
   { title: '', key: 'log', width: 100, render: (r) => h(NButton, { size: 'tiny', onClick: () => openLog(r.domain) }, () => t('prot.log')) },
 ])
@@ -207,11 +221,24 @@ const columns = computed<DataTableColumns<Row>>(() => [
     <li>{{ t('prot.note_count') }}</li>
   </ul>
 
-  <n-drawer :show="!!logSite" :width="900" style="max-width: 100vw" @update:show="(v: boolean) => !v && (logSite = null)">
+  <n-drawer :show="!!logSite" :width="1000" style="max-width: 100vw" @update:show="(v: boolean) => !v && (logSite = null)">
     <n-drawer-content :title="t('prot.log_title', { domain: logSite })" closable>
-      <n-data-table size="small" :columns="logCols" :data="logRows" :pagination="{ pageSize: 20 }" :scroll-x="1000" />
+      <SecEvents v-if="logSite" :site="logSite" @task="(id: string, title: string) => (task = { id, title })" @changed="load" />
     </n-drawer-content>
   </n-drawer>
+  <n-modal :show="!!exclEdit" @update:show="(v: boolean) => !v && (exclEdit = null)">
+    <n-card v-if="exclEdit" :title="t('prot.excl_title', { domain: exclEdit.domain })" style="width: min(520px, calc(100vw - 32px))" closable @close="exclEdit = null">
+      <p class="hint">{{ t('prot.excl_hint') }}</p>
+      <n-dynamic-tags v-model:value="exclEdit.waf_exclude" />
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="exclEdit = null">{{ t('common.cancel') }}</n-button>
+          <n-button type="primary" @click="saveWAF({ ...exclEdit!, waf_exclude: exclEdit!.waf_exclude.filter((id) => /^\d{1,7}$/.test(id)) }); exclEdit = null; loadWAF()">{{ t('common.save') }}</n-button>
+        </n-space>
+      </template>
+    </n-card>
+  </n-modal>
+  <TaskModal :task-id="task?.id ?? null" :title="task?.title ?? ''" @close="task = null; loadWAF()" @done="loadWAF" />
 
   <n-modal :show="settingsOpen" @update:show="(v: boolean) => (settingsOpen = v)">
     <n-card :title="t('prot.settings')" style="width: min(640px, calc(100vw - 32px))" closable @close="settingsOpen = false">

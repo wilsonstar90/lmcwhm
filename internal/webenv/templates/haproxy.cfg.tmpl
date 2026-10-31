@@ -142,27 +142,34 @@ backend st_cc
     acl list_block url -m reg -i -f {{.Dir}}/maps/url_block_regex.lst
     http-request del-header X-Lmcwhm-Pass
     http-request del-header X-Lmcwhm-Block
+    http-request del-header X-Lmcwhm-Detect
     http-request set-header X-Lmcwhm-Pass 1 if list_pass
-    http-request set-var(txn.block) str(ip) if { src -f {{.Dir}}/lists/block.lst } !ip_allow !acme
-    http-request set-var(txn.block) str(list) if !blocked list_block !list_pass !acme
+    http-request set-var(txn.block) str({{$.BlockStatus}}:ip) if { src -f {{.Dir}}/lists/block.lst } !ip_allow !acme
+    http-request set-var(txn.block) str({{$.BlockStatus}}:list) if !blocked list_block !list_pass !acme
     # Website protection: flags per host (",on,fake,idc,crawler,cdn,").
     http-request set-var(txn.prot) var(txn.host),map_str({{.Dir}}/maps/prot_exact.map)
     http-request set-var(txn.prot) var(txn.host),map_end({{.Dir}}/maps/prot_wild.map) if !{ var(txn.prot) -m found }
     acl guard var(txn.prot) -m sub ,on,
-    http-request set-var(txn.block) str(cdn_only) if !blocked guard { var(txn.prot) -m sub ,cdn, } !via_cdn !ip_allow !list_pass !acme
-    http-request set-var(txn.block) str(fake_spider) if !blocked guard { var(txn.prot) -m sub ,fake, } { req.hdr(user-agent) -m sub -i -f {{.Dir}}/maps/spider_ua.lst } !trusted !ip_allow !list_pass !acme
-    http-request set-var(txn.block) str(idc) if !blocked guard { var(txn.prot) -m sub ,idc, } { src -f {{.Dir}}/maps/idc.lst } !trusted !ip_allow !list_pass !acme
-    http-request set-var(txn.block) str(crawler) if !blocked guard { var(txn.prot) -m sub ,crawler, } { req.hdr(user-agent) -m sub -i -f {{.Dir}}/maps/crawler_ua.lst } !ip_allow !list_pass !acme
+    http-request set-var(txn.block) str({{$.BlockStatus}}:cdn_only) if !blocked guard { var(txn.prot) -m sub ,cdn, } !via_cdn !ip_allow !list_pass !acme
+    http-request set-var(txn.block) str({{$.BlockStatus}}:fake_spider) if !blocked guard { var(txn.prot) -m sub ,fake, } { req.hdr(user-agent) -m sub -i -f {{.Dir}}/maps/spider_ua.lst } !trusted !ip_allow !list_pass !acme
+    http-request set-var(txn.block) str({{$.BlockStatus}}:idc) if !blocked guard { var(txn.prot) -m sub ,idc, } { src -f {{.Dir}}/maps/idc.lst } !trusted !ip_allow !list_pass !acme
+    http-request set-var(txn.block) str({{$.BlockStatus}}:crawler) if !blocked guard { var(txn.prot) -m sub ,crawler, } { req.hdr(user-agent) -m sub -i -f {{.Dir}}/maps/crawler_ua.lst } !ip_allow !list_pass !acme
 {{- range .Rules}}
-{{- $code := .Code}}
+{{- $r := .}}
 {{- range .Lines}}
-    http-request set-var(txn.block) str(rule-{{$code}}) if !blocked guard !ip_allow !list_pass !acme {{.}}
+{{- if $r.Detect}}
+    http-request set-var(txn.detect) str(rule-{{$r.Code}}) if !{ var(txn.detect) -m found } !blocked guard !ip_allow !list_pass !acme {{.}}
+{{- else}}
+    http-request set-var(txn.block) str({{$r.Status}}:rule-{{$r.Code}}) if !blocked guard !ip_allow !list_pass !acme {{.}}
+{{- end}}
 {{- end}}
 {{- end}}
     # CC: requests per visitor address in 10 seconds, limit per host.
     http-request set-var(txn.cc) var(txn.host),map_str_int({{.Dir}}/maps/cc_exact.map)
     http-request set-var(txn.cc) var(txn.host),map_end_int({{.Dir}}/maps/cc_wild.map) if !{ var(txn.cc) -m found }
     http-request track-sc0 src table st_cc if guard { var(txn.cc) -m found } !trusted !ip_allow !list_pass !acme
-    http-request set-var(txn.block) str(cc) if !blocked guard { var(txn.cc) -m found } { sc_http_req_rate(0),sub(txn.cc) gt 0 } !trusted !ip_allow !list_pass !acme
+    http-request set-var(txn.block) str(429:cc) if !blocked guard { var(txn.cc) -m found } { sc_http_req_rate(0),sub(txn.cc) gt 0 } !trusted !ip_allow !list_pass !acme
     http-request set-header X-Lmcwhm-Block %[var(txn.block)] if blocked
+    # Rules that only detect pass the request and name themselves for the log.
+    http-request set-header X-Lmcwhm-Detect %[var(txn.detect)] if { var(txn.detect) -m found }
 {{- end}}

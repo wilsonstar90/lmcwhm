@@ -50,6 +50,8 @@ func (s *Server) m5Routes(r chi.Router) {
 		r.Get("/waf", s.handleWAF)
 		r.Put("/waf", s.handlePutWAF)
 		r.Get("/waf/events", s.handleWAFEvents)
+		r.Get("/waf/crs", s.handleWAFCRS)
+		r.Put("/waf/crs/disabled", s.handlePutWAFDisabled)
 	}
 	if s.CrowdSec != nil {
 		r.Get("/crowdsec", s.handleCrowdSec)
@@ -511,6 +513,36 @@ func (s *Server) handlePutWAF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.auditCat(r, "security", "waf.config", "enabled="+strconv.FormatBool(in.Enabled)+" engine="+in.Engine)
+	writeJSON(w, http.StatusOK, map[string]string{"task_id": s.Sites.Reapply("waf.apply")})
+}
+
+// handleWAFCRS lists the OWASP CRS rules of the WAF image with their level,
+// hits in the last 24 hours and whether they are switched off.
+func (s *Server) handleWAFCRS(w http.ResponseWriter, r *http.Request) {
+	st := s.WAF.Settings()
+	cats, err := s.WAF.CRSRules(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"available": false, "paranoia": st.Paranoia, "disabled": st.Disabled, "categories": []any{}})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"available": true, "paranoia": st.Paranoia, "disabled": st.Disabled, "categories": cats})
+}
+
+func (s *Server) handlePutWAFDisabled(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		IDs []string `json:"ids"`
+	}
+	if err := decode(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	st := s.WAF.Settings()
+	st.Disabled = in.IDs
+	if err := s.WAF.Save(r.Context(), st); err != nil {
+		writeCodedErr(w, err)
+		return
+	}
+	s.auditCat(r, "security", "waf.disabled", strings.Join(in.IDs, " "))
 	writeJSON(w, http.StatusOK, map[string]string{"task_id": s.Sites.Reapply("waf.apply")})
 }
 

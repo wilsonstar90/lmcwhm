@@ -123,7 +123,7 @@ docker exec lmcwhm-haproxy haproxy -c -f /opt/lmcwhm/edge/haproxy.cfg 2>&1 | gre
 api POST /protect/rules '{"name":"test rule","enabled":true,"match_all":true,"conditions":[{"field":"query","op":"contains","values":["evil=1"]},{"field":"method","op":"equals","values":["GET"]}]}' | grep -q '"code":"c' || fail "add custom rule"
 [[ "$(code --resolve php.test:80:127.0.0.1 'http://php.test/index.php?evil=1')" == 403 ]] || fail "custom rule"
 [[ "$(code -X POST --resolve php.test:80:127.0.0.1 'http://php.test/index.php?evil=1')" != 403 ]] || fail "custom rule ignores its method condition"
-api GET /protect/sites/php.test/blocked | grep -q '"block":"rule-wp-1002"' || fail "blocked log without the rule: $(api GET /protect/sites/php.test/blocked | head -c 400)"
+api GET '/security/events?site=php.test' | grep -q '"rule":"wp-1002"' || fail "blocked log without the rule: $(api GET '/security/events?site=php.test' | head -c 400)"
 # Scrapers and CC on php.test only.
 api PUT /protect/sites '{"items":{"php.test":{"on":true,"crawler":true,"cc":5}}}' | grep -q '"ok":true' || fail "save site protection"
 [[ "$(code -A 'python-requests/2.31' --resolve php.test:80:127.0.0.1 http://php.test/index.php)" == 403 ]] || fail "scraper User-Agent"
@@ -136,6 +136,40 @@ api PUT /protect/settings "$body" >/dev/null
 sleep 11 # the CC window
 [[ "$(code --resolve php.test:80:127.0.0.1 http://php.test/xmlrpc.php)" != 403 ]] || fail "dedicated rules still on"
 pass "website protection: dedicated rules, custom rule, scrapers, CC, blocked log"
+
+# ---------- rule levels, detect-only, custom status and error page; menu ----------
+cur="$(api GET /protect/settings)"
+body="$(python3 -c "import sys,json; s=json.loads(sys.argv[1])['settings']; s['rules_on']=True; print(json.dumps(s))" "$cur")"
+api PUT /protect/settings "$body" >/dev/null
+LVL="$(api POST /protect/rules '{"name":"level 2","enabled":true,"match_all":true,"level":2,"status":410,"conditions":[{"field":"path","op":"prefix","values":["/lvl2"]}]}' | jget "['id']")"
+DET="$(api POST /protect/rules '{"name":"probe","enabled":true,"match_all":true,"action":"detect","conditions":[{"field":"ua","op":"contains","values":["probe-detect"]}]}' | jget "['code']")"
+[[ "$(code --resolve php.test:80:127.0.0.1 http://php.test/lvl2)" != 410 ]] || fail "level 2 rule ran at paranoia level 1"
+waf="$(api GET /waf | python3 -c "import sys,json; s=json.load(sys.stdin)['settings']; s['paranoia']=2; print(json.dumps(s))")"
+wait_task "$(api PUT /waf "$waf" | jget "['task_id']")"
+[[ "$(code --resolve php.test:80:127.0.0.1 http://php.test/lvl2)" == 410 ]] || fail "level 2 rule (status 410) did not run at paranoia level 2"
+[[ "$(code -A 'probe-detect/1' --resolve php.test:80:127.0.0.1 http://php.test/index.php)" == 200 ]] || fail "detect-only rule blocked"
+sleep 1
+api GET '/security/events?site=php.test&action=detected' | grep -q "\"rule\":\"$DET\"" || fail "detection not in the log: $(api GET '/security/events?site=php.test' | head -c 400)"
+api GET '/security/events?site=php.test&source=rule' | grep -q '"status":410' || fail "blocked event with status 410 missing"
+# A custom 403 page with SSI placeholders answers edge refusals.
+PG="$(api POST /errpages '{"name":"e2e","html":"<p>E2E-PAGE <!--# echo var=\"status\" --> <!--# echo var=\"lmcwhm_block_reason\" --></p>"}' | jget "['id']")"
+api PUT /errpages/mapping "{\"global\":{\"403\":$PG}}" >/dev/null
+page="$(curl -s --resolve php.test:80:127.0.0.1 http://php.test/xmlrpc.php)"
+[[ "$page" == *"E2E-PAGE 403 rule-wp-1002"* ]] || fail "custom 403 page: $page"
+[[ "$(api PUT /errpages/mapping '{"global":{"200":1}}' | jget "['code']")" == errpages.invalid_mapping ]] || fail "status 200 mapped"
+[[ "$(api POST "/errpages/$PG/delete" | jget "['code']")" == errpages.in_use ]] || fail "page in use deleted"
+api PUT /errpages/mapping '{"global":{}}' >/dev/null
+api POST "/errpages/$PG/delete" >/dev/null
+api POST "/protect/rules/$LVL/delete" >/dev/null
+for id in $(api GET /protect/rules | python3 -c "import sys,json; print(' '.join(str(r['id']) for r in json.load(sys.stdin)['rules'] if not r['builtin']))"); do api POST "/protect/rules/$id/delete" >/dev/null; done
+waf="$(api GET /waf | python3 -c "import sys,json; s=json.load(sys.stdin)['settings']; s['paranoia']=1; print(json.dumps(s))")"
+wait_task "$(api PUT /waf "$waf" | jget "['task_id']")"
+body="$(python3 -c "import sys,json; s=json.loads(sys.argv[1])['settings']; s['rules_on']=False; print(json.dumps(s))" "$cur")"
+api PUT /protect/settings "$body" >/dev/null
+[[ "$(api PUT /ui/menu '{"order":["security"],"hidden":["settings"]}' | jget "['code']")" == settings.invalid_menu ]] || fail "settings could be hidden"
+api PUT /ui/menu '{"order":["security","home"],"hidden":["mail"]}' | grep -q '"hidden":\["mail"\]' || fail "save menu"
+api PUT /ui/menu '{"order":[],"hidden":[]}' >/dev/null
+pass "rule levels, detect-only rules, refusal status, custom error page, menu settings"
 
 # ---------- domain entries: link, redirect, port forwarding ----------
 PHPID="$(site_id php.test)"

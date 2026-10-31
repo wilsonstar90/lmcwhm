@@ -27,14 +27,14 @@ func TestRealIPConfig(t *testing.T) {
 		"http-request del-header CF-Connecting-IP if !{ var(txn.via_cf) -m bool }",
 		"http-request set-var(txn.via_cdn) bool(1) if from_cdn !from_cf",
 		"http-request set-src req.hdr_ip(X-Real-IP,-1) if { var(txn.via_cdn) -m bool }",
-		"http-request set-var(txn.block) str(ip) if { src -f " + e.EdgeDir() + "/lists/block.lst } !ip_allow !acme",
+		"http-request set-var(txn.block) str(403:ip) if { src -f " + e.EdgeDir() + "/lists/block.lst } !ip_allow !acme",
 	} {
 		if !strings.Contains(cfg, want) {
 			t.Errorf("haproxy.cfg missing %q", want)
 		}
 	}
 	// set-src must come before the blocks, which must come before routing.
-	if i, j, k := strings.Index(cfg, "set-src"), strings.Index(cfg, "str(ip)"), strings.Index(cfg, "use_backend be_acme"); !(i < j && j < k) {
+	if i, j, k := strings.Index(cfg, "set-src"), strings.Index(cfg, "str(403:ip)"), strings.Index(cfg, "use_backend be_acme"); !(i < j && j < k) {
 		t.Error("real-ip / deny / routing out of order")
 	}
 	cf := string(edge["maps/cdn_cf.lst"])
@@ -155,7 +155,7 @@ func TestPatternLists(t *testing.T) {
 	for _, want := range []string{
 		"acl list_block req.hdr(user-agent) -m sub -i -f " + e.EdgeDir() + "/maps/ua_block_contains.lst",
 		"acl list_pass path -m beg -i -f " + e.EdgeDir() + "/maps/url_allow_prefix.lst",
-		"http-request set-var(txn.block) str(list) if !blocked list_block !list_pass !acme",
+		"http-request set-var(txn.block) str(403:list) if !blocked list_block !list_pass !acme",
 		"http-request del-header X-Lmcwhm-Pass", "http-request set-header X-Lmcwhm-Pass 1 if list_pass",
 	} {
 		if !strings.Contains(cfg, want) {

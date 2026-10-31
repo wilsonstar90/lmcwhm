@@ -65,3 +65,19 @@ func TestParseSSH(t *testing.T) {
 		t.Error("parsed noise")
 	}
 }
+
+func TestParseAccessBlockDetect(t *testing.T) {
+	base := `203.0.113.9 - - [30/Oct/2026:12:00:00 +0000] "GET /x HTTP/1.1" 404 10 "-" "curl/8" "a.com"`
+	for line, want := range map[string][2]string{
+		base:                         {"", ""},
+		base + ` "-"`:                {"", ""},
+		base + ` "rule-wp-1002" "-"`: {"rule-wp-1002", ""},
+		base + ` "404:rule-c7" "-"`:  {"rule-c7", ""},
+		base + ` "" "rule-c9"`:       {"", "rule-c9"},
+	} {
+		a := ParseAccess(line)
+		if a.Block != want[0] || a.Detect != want[1] || a.Status != 404 || a.Host != "a.com" {
+			t.Errorf("%q → block %q detect %q", line, a.Block, a.Detect)
+		}
+	}
+}

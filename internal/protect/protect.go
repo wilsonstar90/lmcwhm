@@ -46,11 +46,16 @@ type Rule struct {
 	Enabled     bool   `json:"enabled"`
 	Builtin     bool   `json:"builtin"`
 	All         bool   `json:"match_all"` // all conditions (else any)
-	Conds       []Cond `json:"conditions"`
-	Modified    bool   `json:"modified,omitempty"` // a built-in rule whose conditions differ from its default
-	Renamed     bool   `json:"renamed,omitempty"`  // a built-in rule with its own name / description
-	CreatedAt   int64  `json:"created_at"`
-	UpdatedAt   int64  `json:"updated_at"`
+	// Level is the WAF paranoia level from which the rule runs (1–4).
+	Level int `json:"level"`
+	// Action: block (answer Status) or detect (log only).
+	Action    string `json:"action"`
+	Status    int    `json:"status"`
+	Conds     []Cond `json:"conditions"`
+	Modified  bool   `json:"modified,omitempty"` // a built-in rule whose conditions differ from its default
+	Renamed   bool   `json:"renamed,omitempty"`  // a built-in rule with its own name / description
+	CreatedAt int64  `json:"created_at"`
+	UpdatedAt int64  `json:"updated_at"`
 }
 
 type ASN struct {
@@ -63,6 +68,8 @@ type Settings struct {
 	RulesOn  bool     `json:"rules_on"` // dedicated rules switch
 	Crawlers []string `json:"crawlers"` // User-Agents refused by 爬蟲防護
 	IDC      []ASN    `json:"idc"`      // networks refused by 禁 IDC
+	// BlockStatus answers IP / list / protection refusals (403 by default).
+	BlockStatus int `json:"block_status"`
 }
 
 const settingsKey = "protect"
@@ -71,6 +78,8 @@ type Service struct {
 	st  *store.Store
 	geo *geoip.DB
 	fw  *firewall.Service
+	// Paranoia is the WAF paranoia level (1–4): rules above it do not run.
+	Paranoia func() int
 
 	mu     sync.Mutex
 	seeded bool
@@ -85,7 +94,7 @@ func New(st *store.Store, geo *geoip.DB, fw *firewall.Service) *Service {
 // ---- settings ----
 
 func (sv *Service) Settings(ctx context.Context) Settings {
-	s := Settings{Crawlers: defaultCrawlers, IDC: defaultIDC}
+	s := Settings{Crawlers: defaultCrawlers, IDC: defaultIDC, BlockStatus: 403}
 	var raw string
 	if sv.st.DB.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, settingsKey).Scan(&raw) == nil {
 		json.Unmarshal([]byte(raw), &s)
@@ -95,7 +104,10 @@ func (sv *Service) Settings(ctx context.Context) Settings {
 
 func (sv *Service) SaveSettings(ctx context.Context, s Settings) (Settings, error) {
 	s.Crawlers = clean(s.Crawlers)
-	if len(s.Crawlers) > 500 || len(s.IDC) > 500 {
+	if s.BlockStatus == 0 {
+		s.BlockStatus = 403
+	}
+	if webenv.BlockStatus(s.BlockStatus) != s.BlockStatus || len(s.Crawlers) > 500 || len(s.IDC) > 500 {
 		return s, ErrBadSettings
 	}
 	for _, v := range s.Crawlers {
@@ -204,8 +216,8 @@ func (sv *Service) seed(ctx context.Context) error {
 	}
 	now := time.Now().Unix()
 	for _, b := range builtins {
-		if _, err := sv.st.DB.ExecContext(ctx, `INSERT INTO waf_rules(code, cms, name, description, enabled, builtin, match_all, conditions, created_at, updated_at)
-			VALUES(?,?,?,?,?,1,?,?,?,?) ON CONFLICT(code) DO NOTHING`, b.Code, b.CMS, b.Name, b.Description, b.Enabled, b.All, condsJSON(b.Conds), now, now); err != nil {
+		if _, err := sv.st.DB.ExecContext(ctx, `INSERT INTO waf_rules(code, cms, name, description, enabled, builtin, match_all, conditions, created_at, updated_at, level, action, status)
+			VALUES(?,?,?,?,?,1,?,?,?,?,?,'block',403) ON CONFLICT(code) DO NOTHING`, b.Code, b.CMS, b.Name, b.Description, b.Enabled, b.All, condsJSON(b.Conds), now, now, levelOf(b)); err != nil {
 			return err
 		}
 	}
@@ -217,7 +229,7 @@ func (sv *Service) Rules(ctx context.Context) ([]Rule, error) {
 	if err := sv.seed(ctx); err != nil {
 		return nil, err
 	}
-	rows, err := sv.st.DB.QueryContext(ctx, `SELECT id, code, cms, name, description, enabled, builtin, match_all, conditions, created_at, updated_at FROM waf_rules ORDER BY builtin DESC, code`)
+	rows, err := sv.st.DB.QueryContext(ctx, `SELECT id, code, cms, name, description, enabled, builtin, match_all, conditions, created_at, updated_at, level, action, status FROM waf_rules ORDER BY builtin DESC, code`)
 	if err != nil {
 		return nil, err
 	}
@@ -226,12 +238,12 @@ func (sv *Service) Rules(ctx context.Context) ([]Rule, error) {
 	for rows.Next() {
 		var r Rule
 		var conds string
-		if err := rows.Scan(&r.ID, &r.Code, &r.CMS, &r.Name, &r.Description, &r.Enabled, &r.Builtin, &r.All, &conds, &r.CreatedAt, &r.UpdatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.Code, &r.CMS, &r.Name, &r.Description, &r.Enabled, &r.Builtin, &r.All, &conds, &r.CreatedAt, &r.UpdatedAt, &r.Level, &r.Action, &r.Status); err != nil {
 			return nil, err
 		}
 		json.Unmarshal([]byte(conds), &r.Conds)
 		if b, ok := builtinByCode(r.Code); ok && r.Builtin {
-			r.Modified = conds != condsJSON(b.Conds) || r.All != b.All
+			r.Modified = conds != condsJSON(b.Conds) || r.All != b.All || r.Level != levelOf(b) || r.Action != "block" || r.Status != 403
 			r.Renamed = r.Name != b.Name || r.Description != b.Description
 		}
 		out = append(out, r)
@@ -241,6 +253,18 @@ func (sv *Service) Rules(ctx context.Context) ([]Rule, error) {
 
 func (r *Rule) validate() error {
 	r.Name, r.Description, r.CMS = strings.TrimSpace(r.Name), strings.TrimSpace(r.Description), strings.TrimSpace(strings.ToLower(r.CMS))
+	if r.Level == 0 {
+		r.Level = 1
+	}
+	if r.Action == "" {
+		r.Action = "block"
+	}
+	if r.Status == 0 {
+		r.Status = 403
+	}
+	if r.Level < 1 || r.Level > 4 || r.Action != "block" && r.Action != "detect" || webenv.BlockStatus(r.Status) != r.Status {
+		return ErrBadRule
+	}
 	if r.Name == "" || len(r.Name) > 120 || len(r.Description) > 400 || len(r.CMS) > 40 || len(r.Conds) == 0 || len(r.Conds) > 10 {
 		return ErrBadRule
 	}
@@ -277,8 +301,8 @@ func (sv *Service) SaveRule(ctx context.Context, r Rule) (Rule, error) {
 	}
 	now := time.Now().Unix()
 	if r.ID == 0 {
-		res, err := sv.st.DB.ExecContext(ctx, `INSERT INTO waf_rules(code, cms, name, description, enabled, builtin, match_all, conditions, created_at, updated_at)
-			VALUES(?,?,?,?,?,0,?,?,?,?)`, fmt.Sprintf("new-%d", now), r.CMS, r.Name, r.Description, r.Enabled, r.All, condsJSON(r.Conds), now, now)
+		res, err := sv.st.DB.ExecContext(ctx, `INSERT INTO waf_rules(code, cms, name, description, enabled, builtin, match_all, conditions, created_at, updated_at, level, action, status)
+			VALUES(?,?,?,?,?,0,?,?,?,?,?,?,?)`, fmt.Sprintf("new-%d", now), r.CMS, r.Name, r.Description, r.Enabled, r.All, condsJSON(r.Conds), now, now, r.Level, r.Action, r.Status)
 		if err != nil {
 			return r, err
 		}
@@ -287,8 +311,8 @@ func (sv *Service) SaveRule(ctx context.Context, r Rule) (Rule, error) {
 		_, err = sv.st.DB.ExecContext(ctx, `UPDATE waf_rules SET code = ? WHERE id = ?`, r.Code, r.ID)
 		return r, err
 	}
-	res, err := sv.st.DB.ExecContext(ctx, `UPDATE waf_rules SET cms=?, name=?, description=?, enabled=?, match_all=?, conditions=?, updated_at=? WHERE id=?`,
-		r.CMS, r.Name, r.Description, r.Enabled, r.All, condsJSON(r.Conds), now, r.ID)
+	res, err := sv.st.DB.ExecContext(ctx, `UPDATE waf_rules SET cms=?, name=?, description=?, enabled=?, match_all=?, conditions=?, updated_at=?, level=?, action=?, status=? WHERE id=?`,
+		r.CMS, r.Name, r.Description, r.Enabled, r.All, condsJSON(r.Conds), now, r.Level, r.Action, r.Status, r.ID)
 	if err != nil {
 		return r, err
 	}
@@ -334,8 +358,8 @@ func (sv *Service) ResetRule(ctx context.Context, id int64) error {
 	if !ok {
 		return ErrNotFound
 	}
-	_, err := sv.st.DB.ExecContext(ctx, `UPDATE waf_rules SET cms=?, name=?, description=?, enabled=?, match_all=?, conditions=?, updated_at=? WHERE id=?`,
-		b.CMS, b.Name, b.Description, b.Enabled, b.All, condsJSON(b.Conds), time.Now().Unix(), id)
+	_, err := sv.st.DB.ExecContext(ctx, `UPDATE waf_rules SET cms=?, name=?, description=?, enabled=?, match_all=?, conditions=?, updated_at=?, level=?, action='block', status=403 WHERE id=?`,
+		b.CMS, b.Name, b.Description, b.Enabled, b.All, condsJSON(b.Conds), time.Now().Unix(), levelOf(b), id)
 	return err
 }
 
@@ -399,17 +423,18 @@ func (sv *Service) SpiderTokens(ctx context.Context) []string { return sv.spider
 func (sv *Service) Edge(ctx context.Context) webenv.Protection {
 	s := sv.Settings(ctx)
 	sites, _ := sv.Sites(ctx)
-	p := webenv.Protection{Sites: sites, Default: Default, SpiderUA: sv.spiders(ctx), CrawlerUA: s.Crawlers}
+	p := webenv.Protection{Sites: sites, Default: Default, SpiderUA: sv.spiders(ctx), CrawlerUA: s.Crawlers, BlockStatus: s.BlockStatus}
 	if anyIDC(p.Sites) {
 		p.IDC = sv.idcRanges(s.IDC)
 	}
 	if s.RulesOn {
 		rules, _ := sv.Rules(ctx)
+		level := sv.paranoia()
 		for _, r := range rules {
-			if !r.Enabled {
+			if !r.Enabled || r.Level > level {
 				continue
 			}
-			er := webenv.EdgeRule{Code: r.Code, All: r.All}
+			er := webenv.EdgeRule{Code: r.Code, All: r.All, Detect: r.Action == "detect", Status: r.Status}
 			for _, c := range r.Conds {
 				er.Conds = append(er.Conds, webenv.EdgeCond{Field: c.Field, Op: c.Op, Negate: c.Negate, Values: c.Values})
 			}
@@ -426,4 +451,26 @@ func anyIDC(m map[string]webenv.SiteProtect) bool {
 		}
 	}
 	return false
+}
+
+func (sv *Service) paranoia() int {
+	if sv.Paranoia == nil {
+		return 1
+	}
+	return min(max(sv.Paranoia(), 1), 4)
+}
+
+// SetAction switches a rule between blocking and detecting.
+func (sv *Service) SetAction(ctx context.Context, id int64, action string) error {
+	if action != "block" && action != "detect" {
+		return ErrBadRule
+	}
+	res, err := sv.st.DB.ExecContext(ctx, `UPDATE waf_rules SET action = ?, updated_at = ? WHERE id = ?`, action, time.Now().Unix(), id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }

@@ -14,6 +14,7 @@ export interface Cond { field: string; op: string; negate: boolean; values: stri
 export interface Rule {
   id: number; code: string; cms: string; name: string; description: string; enabled: boolean; builtin: boolean
   match_all: boolean; conditions: Cond[]; modified?: boolean; renamed?: boolean
+  level: number; action: 'block' | 'detect'; status: number
 }
 
 const props = defineProps<{ rule: Rule | null; beforeSave?: (r: Rule) => Rule }>()
@@ -31,13 +32,14 @@ const saving = ref(false)
 watch(
   () => props.rule,
   (v) => {
-    r.value = v ? JSON.parse(JSON.stringify(v)) : null
+    r.value = v ? { level: 1, action: 'block', status: 403, ...JSON.parse(JSON.stringify(v)) } : null
     view.value = 'visual'
     codeErr.value = ''
     if (r.value && !r.value.conditions.length) r.value.conditions.push(blank())
   },
   { immediate: true },
 )
+const statusOptions = [400, 401, 403, 404, 405, 406, 410, 418, 429, 444, 451, 500, 502, 503].map((c) => ({ label: c === 444 ? '444 (close)' : String(c), value: c }))
 const blank = (): Cond => ({ field: 'path', op: 'contains', negate: false, values: [] })
 
 const fields = ['path', 'url', 'query', 'method', 'ua', 'referer', 'cookie', 'body']
@@ -70,7 +72,7 @@ function switchView(v: 'visual' | 'code') {
 
 let timer: number | undefined
 watch(
-  () => r.value && JSON.stringify([r.value.match_all, r.value.conditions, r.value.code]),
+  () => r.value && JSON.stringify([r.value.match_all, r.value.conditions, r.value.code, r.value.action, r.value.status]),
   () => {
     clearTimeout(timer)
     timer = window.setTimeout(async () => {
@@ -114,6 +116,20 @@ const placeholderFor = (c: Cond) => t(`rules.examples.${c.field}`)
           <n-form-item :label="t('rules.name')" style="width: 360px"><n-input v-model:value="r.name" /></n-form-item>
           <n-form-item :label="t('rules.cms')" style="width: 160px"><n-input v-model:value="r.cms" placeholder="wordpress" /></n-form-item>
           <n-form-item :label="t('rules.enabled')"><n-switch v-model:value="r.enabled" /></n-form-item>
+        </n-space>
+        <n-space :wrap="true" :size="12">
+          <n-form-item :label="t('rules.level')" style="width: 300px">
+            <n-select v-model:value="r.level" :options="[1, 2, 3, 4].map((n) => ({ label: t(`waf.pl.${n}`), value: n }))" />
+          </n-form-item>
+          <n-form-item :label="t('rules.action')">
+            <n-radio-group v-model:value="r.action">
+              <n-radio-button value="block">{{ t('rules.block') }}</n-radio-button>
+              <n-radio-button value="detect">{{ t('rules.detect') }}</n-radio-button>
+            </n-radio-group>
+          </n-form-item>
+          <n-form-item v-if="r.action === 'block'" :label="t('rules.status')" style="width: 140px">
+            <n-select v-model:value="r.status" :options="statusOptions" />
+          </n-form-item>
         </n-space>
         <n-form-item :label="t('rules.description')"><n-input v-model:value="r.description" type="textarea" :autosize="{ minRows: 1, maxRows: 3 }" /></n-form-item>
       </n-form>

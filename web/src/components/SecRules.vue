@@ -3,10 +3,11 @@
 // with protection on. Each can be switched, edited and (custom ones) deleted.
 import { computed, h, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { NAlert, NButton, NDataTable, NPopconfirm, NSpace, NSwitch, NTag, useMessage, type DataTableColumns } from 'naive-ui'
+import { NAlert, NButton, NDataTable, NPopconfirm, NRadioButton, NRadioGroup, NSpace, NSwitch, NTag, useMessage, type DataTableColumns } from 'naive-ui'
 import { get, post, put, ApiError } from '../api/client'
 import RuleEditor, { type Rule } from './RuleEditor.vue'
 
+const props = defineProps<{ paranoia: number }>()
 const emit = defineEmits<{ changed: [] }>()
 const { t, te } = useI18n()
 const msg = useMessage()
@@ -65,7 +66,7 @@ function beforeSave(x: Rule): Rule {
 }
 function blank(): Rule {
   shown = null
-  return { id: 0, code: '', cms: '', name: '', description: '', enabled: true, builtin: false, match_all: true, conditions: [] }
+  return { id: 0, code: '', cms: '', name: '', description: '', enabled: true, builtin: false, match_all: true, conditions: [], level: 1, action: 'block', status: 403 }
 }
 const columns = computed<DataTableColumns<Rule>>(() => [
   { title: () => t('rules.id'), key: 'code', width: 100, render: (r) => h('code', r.code) },
@@ -76,7 +77,27 @@ const columns = computed<DataTableColumns<Rule>>(() => [
     minWidth: 260,
     render: (r) => h('span', [name(r), r.modified ? h(NTag, { size: 'tiny', type: 'warning', bordered: false, style: 'margin-left:6px' }, () => t('rules.modified')) : null, !r.builtin ? h(NTag, { size: 'tiny', bordered: false, style: 'margin-left:6px' }, () => t('rules.custom')) : null]),
   },
-  { title: () => t('rules.description'), key: 'description', minWidth: 300, ellipsis: { tooltip: true }, render: desc },
+  { title: () => t('rules.description'), key: 'description', minWidth: 260, ellipsis: { tooltip: true }, render: desc },
+  {
+    title: () => t('rules.level'),
+    key: 'level',
+    width: 110,
+    render: (r) =>
+      h(NSpace, { size: 4, align: 'center', wrap: false }, () => [
+        h(NTag, { size: 'small', bordered: false, type: r.level <= props.paranoia ? 'info' : 'default' }, () => `PL${r.level}`),
+        r.level > props.paranoia ? h('span', { style: 'font-size:12px;opacity:.6' }, t('rules.inactive')) : null,
+      ]),
+  },
+  {
+    title: () => t('rules.action'),
+    key: 'action',
+    width: 190,
+    render: (r) =>
+      h(NRadioGroup, { size: 'small', value: r.action, 'onUpdate:value': (a: string) => act(`/protect/rules/${r.id}/action`, { action: a }) }, () => [
+        h(NRadioButton, { value: 'block' }, () => (r.status && r.status !== 403 ? `${t('rules.block')} ${r.status}` : t('rules.block'))),
+        h(NRadioButton, { value: 'detect' }, () => t('rules.detect')),
+      ]),
+  },
   { title: () => t('common.status'), key: 'enabled', width: 80, render: (r) => h(NSwitch, { size: 'small', value: r.enabled, 'onUpdate:value': (on: boolean) => act(`/protect/rules/${r.id}/enabled`, { enabled: on }) }) },
   {
     title: '',
@@ -105,7 +126,7 @@ const columns = computed<DataTableColumns<Rule>>(() => [
     <n-button type="primary" size="small" @click="editing = blank()">{{ t('rules.add') }}</n-button>
   </n-space>
   <n-alert v-if="!rulesOn" type="info" :show-icon="false" style="margin-bottom: 12px">{{ t('rules.off_hint') }}</n-alert>
-  <n-data-table size="small" :columns="columns" :data="rules" :loading="loading" :row-key="(r: Rule) => r.id" :pagination="{ pageSize: 100 }" :scroll-x="1100" />
+  <n-data-table size="small" :columns="columns" :data="rules" :loading="loading" :row-key="(r: Rule) => r.id" :row-class-name="(r: Rule) => (r.level > paranoia ? 'dim' : '')" :pagination="{ pageSize: 100 }" :scroll-x="1300" />
   <ul class="notes">
     <li>{{ t('rules.note_scope') }}</li>
     <li>{{ t('rules.note_log') }}</li>
@@ -114,6 +135,9 @@ const columns = computed<DataTableColumns<Rule>>(() => [
 </template>
 
 <style scoped>
+:deep(.dim td) {
+  opacity: 0.55;
+}
 .notes {
   font-size: 12px;
   opacity: 0.65;

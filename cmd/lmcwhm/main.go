@@ -27,6 +27,7 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/cron"
 	"github.com/wilsonstar90/lmcwhm/internal/database"
 	"github.com/wilsonstar90/lmcwhm/internal/dockermgr"
+	"github.com/wilsonstar90/lmcwhm/internal/errpages"
 	"github.com/wilsonstar90/lmcwhm/internal/files"
 	"github.com/wilsonstar90/lmcwhm/internal/fileshare"
 	"github.com/wilsonstar90/lmcwhm/internal/firewall"
@@ -171,6 +172,9 @@ func serveCmd() *cobra.Command {
 			env.Patterns = func() []webenv.PatternList { return fw.EdgePatterns(ctx) }
 			geo := geoip.New(filepath.Join(a.paths.Home, "geoip"))
 			prot := protect.New(a.st, geo, fw)
+			prot.Paranoia = func() int { return waf.Settings().Paranoia }
+			errp := errpages.New(a.st)
+			env.ErrorPages = func() webenv.ErrorPages { return errp.Edge(ctx) }
 			env.Protection = func() webenv.Protection { return prot.Edge(ctx) }
 			// The edge refuses blocked visitors by their real address (behind a CDN).
 			fw.OnListsChanged = func() {
@@ -294,7 +298,7 @@ func serveCmd() *cobra.Command {
 				WebFS: web.FS(), Log: log, Sites: sites, Web: webCfg, Tasks: tm,
 				Apps: apps, DBs: dbs, Docker: dockermgr.New(tm, a.paths.Home),
 				Files: files.New(os.Getenv("LMCWHM_FILES_ROOT")), Term: terminal.New(),
-				Store: a.st, Monitor: mon, Cron: jobs, GeoIP: geo, Firewall: fw, Protect: prot, WAF: waf, CrowdSec: crowdsec, Backup: bk,
+				Store: a.st, Monitor: mon, Cron: jobs, GeoIP: geo, Firewall: fw, Protect: prot, ErrPages: errp, WAF: waf, CrowdSec: crowdsec, Backup: bk,
 				Tokens: apitoken.New(a.st), AI: ai.New(a.st, box, nil),
 				Alerts: alerts, Probes: probes, Stats: stats, Procs: procs, WP: wordpress.New(sites, dbs, env, tm), FTP: ftpSvc,
 				Toolbox: tb, SecScan: secscan.New(a.st), Malware: malware.New(a.st, env.WWWRoot, a.paths.Home), Tamper: tp,

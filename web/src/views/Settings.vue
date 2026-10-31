@@ -12,6 +12,7 @@ import { LANGUAGES, setLang, type Lang } from '../i18n'
 import { useSession } from '../stores/session'
 import SettingsUsers from '../components/SettingsUsers.vue'
 import SettingsApi from '../components/SettingsApi.vue'
+import SettingsMenu from '../components/SettingsMenu.vue'
 import { useRoute } from 'vue-router'
 
 const { t } = useI18n()
@@ -265,6 +266,7 @@ const langOptions = LANGUAGES.map((l) => ({ label: l.label, value: l.value }))
     </n-tab-pane>
 
     <n-tab-pane v-if="session.user?.is_admin" name="api" :tab="t('apis.tab')" display-directive="show:lazy"><SettingsApi /></n-tab-pane>
+    <n-tab-pane v-if="session.user?.is_admin" name="interface" :tab="t('menucfg.tab')" display-directive="show:lazy"><SettingsMenu /></n-tab-pane>
     <n-tab-pane name="account" :tab="t('settings.tab_account')">
       <n-space vertical :size="16" style="max-width: 560px">
         <n-card size="small" :title="t('settings.change_username')">
