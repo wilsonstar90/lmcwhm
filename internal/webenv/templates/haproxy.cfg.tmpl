@@ -116,12 +116,23 @@ backend st_cc
     http-request set-var(txn.via_cdn) bool(1) if from_cdn !from_cf
 {{- end}}
     http-request set-src req.hdr_ip(CF-Connecting-IP,1) if { var(txn.via_cf) -m bool } { req.hdr(CF-Connecting-IP) -m found }
-    http-request del-header CF-Connecting-IP if !{ var(txn.via_cf) -m bool }
 {{- if .CDNHeader}}
     http-request set-src req.hdr_ip({{.CDNHeader}},-1) if { var(txn.via_cdn) -m bool } { req.hdr({{.CDNHeader}}) -m found }
 {{- end}}
-    acl via_cdn var(txn.via_cf) -m bool
-    acl via_cdn var(txn.via_cdn) -m bool
+{{- if .CDNGroups}}
+    # Sites behind a CDN (網站防護 → CDN): the first listed header holding an
+    # address is the visitor, whatever the connection's source (like aaPanel).
+    http-request set-var(txn.cdng) var(txn.host),map_str({{.Dir}}/maps/cdn_exact.map)
+    http-request set-var(txn.cdng) var(txn.host),map_end({{.Dir}}/maps/cdn_wild.map) if !{ var(txn.cdng) -m found }
+{{- range .CDNGroups}}
+{{- $g := .ID}}
+{{- range .Headers}}
+    http-request set-var(txn.rip) req.hdr_ip({{.}},-1) if { var(txn.cdng) -m str {{$g}} } !{ var(txn.rip) -m found } { req.hdr({{.}}) -m found }
+{{- end}}
+{{- end}}
+    http-request set-src var(txn.rip) if { var(txn.rip) -m found }
+{{- end}}
+    http-request del-header CF-Connecting-IP if !{ var(txn.via_cf) -m bool }
     # From here src is the visitor. A block only names its reason (txn.block):
     # nginx refuses the request and logs why, so it is counted per site.
     acl ip_allow src -f {{.Dir}}/lists/allow.lst
@@ -150,7 +161,6 @@ backend st_cc
     http-request set-var(txn.prot) var(txn.host),map_str({{.Dir}}/maps/prot_exact.map)
     http-request set-var(txn.prot) var(txn.host),map_end({{.Dir}}/maps/prot_wild.map) if !{ var(txn.prot) -m found }
     acl guard var(txn.prot) -m sub ,on,
-    http-request set-var(txn.block) str({{$.BlockStatus}}:cdn_only) if !blocked guard { var(txn.prot) -m sub ,cdn, } !via_cdn !ip_allow !list_pass !acme
     http-request set-var(txn.block) str({{$.BlockStatus}}:fake_spider) if !blocked guard { var(txn.prot) -m sub ,fake, } { req.hdr(user-agent) -m sub -i -f {{.Dir}}/maps/spider_ua.lst } !trusted !ip_allow !list_pass !acme
     http-request set-var(txn.block) str({{$.BlockStatus}}:idc) if !blocked guard { var(txn.prot) -m sub ,idc, } { src -f {{.Dir}}/maps/idc.lst } !trusted !ip_allow !list_pass !acme
     http-request set-var(txn.block) str({{$.BlockStatus}}:crawler) if !blocked guard { var(txn.prot) -m sub ,crawler, } { req.hdr(user-agent) -m sub -i -f {{.Dir}}/maps/crawler_ua.lst } !ip_allow !list_pass !acme

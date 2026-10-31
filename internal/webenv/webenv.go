@@ -480,6 +480,7 @@ type edgeData struct {
 	VarnishPort int
 	Passthrough []passBackend
 	CDNHeader   string // the custom CDN's address header ("" = none)
+	CDNGroups   []cdnGroup
 	Rules       []ruleData
 	Body        bool // a rule reads the request body
 	BlockStatus int
@@ -542,6 +543,7 @@ func (e *Env) edgeFiles(sites []Site, pass []Passthrough) (map[string][]byte, er
 	files["maps/cdn_cf.lst"], files["maps/cdn_custom.lst"] = cdnLists(c)
 	e.patternFiles(files)
 	data.Rules, data.Body = e.protectFiles(sites, files)
+	data.CDNGroups = e.cdnFiles(sites, files)
 	data.BlockStatus = BlockStatus(e.protection().BlockStatus)
 	if len(c.Ranges) > 0 && ValidHeader(c.Header) {
 		data.CDNHeader = c.Header

@@ -35,6 +35,9 @@ type Logf func(format string, args ...any)
 const keep = 100
 
 type Manager struct {
+	// OnDone, when set, receives every task as it finishes (for the history).
+	OnDone func(Task)
+
 	mu    sync.Mutex
 	tasks map[string]*Task
 	order []string
@@ -88,13 +91,18 @@ func (m *Manager) start(name string, exclusive bool, timeout time.Duration, fn f
 			return fn(ctx, logf)
 		}()
 		m.mu.Lock()
-		defer m.mu.Unlock()
 		t.Finished = time.Now().Unix()
 		if err != nil {
 			t.Status, t.Error = Failed, err.Error()
 			t.Log = append(t.Log, "ERROR: "+err.Error())
 		} else {
 			t.Status = Success
+		}
+		done := *t
+		done.Log = append([]string(nil), t.Log...)
+		m.mu.Unlock()
+		if m.OnDone != nil {
+			m.OnDone(done)
 		}
 	}()
 	return t.ID
@@ -117,4 +125,17 @@ func (m *Manager) Get(id string) (Task, bool) {
 	c := *t
 	c.Log = append(make([]string, 0, len(t.Log)), t.Log...)
 	return c, true
+}
+
+// List returns the tasks kept in memory, newest first, without their logs.
+func (m *Manager) List() []Task {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]Task, 0, len(m.order))
+	for i := len(m.order) - 1; i >= 0; i-- {
+		c := *m.tasks[m.order[i]]
+		c.Log = nil
+		out = append(out, c)
+	}
+	return out
 }

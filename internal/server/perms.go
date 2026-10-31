@@ -46,7 +46,7 @@ var moduleOf = map[string]string{
 // selfService paths act on the caller's own account.
 var selfService = map[string]bool{
 	"/settings/password": true, "/settings/username": true, "/settings/2fa/begin": true, "/settings/2fa/enable": true,
-	"/settings/2fa/disable": true, "/system/overview": true, "/system/summary": true,
+	"/settings/2fa/disable": true, "/system/overview": true, "/system/summary": true, "/system/detail": true,
 }
 
 // siteScoped are the website routes a site-restricted user may call, with the

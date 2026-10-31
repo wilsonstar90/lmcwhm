@@ -11,7 +11,9 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 
@@ -41,6 +43,39 @@ type Settings struct {
 	BasicAuthHash  string   `json:"basic_auth_hash,omitempty"` // bcrypt; never sent to clients
 	Language       string   `json:"language"`
 	Timezone       string   `json:"timezone"`
+	// UnauthStatus answers visitors who have not passed the gates (wrong IP,
+	// domain or security entry): 0 = 404, or one of UnauthStatuses; 444 closes
+	// the connection without a response.
+	UnauthStatus int `json:"unauth_status"`
+	// SiteRoot is where new websites are created ("" = /www/wwwroot) and
+	// BackupDir where new backups are written ("" = <home>/backup).
+	SiteRoot  string `json:"site_root"`
+	BackupDir string `json:"backup_dir"`
+	// LogoImage shows the uploaded logo instead of the panel alias.
+	LogoImage bool `json:"logo_image"`
+}
+
+// UnauthStatuses are the answers an unauthenticated visitor may get.
+var UnauthStatuses = []int{400, 401, 403, 404, 408, 416, 444}
+
+// systemDirs may not hold websites or backups.
+var systemDirs = []string{"/bin", "/boot", "/dev", "/etc", "/lib", "/lib32", "/lib64", "/libx32", "/proc", "/root", "/run", "/sbin", "/sys", "/usr", "/var/lib/docker", "/var/run", "/snap"}
+
+// ValidDir checks a website or backup directory: absolute, clean, and not a
+// system directory or inside one.
+func ValidDir(p string) bool {
+	if p == "" {
+		return true
+	}
+	if !filepath.IsAbs(p) || filepath.Clean(p) != p || p == "/" || len(p) > 200 || strings.ContainsAny(p, " \t\n\"'$`\\;:") {
+		return false
+	}
+	for _, d := range systemDirs {
+		if p == d || strings.HasPrefix(p, d+"/") {
+			return false
+		}
+	}
+	return true
 }
 
 func Defaults() Settings {
@@ -59,11 +94,13 @@ func Defaults() Settings {
 }
 
 var (
-	ErrInvalidPort  = errors.New("settings.invalid_port")
-	ErrInvalidEntry = errors.New("settings.invalid_entry")
-	ErrInvalidIP    = errors.New("settings.invalid_ip")
-	ErrInvalidDom   = errors.New("settings.invalid_domain")
-	ErrInvalidLang  = errors.New("settings.invalid_language")
+	ErrInvalidPort   = errors.New("settings.invalid_port")
+	ErrInvalidEntry  = errors.New("settings.invalid_entry")
+	ErrInvalidIP     = errors.New("settings.invalid_ip")
+	ErrInvalidDom    = errors.New("settings.invalid_domain")
+	ErrInvalidLang   = errors.New("settings.invalid_language")
+	ErrInvalidDir    = errors.New("settings.invalid_dir")
+	ErrInvalidUnauth = errors.New("settings.invalid_unauth_status")
 )
 
 var (
@@ -111,6 +148,12 @@ func (s *Settings) Validate() error {
 	case SSLOff, SSLSelfSigned, SSLCustom:
 	default:
 		s.SSLMode = SSLSelfSigned
+	}
+	if s.UnauthStatus != 0 && !slices.Contains(UnauthStatuses, s.UnauthStatus) {
+		return ErrInvalidUnauth
+	}
+	if !ValidDir(s.SiteRoot) || !ValidDir(s.BackupDir) {
+		return ErrInvalidDir
 	}
 	return nil
 }

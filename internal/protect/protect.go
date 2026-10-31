@@ -162,6 +162,14 @@ func (sv *Service) Sites(ctx context.Context) (map[string]webenv.SiteProtect, er
 		}
 		p := Default
 		json.Unmarshal([]byte(raw), &p)
+		// Before v0.17 the switch was "only through a CDN" (cdn_only); it now
+		// marks a site behind a CDN, which such a site is.
+		var legacy struct {
+			CDNOnly bool `json:"cdn_only"`
+		}
+		if json.Unmarshal([]byte(raw), &legacy) == nil && legacy.CDNOnly {
+			p.CDN = true
+		}
 		out[d] = p
 	}
 	return out, rows.Err()
@@ -175,8 +183,15 @@ func (sv *Service) SaveSites(ctx context.Context, by map[string]webenv.SiteProte
 	}
 	defer tx.Rollback()
 	for d, p := range by {
-		if p.CC < 0 || p.CC > 100000 || d == "" {
+		if p.CC < 0 || p.CC > 100000 || d == "" || len(p.CDNHeaders) > 20 {
 			return ErrBadSettings
+		}
+		seen := map[string]bool{}
+		for _, h := range p.CDNHeaders {
+			if !webenv.ValidHeader(h) || seen[strings.ToLower(h)] {
+				return ErrBadSettings
+			}
+			seen[strings.ToLower(h)] = true
 		}
 		b, _ := json.Marshal(p)
 		if _, err := tx.ExecContext(ctx, `INSERT INTO site_protect(domain, settings) VALUES(?, ?) ON CONFLICT(domain) DO UPDATE SET settings = excluded.settings`, d, string(b)); err != nil {

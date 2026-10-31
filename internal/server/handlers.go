@@ -80,6 +80,10 @@ func (s *Server) handler() http.Handler {
 			r.Get("/auth/me", s.handleMe)
 			r.Get("/system/overview", s.handleOverview)
 			r.Get("/system/summary", s.handleSummary)
+			s.homeRoutes(r)
+			if s.Tasks != nil && s.Store != nil {
+				s.taskRoutes(r)
+			}
 			s.maintenanceRoutes(r)
 
 			r.Get("/settings", s.handleGetSettings)

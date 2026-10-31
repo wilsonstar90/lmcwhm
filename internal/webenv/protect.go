@@ -17,10 +17,26 @@ import (
 type SiteProtect struct {
 	On         bool `json:"on"`
 	FakeSpider bool `json:"fake_spider"` // crawler User-Agent from outside its trusted ranges
-	CDNOnly    bool `json:"cdn_only"`    // only connections through a CDN
+	// CDN: the site is reached through a CDN (any); the visitor's address is
+	// read from the first of CDNHeaders (empty = DefaultCDNHeaders) that
+	// holds one, from any connection (like aaPanel).
+	CDN        bool     `json:"cdn"`
+	CDNHeaders []string `json:"cdn_headers,omitempty"`
 	IDC        bool `json:"idc"`         // refuse data-centre addresses
 	Crawler    bool `json:"crawler"`     // refuse scraper / bad bot User-Agents
 	CC         int  `json:"cc"`          // max requests per visitor in 10 s (0 = off)
+}
+
+// DefaultCDNHeaders are tried in order for a site behind a CDN.
+var DefaultCDNHeaders = []string{"CF-Connecting-IP", "True-Client-IP", "Ali-Cdn-Real-Ip", "Cdn-Src-Ip", "Cdn-Real-Ip", "X-Real-IP",
+	"X-Forwarded-For", "X-Client-IP", "Client-IP", "Forwarded-For", "X-Forwarded", "Forwarded"}
+
+// Headers returns the site's CDN address headers.
+func (p SiteProtect) Headers() []string {
+	if len(p.CDNHeaders) == 0 {
+		return DefaultCDNHeaders
+	}
+	return p.CDNHeaders
 }
 
 // Protection is everything the edge needs; Sites is keyed by site domain.
@@ -103,6 +119,47 @@ func lines(v []string) []byte {
 	return b.Bytes()
 }
 
+// cdnGroup is one distinct list of CDN address headers; sites sharing a
+// list share its config lines.
+type cdnGroup struct {
+	ID      int
+	Headers []string
+}
+
+// cdnFiles maps every host of a CDN site to its header group ("0" = none).
+func (e *Env) cdnFiles(sites []Site, files map[string][]byte) []cdnGroup {
+	p := e.protection()
+	var groups []cdnGroup
+	ids := map[string]int{}
+	m := map[string]string{}
+	for _, s := range sites {
+		sp, ok := p.Sites[s.Domain]
+		if !ok {
+			sp = p.Default
+		}
+		id := 0
+		if sp.CDN && !s.Passthrough {
+			var hs []string
+			for _, h := range sp.Headers() {
+				if ValidHeader(h) {
+					hs = append(hs, h)
+				}
+			}
+			key := strings.ToLower(strings.Join(hs, ","))
+			if id = ids[key]; id == 0 && len(hs) > 0 {
+				id = len(groups) + 1
+				ids[key] = id
+				groups = append(groups, cdnGroup{ID: id, Headers: hs})
+			}
+		}
+		for _, h := range s.Hosts() {
+			m[strings.ToLower(h)] = strconv.Itoa(id)
+		}
+	}
+	hostMaps("cdn", m, files)
+	return groups
+}
+
 // protectFiles renders the protection maps and lists and returns the rules
 // for the config, and whether a rule reads the request body.
 func (e *Env) protectFiles(sites []Site, files map[string][]byte) (rules []ruleData, body bool) {
@@ -119,7 +176,7 @@ func (e *Env) protectFiles(sites []Site, files map[string][]byte) (rules []ruleD
 			for _, f := range []struct {
 				on   bool
 				name string
-			}{{sp.FakeSpider, "fake"}, {sp.IDC, "idc"}, {sp.Crawler, "crawler"}, {sp.CDNOnly, "cdn"}} {
+			}{{sp.FakeSpider, "fake"}, {sp.IDC, "idc"}, {sp.Crawler, "crawler"}} {
 				if f.on {
 					flags += f.name + ","
 				}

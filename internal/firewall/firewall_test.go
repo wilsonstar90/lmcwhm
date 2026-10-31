@@ -56,6 +56,13 @@ func TestRuleset(t *testing.T) {
 	ctx := context.Background()
 	sv.SaveRule(ctx, Rule{Action: "drop", Proto: "both", Ports: "3306, 6379", Enabled: true})
 	sv.SaveRule(ctx, Rule{Action: "accept", Proto: "tcp", Ports: "9000-9100", Source: "203.0.113.0/24", Enabled: true})
+	// Several sources, one per line, both families.
+	if _, _, err := sv.SaveRule(ctx, Rule{Action: "accept", Proto: "tcp", Ports: "9200", Source: "198.51.100.1\n198.51.100.2, 2001:db8::/32\n198.51.100.1", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := sv.SaveRule(ctx, Rule{Action: "accept", Proto: "tcp", Ports: "9201", Source: "198.51.100.1\nnot-an-ip", Enabled: true}); err == nil {
+		t.Fatal("bad source accepted")
+	}
 	sv.SaveRule(ctx, Rule{Action: "accept", Proto: "tcp", Ports: "1", Enabled: false})
 	sv.AddIP(ctx, "198.51.100.7", "block", 0, "manual", "")
 	sv.AddIP(ctx, "2001:db8::/48", "block", 0, "manual", "")
@@ -73,7 +80,8 @@ func TestRuleset(t *testing.T) {
 		"set block6 { type ipv6_addr; flags interval; auto-merge; elements = { 2001:db8::/48 }; }", "192.0.2.9 timeout 36",
 		"elements = { 192.0.2.10 }", "icmp type echo-request drop", "meta l4proto { icmp, ipv6-icmp } accept",
 		"tcp dport { 8888 } accept comment \"system panel\"", "tcp dport { 80, 443 } accept comment \"system web\"", "tcp dport { 3306, 6379 } drop", "udp dport { 3306, 6379 } drop",
-		"ip saddr 203.0.113.0/24 tcp dport { 9000-9100 } accept", "iifname \"docker0\" accept", "chain forward",
+		"ip saddr 203.0.113.0/24 tcp dport { 9000-9100 } accept",
+		"ip saddr { 198.51.100.1, 198.51.100.2 } tcp dport { 9200 } accept", "ip6 saddr 2001:db8::/32 tcp dport { 9200 } accept", "iifname \"docker0\" accept", "chain forward",
 	} {
 		if !strings.Contains(rs, want) {
 			t.Errorf("ruleset missing %q:\n%s", want, rs)

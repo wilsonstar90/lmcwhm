@@ -118,6 +118,9 @@ func New(d Deps) (*Server, error) {
 	if s.AI != nil {
 		s.AI.MCP = s.MCP
 	}
+	if s.Tasks != nil && s.Store != nil {
+		s.Tasks.OnDone = s.recordTask
+	}
 	return s, nil
 }
 

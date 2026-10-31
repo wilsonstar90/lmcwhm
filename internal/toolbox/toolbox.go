@@ -625,12 +625,18 @@ func Processes(ctx context.Context) ([]Proc, error) {
 }
 
 // Kill signals a process; init, the panel and its parents are refused.
+var protectedProcs = map[string]bool{"sshd": true, "dockerd": true, "containerd": true, "systemd": true, "lmcwhm": true, "init": true}
+
 func Kill(ctx context.Context, pid int32, force bool) error {
 	if pid <= 1 || pid == int32(os.Getpid()) || pid == int32(os.Getppid()) {
 		return ErrPID
 	}
 	p, err := process.NewProcessWithContext(ctx, pid)
 	if err != nil {
+		return ErrPID
+	}
+	// Ending these would cut the server off (SSH, containers) or stop the panel.
+	if name, _ := p.NameWithContext(ctx); protectedProcs[name] {
 		return ErrPID
 	}
 	if force {

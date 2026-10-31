@@ -241,17 +241,61 @@ func NormIP(s string) (netip.Prefix, string, error) {
 	return p, p.String(), nil
 }
 
+// maxRuleSources is how many addresses one port rule may name.
+const maxRuleSources = 50
+
+// sourceMatches are the nft matches of the rule's sources, one per address
+// family ([""] = from anywhere).
+func (r Rule) sourceMatches() []string {
+	if r.Source == "" {
+		return []string{""}
+	}
+	var v4, v6 []string
+	for _, s := range strings.Split(r.Source, ",") {
+		if p, _, err := NormIP(s); err == nil && p.Addr().Is6() {
+			v6 = append(v6, s)
+		} else if err == nil {
+			v4 = append(v4, s)
+		}
+	}
+	var out []string
+	for _, f := range []struct {
+		kw   string
+		list []string
+	}{{"ip", v4}, {"ip6", v6}} {
+		switch {
+		case len(f.list) == 1:
+			out = append(out, f.kw+" saddr "+f.list[0]+" ")
+		case len(f.list) > 1:
+			out = append(out, f.kw+" saddr { "+strings.Join(f.list, ", ")+" } ")
+		}
+	}
+	return out
+}
+
 func (r *Rule) validate() error {
 	r.Ports, r.Source = strings.ReplaceAll(strings.TrimSpace(r.Ports), " ", ""), strings.TrimSpace(r.Source)
 	if r.Action != "accept" && r.Action != "drop" || r.Proto != "tcp" && r.Proto != "udp" && r.Proto != "both" || !validPorts(r.Ports) {
 		return ErrBadRule
 	}
 	if r.Source != "" {
-		_, norm, err := NormIP(r.Source)
-		if err != nil {
+		// Several sources: one per line (or comma separated), stored with commas.
+		var out []string
+		seen := map[string]bool{}
+		for _, f := range strings.FieldsFunc(r.Source, func(c rune) bool { return c == ',' || c == '\n' || c == '\r' || c == ' ' || c == '\t' }) {
+			_, norm, err := NormIP(f)
+			if err != nil {
+				return ErrBadRule
+			}
+			if !seen[norm] {
+				seen[norm] = true
+				out = append(out, norm)
+			}
+		}
+		if len(out) > maxRuleSources {
 			return ErrBadRule
 		}
-		r.Source = norm
+		r.Source = strings.Join(out, ",")
 	}
 	if len(r.Remark) > 200 {
 		r.Remark = r.Remark[:200]
@@ -709,15 +753,6 @@ func (sv *Service) Ruleset(ctx context.Context, c Config) (string, error) {
 		if !r.Enabled {
 			continue
 		}
-		src := ""
-		if r.Source != "" {
-			p, _, _ := NormIP(r.Source)
-			if p.Addr().Is6() {
-				src = "ip6 saddr " + r.Source + " "
-			} else {
-				src = "ip saddr " + r.Source + " "
-			}
-		}
 		ports := strings.ReplaceAll(r.Ports, ",", ", ")
 		protos := []string{r.Proto}
 		if r.Proto == "both" {
@@ -727,11 +762,13 @@ func (sv *Service) Ruleset(ctx context.Context, c Config) (string, error) {
 		if r.System != "" {
 			comment = "system " + r.System
 		}
-		for _, p := range protos {
-			if r.Action == "drop" {
-				fmt.Fprintf(&b, "\t\t%s%s dport { %s } %s\n", src, p, ports, logDrop("rule"+strconv.FormatInt(r.ID, 10)))
+		for _, src := range r.sourceMatches() {
+			for _, p := range protos {
+				if r.Action == "drop" {
+					fmt.Fprintf(&b, "\t\t%s%s dport { %s } %s\n", src, p, ports, logDrop("rule"+strconv.FormatInt(r.ID, 10)))
+				}
+				fmt.Fprintf(&b, "\t\t%s%s dport { %s } %s comment \"%s\"\n", src, p, ports, r.Action, comment)
 			}
-			fmt.Fprintf(&b, "\t\t%s%s dport { %s } %s comment \"%s\"\n", src, p, ports, r.Action, comment)
 		}
 	}
 	if c.Policy == "drop" {

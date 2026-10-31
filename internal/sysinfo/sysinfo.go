@@ -3,7 +3,9 @@ package sysinfo
 
 import (
 	"context"
+	"regexp"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -34,7 +36,28 @@ type Overview struct {
 	Disks      []Disk     `json:"disks"`
 	NetSent    uint64     `json:"net_sent"`
 	NetRecv    uint64     `json:"net_recv"`
+	NICs       []NIC      `json:"nics"`
+	DiskIO     []DiskIO   `json:"disk_io"`
 	SampledAt  int64      `json:"sampled_at"`
+}
+
+// NIC is one network interface's byte counters.
+type NIC struct {
+	Name string `json:"name"`
+	Sent uint64 `json:"sent"`
+	Recv uint64 `json:"recv"`
+}
+
+// DiskIO is one whole disk's counters; the dashboard turns two samples into
+// rates, operations per second and latency (busy time / operations).
+type DiskIO struct {
+	Name       string `json:"name"`
+	ReadBytes  uint64 `json:"read_bytes"`
+	WriteBytes uint64 `json:"write_bytes"`
+	ReadCount  uint64 `json:"read_count"`
+	WriteCount uint64 `json:"write_count"`
+	ReadTime   uint64 `json:"read_time"`  // ms
+	WriteTime  uint64 `json:"write_time"` // ms
 }
 
 type Disk struct {
@@ -88,7 +111,47 @@ func Collect(ctx context.Context) Overview {
 	if io, err := net.IOCountersWithContext(ctx, false); err == nil && len(io) > 0 {
 		o.NetSent, o.NetRecv = io[0].BytesSent, io[0].BytesRecv
 	}
+	if io, err := net.IOCountersWithContext(ctx, true); err == nil {
+		for _, n := range io {
+			if !skipNIC(n.Name) {
+				o.NICs = append(o.NICs, NIC{Name: n.Name, Sent: n.BytesSent, Recv: n.BytesRecv})
+			}
+		}
+		sort.Slice(o.NICs, func(i, j int) bool { return o.NICs[i].Name < o.NICs[j].Name })
+	}
+	if io, err := disk.IOCountersWithContext(ctx); err == nil {
+		for name, d := range io {
+			if wholeDisk(name) {
+				o.DiskIO = append(o.DiskIO, DiskIO{Name: name, ReadBytes: d.ReadBytes, WriteBytes: d.WriteBytes,
+					ReadCount: d.ReadCount, WriteCount: d.WriteCount, ReadTime: d.ReadTime, WriteTime: d.WriteTime})
+			}
+		}
+		sort.Slice(o.DiskIO, func(i, j int) bool { return o.DiskIO[i].Name < o.DiskIO[j].Name })
+	}
 	return o
+}
+
+// skipNIC hides loopback and the per-container virtual interfaces.
+func skipNIC(name string) bool {
+	for _, p := range []string{"lo", "veth", "docker", "br-", "virbr", "tun", "tap"} {
+		if strings.HasPrefix(name, p) {
+			return true
+		}
+	}
+	return false
+}
+
+var partitionRe = regexp.MustCompile(`^((sd|vd|xvd|hd)[a-z]+\d+|(nvme\d+n\d+|mmcblk\d+)p\d+)$`)
+
+// wholeDisk keeps disks and drops partitions, loop, RAM and optical devices.
+func wholeDisk(name string) bool {
+	// Device-mapper and md devices repeat the IO of the disks under them.
+	for _, p := range []string{"loop", "ram", "sr", "fd", "zram", "dm-", "md"} {
+		if strings.HasPrefix(name, p) {
+			return false
+		}
+	}
+	return !partitionRe.MatchString(name)
 }
 
 var pseudoFS = map[string]bool{

@@ -66,3 +66,43 @@ func TestProtectionConfig(t *testing.T) {
 		t.Errorf("preview %q", p)
 	}
 }
+
+func TestCDNHeaders(t *testing.T) {
+	e := &Env{Home: t.TempDir(), Protection: func() Protection {
+		return Protection{Sites: map[string]SiteProtect{
+			"a.com":   {CDN: true},
+			"b.com":   {On: true, CDN: true},                                        // same default list: same group
+			"c.com":   {CDN: true, CDNHeaders: []string{"X-Real-IP", "bad header"}}, // invalid names dropped
+			"off.com": {On: true},
+		}}
+	}}
+	sites := []Site{{Domain: "a.com", Aliases: []string{"*.a.com"}}, {Domain: "b.com"}, {Domain: "c.com"}, {Domain: "off.com"}}
+	edge, err := e.edgeFiles(sites, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(edge["maps/cdn_exact.map"]); got != "a.com 1\nb.com 1\nc.com 2\noff.com 0\n" {
+		t.Fatalf("map:\n%s", got)
+	}
+	if got := string(edge["maps/cdn_wild.map"]); got != ".a.com 1\n" {
+		t.Fatalf("wild:\n%s", got)
+	}
+	cfg := string(edge["haproxy.cfg"])
+	for _, want := range []string{
+		"set-var(txn.rip) req.hdr_ip(CF-Connecting-IP,-1) if { var(txn.cdng) -m str 1 } !{ var(txn.rip) -m found } { req.hdr(CF-Connecting-IP) -m found }",
+		"set-var(txn.rip) req.hdr_ip(X-Forwarded-For,-1) if { var(txn.cdng) -m str 1 }",
+		"set-var(txn.rip) req.hdr_ip(X-Real-IP,-1) if { var(txn.cdng) -m str 2 }",
+		"http-request set-src var(txn.rip) if { var(txn.rip) -m found }",
+	} {
+		if !strings.Contains(cfg, want) {
+			t.Errorf("config lacks %q", want)
+		}
+	}
+	if strings.Contains(cfg, "cdn_only") || strings.Contains(cfg, "bad header") {
+		t.Error("cdn_only refusal or an invalid header in the config")
+	}
+	// The visitor address is settled before the IP lists are checked.
+	if strings.Index(cfg, "set-src var(txn.rip)") > strings.Index(cfg, "lists/block.lst") {
+		t.Error("CDN address applied after the block list")
+	}
+}
