@@ -165,7 +165,16 @@ pma_sql() { # token sql
 TOK="$(pma_token)"
 [[ -n "$TOK" ]] || fail "no phpMyAdmin token on the SQL page"
 out="$(pma_sql "$TOK" "CREATE TABLE e2e_one (id INT)")"
-[[ "$out" == *'"success":true'* ]] || { echo "$out" | head -c 600; fail "phpMyAdmin change refused"; }
+if [[ "$out" != *'"success":true'* ]]; then
+  echo "$out" | head -c 600; echo
+  echo "--- page response headers"; curl -sk -b "$PJ" -c "$PJ" -D - -o /dev/null "$P/phpmyadmin/index.php?route=/database/sql&db=pmtest&server=$PMS" | grep -i 'set-cookie\|^HTTP'
+  echo "--- cookie jar"; grep -i 'phpmyadmin\|pma\|LMCWHM' "$PJ"
+  PMAC="$(api GET /apps | python3 -c "import sys,json; print([a['container'] for a in json.load(sys.stdin)['items'] if a['app']=='phpmyadmin'][0])")"
+  echo "--- php session ini"; docker exec "$PMAC" php -i | grep -E '^session\.(sid|use_strict|save_path|name)'
+  echo "--- sessions"; docker exec "$PMAC" sh -c 'ls -la /sessions | tail -5'
+  echo "--- apache log"; docker logs --tail 20 "$PMAC" 2>&1
+  fail "phpMyAdmin change refused"
+fi
 [[ "$(pma_signon "/databases/$(db_id pmtest)/phpmyadmin")" == 200 ]] || fail "second sign-on, same user"
 out="$(pma_sql "$TOK" "CREATE TABLE e2e_two (id INT)")"
 [[ "$out" == *'"success":true'* ]] || { echo "$out" | head -c 600; fail "token of an open page lost after signing in again (token mismatch)"; }
