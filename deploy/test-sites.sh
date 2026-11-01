@@ -452,7 +452,7 @@ pass "configs regenerated from database on restart"
 
 # ---------- website gRPC (HTTP/2 to the backend) ----------
 docker run -d --name grpcbin --network host moul/grpcbin >/dev/null # plain gRPC on :9000
-grpc() { docker run --rm --network host fullstorydev/grpcurl:latest -insecure -servername grpc.test -authority grpc.test "$@"; }
+grpc() { docker run --rm --network host fullstorydev/grpcurl:latest -max-time 20 -insecure -servername grpc.test -authority grpc.test "$@"; }
 code="$(api POST /sites '{"domain":"grpc.test","type":"proxy","proxy_target":"grpc://127.0.0.1:9000","ssl":"http"}' | jget ".get('code','')")"
 [[ "$code" == site.grpc_off ]] || fail "gRPC target accepted while switched off: $code"
 api PUT /settings '{"site_grpc":true}' | grep -q '"site_grpc":true' || fail "turn website gRPC on"
@@ -475,10 +475,11 @@ out="$(grpc -d '{}' 127.0.0.1:443 grpcbin.GRPCBin/DummyUnary 2>&1 || true)"
 [[ "$out" == *PermissionDenied* ]] || fail "blocked method not refused: $out"
 grpc 127.0.0.1:443 list | grep -q grpcbin.GRPCBin || fail "other methods refused by a method block"
 api POST /firewall/patterns/clear '{"kind":"url","list":"block"}' >/dev/null
-# With the WAF on, calls still pass (the body is not inspected).
+# With the WAF on, gRPC domains bypass ModSecurity and calls still pass.
 waf="$(api GET /waf | python3 -c "import sys,json; s=json.load(sys.stdin)['settings']; s['enabled']=True; s['engine']='On'; print(json.dumps(s))")"
 wait_task "$(api PUT /waf "$waf" | jget "['task_id']")"
 docker exec lmcwhm-nginx nginx -t 2>&1 | grep -q successful || fail "nginx -t with gRPC + WAF: $(docker exec lmcwhm-nginx nginx -t 2>&1 || true)"
+grep -q 'modsecurity off;' /opt/lmcwhm/web/nginx/conf.d/grpc.test.conf || fail "gRPC vhost not exempt from ModSecurity"
 for _ in $(seq 1 20); do grpc 127.0.0.1:443 list 2>/dev/null | grep -q grpcbin.GRPCBin && break; sleep 1; done
 out="$(grpc -d '{"f_string":"waf-ok"}' 127.0.0.1:443 grpcbin.GRPCBin/DummyUnary 2>&1 || true)"
 [[ "$out" == *waf-ok* ]] || fail "gRPC call refused by the WAF: $out"

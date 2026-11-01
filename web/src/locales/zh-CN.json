@@ -3601,7 +3601,7 @@
       "protect": "假蜘蛛、禁 IDC、爬虫防护：正常；gRPC 客户端的 UA（例如 grpc-go）不会被当成蜘蛛。",
       "cc": "CC 防御：每个 RPC 计一次请求，一条 streaming 只计一次；高频服务可能需调高或关闭 CC。",
       "rules": "读取请求内容（body）的专属规则：对 gRPC 域名不生效（protobuf 二进制，也避免卡住 streaming）。",
-      "waf": "WAF（ModSecurity + OWASP）：只检查路径和 header（自动关闭 body 检查并排除 920420），否则所有 gRPC 请求都会被拦截。仍可在网站防护关闭 WAF。",
+      "waf": "WAF（ModSecurity + OWASP）：gRPC 域名不经过 ModSecurity（它会卡住 HTTP/2 流，也无法解析 protobuf）。入口的黑白名单、专属规则和 CC 防御照常生效。",
       "other": "Varnish 缓存、自定义错误页：不适用，自动跳过。被拦截时客户端收到对应错误，例如 403 = PERMISSION_DENIED、429 = UNAVAILABLE。",
       "tls": "必须使用 HTTPS（443）；80 端口不支持 gRPC。",
       "passthrough": "另一选择：「直通」目标（后端自行处理 TLS）也支持 gRPC，但没有 WAF 和 HTTP 层规则。"

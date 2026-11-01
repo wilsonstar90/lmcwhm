@@ -3552,7 +3552,7 @@
       "protect": "Fake spiders, data-centre and crawler blocking: work; gRPC client User-Agents (e.g. grpc-go) are not taken for spiders.",
       "cc": "CC protection: each RPC counts as one request, a stream once; busy services may need a higher limit or CC off.",
       "rules": "Dedicated rules that read the request body: not applied to gRPC domains (binary protobuf; streams would stall).",
-      "waf": "WAF (ModSecurity + OWASP): checks the path and headers only (body inspection off, rule 920420 excluded), or every gRPC call would be blocked. The WAF can still be turned off per site.",
+      "waf": "WAF (ModSecurity + OWASP): gRPC domains bypass ModSecurity (it stalls HTTP/2 streams and cannot read protobuf). The edge lists, custom rules and CC protection still apply.",
       "other": "Varnish cache and custom error pages: not applicable, skipped. Refused calls get the matching error, e.g. 403 = PERMISSION_DENIED, 429 = UNAVAILABLE.",
       "tls": "HTTPS (443) only; port 80 does not carry gRPC.",
       "passthrough": "Alternative: a passthrough target (TLS ends at the backend) also carries gRPC, without the WAF or HTTP-level rules."

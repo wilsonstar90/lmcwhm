@@ -51,18 +51,14 @@ server {
         return {{.}};
     }
 {{- end}}
-{{- if .WAFOff}}
+{{- if or .WAFOff .GRPC}}
+{{- if .GRPC}}
+    # gRPC: ModSecurity stalls streamed HTTP/2 bodies behind grpc_pass and
+    # cannot read protobuf; the edge rules (lists, custom rules, CC) still apply.
+{{- end}}
     modsecurity off;
-{{- else}}
-{{- if .WAFExclude}}
+{{- else if .WAFExclude}}
     modsecurity_rules 'SecRuleRemoveById {{.WAFExclude}}';
-{{- end}}
-{{- if and .GRPC .WAF}}
-    # gRPC: the WAF checks the path and headers only (the body is streamed
-    # protobuf), and application/grpc is an allowed content type.
-    modsecurity_rules 'SecRequestBodyAccess Off';
-    modsecurity_rules 'SecRuleRemoveById 920420';
-{{- end}}
 {{- end}}
 {{- if .Adv.MaxBodyMB}}
     client_max_body_size {{.Adv.MaxBodyMB}}m;

@@ -49,8 +49,8 @@ func TestGRPCConfig(t *testing.T) {
 		t.Errorf("nginx.conf without the gRPC listener:\n%s", main)
 	}
 	v := string(ng["conf.d/rpc.test.conf"])
-	for _, want := range []string{"listen 127.0.0.1:8081;\n    http2 on;", "grpc_pass grpc://127.0.0.1:9000;", "modsecurity_rules 'SecRequestBodyAccess Off';",
-		"modsecurity_rules 'SecRuleRemoveById 920420';", "rpc.test.log grpc;"} {
+	for _, want := range []string{"listen 127.0.0.1:8081;\n    http2 on;", "grpc_pass grpc://127.0.0.1:9000;", 
+		"modsecurity off;", "rpc.test.log grpc;"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("gRPC vhost missing %q:\n%s", want, v)
 		}
