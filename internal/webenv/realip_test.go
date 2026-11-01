@@ -14,7 +14,7 @@ import (
 
 func TestRealIPConfig(t *testing.T) {
 	e := &Env{Home: t.TempDir(), CDN: func() CDN {
-		return CDN{Cloudflare: []string{"104.16.0.0/13", "198.51.100.0/24"}, Ranges: []string{"203.0.113.7", "bad"}, Header: "X-Real-IP"}
+		return CDN{Cloudflare: []string{"104.16.0.0/13", "198.51.100.0/24"}, Ranges: []string{"203.0.113.7", "bad"}, Headers: []string{"X-Real-IP", "True-Client-IP"}}
 	}}
 	edge, err := e.edgeFiles(nil, nil)
 	if err != nil {
@@ -26,7 +26,9 @@ func TestRealIPConfig(t *testing.T) {
 		"http-request set-src req.hdr_ip(CF-Connecting-IP,1) if { var(txn.via_cf) -m bool }",
 		"http-request del-header CF-Connecting-IP if !{ var(txn.via_cf) -m bool }",
 		"http-request set-var(txn.via_cdn) bool(1) if from_cdn !from_cf",
-		"http-request set-src req.hdr_ip(X-Real-IP,-1) if { var(txn.via_cdn) -m bool }",
+		"http-request set-var(txn.cip) req.hdr_ip(X-Real-IP,-1) if { var(txn.via_cdn) -m bool } !{ var(txn.cip) -m found }",
+		"http-request set-var(txn.cip) req.hdr_ip(True-Client-IP,-1) if { var(txn.via_cdn) -m bool } !{ var(txn.cip) -m found }",
+		"http-request set-src var(txn.cip) if { var(txn.cip) -m found }",
 		"http-request set-var(txn.block) str(403:ip) if { src -f " + e.EdgeDir() + "/lists/block.lst } !ip_allow !acme",
 	} {
 		if !strings.Contains(cfg, want) {
@@ -45,7 +47,7 @@ func TestRealIPConfig(t *testing.T) {
 		t.Errorf("cdn_custom.lst = %q", got)
 	}
 	// Without custom ranges there is no custom header rule.
-	e.CDN = func() CDN { return CDN{Header: "X-Real-IP"} }
+	e.CDN = func() CDN { return CDN{Headers: []string{"X-Real-IP"}} }
 	edge, _ = e.edgeFiles(nil, nil)
 	if strings.Contains(string(edge["haproxy.cfg"]), "from_cdn") {
 		t.Error("custom CDN rule without ranges")

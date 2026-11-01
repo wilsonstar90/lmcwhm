@@ -84,3 +84,36 @@ func TestDomainTargets(t *testing.T) {
 		t.Fatalf("passthrough %+v", sp)
 	}
 }
+
+func TestGRPCTarget(t *testing.T) {
+	sv := newTestSvc(t)
+	ctx := context.Background()
+	on := false
+	sv.Env.GRPC = func() bool { return on }
+	s := Site{Domain: "rpc.com", Type: "proxy", SSLMode: "none"}
+	in := TargetInput{Target: TargetURL, ProxyTarget: "grpc://127.0.0.1:9000"}
+	if err := sv.applyTarget(ctx, &s, in); err != ErrGRPCOff {
+		t.Fatalf("gRPC switched off: %v", err)
+	}
+	on = true
+	if err := sv.applyTarget(ctx, &s, in); err != ErrGRPCNoSSL {
+		t.Fatalf("without HTTPS: %v", err)
+	}
+	in.sslPlanned = true // a new site with a certificate on the way
+	if err := sv.applyTarget(ctx, &s, in); err != nil || s.ProxyTarget != "grpc://127.0.0.1:9000" {
+		t.Fatalf("gRPC target: %v %q", err, s.ProxyTarget)
+	}
+	s.SSLMode = "acme"
+	if err := sv.applyTarget(ctx, &s, TargetInput{Target: TargetDocker, Container: "rpc", ProxyTarget: "grpcs://[::1]:9443"}); err != nil {
+		t.Fatalf("docker gRPC over TLS: %v", err)
+	}
+	if err := sv.applyTarget(ctx, &s, TargetInput{Target: TargetURL, ProxyTarget: "grpc://h:1/path"}); err != ErrBadTarget {
+		t.Fatalf("path in a gRPC target: %v", err)
+	}
+	if err := sv.save(ctx, &s); err != nil {
+		t.Fatal(err)
+	}
+	if sv.GRPCCount(ctx) != 1 {
+		t.Error("GRPCCount")
+	}
+}

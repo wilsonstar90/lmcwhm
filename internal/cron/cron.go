@@ -55,6 +55,7 @@ type Run struct {
 type Job struct {
 	ID        int64  `json:"id"`
 	Name      string `json:"name"`
+	Remark    string `json:"remark"`
 	Type      string `json:"type"` // shell | url | logrotate | backup | ip_feeds | system | malware_scan
 	Schedule  string `json:"schedule"`
 	Command   string `json:"command"`
@@ -138,11 +139,11 @@ func (sv *Service) Next(schedule string, n int) ([]int64, error) {
 
 // ---- persistence ----
 
-const jobCols = `id, name, type, schedule, command, enabled, timeout, created_at, updated_at`
+const jobCols = `id, name, remark, type, schedule, command, enabled, timeout, created_at, updated_at`
 
 func scanJob(row interface{ Scan(...any) error }) (Job, error) {
 	var j Job
-	err := row.Scan(&j.ID, &j.Name, &j.Type, &j.Schedule, &j.Command, &j.Enabled, &j.Timeout, &j.CreatedAt, &j.UpdatedAt)
+	err := row.Scan(&j.ID, &j.Name, &j.Remark, &j.Type, &j.Schedule, &j.Command, &j.Enabled, &j.Timeout, &j.CreatedAt, &j.UpdatedAt)
 	return j, err
 }
 
@@ -196,6 +197,7 @@ func (sv *Service) Get(ctx context.Context, id int64) (Job, error) {
 // Input creates or replaces a job.
 type Input struct {
 	Name     string `json:"name"`
+	Remark   string `json:"remark"`
 	Type     string `json:"type"`
 	Schedule string `json:"schedule"`
 	Command  string `json:"command"`
@@ -204,7 +206,7 @@ type Input struct {
 }
 
 func (sv *Service) validate(ctx context.Context, in *Input) error {
-	in.Name, in.Schedule = strings.TrimSpace(in.Name), strings.TrimSpace(in.Schedule)
+	in.Name, in.Schedule, in.Remark = strings.TrimSpace(in.Name), strings.TrimSpace(in.Schedule), trimRemark(in.Remark)
 	if in.Name == "" || len(in.Name) > 100 {
 		return ErrName
 	}
@@ -259,8 +261,8 @@ func (sv *Service) Create(ctx context.Context, in Input) (Job, error) {
 		return Job{}, err
 	}
 	now := time.Now().Unix()
-	res, err := sv.st.DB.ExecContext(ctx, `INSERT INTO cron_jobs(name, type, schedule, command, enabled, timeout, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?)`,
-		in.Name, in.Type, in.Schedule, in.Command, in.Enabled, in.Timeout, now, now)
+	res, err := sv.st.DB.ExecContext(ctx, `INSERT INTO cron_jobs(name, remark, type, schedule, command, enabled, timeout, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?)`,
+		in.Name, in.Remark, in.Type, in.Schedule, in.Command, in.Enabled, in.Timeout, now, now)
 	if err != nil {
 		return Job{}, err
 	}
@@ -273,8 +275,8 @@ func (sv *Service) Update(ctx context.Context, id int64, in Input) (Job, error) 
 	if err := sv.validate(ctx, &in); err != nil {
 		return Job{}, err
 	}
-	res, err := sv.st.DB.ExecContext(ctx, `UPDATE cron_jobs SET name=?, type=?, schedule=?, command=?, enabled=?, timeout=?, updated_at=? WHERE id=?`,
-		in.Name, in.Type, in.Schedule, in.Command, in.Enabled, in.Timeout, time.Now().Unix(), id)
+	res, err := sv.st.DB.ExecContext(ctx, `UPDATE cron_jobs SET name=?, remark=?, type=?, schedule=?, command=?, enabled=?, timeout=?, updated_at=? WHERE id=?`,
+		in.Name, in.Remark, in.Type, in.Schedule, in.Command, in.Enabled, in.Timeout, time.Now().Unix(), id)
 	if err != nil {
 		return Job{}, err
 	}
@@ -295,6 +297,26 @@ func (sv *Service) SetEnabled(ctx context.Context, id int64, on bool) error {
 	}
 	sv.reschedule(ctx, id)
 	return nil
+}
+
+// SetRemark changes only a job's remark.
+func (sv *Service) SetRemark(ctx context.Context, id int64, remark string) error {
+	res, err := sv.st.DB.ExecContext(ctx, `UPDATE cron_jobs SET remark=? WHERE id=?`, trimRemark(remark), id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func trimRemark(s string) string {
+	s = strings.TrimSpace(s)
+	if r := []rune(s); len(r) > 200 {
+		s = string(r[:200])
+	}
+	return s
 }
 
 func (sv *Service) Delete(ctx context.Context, id int64) error {

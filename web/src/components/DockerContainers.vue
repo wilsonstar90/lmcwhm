@@ -6,11 +6,12 @@ import {
   NButton, NSpace, NTag, NInput, NModal, NCard, NForm, NFormItem, NSelect, NDropdown, NGrid, NGi, NRadioGroup, NRadioButton, NEmpty,
   NSpin, useMessage,
 } from 'naive-ui'
-import { get, post, ApiError } from '../api/client'
+import { get, post, put, ApiError } from '../api/client'
 import type { Container } from '../api/types'
 import { bytes, datetime } from '../format'
 import DockerContainer from './DockerContainer.vue'
 import DockerVolumes from './DockerVolumes.vue'
+import RemarkCell from './RemarkCell.vue'
 
 // Containers as cards with live CPU / memory; click one for its settings.
 const emit = defineEmits<{ task: [id: string, title: string]; bind: [port: number, name: string]; changed: [] }>()
@@ -74,7 +75,7 @@ const filtered = computed(() => {
   return items.value.filter(
     (c) =>
       (state.value === 'all' || (state.value === 'stopped' ? stopped(c.state) : c.state === state.value)) &&
-      (!q || [c.name, c.image, c.project].some((x) => x.toLowerCase().includes(q))),
+      (!q || [c.name, c.image, c.project, c.remark ?? ''].some((x) => x.toLowerCase().includes(q))),
   )
 })
 
@@ -150,6 +151,9 @@ async function create() {
           </span>
         </div>
         <div class="img" :title="c.image">{{ c.image }}</div>
+        <div class="rmk" @click.stop @keyup.stop>
+          <RemarkCell :value="c.remark ?? ''" :save="(v: string) => put('/docker/remark', { kind: 'container', name: c.name, remark: v }).then(() => (c.remark = v))" />
+        </div>
         <div class="meta">
           <span>{{ c.created_at ? datetime(c.created_at, locale) : c.created }}</span>
           <span>{{ c.status }}</span>
@@ -290,6 +294,14 @@ async function create() {
   display: inline-flex;
   gap: 4px;
   flex: none;
+}
+.rmk {
+  font-size: 12.5px;
+  margin-top: -2px;
+}
+.card:hover :deep(.remark-cell.empty),
+.card:focus-within :deep(.remark-cell.empty) {
+  opacity: 0.35;
 }
 .img {
   font-size: 12.5px;

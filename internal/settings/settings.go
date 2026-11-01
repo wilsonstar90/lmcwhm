@@ -53,6 +53,8 @@ type Settings struct {
 	BackupDir string `json:"backup_dir"`
 	// LogoImage shows the uploaded logo instead of the panel alias.
 	LogoImage bool `json:"logo_image"`
+	// SiteGRPC lets websites proxy gRPC services (HTTP/2 to the backend).
+	SiteGRPC bool `json:"site_grpc"`
 }
 
 // UnauthStatuses are the answers an unauthenticated visitor may get.

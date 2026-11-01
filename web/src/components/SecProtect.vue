@@ -10,8 +10,9 @@ import {
 import { get, patch, put, ApiError } from '../api/client'
 import SecEvents from './SecEvents.vue'
 import TaskModal from './TaskModal.vue'
+import CdnHeaderList, { type CdnHeader } from './CdnHeaderList.vue'
 
-interface Prot { on: boolean; fake_spider: boolean; cdn: boolean; cdn_headers?: string[] | null; idc: boolean; crawler: boolean; cc: number }
+interface Prot { on: boolean; fake_spider: boolean; cdn: boolean; cdn_headers?: CdnHeader[] | null; idc: boolean; crawler: boolean; cc: number }
 interface Row { domain: string; aliases: string[]; type: string; supported: boolean; proxied: boolean; protect: Prot; blocked: number; blocked_24h: number }
 interface Info { rules_on: boolean; spiders: string[]; has_asn: boolean }
 interface Settings { rules_on: boolean; crawlers: string[]; idc: { number: number; name: string }[] }
@@ -139,27 +140,13 @@ const usesIDC = computed(() => rows.value.some((r) => r.protect.on && r.protect.
 // address comes from the first of its headers that holds one.
 const DEFAULT_CDN_HEADERS = ['CF-Connecting-IP', 'True-Client-IP', 'Ali-Cdn-Real-Ip', 'Cdn-Src-Ip', 'Cdn-Real-Ip', 'X-Real-IP',
   'X-Forwarded-For', 'X-Client-IP', 'Client-IP', 'Forwarded-For', 'X-Forwarded', 'Forwarded']
-const cdnEdit = ref<{ row: Row; headers: string[]; add: string } | null>(null)
-const headerOK = (v: string) => /^[A-Za-z0-9-]{1,64}$/.test(v)
+const cdnEdit = ref<{ row: Row; headers: CdnHeader[] } | null>(null)
 function openCDN(r: Row) {
-  cdnEdit.value = { row: r, headers: [...(r.protect.cdn_headers?.length ? r.protect.cdn_headers : DEFAULT_CDN_HEADERS)], add: '' }
-}
-function addHeader() {
-  const e = cdnEdit.value!
-  const v = e.add.trim()
-  if (!headerOK(v) || e.headers.some((x) => x.toLowerCase() === v.toLowerCase())) return msg.warning(t('prot.cdn_bad_header'))
-  e.headers.push(v)
-  e.add = ''
-}
-function moveHeader(i: number, d: number) {
-  const hs = cdnEdit.value!.headers
-  const j = i + d
-  if (j < 0 || j >= hs.length) return
-  ;[hs[i], hs[j]] = [hs[j], hs[i]]
+  cdnEdit.value = { row: r, headers: r.protect.cdn_headers?.length ? r.protect.cdn_headers.map((x) => ({ ...x })) : DEFAULT_CDN_HEADERS.map((name) => ({ name })) }
 }
 async function saveCDN() {
   const e = cdnEdit.value!
-  const same = e.headers.length === DEFAULT_CDN_HEADERS.length && e.headers.every((x, i) => x === DEFAULT_CDN_HEADERS[i])
+  const same = e.headers.length === DEFAULT_CDN_HEADERS.length && e.headers.every((x, i) => x.name === DEFAULT_CDN_HEADERS[i] && !x.remark)
   await set(e.row, { cdn_headers: same ? [] : e.headers })
   cdnEdit.value = null
 }
@@ -298,29 +285,13 @@ const columns = computed<DataTableColumns<Row>>(() => [
   </n-modal>
 
   <n-modal :show="!!cdnEdit" @update:show="(v: boolean) => !v && (cdnEdit = null)">
-    <n-card v-if="cdnEdit" :title="t('prot.cdn_headers_of', { site: cdnEdit.row.domain })" style="width: min(520px, calc(100vw - 32px))" closable @close="cdnEdit = null">
-      <n-space :wrap="false" style="margin-bottom: 12px">
-        <n-input v-model:value="cdnEdit.add" :placeholder="t('prot.cdn_header_name')" @keyup.enter="addHeader" />
-        <n-button type="primary" @click="addHeader">{{ t('prot.cdn_add') }}</n-button>
-      </n-space>
-      <div class="hdrs">
-        <div v-for="(hd, i) in cdnEdit.headers" :key="hd" class="hdr">
-          <span class="n">{{ i + 1 }}</span>
-          <code>{{ hd }}</code>
-          <n-button size="tiny" quaternary :disabled="i === 0" :aria-label="t('menucfg.up')" @click="moveHeader(i, -1)">↑</n-button>
-          <n-button size="tiny" quaternary :disabled="i === cdnEdit.headers.length - 1" :aria-label="t('menucfg.down')" @click="moveHeader(i, 1)">↓</n-button>
-          <n-button size="tiny" quaternary type="error" :disabled="cdnEdit.headers.length === 1" @click="cdnEdit.headers.splice(i, 1)">{{ t('common.delete') }}</n-button>
-        </div>
-      </div>
-      <p class="note">• {{ t('prot.cdn_note') }}</p>
+    <n-card v-if="cdnEdit" :title="t('prot.cdn_headers_of', { site: cdnEdit.row.domain })" style="width: min(640px, calc(100vw - 32px))" closable @close="cdnEdit = null">
+      <CdnHeaderList v-model="cdnEdit.headers" :defaults="DEFAULT_CDN_HEADERS" />
       <n-alert type="warning" :show-icon="false" style="margin-top: 8px; font-size: 12px">{{ t('prot.cdn_risk') }}</n-alert>
       <template #footer>
-        <n-space justify="space-between">
-          <n-button quaternary @click="cdnEdit.headers = [...DEFAULT_CDN_HEADERS]">{{ t('prot.cdn_reset') }}</n-button>
-          <n-space>
-            <n-button @click="cdnEdit = null">{{ t('common.cancel') }}</n-button>
-            <n-button type="primary" @click="saveCDN">{{ t('common.save') }}</n-button>
-          </n-space>
+        <n-space justify="end">
+          <n-button @click="cdnEdit = null">{{ t('common.cancel') }}</n-button>
+          <n-button type="primary" @click="saveCDN">{{ t('common.save') }}</n-button>
         </n-space>
       </template>
     </n-card>
@@ -328,35 +299,6 @@ const columns = computed<DataTableColumns<Row>>(() => [
 </template>
 
 <style scoped>
-.hdrs {
-  max-height: 46vh;
-  overflow: auto;
-  border: 1px solid rgba(128, 128, 128, 0.2);
-  border-radius: 6px;
-}
-.hdr {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-bottom: 1px solid rgba(128, 128, 128, 0.12);
-}
-.hdr code {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.hdr .n {
-  width: 18px;
-  font-size: 12px;
-  opacity: 0.5;
-}
-.note {
-  font-size: 12px;
-  opacity: 0.75;
-  margin: 10px 0 0;
-}
 .notes {
   font-size: 12px;
   opacity: 0.65;

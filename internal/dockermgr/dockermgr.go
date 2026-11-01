@@ -95,6 +95,7 @@ type Container struct {
 	HostPorts []int  `json:"host_ports"`
 	CreatedAt int64  `json:"created_at"`
 	Usage     *Usage `json:"usage"` // with stats, running containers only
+	Remark    string `json:"remark"`
 }
 
 type psLine struct {
@@ -476,6 +477,7 @@ type Project struct {
 	Running  int    `json:"running"`
 	Services int    `json:"services"`
 	Status   string `json:"status"`
+	Remark   string `json:"remark"`
 }
 
 func (m *Manager) compose(ctx context.Context, name string, args ...string) (string, error) {

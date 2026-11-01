@@ -15,6 +15,7 @@ import type { FileEntry } from '../../api/types'
 import { bytes, datetime } from '../../format'
 import FilesExtras from '../FilesExtras.vue'
 import FileIcon from './FileIcon.vue'
+import RemarkCell from '../RemarkCell.vue'
 import {
   baseName, changed, clipboard, droppedFiles, isArchive, isImage, join, openInEditor, openUpload, parentOf,
 } from './state'
@@ -509,45 +510,17 @@ function sizeCell(e: FileEntry) {
 }
 
 // ---- remarks: click to type ----
-const remarkEdit = ref<{ path: string; text: string } | null>(null)
-const remarkEl = ref<HTMLInputElement | null>(null)
+const remarkOpen = ref('')
 const autoText = (e: FileEntry) => (e.auto && te(`fm.auto.${e.auto.code}`) ? t(`fm.auto.${e.auto.code}`, { arg: e.auto.arg ?? '' }) : '')
-async function editRemark(e: FileEntry) {
-  remarkEdit.value = { path: e.path, text: e.remark ?? '' }
-  await nextTick()
-  remarkEl.value?.focus()
-}
-async function saveRemark() {
-  const r = remarkEdit.value
-  if (!r) return
-  remarkEdit.value = null
-  const e = byPath.value.get(r.path)
-  if (!e || (e.remark ?? '') === r.text.trim()) return
-  try {
-    await put('/files/remark', { path: r.path, remark: r.text })
-    e.remark = r.text.trim()
-  } catch (err) {
-    fail(err)
-  }
+function editRemark(e: FileEntry) {
+  remarkOpen.value = e.path
 }
 function remarkCell(e: FileEntry) {
-  if (remarkEdit.value?.path === e.path) {
-    return h('input', {
-      ref: remarkEl, class: 'remark-input', value: remarkEdit.value.text, maxlength: 500,
-      onInput: (ev: Event) => (remarkEdit.value!.text = (ev.target as HTMLInputElement).value),
-      onKeydown: (ev: KeyboardEvent) => {
-        ev.stopPropagation()
-        if (ev.key === 'Enter') saveRemark()
-        if (ev.key === 'Escape') remarkEdit.value = null
-      },
-      onBlur: saveRemark, onClick: (ev: MouseEvent) => ev.stopPropagation(), onDblclick: (ev: MouseEvent) => ev.stopPropagation(),
-    })
-  }
-  const text = e.remark || autoText(e)
-  return h('div', {
-    class: ['remark', { auto: !e.remark && text, empty: !text }], title: text,
-    onClick: (ev: MouseEvent) => (ev.stopPropagation(), editRemark(e)), onDblclick: (ev: MouseEvent) => ev.stopPropagation(),
-  }, text || t('fm.add_remark'))
+  return h(RemarkCell, {
+    value: e.remark ?? '', auto: autoText(e), maxlength: 500, open: remarkOpen.value === e.path,
+    onClose: () => (remarkOpen.value = ''),
+    save: (v: string) => put('/files/remark', { path: e.path, remark: v }).then(() => (e.remark = v)),
+  })
 }
 
 // ---- table ----
@@ -927,32 +900,6 @@ ul.conflicts {
 }
 .list :deep(.fname) {
   cursor: pointer;
-}
-.list :deep(.remark) {
-  min-height: 20px;
-  cursor: text;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.list :deep(.remark.auto) {
-  opacity: 0.55;
-}
-.list :deep(.remark.empty) {
-  opacity: 0;
-}
-.list :deep(tr:hover .remark.empty) {
-  opacity: 0.35;
-}
-.list :deep(.remark-input) {
-  width: 100%;
-  font: inherit;
-  padding: 2px 6px;
-  border: 1px solid #20a53a;
-  border-radius: 4px;
-  background: transparent;
-  color: inherit;
-  outline: none;
 }
 .muted,
 .list :deep(.muted) {

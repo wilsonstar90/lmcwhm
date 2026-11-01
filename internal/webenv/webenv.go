@@ -40,6 +40,7 @@ const (
 	NginxName   = "lmcwhm-nginx"
 
 	NginxPort = 8080 // loopback only
+	GRPCPort  = 8081 // loopback only: nginx's HTTP/2 (h2c) listener for gRPC sites
 	ACMEPort  = 8899 // loopback only; served by the panel process
 )
 
@@ -105,6 +106,17 @@ var DefaultIndex = []string{"index.php", "index.html", "index.htm", "default.php
 
 func (s Site) Hosts() []string { return append([]string{s.Domain}, s.Aliases...) }
 
+// IsGRPC reports whether an upstream URL is a gRPC service (grpc:// is
+// plain HTTP/2, grpcs:// HTTP/2 over TLS).
+func IsGRPC(upstream string) bool {
+	return strings.HasPrefix(upstream, "grpc://") || strings.HasPrefix(upstream, "grpcs://")
+}
+
+// grpc: the site proxies gRPC (end-to-end HTTP/2), when the panel allows it.
+func (s Site) grpc(on bool) bool { return on && !s.Passthrough && !s.Stopped && IsGRPC(s.Upstream) }
+
+func (e *Env) grpcOn() bool { return e.GRPC != nil && e.GRPC() }
+
 // Passthrough routes a hostname's raw TLS stream to Target.
 type Passthrough struct {
 	Host          string
@@ -122,6 +134,8 @@ type Env struct {
 	// ExtraRoots are further site directories outside WWWRoot; nginx and PHP
 	// see each at the same path.
 	ExtraRoots func() []string
+	// GRPC reports whether websites may proxy gRPC (面板設定; nil = no).
+	GRPC func() bool
 	// WAF returns the current WAF settings (nil = off).
 	WAF func() WAFSettings
 	// CDN returns the proxies trusted for the visitor's address (nil = Cloudflare only).
@@ -519,10 +533,12 @@ type edgeData struct {
 	NginxPort   int
 	VarnishPort int
 	Passthrough []passBackend
-	CDNHeader   string // the custom CDN's address header ("" = none)
+	CDNHeaders  []string // the custom CDN's address headers (none = no custom CDN)
 	CDNGroups   []cdnGroup
 	Rules       []ruleData
 	Body        bool // a rule reads the request body
+	GRPC        bool // some site proxies gRPC (be_web_h2)
+	GRPCPort    int
 	BlockStatus int
 }
 
@@ -547,12 +563,16 @@ func (e *Env) edgeFiles(sites []Site, pass []Passthrough) (map[string][]byte, er
 
 	// Every hostname gets an entry in each map (also "0" / be_terminate), so an
 	// exact hostname is never captured by another site's wildcard.
-	sni, fh, hsts, cache := map[string]string{}, map[string]string{}, map[string]string{}, map[string]string{}
+	sni, fh, hsts, cache, grpc := map[string]string{}, map[string]string{}, map[string]string{}, map[string]string{}, map[string]string{}
+	grpcOn, anyGRPC := e.grpcOn(), false
 	for _, s := range sites {
+		g := s.grpc(grpcOn)
+		anyGRPC = anyGRPC || g
 		for _, h := range s.Hosts() {
 			h = strings.ToLower(h)
 			sni[h] = "be_terminate"
-			cache[h] = flag(s.cached())
+			cache[h] = flag(s.cached() && !g)
+			grpc[h] = flag(g)
 			// Passthrough hosts terminate TLS at their backend, so plain HTTP always redirects.
 			fh[h] = flag(!s.Stopped && (s.Passthrough || (s.ForceHTTPS && s.HasCert)))
 			hsts[h] = flag(!s.Stopped && s.HSTS && s.HasCert)
@@ -563,7 +583,7 @@ func (e *Env) edgeFiles(sites []Site, pass []Passthrough) (map[string][]byte, er
 			}
 		}
 	}
-	data := edgeData{Dir: dir, IPv6: hasIPv6(), ACMEPort: ACMEPort, NginxPort: NginxPort}
+	data := edgeData{Dir: dir, IPv6: hasIPv6(), ACMEPort: ACMEPort, NginxPort: NginxPort, GRPC: anyGRPC, GRPCPort: GRPCPort}
 	backends := map[string]string{} // one backend per distinct target
 	for _, p := range pass {
 		key := fmt.Sprintf("%s|%v", p.Target, p.ProxyProtocol)
@@ -578,6 +598,7 @@ func (e *Env) edgeFiles(sites []Site, pass []Passthrough) (map[string][]byte, er
 	hostMaps("sni", sni, files)
 	hostMaps("force_https", fh, files)
 	hostMaps("hsts", hsts, files)
+	hostMaps("grpc", grpc, files)
 	hostMaps("cache", cache, files)
 	c := e.cdn()
 	files["maps/cdn_cf.lst"], files["maps/cdn_custom.lst"] = cdnLists(c)
@@ -585,8 +606,12 @@ func (e *Env) edgeFiles(sites []Site, pass []Passthrough) (map[string][]byte, er
 	data.Rules, data.Body = e.protectFiles(sites, files)
 	data.CDNGroups = e.cdnFiles(sites, files)
 	data.BlockStatus = BlockStatus(e.protection().BlockStatus)
-	if len(c.Ranges) > 0 && ValidHeader(c.Header) {
-		data.CDNHeader = c.Header
+	if len(c.Ranges) > 0 {
+		for _, h := range c.Headers {
+			if ValidHeader(h) {
+				data.CDNHeaders = append(data.CDNHeaders, h)
+			}
+		}
 	}
 	data.VarnishPort = VarnishPort
 	cfg, err := render("haproxy.cfg.tmpl", data)
@@ -623,7 +648,12 @@ func (e *Env) nginxFiles(sites []Site) (map[string][]byte, error) {
 	for name, html := range ep.Pages {
 		files["errors/"+name+".html"] = html
 	}
-	main, err := render("nginx.conf.tmpl", map[string]any{"NginxPort": NginxPort, "WAF": w.Enabled, "ConfDir": nginxConfDir,
+	grpcOn := e.grpcOn()
+	anyGRPC := false
+	for _, s := range sites {
+		anyGRPC = anyGRPC || s.grpc(grpcOn)
+	}
+	main, err := render("nginx.conf.tmpl", map[string]any{"NginxPort": NginxPort, "GRPCPort": GRPCPort, "GRPC": anyGRPC, "WAF": w.Enabled, "ConfDir": nginxConfDir,
 		"ErrorPages": errorLines(ep, "", false), "ErrDir": errDir, "WAFDisabled": wafExclusions(w.Enabled, w.Disabled)})
 	if err != nil {
 		return nil, err
@@ -657,16 +687,23 @@ func (e *Env) nginxFiles(sites []Site) (map[string][]byte, error) {
 		for i, d := range s.Advanced.AuthDirs {
 			files[filepath.Join("auth", fmt.Sprintf("%s.%d.htpasswd", s.Domain, i))] = []byte(d.User + ":" + d.Hash + "\n")
 		}
+		g := s.grpc(grpcOn)
+		errPages := errorLines(ep, s.Domain, s.Advanced.ErrorPages)
+		if g {
+			errPages = nil // gRPC clients read grpc-status, not HTML
+		}
 		v, err := render("vhost.conf.tmpl", map[string]any{
+			"GRPC": g, "GRPCPort": GRPCPort, "WAF": w.Enabled,
 			"Index": strings.Join(index, " "), "Rewrite": indent(s.Rewrite), "Custom": indent(s.Custom), "Proxies": proxies,
 			"StopPage": stopPage, "AuthDir": authDir, "SrvZone": zone("srv", s.Domain), "HotlinkExt": s.Advanced.hotlinkExt(),
 			"Domain": s.Domain, "ServerNames": strings.Join(s.Hosts(), " "), "Root": s.Root,
-			"LogDir": e.WWWLogs, "NginxPort": NginxPort, "PHPPort": port, "Stopped": s.Stopped,
+			// A gRPC site while gRPC is off cannot be proxied (proxy_pass has no grpc://).
+			"LogDir": e.WWWLogs, "NginxPort": NginxPort, "PHPPort": port, "Stopped": s.Stopped || (IsGRPC(s.Upstream) && !g),
 			"Upstream": s.Upstream, "WAFOff": w.Enabled && s.WAFOff, "WAFExclude": wafExclusions(w.Enabled, s.WAFExclude),
 			"Adv": s.Advanced, "ReqZone": zone("req", s.Domain), "ConnZone": zone("conn", s.Domain), "DenyUA": uaRegex(s.Advanced.DenyUA),
 			"Redirect": s.Redirect, "RedirectCode": redirectCode(s.RedirectCode), "RedirectPath": s.RedirectPath,
 			"BlockStatuses": BlockStatuses,
-			"ErrorPages":    errorLines(ep, s.Domain, s.Advanced.ErrorPages), "ErrDir": errDir, "Intercept": ep.Intercept[s.Domain],
+			"ErrorPages":    errPages, "ErrDir": errDir, "Intercept": ep.Intercept[s.Domain] && !g,
 		})
 		if err != nil {
 			return nil, err

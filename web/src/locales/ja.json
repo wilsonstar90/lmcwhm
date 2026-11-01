@@ -213,7 +213,8 @@
       "invalid_menu": "メニュー設定が無効です",
       "invalid_dir": "このディレクトリは使えません：絶対パスで、システムディレクトリ（/etc、/usr、/root…）以外を指定してください",
       "invalid_unauth_status": "未認証時の応答が無効です",
-      "bad_logo": "ロゴは PNG、SVG または WebP、256 KB 以下にしてください"
+      "bad_logo": "ロゴは PNG、SVG または WebP、256 KB 以下にしてください",
+      "grpc_in_use": "{n} 件のドメインが gRPC を使用中です。HTTP に戻すか削除してから無効にしてください"
     },
     "ssl": {
       "invalid_pair": "証明書と鍵が一致しないか不正です"
@@ -250,7 +251,9 @@
       "invalid_category": "無効な分類",
       "invalid_index": "無効なインデックス名",
       "invalid_directives": "設定が不正です（括弧の不一致または長すぎ）",
-      "invalid_batch": "無効な一括操作"
+      "invalid_batch": "無効な一括操作",
+      "grpc_off": "gRPC ターゲットを使うには「パネル設定 → サイトの gRPC」を有効にしてください",
+      "grpc_no_ssl": "gRPC には HTTPS が必要です。先にこのドメインの SSL 証明書を設定してください"
     },
     "cf": {
       "no_token": "Cloudflare トークンを設定してください",
@@ -273,7 +276,8 @@
       "invalid_compose": "Compose ファイルが無効です：{detail}",
       "failed": "Docker：{detail}",
       "compose_owned": "このコンテナは Compose プロジェクトに属しています。プロジェクトを編集してください",
-      "no_log_file": "このコンテナにはクリアできるログファイルがありません（ログドライバーが json-file ではありません）"
+      "no_log_file": "このコンテナにはクリアできるログファイルがありません（ログドライバーが json-file ではありません）",
+      "bad_remark": "メモが無効です"
     },
     "app": {
       "unknown": "不明なアプリまたはバージョン",
@@ -359,7 +363,8 @@
       "invalid_pattern": "無効なエントリ：値・一致方法・正規表現を確認してください（URL の前方一致は / で始めます）。",
       "duplicate_pattern": "このエントリは既にリストにあります",
       "invalid_forward": "無効なポート転送：プロトコル・ポート・転送先（IPv4）・送信元を確認してください",
-      "forward_port_taken": "ポート {port} は使用中です"
+      "forward_port_taken": "ポート {port} は使用中です",
+      "duplicate_ip": "この IP は既にリストにあります"
     },
     "waf": {
       "invalid_settings": "WAF 設定が無効です",
@@ -1079,6 +1084,7 @@
     "modes": {
       "seconds": "N 秒ごと",
       "minutes": "N 分ごと",
+      "hours": "N 時間ごと",
       "hourly": "毎時",
       "daily": "毎日",
       "weekly": "毎週",
@@ -1108,14 +1114,16 @@
       "time_sync": "サーバー時刻の同期",
       "release_memory": "メモリ解放",
       "security_scan": "セキュリティスキャン",
-      "app_updates": "ソフトウェア更新の確認"
+      "app_updates": "ソフトウェア更新の確認",
+      "site_expiry": "期限切れのサイトを停止"
     },
     "sys_hint": {
       "ssl_renew": "30 日以内に期限が切れるサイト証明書をすべて更新します。",
       "time_sync": "NTP クライアント（systemd-timesyncd）を再起動して時刻を補正します。",
       "release_memory": "キャッシュを書き出してページキャッシュを解放します。読み込み時に再びキャッシュされます。",
       "security_scan": "セキュリティスキャンを実行し、重大な問題を通知します。",
-      "app_updates": "インストール済みソフトウェアと PHP のパッチ更新を確認し、あればアラートを送ります。自動ではインストールしません。"
+      "app_updates": "インストール済みソフトウェアと PHP のパッチ更新を確認し、あればアラートを送ります。自動ではインストールしません。",
+      "site_expiry": "サイトの有効期限を毎日確認し、期限切れのサイトを停止して通知します。"
     },
     "feeds": {
       "block": "悪性 IP ブロックリスト",
@@ -1124,7 +1132,8 @@
     "feeds_hint": "「セキュリティ → 自動更新リスト」で選んだリストを取得します。タスクが止まると 2 間隔後に期限切れになります。",
     "mw_paths": "パス",
     "mw_paths_hint": "サイトルート以下。空ですべてのサイト",
-    "mw_clam": "ClamAV でもスキャン（遅い）"
+    "mw_clam": "ClamAV でもスキャン（遅い）",
+    "unit_h": "時間"
   },
   "sec": {
     "firewall": "ファイアウォール",
@@ -1327,13 +1336,14 @@
     "sys_ports": "システムルールのポートは SSH・パネル設定に自動で追従します。",
     "cdn": {
       "title": "CDN 経由の実 IP",
-      "hint": "CDN（例: Cloudflare プロキシ）経由の接続では、サーバーには CDN の IP が見えます。CDN の IP 範囲からの接続に限り、CDN ヘッダーの訪問者 IP を使用します。ログ・WAF・CrowdSec・レート制限・IP ブロックリストが実際の訪問者 IP で動作します。",
+      "hint": "CDN（Cloudflare のプロキシなど）経由では、サーバーには CDN の IP が見えます。CDN の IP 範囲からのリクエストのみ、下のヘッダーから順に訪問者の IP を取得します。ログ・WAF・CrowdSec・レート制限・IP ブラックリストは実際の訪問者 IP を使います。",
       "builtin": "組み込み",
       "ranges_n": "{n} 範囲",
       "other": "その他の CDN",
       "header": "IP ヘッダー",
       "ranges": "CDN の IP 範囲",
-      "ranges_hint": "1 行に 1 つの IP または CIDR。ヘッダーと併せて有効になります。"
+      "ranges_hint": "1 行に 1 つの IP または CIDR。ヘッダーも 1 つ以上必要です。",
+      "headers": "IP ヘッダー（順に試行）"
     },
     "source_multi": "空 = どこからでも。1 行に 1 つの IP / CIDR（最大 50）"
   },
@@ -2583,7 +2593,9 @@
     "kept": "恒久的な手動ブロックに変更しました",
     "remove_auto": "{ip} を削除しますか？次回のリスト更新で再追加される場合があります。",
     "auto_hint": "自動追加されたエントリのみ表示します。「手動として保持」でブロックを恒久的な手動ブロックに変更します。",
-    "builtin_list": "組み込みリスト（ダウンロード不要）"
+    "builtin_list": "組み込みリスト（ダウンロード不要）",
+    "edit": "エントリを編集",
+    "keep_expiry": "現在の有効期限を維持"
   },
   "prot": {
     "cols": {
@@ -3558,5 +3570,41 @@
     "unfold": "展開",
     "fold_line": "折りたたむ",
     "unfold_line": "展開"
+  },
+  "cdnh": {
+    "note": {
+      "cf_connecting_ip": "Cloudflare",
+      "true_client_ip": "Akamai / Cloudflare Enterprise",
+      "ali_cdn_real_ip": "Alibaba Cloud CDN",
+      "cdn_src_ip": "Wangsu / 中国の一部 CDN",
+      "cdn_real_ip": "Tencent Cloud CDN など",
+      "x_real_ip": "一般的なリバースプロキシ（nginx）",
+      "x_forwarded_for": "汎用（最後のアドレスを使用）",
+      "x_client_ip": "一部の CDN / ロードバランサー",
+      "client_ip": "一部の CDN",
+      "forwarded_for": "旧式プロキシ",
+      "x_forwarded": "旧式プロキシ",
+      "forwarded": "RFC 7239 標準"
+    }
+  },
+  "grpc": {
+    "protocol": "プロトコル",
+    "target_hint": "gRPC：バックエンドまで HTTP/2。grpc:// = バックエンドへ平文（h2c）、grpcs:// = バックエンドへ TLS。クライアントは HTTPS（443）で接続します。",
+    "http_hint": "HTTP：通常のサイト、API、WebSocket。",
+    "setting": "サイトの gRPC（バックエンドへ HTTP/2）",
+    "setting_hint": "有効にすると、ドメインのターゲット（Docker / URL）で gRPC プロトコルを選べます。gRPC を使うドメインがある間は無効にできません。",
+    "impact_title": "ファイアウォールと WAF への影響",
+    "impact": {
+      "network": "ポートルール、IP ブロック、CrowdSec、Linode / Cloudflare 同期：影響なし（TCP / IP レベル）。",
+      "ip": "実際の訪問者 IP と CDN ヘッダー：通常どおり動作。",
+      "lists": "IP / UA / URL のブラック・ホワイトリスト：動作。URL は /package.Service/Method なので、メソッド単位でブロックできます。",
+      "protect": "偽クローラー、データセンター、スクレイパー対策：動作。gRPC クライアントの UA（grpc-go など）はクローラー扱いされません。",
+      "cc": "CC 対策：RPC 1 回で 1 リクエスト、ストリームは 1 回として数えます。高頻度のサービスでは上限を上げるか CC を無効にしてください。",
+      "rules": "リクエスト本文を読む専用ルール：gRPC ドメインには適用されません（バイナリの protobuf、ストリームが止まるため）。",
+      "waf": "WAF（ModSecurity + OWASP）：パスとヘッダーのみ検査（本文検査を無効化、920420 を除外）。そうしないと全ての gRPC 呼び出しがブロックされます。サイト単位で WAF を無効にすることもできます。",
+      "other": "Varnish キャッシュ、カスタムエラーページ：対象外のためスキップ。拒否された呼び出しは対応するエラー（403 = PERMISSION_DENIED、429 = UNAVAILABLE など）を受け取ります。",
+      "tls": "HTTPS（443）のみ。ポート 80 では gRPC を使えません。",
+      "passthrough": "別の方法：パススルー（TLS をバックエンドで終端）も gRPC に対応しますが、WAF や HTTP レベルのルールは使えません。"
+    }
   }
 }

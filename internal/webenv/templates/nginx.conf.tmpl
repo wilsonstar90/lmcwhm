@@ -66,6 +66,10 @@ http {
     }
     log_format main '$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent" "$host" "$lmcwhm_block_reason" "$http_x_lmcwhm_detect"';
     access_log /var/log/nginx/access.log main;
+{{- if .GRPC}}
+    # gRPC sites log the call's result (grpc-status trailer) as well.
+    log_format grpc '$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent" "$host" "$lmcwhm_block_reason" "$http_x_lmcwhm_detect" "grpc-status=$upstream_trailer_grpc_status"';
+{{- end}}
 
     # Unknown hosts.
     server {
@@ -85,6 +89,16 @@ http {
             return 404;
         }
     }
+{{- if .GRPC}}
+
+    # gRPC sites listen here over HTTP/2 without TLS (h2c, from HAProxy only).
+    server {
+        listen 127.0.0.1:{{.GRPCPort}} default_server;
+        http2 on;
+        server_name _;
+        return 444;
+    }
+{{- end}}
 
     include {{.ConfDir}}/conf.d/*.conf;
 }

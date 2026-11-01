@@ -213,7 +213,8 @@
       "invalid_menu": "Invalid menu settings",
       "invalid_dir": "This directory cannot be used: it must be an absolute path and not a system directory (/etc, /usr, /root…)",
       "invalid_unauth_status": "Invalid unauthenticated response",
-      "bad_logo": "The logo must be a PNG, SVG or WebP image of at most 256 KB"
+      "bad_logo": "The logo must be a PNG, SVG or WebP image of at most 256 KB",
+      "grpc_in_use": "{n} domains still use gRPC; switch them to HTTP or delete them first"
     },
     "ssl": {
       "invalid_pair": "Certificate and key do not match or are invalid"
@@ -250,7 +251,9 @@
       "invalid_category": "Invalid category",
       "invalid_index": "Invalid index file name",
       "invalid_directives": "The directives are not valid (unbalanced braces or too long)",
-      "invalid_batch": "Invalid batch action"
+      "invalid_batch": "Invalid batch action",
+      "grpc_off": "Turn on Panel settings → Website gRPC to use gRPC targets",
+      "grpc_no_ssl": "gRPC needs HTTPS: set up an SSL certificate for this domain first"
     },
     "cf": {
       "no_token": "Set a Cloudflare API token first",
@@ -273,7 +276,8 @@
       "invalid_compose": "Invalid compose file: {detail}",
       "failed": "Docker: {detail}",
       "compose_owned": "This container belongs to a Compose project; edit the project instead",
-      "no_log_file": "This container has no log file to clear (log driver is not json-file)"
+      "no_log_file": "This container has no log file to clear (log driver is not json-file)",
+      "bad_remark": "Invalid remark"
     },
     "app": {
       "unknown": "Unknown app or version",
@@ -359,7 +363,8 @@
       "invalid_pattern": "Invalid entry: check the value, match type and regex (a URL \"starts with\" begins with /).",
       "duplicate_pattern": "That entry is already on the list",
       "invalid_forward": "Invalid port forward: check the protocol, ports, target (IPv4) and source",
-      "forward_port_taken": "Port {port} is already in use"
+      "forward_port_taken": "Port {port} is already in use",
+      "duplicate_ip": "This IP is already on the list"
     },
     "waf": {
       "invalid_settings": "Invalid WAF settings",
@@ -1079,6 +1084,7 @@
     "modes": {
       "seconds": "Every N seconds",
       "minutes": "Every N minutes",
+      "hours": "Every N hours",
       "hourly": "Hourly",
       "daily": "Daily",
       "weekly": "Weekly",
@@ -1108,14 +1114,16 @@
       "time_sync": "Sync server time",
       "release_memory": "Release memory",
       "security_scan": "Security scan",
-      "app_updates": "Check software updates"
+      "app_updates": "Check software updates",
+      "site_expiry": "Stop expired websites"
     },
     "sys_hint": {
       "ssl_renew": "Renews every website certificate that expires within 30 days.",
       "time_sync": "Restarts the NTP client (systemd-timesyncd), which corrects the clock.",
       "release_memory": "Writes caches to disk and drops the page cache; Linux refills it as files are read.",
       "security_scan": "Runs the security scan and raises an alert on critical findings.",
-      "app_updates": "Checks installed software and PHP versions for patch updates and raises an alert; nothing is installed automatically."
+      "app_updates": "Checks installed software and PHP versions for patch updates and raises an alert; nothing is installed automatically.",
+      "site_expiry": "Checks website expiry dates daily; expired websites are stopped and an alert is sent."
     },
     "feeds": {
       "block": "Malicious IP blocklists",
@@ -1124,7 +1132,8 @@
     "feeds_hint": "Downloads the lists selected in Security → Auto-updated lists. Entries expire after two intervals if the task stops.",
     "mw_paths": "Paths",
     "mw_paths_hint": "Under the website root; empty = every website",
-    "mw_clam": "Also scan with ClamAV (slower)"
+    "mw_clam": "Also scan with ClamAV (slower)",
+    "unit_h": "hours"
   },
   "sec": {
     "firewall": "Firewall",
@@ -1327,13 +1336,14 @@
     "sys_ports": "System rule ports follow the SSH and panel settings.",
     "cdn": {
       "title": "Real visitor IP behind a CDN",
-      "hint": "Through a CDN (e.g. Cloudflare proxied), the server sees the CDN's address. Only requests from the CDN's ranges may set the visitor address from its header; logs, the WAF, CrowdSec, rate limits and the IP block list then use the real visitor address.",
+      "hint": "Behind a CDN (e.g. Cloudflare proxied), the server sees the CDN's address. Only requests from the CDN's ranges have the visitor's address taken from the headers below, in order; logs, the WAF, CrowdSec, rate limits and the IP black list then use the real visitor.",
       "builtin": "Built in",
       "ranges_n": "{n} ranges",
       "other": "Other CDN",
       "header": "IP header",
       "ranges": "CDN ranges",
-      "ranges_hint": "One IP or CIDR per line; takes effect together with the header."
+      "ranges_hint": "One IP or CIDR per line; needs at least one header as well.",
+      "headers": "IP headers (tried in order)"
     },
     "source_multi": "Empty = anywhere; one IP / CIDR per line (up to 50)"
   },
@@ -2583,7 +2593,9 @@
     "kept": "Now a permanent manual block",
     "remove_auto": "Remove {ip}? The next list update may add it again.",
     "auto_hint": "Only automatic entries are shown here. \"Keep as manual\" turns a block entry into a permanent manual block.",
-    "builtin_list": "Built-in list (no download)"
+    "builtin_list": "Built-in list (no download)",
+    "edit": "Edit entry",
+    "keep_expiry": "Keep the current expiry"
   },
   "prot": {
     "cols": {
@@ -3509,5 +3521,41 @@
     "unfold": "unfold",
     "fold_line": "Fold line",
     "unfold_line": "Unfold line"
+  },
+  "cdnh": {
+    "note": {
+      "cf_connecting_ip": "Cloudflare",
+      "true_client_ip": "Akamai / Cloudflare Enterprise",
+      "ali_cdn_real_ip": "Alibaba Cloud CDN",
+      "cdn_src_ip": "Wangsu / some CDNs in China",
+      "cdn_real_ip": "Tencent Cloud CDN and others",
+      "x_real_ip": "Common reverse proxies (nginx)",
+      "x_forwarded_for": "Generic (last address used)",
+      "x_client_ip": "Some CDNs / load balancers",
+      "client_ip": "Some CDNs",
+      "forwarded_for": "Older proxies",
+      "x_forwarded": "Older proxies",
+      "forwarded": "RFC 7239 standard"
+    }
+  },
+  "grpc": {
+    "protocol": "Protocol",
+    "target_hint": "gRPC: HTTP/2 all the way to the backend. grpc:// = plain to the backend (h2c), grpcs:// = TLS to the backend. Clients connect over HTTPS (443).",
+    "http_hint": "HTTP: ordinary websites, APIs and WebSocket.",
+    "setting": "Website gRPC (HTTP/2 to backends)",
+    "setting_hint": "When on, domain targets (Docker / URL) can use the gRPC protocol. It cannot be turned off while domains use gRPC.",
+    "impact_title": "Effect on the firewall and WAF",
+    "impact": {
+      "network": "Port rules, IP blocks, CrowdSec, Linode / Cloudflare sync: unaffected (TCP / IP level).",
+      "ip": "Real visitor IP and CDN headers: work as usual.",
+      "lists": "IP / UA / URL black and white lists: work; the URL is /package.Service/Method, so methods can be blocked.",
+      "protect": "Fake spiders, data-centre and crawler blocking: work; gRPC client User-Agents (e.g. grpc-go) are not taken for spiders.",
+      "cc": "CC protection: each RPC counts as one request, a stream once; busy services may need a higher limit or CC off.",
+      "rules": "Dedicated rules that read the request body: not applied to gRPC domains (binary protobuf; streams would stall).",
+      "waf": "WAF (ModSecurity + OWASP): checks the path and headers only (body inspection off, rule 920420 excluded), or every gRPC call would be blocked. The WAF can still be turned off per site.",
+      "other": "Varnish cache and custom error pages: not applicable, skipped. Refused calls get the matching error, e.g. 403 = PERMISSION_DENIED, 429 = UNAVAILABLE.",
+      "tls": "HTTPS (443) only; port 80 does not carry gRPC.",
+      "passthrough": "Alternative: a passthrough target (TLS ends at the backend) also carries gRPC, without the WAF or HTTP-level rules."
+    }
   }
 }

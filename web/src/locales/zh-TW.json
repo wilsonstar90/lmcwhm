@@ -213,7 +213,8 @@
       "invalid_menu": "選單設定無效",
       "invalid_dir": "無法使用此目錄：必須是絕對路徑，且不可為系統目錄（/etc、/usr、/root…）",
       "invalid_unauth_status": "未認證回應狀態無效",
-      "bad_logo": "Logo 須為 PNG、SVG 或 WebP，最大 256 KB"
+      "bad_logo": "Logo 須為 PNG、SVG 或 WebP，最大 256 KB",
+      "grpc_in_use": "仍有 {n} 個網域使用 gRPC，請先改回 HTTP 或刪除後再關閉"
     },
     "ssl": {
       "invalid_pair": "憑證與私鑰不相符或格式錯誤"
@@ -250,7 +251,9 @@
       "invalid_category": "分類名稱無效",
       "invalid_index": "預設文件名稱無效",
       "invalid_directives": "設定語法有問題（括號不對稱或太長）",
-      "invalid_batch": "批次操作無效"
+      "invalid_batch": "批次操作無效",
+      "grpc_off": "請先在「面板設定 → 網站 gRPC」開啟，才能使用 gRPC 目標",
+      "grpc_no_ssl": "gRPC 必須使用 HTTPS：請先為此網域設定 SSL 憑證"
     },
     "cf": {
       "no_token": "請先設定 Cloudflare API Token",
@@ -273,7 +276,8 @@
       "invalid_compose": "Compose 檔案無效：{detail}",
       "failed": "Docker：{detail}",
       "compose_owned": "這個容器屬於 Compose 專案，請改為編輯該專案",
-      "no_log_file": "這個容器沒有可清空的日誌檔案（日誌驅動不是 json-file）"
+      "no_log_file": "這個容器沒有可清空的日誌檔案（日誌驅動不是 json-file）",
+      "bad_remark": "備註無效"
     },
     "app": {
       "unknown": "未知的軟體或版本",
@@ -359,7 +363,8 @@
       "invalid_pattern": "名單項目無效：請檢查內容、比對方式與正則（URL「開頭為」需以 / 開頭）。",
       "duplicate_pattern": "名單已有此項目",
       "invalid_forward": "連接埠轉發無效：請檢查協定、連接埠、目標（IPv4）與來源",
-      "forward_port_taken": "連接埠 {port} 已被使用"
+      "forward_port_taken": "連接埠 {port} 已被使用",
+      "duplicate_ip": "此 IP 已在名單中"
     },
     "waf": {
       "invalid_settings": "WAF 設定無效",
@@ -1079,6 +1084,7 @@
     "modes": {
       "seconds": "每 N 秒",
       "minutes": "每 N 分鐘",
+      "hours": "每 N 小時",
       "hourly": "每小時",
       "daily": "每天",
       "weekly": "每週",
@@ -1108,14 +1114,16 @@
       "time_sync": "伺服器時間同步",
       "release_memory": "釋放記憶體",
       "security_scan": "安全掃描",
-      "app_updates": "檢查軟體更新"
+      "app_updates": "檢查軟體更新",
+      "site_expiry": "停用已到期網站"
     },
     "sys_hint": {
       "ssl_renew": "續簽 30 天內到期的所有網站憑證。",
       "time_sync": "重新啟動 NTP 用戶端（systemd-timesyncd）校正時間。",
       "release_memory": "將快取寫入磁碟並清空頁面快取；之後讀檔時 Linux 會自動重新快取。",
       "security_scan": "執行安全掃描，發現嚴重問題時告警。",
-      "app_updates": "檢查已安裝軟體與 PHP 版本是否有小版本更新，有則發出告警；不會自動安裝。"
+      "app_updates": "檢查已安裝軟體與 PHP 版本是否有小版本更新，有則發出告警；不會自動安裝。",
+      "site_expiry": "每日檢查網站到期時間，已過期的網站會自動停用並發出告警。"
     },
     "feeds": {
       "block": "公共惡意 IP 黑名單",
@@ -1124,7 +1132,8 @@
     "feeds_hint": "下載「安全 → 自動更新名單」選取的名單。任務停止時條目於兩個間隔後過期。",
     "mw_paths": "掃描目錄",
     "mw_paths_hint": "須位於網站根目錄下；留空即掃描所有網站",
-    "mw_clam": "同時使用 ClamAV 掃描（較慢）"
+    "mw_clam": "同時使用 ClamAV 掃描（較慢）",
+    "unit_h": "小時"
   },
   "sec": {
     "firewall": "防火牆",
@@ -1327,13 +1336,14 @@
     "sys_ports": "系統規則的連接埠會自動跟隨 SSH / 面板設定。",
     "cdn": {
       "title": "CDN 真實 IP",
-      "hint": "經 CDN（例如 Cloudflare 橘雲）連入時，伺服器看到的是 CDN 的 IP。只有從 CDN IP 段連入的請求，才會改用 CDN header 內的訪客 IP；日誌、WAF、CrowdSec、限流與 IP 黑名單都會使用真實訪客 IP。",
+      "hint": "經 CDN（例如 Cloudflare 橘雲）連入時，伺服器看到的是 CDN 的 IP。只有從 CDN IP 段連入的請求，才會依序從下列 header 取得訪客 IP；日誌、WAF、CrowdSec、限流與 IP 黑名單都會改用真實訪客 IP。",
       "builtin": "內建",
       "ranges_n": "{n} 個 IP 段",
       "other": "其他 CDN",
       "header": "IP Header",
       "ranges": "CDN IP 段",
-      "ranges_hint": "每行一個 IP 或 CIDR；需同時填寫 Header 才會生效。"
+      "ranges_hint": "每行一個 IP 或 CIDR；需同時有至少一個 Header 才會生效。",
+      "headers": "IP Header（依序嘗試）"
     },
     "source_multi": "留空 = 任何地方；每行一個 IP / CIDR（最多 50 個）"
   },
@@ -2583,7 +2593,9 @@
     "kept": "已轉為手動黑名單（永久）",
     "remove_auto": "移除 {ip}？名單下次更新時可能會再加入。",
     "auto_hint": "這裡只顯示自動加入的項目。「保留為手動」會將黑名單項目轉為永久手動黑名單。",
-    "builtin_list": "內建名單（無須下載）"
+    "builtin_list": "內建名單（無須下載）",
+    "edit": "編輯名單項目",
+    "keep_expiry": "保留目前的到期時間"
   },
   "prot": {
     "cols": {
@@ -3558,5 +3570,41 @@
     "unfold": "展開",
     "fold_line": "摺疊",
     "unfold_line": "展開"
+  },
+  "cdnh": {
+    "note": {
+      "cf_connecting_ip": "Cloudflare",
+      "true_client_ip": "Akamai / Cloudflare 企業版",
+      "ali_cdn_real_ip": "阿里雲 CDN",
+      "cdn_src_ip": "網宿 / 部分中國 CDN",
+      "cdn_real_ip": "騰訊雲 CDN 等",
+      "x_real_ip": "常見反向代理（Nginx）",
+      "x_forwarded_for": "通用（取最後一個 IP）",
+      "x_client_ip": "部分 CDN / 負載平衡",
+      "client_ip": "部分 CDN",
+      "forwarded_for": "舊式代理",
+      "x_forwarded": "舊式代理",
+      "forwarded": "RFC 7239 標準"
+    }
+  },
+  "grpc": {
+    "protocol": "協定",
+    "target_hint": "gRPC：HTTP/2 一路到後端。grpc:// = 後端明文（h2c），grpcs:// = 後端 TLS。用戶端須經 HTTPS（443）連入。",
+    "http_hint": "HTTP：一般網站、API 與 WebSocket。",
+    "setting": "網站 gRPC（HTTP/2 到後端）",
+    "setting_hint": "開啟後，網域目標（Docker / URL）可選擇 gRPC 協定。仍有網域使用 gRPC 時無法關閉。",
+    "impact_title": "對防火牆與 WAF 的影響",
+    "impact": {
+      "network": "連接埠規則、IP 封鎖、CrowdSec、Linode / Cloudflare 同步：不受影響（位於 TCP / IP 層）。",
+      "ip": "真實 IP 與 CDN Header：正常運作。",
+      "lists": "IP / UA / URL 黑白名單：正常；URL 即 /package.Service/Method，可依方法封鎖。",
+      "protect": "假蜘蛛、禁 IDC、爬蟲防護：正常；gRPC 用戶端的 UA（例如 grpc-go）不會被當成蜘蛛。",
+      "cc": "CC 防禦：每個 RPC 算一次請求，一條 streaming 只算一次；高頻服務可能需調高或關閉 CC。",
+      "rules": "讀取請求內容（body）的專屬規則：對 gRPC 網域不生效（protobuf 二進位，也避免卡住 streaming）。",
+      "waf": "WAF（ModSecurity + OWASP）：只檢查路徑與 header（自動關閉 body 檢查並排除 920420），否則所有 gRPC 請求都會被攔截。仍可在網站防護關閉 WAF。",
+      "other": "Varnish 快取、自訂錯誤頁：不適用，自動略過。被攔截時用戶端收到對應錯誤，例如 403 = PERMISSION_DENIED、429 = UNAVAILABLE。",
+      "tls": "必須使用 HTTPS（443）；port 80 不支援 gRPC。",
+      "passthrough": "另一選擇：「直通」目標（後端自行處理 TLS）也支援 gRPC，但沒有 WAF 與 HTTP 層規則。"
+    }
   }
 }

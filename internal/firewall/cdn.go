@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 
 	"github.com/wilsonstar90/lmcwhm/internal/webenv"
 )
@@ -11,8 +12,9 @@ import (
 // CDNConfig names another CDN (besides Cloudflare, which is built in) whose
 // header carries the visitor's address: only its ranges may set it.
 type CDNConfig struct {
-	Ranges []string `json:"ranges"`
-	Header string   `json:"header"`
+	Ranges  []string           `json:"ranges"`
+	Headers []webenv.CDNHeader `json:"headers"`          // tried in order
+	Header  string             `json:"header,omitempty"` // before v0.19: one header
 }
 
 const cdnKey = "edge_cdn"
@@ -25,14 +27,30 @@ func (sv *Service) CDN(ctx context.Context) CDNConfig {
 	if sv.st.DB.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, cdnKey).Scan(&raw) == nil {
 		json.Unmarshal([]byte(raw), &c)
 	}
+	if len(c.Headers) == 0 && c.Header != "" {
+		c.Headers = []webenv.CDNHeader{{Name: c.Header}}
+	}
+	if c.Headers == nil {
+		c.Headers = []webenv.CDNHeader{}
+	}
+	c.Header = ""
 	return c
 }
 
 func (sv *Service) SaveCDN(ctx context.Context, c CDNConfig) (CDNConfig, error) {
-	if len(c.Ranges) > 1000 || (len(c.Ranges) > 0 && !webenv.ValidHeader(c.Header)) || (c.Header != "" && !webenv.ValidHeader(c.Header)) {
+	if len(c.Headers) == 0 && c.Header != "" {
+		c.Headers = []webenv.CDNHeader{{Name: c.Header}}
+	}
+	for i := range c.Headers {
+		c.Headers[i].Name, c.Headers[i].Remark = strings.TrimSpace(c.Headers[i].Name), strings.TrimSpace(c.Headers[i].Remark)
+	}
+	if len(c.Ranges) > 1000 || (len(c.Ranges) > 0 && len(c.Headers) == 0) || !webenv.ValidHeaders(c.Headers) {
 		return c, ErrBadCDN
 	}
-	out := CDNConfig{Ranges: []string{}, Header: c.Header}
+	out := CDNConfig{Ranges: []string{}, Headers: c.Headers}
+	if out.Headers == nil {
+		out.Headers = []webenv.CDNHeader{}
+	}
 	seen := map[string]bool{}
 	for _, r := range c.Ranges {
 		_, norm, err := NormIP(r)

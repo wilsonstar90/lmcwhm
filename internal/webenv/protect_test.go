@@ -1,6 +1,7 @@
 package webenv
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -43,7 +44,7 @@ func TestProtectionConfig(t *testing.T) {
 		"str(403:rule-wp-1001) if !blocked guard !ip_allow !list_pass !acme { path -m beg -i -f " + d + "/maps/rules/wp-1001_0.lst }",
 		"str(403:rule-wp-1001) if !blocked guard !ip_allow !list_pass !acme { query -m sub -i -f " + d + "/maps/rules/wp-1001_1.lst }",
 		"{ req.body -m sub -i -f " + d + "/maps/rules/c7_0.lst } !{ path -m beg -i -f " + d + "/maps/rules/c7_1.lst }",
-		"option http-buffer-request", "stick-table type ipv6", "sc_http_req_rate(0),sub(txn.cc) gt 0",
+		"http-request wait-for-body time 15s", "stick-table type ipv6", "sc_http_req_rate(0),sub(txn.cc) gt 0",
 		"use_backend be_web if blocked",
 		"set-var(txn.detect) str(rule-c9) if !{ var(txn.detect) -m found } !blocked guard",
 		"str(404:rule-c10) if", "str(403:rule-c11) if", "str(429:cc) if", "set-header X-Lmcwhm-Detect %[var(txn.detect)]", "http-request set-header X-Lmcwhm-Block %[var(txn.block)] if blocked",
@@ -71,8 +72,8 @@ func TestCDNHeaders(t *testing.T) {
 	e := &Env{Home: t.TempDir(), Protection: func() Protection {
 		return Protection{Sites: map[string]SiteProtect{
 			"a.com":   {CDN: true},
-			"b.com":   {On: true, CDN: true},                                        // same default list: same group
-			"c.com":   {CDN: true, CDNHeaders: []string{"X-Real-IP", "bad header"}}, // invalid names dropped
+			"b.com":   {On: true, CDN: true},                                                           // same default list: same group
+			"c.com":   {CDN: true, CDNHeaders: []CDNHeader{{Name: "X-Real-IP"}, {Name: "bad header"}}}, // invalid names dropped
 			"off.com": {On: true},
 		}}
 	}}
@@ -104,5 +105,18 @@ func TestCDNHeaders(t *testing.T) {
 	// The visitor address is settled before the IP lists are checked.
 	if strings.Index(cfg, "set-src var(txn.rip)") > strings.Index(cfg, "lists/block.lst") {
 		t.Error("CDN address applied after the block list")
+	}
+}
+
+func TestCDNHeaderJSON(t *testing.T) {
+	var p SiteProtect
+	if err := json.Unmarshal([]byte(`{"cdn":true,"cdn_headers":["X-Real-IP",{"name":"True-Client-IP","remark":"Akamai"}]}`), &p); err != nil {
+		t.Fatal(err)
+	}
+	if len(p.CDNHeaders) != 2 || p.CDNHeaders[0].Name != "X-Real-IP" || p.CDNHeaders[1].Remark != "Akamai" {
+		t.Fatalf("%+v", p.CDNHeaders)
+	}
+	if !ValidHeaders(p.CDNHeaders) || ValidHeaders([]CDNHeader{{Name: "A"}, {Name: "a"}}) || ValidHeaders([]CDNHeader{{Name: "bad header"}}) {
+		t.Error("ValidHeaders")
 	}
 }

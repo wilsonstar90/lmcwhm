@@ -304,6 +304,13 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
+	// gRPC cannot be switched off under domains that proxy it.
+	if old.SiteGRPC && !next.SiteGRPC && s.Sites != nil {
+		if n := s.Sites.GRPCCount(r.Context()); n > 0 {
+			writeJSON(w, http.StatusConflict, apiError{Code: "settings.grpc_in_use", Params: map[string]any{"n": n}})
+			return
+		}
+	}
 	for _, d := range []struct {
 		path string
 		mode os.FileMode
@@ -320,7 +327,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// nginx and PHP must see a new site directory: recreate them with the mount.
-	if next.SiteRoot != old.SiteRoot && s.Sites != nil {
+	if (next.SiteRoot != old.SiteRoot || next.SiteGRPC != old.SiteGRPC) && s.Sites != nil {
 		s.Sites.Reapply("web.apply")
 	}
 	sess := sessionFrom(r)
@@ -364,6 +371,7 @@ func diffSettings(a, b settings.Settings) string {
 	add("basic_auth_user", a.BasicAuthUser, b.BasicAuthUser)
 	add("language", a.Language, b.Language)
 	add("panel_alias", a.PanelAlias, b.PanelAlias)
+	add("site_grpc", a.SiteGRPC, b.SiteGRPC)
 	return strings.Join(parts, "; ")
 }
 

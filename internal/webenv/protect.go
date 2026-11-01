@@ -6,6 +6,7 @@ package webenv
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"sort"
@@ -20,11 +21,55 @@ type SiteProtect struct {
 	// CDN: the site is reached through a CDN (any); the visitor's address is
 	// read from the first of CDNHeaders (empty = DefaultCDNHeaders) that
 	// holds one, from any connection (like aaPanel).
-	CDN        bool     `json:"cdn"`
-	CDNHeaders []string `json:"cdn_headers,omitempty"`
-	IDC        bool     `json:"idc"`     // refuse data-centre addresses
-	Crawler    bool     `json:"crawler"` // refuse scraper / bad bot User-Agents
-	CC         int      `json:"cc"`      // max requests per visitor in 10 s (0 = off)
+	CDN        bool        `json:"cdn"`
+	CDNHeaders []CDNHeader `json:"cdn_headers,omitempty"`
+	IDC        bool        `json:"idc"`     // refuse data-centre addresses
+	Crawler    bool        `json:"crawler"` // refuse scraper / bad bot User-Agents
+	CC         int         `json:"cc"`      // max requests per visitor in 10 s (0 = off)
+}
+
+// CDNHeader is a header that may carry the visitor's address, with a note.
+type CDNHeader struct {
+	Name   string `json:"name"`
+	Remark string `json:"remark,omitempty"`
+}
+
+// UnmarshalJSON also reads a plain name (as stored before v0.19).
+func (h *CDNHeader) UnmarshalJSON(b []byte) error {
+	if len(b) > 0 && b[0] == '"' {
+		*h = CDNHeader{}
+		return json.Unmarshal(b, &h.Name)
+	}
+	type plain CDNHeader
+	return json.Unmarshal(b, (*plain)(h))
+}
+
+// HeaderNames lists the names of hs.
+func HeaderNames(hs []CDNHeader) []string {
+	out := make([]string, 0, len(hs))
+	for _, h := range hs {
+		out = append(out, h.Name)
+	}
+	return out
+}
+
+// MaxCDNHeaders caps a header list.
+const MaxCDNHeaders = 20
+
+// ValidHeaders checks a header list: valid names, no repeats, short remarks.
+func ValidHeaders(hs []CDNHeader) bool {
+	if len(hs) > MaxCDNHeaders {
+		return false
+	}
+	seen := map[string]bool{}
+	for _, h := range hs {
+		k := strings.ToLower(h.Name)
+		if !ValidHeader(h.Name) || seen[k] || len([]rune(h.Remark)) > 100 {
+			return false
+		}
+		seen[k] = true
+	}
+	return true
 }
 
 // DefaultCDNHeaders are tried in order for a site behind a CDN.
@@ -36,7 +81,7 @@ func (p SiteProtect) Headers() []string {
 	if len(p.CDNHeaders) == 0 {
 		return DefaultCDNHeaders
 	}
-	return p.CDNHeaders
+	return HeaderNames(p.CDNHeaders)
 }
 
 // Protection is everything the edge needs; Sites is keyed by site domain.
@@ -107,6 +152,7 @@ type ruleData struct {
 	Lines  []string // conditions after "if"
 	Detect bool
 	Status int
+	Body   bool // reads the request body: not for gRPC hosts (streamed protobuf)
 }
 
 func lines(v []string) []byte {
@@ -232,6 +278,7 @@ func RuleConfig(dir string, r EdgeRule) (rd ruleData, files map[string][]byte, b
 		conds = append(conds, cond)
 		body = body || c.Field == "body"
 	}
+	rd.Body = body
 	if r.All {
 		rd.Lines = []string{strings.Join(conds, " ")}
 	} else {

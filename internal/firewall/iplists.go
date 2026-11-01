@@ -2,6 +2,7 @@ package firewall
 
 import (
 	"context"
+	"errors"
 	"net/netip"
 	"strings"
 	"time"
@@ -168,4 +169,83 @@ func (sv *Service) KeepIP(ctx context.Context, id int64) error {
 	}
 	sv.blocksChanged()
 	return nil
+}
+
+// ErrDuplicateIP: the edited address is already on the same list.
+var ErrDuplicateIP = errors.New("fw.duplicate_ip")
+
+// UpdateIP edits a manual entry: its address, remark and, unless keepTTL,
+// its lifetime (ttl 0 = permanent). A block may not cover self (the admin's
+// own address). The ruleset is rebuilt from the table.
+func (sv *Service) UpdateIP(ctx context.Context, id int64, ip string, ttl time.Duration, keepTTL bool, remark string, self netip.Addr) (IP, error) {
+	var x IP
+	err := sv.st.DB.QueryRowContext(ctx, `SELECT id, ip, list, source, remark, expires_at, created_at FROM fw_ips WHERE id = ?`, id).
+		Scan(&x.ID, &x.IP, &x.List, &x.Source, &x.Remark, &x.ExpiresAt, &x.CreatedAt)
+	if err != nil {
+		return x, ErrNotFound
+	}
+	if x.Source != "manual" {
+		return x, ErrBadIP // automatic entries are kept first ("keep"), then edited
+	}
+	pfx, norm, err := NormIP(ip)
+	if err != nil {
+		return x, err
+	}
+	if x.List == "block" && self.IsValid() && pfx.Contains(self) {
+		return x, ErrSelf
+	}
+	x.IP, x.Remark = norm, trimRemark(remark)
+	if !keepTTL {
+		x.ExpiresAt = 0
+		if ttl > 0 {
+			x.ExpiresAt = time.Now().Add(ttl).Unix()
+		}
+	}
+	if _, err := sv.st.DB.ExecContext(ctx, `UPDATE fw_ips SET ip = ?, remark = ?, expires_at = ? WHERE id = ?`, x.IP, x.Remark, x.ExpiresAt, id); err != nil {
+		if strings.Contains(err.Error(), "UNIQUE") {
+			return x, ErrDuplicateIP
+		}
+		return x, err
+	}
+	if c, _ := sv.Config(ctx); c.Enabled && sv.Available() {
+		if _, err := sv.Apply(ctx); err != nil {
+			return x, err
+		}
+	} else {
+		sv.listsChanged()
+	}
+	sv.blocksChanged()
+	return x, nil
+}
+
+// SetIPRemark changes only the remark; no rule changes.
+func (sv *Service) SetIPRemark(ctx context.Context, id int64, remark string) error {
+	res, err := sv.st.DB.ExecContext(ctx, `UPDATE fw_ips SET remark = ? WHERE id = ?`, trimRemark(remark), id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetPatternRemark changes only a UA / URL entry's remark.
+func (sv *Service) SetPatternRemark(ctx context.Context, id int64, remark string) error {
+	res, err := sv.st.DB.ExecContext(ctx, `UPDATE fw_patterns SET remark = ? WHERE id = ?`, trimRemark(remark), id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func trimRemark(s string) string {
+	s = strings.TrimSpace(s)
+	if r := []rune(s); len(r) > 200 {
+		s = string(r[:200])
+	}
+	return s
 }

@@ -235,6 +235,14 @@ func (s *Server) handleUpdateSite(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusForbidden, errForbidden)
 		return
 	}
+	if in.OnlyRemark() {
+		if err := s.Sites.SetRemark(r.Context(), idParam(r), *in.Remark); err != nil {
+			writeSiteErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+		return
+	}
 	id, err := s.Sites.Update(r.Context(), idParam(r), in)
 	if err != nil {
 		writeSiteErr(w, err)

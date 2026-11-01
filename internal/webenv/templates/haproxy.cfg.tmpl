@@ -47,9 +47,6 @@ frontend fe_https
     mode http
     bind abns@lmcwhm_https accept-proxy ssl crt-list {{.Dir}}/crt-list.txt alpn h2,http/1.1
     option forwardfor
-{{- if .Body}}
-    option http-buffer-request
-{{- end}}
 {{- template "guard" .}}
     http-request set-header X-Forwarded-Proto https
     http-request set-header X-Forwarded-Port 443
@@ -60,6 +57,9 @@ frontend fe_https
     http-request set-var(txn.cache) var(txn.host),map_end({{.Dir}}/maps/cache_wild.map) if !{ var(txn.cache) -m found }
     # HTTP-01 validators follow redirects to HTTPS (e.g. Cloudflare "Always Use HTTPS").
     use_backend be_acme if acme
+{{- if .GRPC}}
+    use_backend be_web_h2 if grpc_host
+{{- end}}
     use_backend be_web if blocked
     use_backend be_varnish if { var(txn.cache) -m str 1 }
     default_backend be_web
@@ -72,9 +72,6 @@ frontend fe_http
     bind :::80 v6only
 {{- end}}
     option forwardfor
-{{- if .Body}}
-    option http-buffer-request
-{{- end}}
     http-request set-header X-Forwarded-Proto http
     http-request set-header X-Forwarded-Port 80
 {{- template "guard" .}}
@@ -95,6 +92,15 @@ backend be_acme
 backend be_web
     mode http
     server nginx 127.0.0.1:{{.NginxPort}}
+{{- if .GRPC}}
+
+# gRPC sites: HTTP/2 all the way to nginx (h2c), which grpc_passes to the
+# service; streams may stay open for long.
+backend be_web_h2
+    mode http
+    timeout server 1h
+    server nginx 127.0.0.1:{{.GRPCPort}} proto h2
+{{- end}}
 
 # Page cache (sites with Varnish on); Varnish fetches misses from nginx.
 backend be_varnish
@@ -108,16 +114,30 @@ backend st_cc
 {{define "guard"}}
     acl acme path_beg /.well-known/acme-challenge/
     http-request set-var(txn.host) req.hdr(host),field(1,:),lower
+{{- if .GRPC}}
+    # gRPC sites: streamed protobuf bodies are not buffered or read by rules.
+    http-request set-var(txn.grpc) var(txn.host),map_str({{.Dir}}/maps/grpc_exact.map)
+    http-request set-var(txn.grpc) var(txn.host),map_end({{.Dir}}/maps/grpc_wild.map) if !{ var(txn.grpc) -m found }
+    acl grpc_host var(txn.grpc) -m str 1
+    http-request set-timeout client 1h if grpc_host
+{{- end}}
+{{- if .Body}}
+    # A rule reads the request body: wait for it (not on gRPC sites).
+    http-request wait-for-body time 15s{{if .GRPC}} if !grpc_host{{end}}
+{{- end}}
     # Visitor address: only connections from a CDN's ranges may set it.
     acl from_cf src -f {{.Dir}}/maps/cdn_cf.lst
     http-request set-var(txn.via_cf) bool(1) if from_cf
-{{- if .CDNHeader}}
+{{- if .CDNHeaders}}
     acl from_cdn src -f {{.Dir}}/maps/cdn_custom.lst
     http-request set-var(txn.via_cdn) bool(1) if from_cdn !from_cf
 {{- end}}
     http-request set-src req.hdr_ip(CF-Connecting-IP,1) if { var(txn.via_cf) -m bool } { req.hdr(CF-Connecting-IP) -m found }
-{{- if .CDNHeader}}
-    http-request set-src req.hdr_ip({{.CDNHeader}},-1) if { var(txn.via_cdn) -m bool } { req.hdr({{.CDNHeader}}) -m found }
+{{- if .CDNHeaders}}
+{{- range .CDNHeaders}}
+    http-request set-var(txn.cip) req.hdr_ip({{.}},-1) if { var(txn.via_cdn) -m bool } !{ var(txn.cip) -m found } { req.hdr({{.}}) -m found }
+{{- end}}
+    http-request set-src var(txn.cip) if { var(txn.cip) -m found }
 {{- end}}
 {{- if .CDNGroups}}
     # Sites behind a CDN (網站防護 → CDN): the first listed header holding an
@@ -168,9 +188,9 @@ backend st_cc
 {{- $r := .}}
 {{- range .Lines}}
 {{- if $r.Detect}}
-    http-request set-var(txn.detect) str(rule-{{$r.Code}}) if !{ var(txn.detect) -m found } !blocked guard !ip_allow !list_pass !acme {{.}}
+    http-request set-var(txn.detect) str(rule-{{$r.Code}}) if !{ var(txn.detect) -m found } !blocked guard !ip_allow !list_pass !acme {{.}}{{if and $r.Body $.GRPC}} !grpc_host{{end}}
 {{- else}}
-    http-request set-var(txn.block) str({{$r.Status}}:rule-{{$r.Code}}) if !blocked guard !ip_allow !list_pass !acme {{.}}
+    http-request set-var(txn.block) str({{$r.Status}}:rule-{{$r.Code}}) if !blocked guard !ip_allow !list_pass !acme {{.}}{{if and $r.Body $.GRPC}} !grpc_host{{end}}
 {{- end}}
 {{- end}}
 {{- end}}

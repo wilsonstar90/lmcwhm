@@ -9,7 +9,12 @@ limit_conn_zone $binary_remote_addr zone={{.ConnZone}}:10m;
 limit_conn_zone $server_name zone={{.SrvZone}}:1m;
 {{- end}}
 server {
+{{- if .GRPC}}
+    listen 127.0.0.1:{{.GRPCPort}};
+    http2 on;
+{{- else}}
     listen 127.0.0.1:{{.NginxPort}};
+{{- end}}
     server_name {{.ServerNames}};
     root {{.Root}};
     index {{.Index}};
@@ -17,7 +22,7 @@ server {
 {{- if .Adv.NoAccessLog}}
     access_log off;
 {{- else}}
-    access_log {{.LogDir}}/{{.Domain}}.log main;
+    access_log {{.LogDir}}/{{.Domain}}.log {{if .GRPC}}grpc{{else}}main{{end}};
 {{- end}}
     error_log  {{.LogDir}}/{{.Domain}}.error.log;
     # Refused at the edge (blacklists, website protection, dedicated rules);
@@ -48,8 +53,16 @@ server {
 {{- end}}
 {{- if .WAFOff}}
     modsecurity off;
-{{- else if .WAFExclude}}
+{{- else}}
+{{- if .WAFExclude}}
     modsecurity_rules 'SecRuleRemoveById {{.WAFExclude}}';
+{{- end}}
+{{- if and .GRPC .WAF}}
+    # gRPC: the WAF checks the path and headers only (the body is streamed
+    # protobuf), and application/grpc is an allowed content type.
+    modsecurity_rules 'SecRequestBodyAccess Off';
+    modsecurity_rules 'SecRuleRemoveById 920420';
+{{- end}}
 {{- end}}
 {{- if .Adv.MaxBodyMB}}
     client_max_body_size {{.Adv.MaxBodyMB}}m;
@@ -157,7 +170,18 @@ server {
 {{- end}}
     }
 {{- end}}
-{{if .Upstream}}
+{{if .GRPC}}
+    location / {
+        grpc_pass {{.Upstream}};
+        grpc_set_header X-Real-IP $remote_addr;
+        grpc_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        grpc_set_header X-Forwarded-Proto $fwd_proto;
+        grpc_read_timeout 1h;
+        grpc_send_timeout 1h;
+        client_max_body_size 0;
+        client_body_timeout 1h;
+    }
+{{else if .Upstream}}
     location / {
         proxy_pass {{.Upstream}};
         proxy_http_version 1.1;

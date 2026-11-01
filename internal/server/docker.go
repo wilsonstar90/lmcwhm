@@ -50,6 +50,7 @@ func (s *Server) dockerRoutes(r chi.Router) {
 	r.Post("/docker/networks", s.handleCreateNetwork)
 	r.Post("/docker/networks/{name}/remove", s.handleRemoveNetwork)
 
+	r.Put("/docker/remark", s.handleDockerRemark)
 	r.Get("/docker/compose", s.handleProjects)
 	r.Post("/docker/compose", s.handleCreateProject)
 	r.Get("/docker/compose/{name}", s.handleProjectFiles)
@@ -93,6 +94,10 @@ func (s *Server) handleContainers(w http.ResponseWriter, r *http.Request) {
 		writeDockerErr(w, err)
 		return
 	}
+	rm := s.dockerRemarks(r.Context(), "container")
+	for i := range list {
+		list[i].Remark = rm[list[i].Name]
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": list})
 }
 
@@ -113,10 +118,15 @@ func (s *Server) handleCreateContainer(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleContainerAction(w http.ResponseWriter, r *http.Request) {
 	id, action := chi.URLParam(r, "id"), chi.URLParam(r, "action")
+	name := ""
+	if action == "remove" {
+		name = s.containerName(r.Context(), id)
+	}
 	if err := s.Docker.Action(r.Context(), id, action); err != nil {
 		writeDockerErr(w, err)
 		return
 	}
+	s.renameDockerRemark(r.Context(), "container", name, "")
 	s.dockerAudit(r, "docker."+action, id)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -271,6 +281,10 @@ func (s *Server) handleProjects(w http.ResponseWriter, r *http.Request) {
 		writeDockerErr(w, err)
 		return
 	}
+	rm := s.dockerRemarks(r.Context(), "project")
+	for i := range list {
+		list[i].Remark = rm[list[i].Name]
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": list})
 }
 
@@ -344,6 +358,7 @@ func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
 		writeDockerErr(w, err)
 		return
 	}
+	s.renameDockerRemark(r.Context(), "project", name, "")
 	s.dockerAudit(r, "compose.delete", name)
 	writeJSON(w, http.StatusOK, map[string]string{"task_id": id})
 }
@@ -423,10 +438,12 @@ func (s *Server) handleContainerRename(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := chi.URLParam(r, "id")
+	old := s.containerName(r.Context(), id)
 	if err := s.Docker.Rename(r.Context(), id, strings.TrimSpace(in.Name)); err != nil {
 		writeDockerErr(w, err)
 		return
 	}
+	s.renameDockerRemark(r.Context(), "container", old, strings.TrimSpace(in.Name))
 	s.dockerAudit(r, "docker.rename", id+" → "+in.Name)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

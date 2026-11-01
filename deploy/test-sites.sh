@@ -69,7 +69,10 @@ pass "PHP 8.3 site over HTTP, HTTPS, IPv4 and IPv6"
 
 # ---------- visitor address behind a CDN ----------
 # 127.0.0.1 (curl) plays the CDN: only its header is believed, Cloudflare's is not.
-api PUT /firewall/cdn '{"ranges":["127.0.0.1"],"header":"X-Real-IP"}' | grep -q '"header":"X-Real-IP"' || fail "save CDN settings"
+api PUT /firewall/cdn '{"ranges":["127.0.0.1"],"header":"X-Real-IP"}' | grep -q '"name":"X-Real-IP"' || fail "save CDN settings (single header, as before v0.19)"
+api PUT /firewall/cdn '{"ranges":["127.0.0.1"],"headers":[{"name":"True-Client-IP","remark":"Akamai"},{"name":"X-Real-IP"}]}' | grep -q '"remark":"Akamai"' || fail "save CDN header list"
+out="$(curl -s -H 'X-Real-IP: 203.0.113.8' -H 'True-Client-IP: 203.0.113.4' --resolve php.test:80:127.0.0.1 http://php.test/index.php)"
+[[ "$out" == *"ip=203.0.113.4"* ]] || fail "CDN headers not tried in order: $out"
 docker exec lmcwhm-haproxy haproxy -c -f /opt/lmcwhm/edge/haproxy.cfg 2>&1 | grep -i "warning\|alert" && fail "haproxy config has warnings (CDN)"
 out="$(curl -s -H 'X-Real-IP: 203.0.113.9' --resolve php.test:80:127.0.0.1 http://php.test/index.php)"
 [[ "$out" == *"ip=203.0.113.9"* ]] || fail "CDN header not used: $out"
@@ -85,14 +88,24 @@ if command -v nft >/dev/null; then
   [[ "$code" == 403 ]] || fail "blocked visitor behind the CDN got $code"
   [[ "$(get80 php.test /index.php)" == php-ok-8.3* ]] || fail "unblocked visitor refused"
   id="$(api GET '/firewall/ips?list=block' | jget "['items'][0]['id']")"
-  api POST "/firewall/ips/$id/delete" >/dev/null
+  # Edit the entry: the old address is let in, the new one refused.
+  api PUT "/firewall/ips/$id" '{"ip":"203.0.113.10","minutes":-1,"remark":"edited"}' | grep -q '"ip":"203.0.113.10"' || fail "edit black list IP"
+  api PUT "/firewall/ips/$id/remark" '{"remark":"note"}' | grep -q '"ok":true' || fail "IP remark"
+  api GET '/firewall/ips?list=block' | grep -q '"remark":"note"' || fail "IP remark not stored"
   sleep 4
   code="$(curl -s -o /dev/null -w '%{http_code}' -H 'X-Real-IP: 203.0.113.9' --resolve php.test:80:127.0.0.1 http://php.test/index.php)"
+  [[ "$code" == 200 ]] || fail "old address still refused after the edit ($code)"
+  code="$(curl -s -o /dev/null -w '%{http_code}' -H 'X-Real-IP: 203.0.113.10' --resolve php.test:80:127.0.0.1 http://php.test/index.php)"
+  [[ "$code" == 403 ]] || fail "edited address not refused ($code)"
+  [[ "$(api PUT "/firewall/ips/$id" '{"ip":"127.0.0.1","minutes":-1}' | jget "['code']")" == fw.self_block ]] || fail "edit could block self"
+  api POST "/firewall/ips/$id/delete" >/dev/null
+  sleep 4
+  code="$(curl -s -o /dev/null -w '%{http_code}' -H 'X-Real-IP: 203.0.113.10' --resolve php.test:80:127.0.0.1 http://php.test/index.php)"
   [[ "$code" == 200 ]] || fail "unblocked visitor still refused ($code)"
   api PUT /firewall '{"enabled":false,"policy":"accept","ping":true}' >/dev/null
   pass "blocked by the real visitor address at the edge"
 fi
-api PUT /firewall/cdn '{"ranges":[],"header":""}' >/dev/null
+api PUT /firewall/cdn '{"ranges":[],"headers":[]}' >/dev/null
 pass "visitor address from a trusted CDN header only"
 
 # ---------- a website behind a CDN (網站防護 → CDN, like aaPanel) ----------
@@ -110,6 +123,11 @@ out="$(curl -s -H 'CF-Connecting-IP: 203.0.113.5' -H 'X-Real-IP: 203.0.113.7' --
 api PUT /protect/sites '{"items":{"php.test":{"on":true,"cdn":true,"cdn_headers":["X-Test-Client"]}}}' | grep -q '"ok":true' || fail "custom CDN headers"
 out="$(curl -s -H 'X-Test-Client: 203.0.113.8' -H 'X-Real-IP: 203.0.113.7' --resolve php.test:80:127.0.0.1 http://php.test/index.php)"
 [[ "$out" == *"ip=203.0.113.8"* ]] || fail "custom CDN header list: $out"
+# The v0.19 format: each header with a remark.
+api PUT /protect/sites '{"items":{"php.test":{"on":true,"cdn":true,"cdn_headers":[{"name":"X-Test-Client","remark":"test CDN"}]}}}' | grep -q '"ok":true' || fail "CDN headers with remarks"
+api GET /protect/sites | grep -q '"remark":"test CDN"' || fail "CDN header remark not stored"
+out="$(curl -s -H 'X-Test-Client: 203.0.113.8' -H 'X-Real-IP: 203.0.113.7' --resolve php.test:80:127.0.0.1 http://php.test/index.php)"
+[[ "$out" == *"ip=203.0.113.8"* ]] || fail "CDN header list with remarks: $out"
 code="$(api PUT /protect/sites '{"items":{"php.test":{"on":true,"cdn":true,"cdn_headers":["bad header"]}}}' | jget ".get('code','')")"
 [[ -n "$code" ]] || fail "invalid header name accepted"
 if command -v nft >/dev/null; then
@@ -153,6 +171,10 @@ code() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
 [[ "$(code --resolve php.test:80:127.0.0.1 http://php.test/blocked/x)" == 403 ]] || fail "URL black list"
 [[ "$(code --resolve php.test:80:127.0.0.1 http://php.test/blocked/hook)" != 403 ]] || fail "URL white list does not win over the black list"
 [[ "$(get80 php.test /index.php)" == php-ok-8.3* ]] || fail "ordinary request refused by the lists"
+pid="$(api GET '/firewall/patterns?kind=ua&list=block' | jget "['items'][0]['id']")"
+api PUT "/firewall/patterns/$pid/remark" '{"remark":"scanner"}' | grep -q '"ok":true' || fail "pattern remark"
+api GET '/firewall/patterns?kind=ua&list=block' | grep -q '"remark":"scanner"' || fail "pattern remark not stored"
+[[ "$(code -A 'sqlmap/1.7' --resolve php.test:80:127.0.0.1 http://php.test/index.php)" == 403 ]] || fail "remark change touched the rule"
 api POST /firewall/patterns/clear '{"kind":"ua","list":"block"}' | grep -q '"removed":1' || fail "clear UA list"
 [[ "$(code -A 'sqlmap/1.7' --resolve php.test:80:127.0.0.1 http://php.test/index.php)" == 200 ]] || fail "cleared UA list still enforced"
 api POST /firewall/patterns/clear '{"kind":"url","list":"block"}' >/dev/null
@@ -427,3 +449,59 @@ systemctl restart lmcwhm
 for _ in $(seq 1 30); do [[ -f /opt/lmcwhm/web/nginx/conf.d/acme.test.conf ]] && break; sleep 1; done
 [[ -f /opt/lmcwhm/web/nginx/conf.d/acme.test.conf ]] || fail "config not regenerated on boot"
 pass "configs regenerated from database on restart"
+
+# ---------- website gRPC (HTTP/2 to the backend) ----------
+docker run -d --name grpcbin --network host moul/grpcbin >/dev/null # plain gRPC on :9000
+grpc() { docker run --rm --network host fullstorydev/grpcurl:latest -insecure -servername grpc.test -authority grpc.test "$@"; }
+code="$(api POST /sites '{"domain":"grpc.test","type":"proxy","proxy_target":"grpc://127.0.0.1:9000","ssl":"http"}' | jget ".get('code','')")"
+[[ "$code" == site.grpc_off ]] || fail "gRPC target accepted while switched off: $code"
+api PUT /settings '{"site_grpc":true}' | grep -q '"site_grpc":true' || fail "turn website gRPC on"
+code="$(api POST /sites '{"domain":"grpc.test","type":"proxy","proxy_target":"grpc://127.0.0.1:9000","ssl":"none"}' | jget ".get('code','')")"
+[[ "$code" == site.grpc_no_ssl ]] || fail "gRPC target accepted without HTTPS: $code"
+wait_task "$(api POST /sites '{"domain":"grpc.test","type":"proxy","proxy_target":"grpc://127.0.0.1:9000","ssl":"http"}' | jget "['task_id']")"
+docker exec lmcwhm-haproxy haproxy -c -f /opt/lmcwhm/edge/haproxy.cfg 2>&1 | grep -i "warning\|alert" && fail "haproxy config has warnings (gRPC)"
+for _ in $(seq 1 20); do grpc 127.0.0.1:443 list 2>/dev/null | grep -q grpcbin.GRPCBin && break; sleep 1; done
+grpc 127.0.0.1:443 list | grep -q grpcbin.GRPCBin || fail "gRPC reflection through the edge: $(grpc 127.0.0.1:443 list 2>&1 | tail -3 || true)"
+out="$(grpc -d '{"f_string":"hello-grpc"}' 127.0.0.1:443 grpcbin.GRPCBin/DummyUnary 2>&1 || true)"
+[[ "$out" == *hello-grpc* ]] || fail "unary call: $out"
+n="$(grpc -d '{"f_string":"s"}' 127.0.0.1:443 grpcbin.GRPCBin/DummyServerStream 2>/dev/null | grep -c '"fString"' || true)"
+[[ "$n" -ge 2 ]] || fail "server streaming: $n messages"
+c="$(code -k --resolve acme.test:443:127.0.0.1 https://acme.test/)"
+[[ "$c" != 000 && "$c" -lt 500 ]] || fail "HTTP site broken by gRPC ($c)"
+grep -q 'grpc-status=0' /www/wwwlogs/grpc.test.log || fail "gRPC result not logged"
+# The edge lists refuse calls by method (URL) and client (User-Agent).
+api POST /firewall/patterns '{"kind":"url","list":"block","match":"prefix","value":"/grpcbin.GRPCBin/DummyUnary","enabled":true}' >/dev/null
+out="$(grpc -d '{}' 127.0.0.1:443 grpcbin.GRPCBin/DummyUnary 2>&1 || true)"
+[[ "$out" == *PermissionDenied* ]] || fail "blocked method not refused: $out"
+grpc 127.0.0.1:443 list | grep -q grpcbin.GRPCBin || fail "other methods refused by a method block"
+api POST /firewall/patterns/clear '{"kind":"url","list":"block"}' >/dev/null
+# With the WAF on, calls still pass (the body is not inspected).
+waf="$(api GET /waf | python3 -c "import sys,json; s=json.load(sys.stdin)['settings']; s['enabled']=True; s['engine']='On'; print(json.dumps(s))")"
+wait_task "$(api PUT /waf "$waf" | jget "['task_id']")"
+docker exec lmcwhm-nginx nginx -t 2>&1 | grep -q successful || fail "nginx -t with gRPC + WAF: $(docker exec lmcwhm-nginx nginx -t 2>&1 || true)"
+for _ in $(seq 1 20); do grpc 127.0.0.1:443 list 2>/dev/null | grep -q grpcbin.GRPCBin && break; sleep 1; done
+out="$(grpc -d '{"f_string":"waf-ok"}' 127.0.0.1:443 grpcbin.GRPCBin/DummyUnary 2>&1 || true)"
+[[ "$out" == *waf-ok* ]] || fail "gRPC call refused by the WAF: $out"
+waf="$(api GET /waf | python3 -c "import sys,json; s=json.load(sys.stdin)['settings']; s['enabled']=False; print(json.dumps(s))")"
+wait_task "$(api PUT /waf "$waf" | jget "['task_id']")"
+# gRPC cannot be switched off under a gRPC domain.
+[[ "$(api PUT /settings '{"site_grpc":false}' | jget "['code']")" == settings.grpc_in_use ]] || fail "gRPC switched off under a gRPC domain"
+pass "website gRPC: unary and streaming calls, method blocks, WAF"
+
+# ---------- remarks ----------
+GID="$(site_id grpc.test)"
+api PATCH "/sites/$GID" '{"remark":"rpc backend"}' | grep -q '"ok":true' || fail "domain remark needs no task"
+api GET "/sites/$GID" | grep -q '"remark":"rpc backend"' || fail "domain remark not stored"
+J="$(api POST /cron '{"name":"remark job","remark":"first","type":"shell","schedule":"0 */6 * * *","command":"true","enabled":false,"timeout":60}' | jget "['id']")"
+api PUT "/cron/$J/remark" '{"remark":"second"}' | grep -q '"ok":true' || fail "cron remark"
+api GET /cron | python3 -c "import sys,json; j=[x for x in json.load(sys.stdin)['items'] if x['id']==$J][0]; assert j['remark']=='second' and j['schedule']=='0 */6 * * *', j" || fail "cron remark not stored"
+api POST "/cron/$J/delete" >/dev/null
+api PUT /docker/remark '{"kind":"container","name":"grpcbin","remark":"test service"}' | grep -q '"ok":true' || fail "container remark"
+api GET /docker/containers | python3 -c "import sys,json; c=[x for x in json.load(sys.stdin)['items'] if x['name']=='grpcbin'][0]; assert c['remark']=='test service', c" || fail "container remark not listed"
+wait_task "$(api POST "/sites/$GID/delete" '{"files":true}' | jget "['task_id']")"
+api PUT /settings '{"site_grpc":false}' | grep -q '"site_grpc":false' || fail "turn website gRPC off"
+api POST /docker/containers/grpcbin/remove >/dev/null
+docker run -d --name grpcbin --network host moul/grpcbin >/dev/null
+api GET /docker/containers | python3 -c "import sys,json; c=[x for x in json.load(sys.stdin)['items'] if x['name']=='grpcbin'][0]; assert c['remark']=='', c" || fail "a removed container's remark came back"
+docker rm -f grpcbin >/dev/null
+pass "remarks: domains, scheduled tasks, containers"

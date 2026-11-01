@@ -166,3 +166,21 @@ func TestFeedTTL(t *testing.T) {
 		t.Fatalf("daily: %v", d)
 	}
 }
+
+func TestRemark(t *testing.T) {
+	sv := newSvc(t)
+	ctx := context.Background()
+	j, err := sv.Create(ctx, Input{Name: "r", Remark: "  nightly  ", Type: "shell", Schedule: "@daily", Command: "true"})
+	if err != nil || j.Remark != "nightly" {
+		t.Fatalf("create: %+v %v", j, err)
+	}
+	if err := sv.SetRemark(ctx, j.ID, "changed"); err != nil {
+		t.Fatal(err)
+	}
+	if g, _ := sv.Get(ctx, j.ID); g.Remark != "changed" || g.Schedule != "@daily" {
+		t.Fatalf("after SetRemark: %+v", g)
+	}
+	if err := sv.SetRemark(ctx, 999, "x"); err != ErrNotFound {
+		t.Fatalf("missing job: %v", err)
+	}
+}

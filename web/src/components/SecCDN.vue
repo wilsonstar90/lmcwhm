@@ -5,21 +5,22 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { NButton, NCard, NCollapse, NCollapseItem, NFormItem, NInput, NSpace, NTag, useMessage } from 'naive-ui'
 import { get, put, ApiError } from '../api/client'
+import CdnHeaderList, { type CdnHeader } from './CdnHeaderList.vue'
 
-interface CDNConfig { ranges: string[]; header: string }
+interface CDNConfig { ranges: string[]; headers: CdnHeader[] }
 
 const { t } = useI18n()
 const msg = useMessage()
 const cf = ref<string[]>([])
-const saved = ref<CDNConfig>({ ranges: [], header: '' })
+const saved = ref<CDNConfig>({ ranges: [], headers: [] })
 const ranges = ref('')
-const header = ref('')
+const headers = ref<CdnHeader[]>([])
 const saving = ref(false)
 
 function show(c: CDNConfig) {
   saved.value = c
   ranges.value = c.ranges.join('\n')
-  header.value = c.header
+  headers.value = c.headers.map((x) => ({ ...x }))
 }
 onMounted(async () => {
   try {
@@ -31,11 +32,11 @@ onMounted(async () => {
   }
 })
 const list = computed(() => ranges.value.split(/[\s,]+/).map((x) => x.trim()).filter(Boolean))
-const dirty = computed(() => header.value.trim() !== saved.value.header || list.value.join('\n') !== saved.value.ranges.join('\n'))
+const dirty = computed(() => JSON.stringify(headers.value) !== JSON.stringify(saved.value.headers) || list.value.join('\n') !== saved.value.ranges.join('\n'))
 async function save() {
   saving.value = true
   try {
-    const r = await put<{ config: CDNConfig }>('/firewall/cdn', { ranges: list.value, header: header.value.trim() })
+    const r = await put<{ config: CDNConfig }>('/firewall/cdn', { ranges: list.value, headers: headers.value })
     show(r.config)
     msg.success(t('common.saved'))
   } catch (e) {
@@ -61,9 +62,8 @@ async function save() {
       </n-collapse-item>
     </n-collapse>
     <b>{{ t('fw.cdn.other') }}</b>
-    <n-form-item :label="t('fw.cdn.header')" :show-feedback="false" style="margin-top: 8px">
-      <n-input v-model:value="header" placeholder="X-Forwarded-For / X-Real-IP" style="max-width: 320px" />
-    </n-form-item>
+    <div class="lbl">{{ t('fw.cdn.headers') }}</div>
+    <div style="max-width: 640px"><CdnHeaderList v-model="headers" /></div>
     <n-form-item :label="t('fw.cdn.ranges')" :feedback="t('fw.cdn.ranges_hint')" style="margin-top: 8px">
       <n-input v-model:value="ranges" type="textarea" :autosize="{ minRows: 3, maxRows: 10 }" placeholder="203.0.113.0/24&#10;2001:db8::/32" />
     </n-form-item>
@@ -72,6 +72,10 @@ async function save() {
 </template>
 
 <style scoped>
+.lbl {
+  margin: 10px 0 6px;
+  font-size: 14px;
+}
 .hint {
   margin: 0;
   font-size: 12px;

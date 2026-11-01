@@ -163,6 +163,7 @@ func serveCmd() *cobra.Command {
 			sites := site.NewService(a.st, env, webCfg, &acme.Issuer{Cfg: webCfg, HTTP: responder}, tm)
 			sites.RebuildMarker = server.RebuildMarker(a.paths)
 			env.SiteDir = func() string { return a.settings.Get().SiteRoot }
+			env.GRPC = func() bool { return a.settings.Get().SiteGRPC }
 			// nginx and PHP also see the configured site directory and every
 			// directory holding a site outside the web root.
 			env.ExtraRoots = func() []string {
@@ -181,7 +182,7 @@ func serveCmd() *cobra.Command {
 			fw.PanelPort = func() int { return a.settings.Get().PanelPort }
 			env.CDN = func() webenv.CDN {
 				c := fw.CDN(ctx)
-				return webenv.CDN{Cloudflare: fw.CloudflareTrust(ctx), Ranges: c.Ranges, Header: c.Header}
+				return webenv.CDN{Cloudflare: fw.CloudflareTrust(ctx), Ranges: c.Ranges, Headers: webenv.HeaderNames(c.Headers)}
 			}
 			env.Patterns = func() []webenv.PatternList { return fw.EdgePatterns(ctx) }
 			geo := geoip.New(filepath.Join(a.paths.Home, "geoip"))

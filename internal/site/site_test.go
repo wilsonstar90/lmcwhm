@@ -57,3 +57,13 @@ func TestResolveRoutes(t *testing.T) {
 		t.Error("reversed order")
 	}
 }
+
+func TestOnlyRemark(t *testing.T) {
+	r, b := "x", true
+	if !(UpdateInput{Remark: &r}).OnlyRemark() {
+		t.Error("remark only")
+	}
+	if (UpdateInput{Remark: &r, HSTS: &b}).OnlyRemark() || (UpdateInput{}).OnlyRemark() {
+		t.Error("not remark only")
+	}
+}

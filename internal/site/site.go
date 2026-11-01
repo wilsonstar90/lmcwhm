@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -118,13 +119,16 @@ var (
 	ErrBadIndex    = errors.New("site.invalid_index")
 	ErrBadCommand  = errors.New("site.invalid_command")
 	ErrPassSSL     = errors.New("site.passthrough_no_ssl")
+	ErrGRPCOff     = errors.New("site.grpc_off")    // gRPC targets need 面板設定 → gRPC
+	ErrGRPCNoSSL   = errors.New("site.grpc_no_ssl") // gRPC clients speak HTTP/2 over TLS
 	ErrNotProject  = errors.New("site.not_project")
 	ErrBadWAFRule  = errors.New("site.invalid_waf_rule")
 )
 
 var (
-	wafRuleRe    = regexp.MustCompile(`^\d{1,7}$`)
-	urlTargetRe  = regexp.MustCompile(`^https?://[A-Za-z0-9.\-]+(:[0-9]{1,5})?$|^https?://\[[0-9a-fA-F:]+\](:[0-9]{1,5})?$`)
+	wafRuleRe = regexp.MustCompile(`^\d{1,7}$`)
+	// http(s):// proxies; grpc:// (h2c) and grpcs:// proxy gRPC (面板設定 → gRPC).
+	urlTargetRe  = regexp.MustCompile(`^(https?|grpcs?)://[A-Za-z0-9.\-]+(:[0-9]{1,5})?$|^(https?|grpcs?)://\[[0-9a-fA-F:]+\](:[0-9]{1,5})?$`)
 	passTargetRe = regexp.MustCompile(`^([A-Za-z0-9.\-]+|\[[0-9a-fA-F:]+\]):[0-9]{1,5}$`)
 )
 
@@ -682,7 +686,8 @@ func (sv *Service) Create(ctx context.Context, in CreateInput) (string, error) {
 			return "", ErrNoContent
 		}
 		if err := sv.applyTarget(ctx, &s, TargetInput{Target: t, TargetSite: in.TargetSite, Container: in.Container, ProxyTarget: in.ProxyTarget,
-			Redirect: in.Redirect, RedirectCode: in.RedirectCode, RedirectPath: in.RedirectPath, TargetSubdir: in.TargetSubdir}); err != nil {
+			Redirect: in.Redirect, RedirectCode: in.RedirectCode, RedirectPath: in.RedirectPath, TargetSubdir: in.TargetSubdir,
+			sslPlanned: in.SSL != "" && in.SSL != "none"}); err != nil {
 			return "", err
 		}
 		if s.Passthrough && in.SSL != "none" && in.SSL != "" {
@@ -1237,6 +1242,11 @@ func (sv *Service) Update(ctx context.Context, id int64, in UpdateInput) (string
 		if t := s.target(); t != TargetURL && t != TargetDocker && t != TargetPassthrough || !validTarget(target, s.Passthrough) {
 			return "", ErrBadTarget
 		}
+		if !s.Passthrough {
+			if err := sv.checkGRPC(target, s.SSLMode != "none" && s.SSLMode != ""); err != nil {
+				return "", err
+			}
+		}
 		s.ProxyTarget = target
 	}
 	return sv.tasks.Start("site.update:"+s.Domain, func(ctx context.Context, log tasks.Logf) error {
@@ -1551,4 +1561,55 @@ func ProbeHost(ctx context.Context, host string, https bool) (status int, ms int
 	}
 	resp.Body.Close()
 	return resp.StatusCode, time.Since(start).Milliseconds(), nil
+}
+
+// OnlyRemark reports whether an update changes nothing but the remark, which
+// needs no task (nothing is regenerated).
+func (in UpdateInput) OnlyRemark() bool {
+	x := in
+	x.Remark = nil
+	return in.Remark != nil && reflect.ValueOf(x).IsZero()
+}
+
+// SetRemark changes only a site's (or domain's) remark.
+func (sv *Service) SetRemark(ctx context.Context, id int64, remark string) error {
+	remark = strings.TrimSpace(remark)
+	if r := []rune(remark); len(r) > 200 {
+		remark = string(r[:200])
+	}
+	res, err := sv.st.DB.ExecContext(ctx, `UPDATE sites SET remark = ?, updated_at = ? WHERE id = ?`, remark, time.Now().Unix(), id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// checkGRPC: a gRPC target needs gRPC switched on and HTTPS (ssl: the site
+// has, or is about to get, a certificate).
+func (sv *Service) checkGRPC(target string, ssl bool) error {
+	if !webenv.IsGRPC(target) {
+		return nil
+	}
+	if sv.Env == nil || sv.Env.GRPC == nil || !sv.Env.GRPC() {
+		return ErrGRPCOff
+	}
+	if !ssl {
+		return ErrGRPCNoSSL
+	}
+	return nil
+}
+
+// GRPCCount is how many domains proxy gRPC.
+func (sv *Service) GRPCCount(ctx context.Context) int {
+	all, _ := sv.List(ctx)
+	n := 0
+	for _, s := range all {
+		if !s.Passthrough && webenv.IsGRPC(s.ProxyTarget) {
+			n++
+		}
+	}
+	return n
 }

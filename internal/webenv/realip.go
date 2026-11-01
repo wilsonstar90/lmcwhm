@@ -38,7 +38,7 @@ var CloudflareRanges = []string{
 type CDN struct {
 	Cloudflare []string // extra Cloudflare ranges (from the trust list)
 	Ranges     []string // another CDN's ranges
-	Header     string   // and the header it sets (last value is used)
+	Headers    []string // and the headers it may set, tried in order (last value is used)
 }
 
 var headerRe = regexp.MustCompile(`^[A-Za-z0-9-]{1,64}$`)

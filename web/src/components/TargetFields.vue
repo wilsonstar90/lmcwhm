@@ -4,7 +4,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { NCheckbox, NFormItem, NInput, NRadioButton, NRadioGroup, NSelect, NSpace } from 'naive-ui'
 import { get } from '../api/client'
-import type { DomainTarget, Site } from '../api/types'
+import type { DomainTarget, PanelSettings, Site } from '../api/types'
 
 export interface TargetValue {
   target: DomainTarget
@@ -25,7 +25,9 @@ const set = (patch: Partial<TargetValue>) => emit('update:modelValue', { ...prop
 
 const sites = ref<Site[]>([])
 const ports = ref<{ container: string; port: number }[]>([])
+const grpcOn = ref(false)
 onMounted(async () => {
+  get<PanelSettings>('/settings').then((s) => (grpcOn.value = !!s.site_grpc)).catch(() => {})
   try {
     sites.value = (await get<{ items: Site[] }>('/sites')).items
   } catch {
@@ -43,9 +45,21 @@ const siteOptions = computed(() =>
 )
 const containerOptions = computed(() => [...new Set(ports.value.map((p) => p.container))].map((c) => ({ label: c, value: c })))
 const portOptions = computed(() => ports.value.filter((p) => p.container === v.value.container).map((p) => ({ label: String(p.port), value: p.port })))
+// Protocol of a container / URL target: gRPC targets are grpc:// (h2c) or
+// grpcs:// (TLS), offered when 面板設定 → gRPC is on.
+const isGRPC = computed(() => /^grpcs?:\/\//.test(v.value.proxy_target))
+const showProto = computed(() => grpcOn.value || isGRPC.value)
+const scheme = (grpc: boolean) => (grpc ? 'grpc' : 'http')
+function setProto(grpc: boolean) {
+  const u = v.value.proxy_target
+  const m = u.match(/^(https?|grpcs?):\/\/(.*)$/)
+  if (!m) return set({ proxy_target: `${grpc ? 'grpc' : 'http'}://${u}` })
+  const tls = m[1].endsWith('s')
+  set({ proxy_target: `${grpc ? 'grpc' : 'http'}${tls ? 's' : ''}://${m[2]}` })
+}
 function pickContainer(c: string) {
   const first = ports.value.find((p) => p.container === c)?.port ?? null
-  set({ container: c, port: first, proxy_target: first ? `http://127.0.0.1:${first}` : '' })
+  set({ container: c, port: first, proxy_target: first ? `${scheme(isGRPC.value)}://127.0.0.1:${first}` : '' })
 }
 </script>
 
@@ -56,6 +70,15 @@ function pickContainer(c: string) {
     </n-radio-group>
   </n-form-item>
   <p class="hint">{{ t(`dom.target_hint.${v.target}`) }}</p>
+  <template v-if="showProto && (v.target === 'docker' || v.target === 'url')">
+    <n-form-item :label="t('grpc.protocol')" :show-feedback="false">
+      <n-radio-group :value="isGRPC" @update:value="setProto">
+        <n-radio-button :value="false">HTTP</n-radio-button>
+        <n-radio-button :value="true" :disabled="!grpcOn && !isGRPC">gRPC</n-radio-button>
+      </n-radio-group>
+    </n-form-item>
+    <p class="hint" style="margin-top: 4px">{{ isGRPC ? t('grpc.target_hint') : t('grpc.http_hint') }}</p>
+  </template>
   <n-form-item v-if="v.target === 'link'" :label="t('dom.website')">
     <n-select :value="v.target_site" :options="siteOptions" filterable @update:value="(x: number) => set({ target_site: x })" />
   </n-form-item>
@@ -65,12 +88,12 @@ function pickContainer(c: string) {
         <n-select :value="v.container" :options="containerOptions" filterable :placeholder="t('dom.no_containers')" @update:value="pickContainer" />
       </n-form-item>
       <n-form-item :label="t('route.port')" style="width: 140px">
-        <n-select :value="v.port" :options="portOptions" @update:value="(p: number) => set({ port: p, proxy_target: `http://127.0.0.1:${p}` })" />
+        <n-select :value="v.port" :options="portOptions" @update:value="(p: number) => set({ port: p, proxy_target: `${scheme(isGRPC)}://127.0.0.1:${p}` })" />
       </n-form-item>
     </n-space>
   </template>
   <n-form-item v-else-if="v.target === 'url'" :label="t('site.proxy_target')" :feedback="t('site.proxy_target_hint')">
-    <n-input :value="v.proxy_target" placeholder="http://127.0.0.1:8081 / https://backend.example.com" @update:value="(x: string) => set({ proxy_target: x })" />
+    <n-input :value="v.proxy_target" :placeholder="isGRPC ? 'grpc://127.0.0.1:9000 / grpcs://rpc.example.com:443' : 'http://127.0.0.1:8081 / https://backend.example.com'" @update:value="(x: string) => set({ proxy_target: x })" />
   </n-form-item>
   <n-form-item v-else-if="v.target === 'passthrough'" :label="t('site.proxy_target')" :feedback="t('site.passthrough_hint')">
     <n-input :value="v.proxy_target" placeholder="127.0.0.1:8443" @update:value="(x: string) => set({ proxy_target: x })" />

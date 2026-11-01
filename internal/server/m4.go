@@ -38,6 +38,7 @@ func (s *Server) m4Routes(r chi.Router) {
 		r.Post("/cron/{id}/delete", s.handleCronDelete)
 		r.Post("/cron/{id}/run", s.handleCronRunNow)
 		r.Post("/cron/{id}/enabled", s.handleCronEnabled)
+		r.Put("/cron/{id}/remark", s.handleCronRemark)
 		r.Get("/cron/{id}/runs", s.handleCronRuns)
 	}
 	if s.GeoIP != nil {
@@ -183,6 +184,21 @@ func (s *Server) handleCronEnabled(w http.ResponseWriter, r *http.Request) {
 	}
 	decode(r, &in)
 	if err := s.Cron.SetEnabled(r.Context(), idParam(r), in.Enabled); err != nil {
+		writeCronErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (s *Server) handleCronRemark(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Remark string `json:"remark"`
+	}
+	if err := decode(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := s.Cron.SetRemark(r.Context(), idParam(r), in.Remark); err != nil {
 		writeCronErr(w, err)
 		return
 	}

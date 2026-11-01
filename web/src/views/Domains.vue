@@ -18,6 +18,7 @@ import DnsZones from '../components/DnsZones.vue'
 import DomainEditor from '../components/DomainEditor.vue'
 import DomainCreate, { type DomainPreset } from '../components/DomainCreate.vue'
 import PortForwards from '../components/PortForwards.vue'
+import RemarkCell from '../components/RemarkCell.vue'
 
 const { t, locale } = useI18n()
 const msg = useMessage()
@@ -74,7 +75,7 @@ const entries = computed<Entry[]>(() => {
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase()
   if (!q) return entries.value
-  return entries.value.filter((e) => e.hosts.some((r) => r.host.includes(q)) || e.primary.upstream.includes(q) || e.primary.container.includes(q) || (e.primary.target_name ?? '').includes(q))
+  return entries.value.filter((e) => e.hosts.some((r) => r.host.includes(q)) || e.primary.upstream.includes(q) || e.primary.container.includes(q) || (e.primary.target_name ?? '').includes(q) || (e.site?.remark ?? '').toLowerCase().includes(q))
 })
 const warned = computed(() => entries.value.filter((e) => e.hosts.some((r) => r.warnings.length)).length)
 
@@ -209,6 +210,12 @@ const columns = computed<DataTableColumns<Entry>>(() => [
         h('span', targetLabel(e.primary)),
       ]),
   },
+  {
+    title: () => t('site.remark'),
+    key: 'remark',
+    minWidth: 150,
+    render: (e) => (e.site ? h(RemarkCell, { value: e.site.remark, save: (v: string) => patch(`/sites/${e.site!.id}`, { remark: v }).then(() => (e.site!.remark = v)) }) : null),
+  },
   { title: 'TLS', key: 'mode', width: 90, render: (e) => h(NTag, { size: 'small', type: e.primary.mode === 'passthrough' ? 'warning' : 'default' }, () => t(`route.modes.${e.primary.mode}`)) },
   { title: 'SSL', key: 'cert', width: 130, render: sslCell },
   { title: 'DNS', key: 'dns', width: 130, render: dnsCell },
@@ -266,7 +273,7 @@ const columns = computed<DataTableColumns<Entry>>(() => [
       </n-alert>
       <n-alert v-if="warned" type="warning" :show-icon="false" style="margin-bottom: 12px">{{ t('dom.warned', { n: warned }) }}</n-alert>
 
-      <n-data-table size="small" :columns="columns" :data="filtered" :loading="loading" :row-key="(e: Entry) => e.id" :scroll-x="1300" />
+      <n-data-table size="small" :columns="columns" :data="filtered" :loading="loading" :row-key="(e: Entry) => e.id" :scroll-x="1450" />
     </n-tab-pane>
     <n-tab-pane name="forwards" :tab="t('fwd.title')" display-directive="show:lazy"><PortForwards /></n-tab-pane>
     <n-tab-pane name="dns" :tab="t('dns.tab')" display-directive="show:lazy"><DnsZones /></n-tab-pane>

@@ -181,6 +181,15 @@ const unauthOptions = [404, 403, 401, 400, 408, 416, 444].map((c) => ({ label: t
           <n-form-item :label="t('settings.backup_dir')" :feedback="t('settings.backup_dir_hint')">
             <PathInput v-model:value="form.backup_dir" placeholder="/opt/lmcwhm/backup" />
           </n-form-item>
+          <n-form-item :label="t('grpc.setting')" :feedback="t('grpc.setting_hint')">
+            <n-switch v-model:value="form.site_grpc" />
+          </n-form-item>
+          <details class="grpc-impact">
+            <summary>{{ t('grpc.impact_title') }}</summary>
+            <ul>
+              <li v-for="k in ['network', 'ip', 'lists', 'protect', 'cc', 'rules', 'waf', 'other', 'tls', 'passthrough']" :key="k">{{ t(`grpc.impact.${k}`) }}</li>
+            </ul>
+          </details>
           <n-button type="primary" :loading="saving" @click="save">{{ t('common.save') }}</n-button>
         </n-form>
       </n-card>
@@ -311,3 +320,20 @@ const unauthOptions = [404, 403, 401, 400, 408, 416, 444].map((c) => ({ label: t
     <n-tab-pane v-if="session.user?.is_admin" name="users" :tab="t('users.tab')" display-directive="show:lazy"><SettingsUsers /></n-tab-pane>
   </n-tabs>
 </template>
+
+<style scoped>
+.grpc-impact {
+  font-size: 12.5px;
+  margin: 8px 0 18px;
+}
+.grpc-impact summary {
+  cursor: pointer;
+  opacity: 0.8;
+}
+.grpc-impact ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  line-height: 1.6;
+  opacity: 0.85;
+}
+</style>

@@ -59,6 +59,7 @@ type TargetInput struct {
 	RedirectCode int    `json:"redirect_code"`
 	RedirectPath bool   `json:"redirect_path"`
 	TargetSubdir string `json:"target_subdir"` // link: serve this directory of the website
+	sslPlanned   bool   // a new site whose certificate is issued after it is saved
 }
 
 var containerRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
@@ -88,6 +89,9 @@ func (sv *Service) applyTarget(ctx context.Context, s *Site, in TargetInput) err
 		}
 		if in.Target == TargetDocker && !containerRe.MatchString(in.Container) {
 			return ErrBadTarget
+		}
+		if err := sv.checkGRPC(target, in.sslPlanned || (s.SSLMode != "none" && s.SSLMode != "")); err != nil {
+			return err
 		}
 		s.ProxyTarget = target
 	case TargetPassthrough:

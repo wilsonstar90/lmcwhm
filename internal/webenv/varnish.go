@@ -56,7 +56,9 @@ func (e *Env) SaveVarnishSettings(s VarnishSettings) error {
 }
 
 // cached reports whether HAProxy should send s through Varnish.
-func (s Site) cached() bool { return s.Advanced.Varnish && !s.Stopped && !s.Passthrough }
+func (s Site) cached() bool {
+	return s.Advanced.Varnish && !s.Stopped && !s.Passthrough && !IsGRPC(s.Upstream)
+}
 
 func cachedSites(sites []Site) []Site {
 	out := []Site{}

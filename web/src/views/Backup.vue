@@ -9,13 +9,15 @@ import { get, post, put, ApiError } from '../api/client'
 import { bytes, datetime } from '../format'
 import TaskModal from '../components/TaskModal.vue'
 import PathInput from '../components/PathInput.vue'
+import SchedulePicker from '../components/SchedulePicker.vue'
+import RemarkCell from '../components/RemarkCell.vue'
 
 interface Rec { id: number; kind: string; target: string; target_id: number; name: string; size: number; dest: string; dest_name: string; job_id: number; created_at: number }
 type Opt = { label: string; value: string }
 interface Targets { site: Opt[]; database: Opt[]; volume: Opt[]; dest: Opt[] }
 interface Device { user_code: string; url: string; interval: number; expires_at: number }
 interface Remote { id: number; name: string; kind: string; client_id: string; account: string; authorized: boolean; device?: Device; created_at: number }
-interface Job { id: number; name: string; type: string; schedule: string; command: string; enabled: boolean; next: number; last?: { status: string; started_at: number } }
+interface Job { id: number; name: string; remark: string; type: string; schedule: string; command: string; enabled: boolean; next: number; last?: { status: string; started_at: number } }
 interface Plan { kind: string; target: string; dests: string[]; keep: number; exclude?: string[] }
 
 const { t, locale } = useI18n()
@@ -86,21 +88,13 @@ async function openMigrate(r: Rec) {
 const copy = (s: string) => navigator.clipboard?.writeText(s).then(() => msg.success(t('common.copied')))
 
 // ---- run now / plan form ----
-interface Form { mode: 'now' | 'plan'; id: number; name: string; kind: string; target: string; dests: string[]; keep: number; exclude: string[]; schedule: string; preset: string; enabled: boolean }
+interface Form { mode: 'now' | 'plan'; id: number; name: string; kind: string; target: string; dests: string[]; keep: number; exclude: string[]; schedule: string; remark: string; badSchedule: boolean; enabled: boolean }
 const f = ref<Form | null>(null)
-const presets = computed(() => [
-  { label: t('bk.presets.daily'), value: '0 3 * * *' },
-  { label: t('bk.presets.twice'), value: '0 3,15 * * *' },
-  { label: t('bk.presets.hourly6'), value: '0 */6 * * *' },
-  { label: t('bk.presets.weekly'), value: '0 3 * * 0' },
-  { label: t('bk.presets.custom'), value: 'custom' },
-])
 function openForm(mode: 'now' | 'plan', j?: Job) {
-  const x: Form = { mode, id: 0, name: '', kind: 'site', target: '*', dests: ['local'], keep: 7, exclude: [], schedule: '0 3 * * *', preset: '0 3 * * *', enabled: true }
+  const x: Form = { mode, id: 0, name: '', kind: 'site', target: '*', dests: ['local'], keep: 7, exclude: [], schedule: '0 3 * * *', remark: '', badSchedule: false, enabled: true }
   if (j) {
     const p = JSON.parse(j.command) as Plan
-    Object.assign(x, { id: j.id, name: j.name, kind: p.kind, target: p.target, dests: p.dests, keep: p.keep, exclude: p.exclude ?? [], schedule: j.schedule, enabled: j.enabled })
-    x.preset = presets.value.some((o) => o.value === j.schedule) ? j.schedule : 'custom'
+    Object.assign(x, { id: j.id, name: j.name, kind: p.kind, target: p.target, dests: p.dests, keep: p.keep, exclude: p.exclude ?? [], schedule: j.schedule, remark: j.remark ?? '', enabled: j.enabled })
   }
   if (mode === 'now') x.target = ''
   f.value = x
@@ -113,7 +107,7 @@ async function submit() {
       const r = await post<{ task_id: string }>('/backups/run', plan(x))
       task.value = { id: r.task_id, title: t('bk.run_now') }
     } else {
-      const body = { name: x.name || `${t(`bk.kinds.${x.kind}`)} ${targetLabel(plan(x))}`, type: 'backup', schedule: x.preset === 'custom' ? x.schedule : x.preset,
+      const body = { name: x.name || `${t(`bk.kinds.${x.kind}`)} ${targetLabel(plan(x))}`, type: 'backup', remark: x.remark, schedule: x.schedule,
         command: JSON.stringify(plan(x)), enabled: x.enabled, timeout: 43200 }
       if (x.id) await put(`/cron/${x.id}`, body)
       else await post('/cron', body)
@@ -197,10 +191,11 @@ const recCols = computed<DataTableColumns<Rec>>(() => [
   },
 ])
 const jobCols = computed<DataTableColumns<Job>>(() => [
-  { title: () => t('cron.name'), key: 'name' },
-  { title: () => t('bk.what'), key: 'command', render: (j) => { const p = JSON.parse(j.command) as Plan; return `${t(`bk.kinds.${p.kind}`)} · ${targetLabel(p)}` } },
+  { title: () => t('cron.name'), key: 'name', minWidth: 160 },
+  { title: () => t('bk.what'), key: 'command', minWidth: 160, render: (j) => { const p = JSON.parse(j.command) as Plan; return `${t(`bk.kinds.${p.kind}`)} · ${targetLabel(p)}` } },
   { title: () => t('bk.dest'), key: 'dests', render: (j) => (JSON.parse(j.command) as Plan).dests.map(destLabel).join(', ') },
   { title: () => t('bk.keep'), key: 'keep', width: 80, render: (j) => (JSON.parse(j.command) as Plan).keep || '∞' },
+  { title: () => t('site.remark'), key: 'remark', minWidth: 140, render: (j) => h(RemarkCell, { value: j.remark, save: (v: string) => put(`/cron/${j.id}/remark`, { remark: v }).then(() => (j.remark = v)) }) },
   { title: () => t('cron.schedule'), key: 'schedule', width: 130, render: (j) => h('code', j.schedule) },
   { title: () => t('cron.next'), key: 'next', width: 170, render: (j) => (j.enabled && j.next ? datetime(j.next, locale.value) : '—') },
   { title: () => t('cron.last'), key: 'last', width: 100, render: (j) => (j.last ? h(NTag, { size: 'small', type: j.last.status === 'success' ? 'success' : j.last.status === 'running' ? 'info' : 'error' }, () => t(`cron.status.${j.last!.status}`)) : '—') },
@@ -297,7 +292,7 @@ const remoteCols = computed<DataTableColumns<Remote>>(() => [
 
     <n-tab-pane name="plans" :tab="t('bk.tab_plans')">
       <n-space style="margin-bottom: 12px"><n-button type="primary" @click="openForm('plan')">{{ t('bk.new_plan') }}</n-button></n-space>
-      <n-data-table size="small" :columns="jobCols" :data="jobs" :row-key="(j: Job) => j.id" :scroll-x="1100" />
+      <n-data-table size="small" :columns="jobCols" :data="jobs" :row-key="(j: Job) => j.id" :scroll-x="1360" />
     </n-tab-pane>
 
     <n-tab-pane name="remotes" :tab="t('bk.tab_remotes')">
@@ -333,14 +328,15 @@ const remoteCols = computed<DataTableColumns<Remote>>(() => [
         <n-form-item :label="t('bk.keep')" :feedback="t('bk.keep_hint')"><n-input-number v-model:value="f.keep" :min="0" :max="1000" /></n-form-item>
         <template v-if="f.mode === 'plan'">
           <n-form-item :label="t('cron.schedule')">
-            <n-space><n-select v-model:value="f.preset" :options="presets" style="width: 220px" /><n-input v-if="f.preset === 'custom'" v-model:value="f.schedule" style="width: 180px" /></n-space>
+            <SchedulePicker v-model="f.schedule" @invalid="(v: boolean) => f && (f.badSchedule = v)" />
           </n-form-item>
+          <n-form-item :label="t('site.remark')"><n-input v-model:value="f.remark" maxlength="200" /></n-form-item>
         </template>
       </n-form>
       <template #footer>
         <n-space justify="end">
           <n-button @click="f = null">{{ t('common.cancel') }}</n-button>
-          <n-button type="primary" :disabled="!f.dests.length || (f.kind !== 'panel' && f.kind !== 'snapshot' && !f.target)" @click="submit">{{ f.mode === 'now' ? t('bk.start') : t('common.save') }}</n-button>
+          <n-button type="primary" :disabled="!f.dests.length || (f.mode === 'plan' && f.badSchedule) || (f.kind !== 'panel' && f.kind !== 'snapshot' && !f.target)" @click="submit">{{ f.mode === 'now' ? t('bk.start') : t('common.save') }}</n-button>
         </n-space>
       </template>
     </n-card>

@@ -31,6 +31,7 @@ export interface PanelSettings {
   site_root: string
   backup_dir: string
   logo_image: boolean
+  site_grpc: boolean
 }
 
 export interface Overview {
@@ -285,6 +286,7 @@ export interface Container {
   host_ports: number[]
   created_at: number
   usage: DockerUsage | null
+  remark?: string
 }
 
 export interface DockerUsage {
@@ -375,6 +377,7 @@ export interface ComposeProject {
   running: number
   services: number
   status: string
+  remark?: string
 }
 
 export interface FileEntry {

@@ -9,6 +9,7 @@ import {
 import { get, post, patch, ApiError } from '../api/client'
 import type { Database, InstalledApp } from '../api/types'
 import TaskModal from '../components/TaskModal.vue'
+import RemarkCell from '../components/RemarkCell.vue'
 import AppSettings from '../components/AppSettings.vue'
 import RedisKeys from '../components/RedisKeys.vue'
 import UpdateBadge from '../components/UpdateBadge.vue'
@@ -131,15 +132,6 @@ async function setPassword() {
   }
 }
 
-async function setRemark(d: Database, remark: string) {
-  try {
-    await patch(`/databases/${d.id}`, { remark })
-    d.remark = remark
-  } catch (e) {
-    fail(e)
-  }
-}
-
 function copy(text: string) {
   navigator.clipboard?.writeText(text).then(() => msg.success(t('common.copied')))
 }
@@ -180,7 +172,7 @@ const columns: DataTableColumns<Database> = [
     title: () => t('site.remark'),
     key: 'remark',
     render: (d) =>
-      h(NInput, { size: 'small', value: d.remark, placeholder: '—', onChange: (v: string) => setRemark(d, v), 'onUpdate:value': (v: string) => (d.remark = v) }),
+      h(RemarkCell, { value: d.remark, save: (v: string) => patch(`/databases/${d.id}`, { remark: v }).then(() => (d.remark = v)) }),
   },
   {
     title: '',

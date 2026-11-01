@@ -31,6 +31,9 @@ func (s *Server) m5Routes(r chi.Router) {
 		r.Get("/firewall/ips", s.handleFWIPs)
 		r.Post("/firewall/ips", s.handleAddFWIP)
 		r.Post("/firewall/ips/{id}/delete", s.handleDeleteFWIP)
+		r.Put("/firewall/ips/{id}", s.handleUpdateFWIP)
+		r.Put("/firewall/ips/{id}/remark", s.handleFWIPRemark)
+		r.Put("/firewall/patterns/{id}/remark", s.handleFWPatternRemark)
 		s.fwListRoutes(r)
 		r.Post("/firewall/sync", s.handleFWSync)
 		r.Post("/firewall/linode/verify", s.handleLinodeVerify)
@@ -365,6 +368,50 @@ func (s *Server) handleAddFWIP(w http.ResponseWriter, r *http.Request) {
 	}
 	s.auditCat(r, "security", "firewall."+in.List, x.IP)
 	writeJSON(w, http.StatusOK, x)
+}
+
+func (s *Server) handleUpdateFWIP(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		IP      string `json:"ip"`
+		Minutes int    `json:"minutes"` // 0 = permanent, -1 = keep the current expiry
+		Remark  string `json:"remark"`
+	}
+	if err := decode(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	self, _ := netip.ParseAddr(clientIP(r))
+	x, err := s.Firewall.UpdateIP(r.Context(), idParam(r), in.IP, time.Duration(in.Minutes)*time.Minute, in.Minutes < 0, in.Remark, self.Unmap())
+	if err != nil {
+		writeFWErr(w, err)
+		return
+	}
+	s.auditCat(r, "security", "firewall.ip_edit", x.List+" "+x.IP)
+	writeJSON(w, http.StatusOK, x)
+}
+
+func (s *Server) handleFWIPRemark(w http.ResponseWriter, r *http.Request) {
+	s.setRemark(w, r, s.Firewall.SetIPRemark)
+}
+
+func (s *Server) handleFWPatternRemark(w http.ResponseWriter, r *http.Request) {
+	s.setRemark(w, r, s.Firewall.SetPatternRemark)
+}
+
+// setRemark decodes {remark} and stores it for the {id} in the path.
+func (s *Server) setRemark(w http.ResponseWriter, r *http.Request, set func(context.Context, int64, string) error) {
+	var in struct {
+		Remark string `json:"remark"`
+	}
+	if err := decode(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := set(r.Context(), idParam(r), in.Remark); err != nil {
+		writeFWErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func (s *Server) handleDeleteFWIP(w http.ResponseWriter, r *http.Request) {

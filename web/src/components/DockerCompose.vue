@@ -5,6 +5,7 @@ import { NButton, NDataTable, NSpace, NTag, NModal, NCard, NForm, NFormItem, NIn
 import { get, post, put, ApiError } from '../api/client'
 import type { ComposeProject } from '../api/types'
 import LogsModal from './LogsModal.vue'
+import RemarkCell from './RemarkCell.vue'
 import { CodeEditor } from './code-editor'
 
 const emit = defineEmits<{ task: [id: string, title: string] }>()
@@ -89,7 +90,8 @@ async function remove(p: ComposeProject) {
 }
 
 const columns: DataTableColumns<ComposeProject> = [
-  { title: () => t('docker.project'), key: 'name', render: (p) => h('div', [h('b', p.name), h('div', { style: 'font-size:12px;opacity:.6' }, p.dir)]) },
+  { title: () => t('docker.project'), key: 'name', minWidth: 200, render: (p) => h('div', [h('b', p.name), h('div', { style: 'font-size:12px;opacity:.6' }, p.dir)]) },
+  { title: () => t('site.remark'), key: 'remark', minWidth: 150, render: (p) => h(RemarkCell, { value: p.remark ?? '', save: (v: string) => put('/docker/remark', { kind: 'project', name: p.name, remark: v }).then(() => (p.remark = v)) }) },
   {
     title: () => t('common.status'),
     key: 'status',
@@ -135,7 +137,7 @@ const columns: DataTableColumns<ComposeProject> = [
     <n-button type="primary" @click="openEdit()">{{ t('docker.compose_create') }}</n-button>
     <n-button size="small" @click="load">{{ t('common.refresh') }}</n-button>
   </n-space>
-  <n-data-table size="small" :columns="columns" :data="items" :loading="loading" :row-key="(r: ComposeProject) => r.name" :scroll-x="800" />
+  <n-data-table size="small" :columns="columns" :data="items" :loading="loading" :row-key="(r: ComposeProject) => r.name" :scroll-x="950" />
 
   <n-modal :show="!!edit" @update:show="(v: boolean) => !v && (edit = null)">
     <n-card v-if="edit" :title="edit.isNew ? t('docker.compose_create') : edit.name" style="width: min(860px, calc(100vw - 32px))" closable @close="edit = null">

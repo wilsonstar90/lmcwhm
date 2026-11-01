@@ -4,12 +4,13 @@
 import { computed, h, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-  NButton, NDataTable, NInput, NModal, NCard, NPopconfirm, NSelect, NSpace, NSwitch, NTag, useMessage, type DataTableColumns,
+  NButton, NDataTable, NForm, NFormItem, NInput, NModal, NCard, NPopconfirm, NSelect, NSpace, NSwitch, NTag, useMessage, type DataTableColumns,
 } from 'naive-ui'
 import { get, post, put, ApiError } from '../api/client'
 import type { FirewallIP } from '../api/types'
 import { datetime } from '../format'
 import IpGeo from './IpGeo.vue'
+import RemarkCell from './RemarkCell.vue'
 
 interface Pattern { id: number; kind: 'ua' | 'url'; list: 'allow' | 'block'; match: 'contains' | 'prefix' | 'regex'; value: string; remark: string; enabled: boolean; created_at: number }
 type Row = { id: number; value: string; match?: Pattern['match']; remark: string; enabled: boolean; created_at: number; expires_at?: number; raw: Pattern | FirewallIP }
@@ -84,6 +85,27 @@ async function toggle(r: Row, on: boolean) {
     fail(e)
   }
 }
+// ---- edit ----
+const editing = ref<{ row: Row; value: string; match: Pattern['match']; minutes: number; remark: string } | null>(null)
+function edit(r: Row) {
+  editing.value = { row: r, value: r.value, match: r.match ?? 'contains', minutes: r.expires_at ? -1 : 0, remark: r.remark }
+}
+const editDurations = computed(() => (editing.value?.row.expires_at ? [{ label: t('fwl.keep_expiry'), value: -1 }, ...durations.value] : durations.value))
+async function saveEdit() {
+  const e = editing.value!
+  try {
+    if (isIP) await put(`/firewall/ips/${e.row.id}`, { ip: e.value.trim(), minutes: e.minutes, remark: e.remark })
+    else await put(`/firewall/patterns/${e.row.id}`, { ...(e.row.raw as Pattern), value: e.value.trim(), match: e.match, remark: e.remark })
+    editing.value = null
+    msg.success(t('common.saved'))
+    done()
+  } catch (err) {
+    fail(err)
+  }
+}
+const saveRemark = (r: Row) => (v: string) =>
+  put(isIP ? `/firewall/ips/${r.id}/remark` : `/firewall/patterns/${r.id}/remark`, { remark: v }).then(() => (r.remark = v))
+
 async function doImport() {
   const values = importText.value.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
   if (!values.length) return
@@ -131,15 +153,18 @@ const columns = computed<DataTableColumns<Row>>(() => [
   ...(isIP
     ? [{ title: () => t('fw.expires'), key: 'expires_at', width: 170, render: (r: Row) => (r.expires_at ? datetime(r.expires_at, locale.value) : t('fw.permanent')) }]
     : [{ title: () => t('fwl.match_col'), key: 'match', width: 110, render: (r: Row) => h(NTag, { size: 'small', bordered: false }, () => t(`fwl.match.${r.match}`)) }]),
-  { title: () => t('site.remark'), key: 'remark', ellipsis: { tooltip: true } },
+  { title: () => t('site.remark'), key: 'remark', minWidth: 160, render: (r) => h(RemarkCell, { value: r.remark, save: saveRemark(r) }) },
   { title: () => t('fw.added'), key: 'created_at', width: 170, render: (r) => datetime(r.created_at, locale.value) },
   ...(isIP ? [] : [{ title: () => t('cron.enabled'), key: 'enabled', width: 80, render: (r: Row) => h(NSwitch, { size: 'small', value: r.enabled, 'onUpdate:value': (on: boolean) => toggle(r, on) }) }]),
   {
     title: '',
     key: 'actions',
-    width: 80,
+    width: 130,
     render: (r) =>
-      h(NPopconfirm, { onPositiveClick: () => remove(r) }, { trigger: () => h(NButton, { size: 'tiny', type: 'error', ghost: true }, () => t('common.delete')), default: () => t('fw.remove_confirm', { ip: r.value }) }),
+      h(NSpace, { size: 6, wrap: false }, () => [
+        h(NButton, { size: 'tiny', onClick: () => edit(r) }, () => t('common.edit')),
+        h(NPopconfirm, { onPositiveClick: () => remove(r) }, { trigger: () => h(NButton, { size: 'tiny', type: 'error', ghost: true }, () => t('common.delete')), default: () => t('fw.remove_confirm', { ip: r.value }) }),
+      ]),
   },
 ])
 </script>
@@ -161,7 +186,24 @@ const columns = computed<DataTableColumns<Row>>(() => [
     <n-input v-model:value="q" size="small" clearable :placeholder="t('logs.filter_kw')" style="width: 180px" />
   </n-space>
   <p class="hint">{{ t(`fwl.hint.${kind}_${list}`) }}</p>
-  <n-data-table size="small" :columns="columns" :data="shown" :loading="loading" :row-key="(r: Row) => r.id" :pagination="{ pageSize: 20 }" :scroll-x="820" />
+  <n-data-table size="small" :columns="columns" :data="shown" :loading="loading" :row-key="(r: Row) => r.id" :pagination="{ pageSize: 20 }" :scroll-x="880" />
+
+  <n-modal :show="!!editing" @update:show="(v: boolean) => !v && (editing = null)">
+    <n-card v-if="editing" :title="t('fwl.edit')" style="width: min(480px, calc(100vw - 32px))" closable @close="editing = null">
+      <n-form label-placement="top" @submit.prevent="saveEdit">
+        <n-form-item v-if="!isIP" :label="t('fwl.match_col')"><n-select v-model:value="editing.match" :options="matches" /></n-form-item>
+        <n-form-item :label="t(`fwl.col.${kind}`)"><n-input v-model:value="editing.value" :placeholder="placeholder" @keyup.enter="saveEdit" /></n-form-item>
+        <n-form-item v-if="isIP" :label="t('fw.expires')"><n-select v-model:value="editing.minutes" :options="editDurations" /></n-form-item>
+        <n-form-item :label="t('site.remark')"><n-input v-model:value="editing.remark" maxlength="200" /></n-form-item>
+      </n-form>
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="editing = null">{{ t('common.cancel') }}</n-button>
+          <n-button type="primary" :disabled="!editing.value.trim()" @click="saveEdit">{{ t('common.save') }}</n-button>
+        </n-space>
+      </template>
+    </n-card>
+  </n-modal>
 
   <n-modal :show="importing" @update:show="(v: boolean) => (importing = v)">
     <n-card :title="t('fwl.import')" style="width: min(560px, calc(100vw - 32px))" closable @close="importing = false">

@@ -17,6 +17,7 @@ import SiteSettings from '../components/SiteSettings.vue'
 import SiteBackups from '../components/SiteBackups.vue'
 import SiteStats from '../components/SiteStats.vue'
 import TaskModal from '../components/TaskModal.vue'
+import RemarkCell from '../components/RemarkCell.vue'
 import WebEnvPanel from '../components/WebEnvPanel.vue'
 
 const { t, locale } = useI18n()
@@ -91,27 +92,6 @@ async function start(ids: number[]) {
   }
 }
 const pageName = (p: { code: string; name: string }) => (p.code ? t(`ep.builtin.${p.code}`) : p.name)
-
-// ---- remark: click to type ----
-const remarkEdit = ref<{ id: number; text: string } | null>(null)
-const remarkEl = ref<HTMLInputElement | null>(null)
-async function editRemark(s: Site) {
-  remarkEdit.value = { id: s.id, text: s.remark }
-  await nextTick()
-  remarkEl.value?.focus()
-}
-async function saveRemark() {
-  const r = remarkEdit.value
-  remarkEdit.value = null
-  const s = sites.value.find((x) => x.id === r?.id)
-  if (!r || !s || s.remark === r.text.trim()) return
-  try {
-    await patch(`/sites/${s.id}`, { remark: r.text.trim() })
-    s.remark = r.text.trim()
-  } catch (e) {
-    fail(e)
-  }
-}
 
 // ---- delete ----
 const delDlg = ref<{ sites: Site[]; files: boolean; dns: boolean } | null>(null)
@@ -227,15 +207,7 @@ const columns = computed<DataTableColumns<Site>>(() => [
     title: () => t('site.remark'),
     key: 'remark',
     minWidth: 150,
-    render: (s) =>
-      remarkEdit.value?.id === s.id
-        ? h('input', {
-          ref: remarkEl, class: 'remark-input', value: remarkEdit.value.text, maxlength: 200,
-          onInput: (e: Event) => (remarkEdit.value!.text = (e.target as HTMLInputElement).value),
-          onKeydown: (e: KeyboardEvent) => (e.key === 'Enter' ? saveRemark() : e.key === 'Escape' ? (remarkEdit.value = null) : null),
-          onBlur: saveRemark,
-        })
-        : h('div', { class: ['remark', { empty: !s.remark }], title: s.remark, onClick: () => editRemark(s) }, s.remark || t('fm.add_remark')),
+    render: (s) => h(RemarkCell, { value: s.remark, save: (v: string) => patch(`/sites/${s.id}`, { remark: v }).then(() => (s.remark = v)) }),
   },
   { title: 'PHP', key: 'php', width: 90, render: langCell },
   { title: () => t('ws.ssl'), key: 'ssl', width: 100, sorter: (a, b) => (a.cert_not_after || 0) - (b.cert_not_after || 0), render: sslCell },
@@ -439,34 +411,6 @@ const catOptions = computed(() => [
   display: inline-flex;
   gap: 10px;
   white-space: nowrap;
-}
-:deep(.remark) {
-  min-height: 20px;
-  cursor: text;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-:deep(.remark.empty) {
-  opacity: 0;
-}
-:deep(tr:hover .remark.empty) {
-  opacity: 0.35;
-}
-@media (hover: none) {
-  :deep(.remark.empty) {
-    opacity: 0.35;
-  }
-}
-:deep(.remark-input) {
-  width: 100%;
-  font: inherit;
-  padding: 2px 6px;
-  border: 1px solid #20a53a;
-  border-radius: 4px;
-  background: transparent;
-  color: inherit;
-  outline: none;
 }
 .date {
   font: inherit;
