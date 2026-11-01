@@ -62,7 +62,7 @@ func TestRenderPHP(t *testing.T) {
 	if strings.Contains(string(fpm), "pm.start_servers") {
 		t.Error("static pool must not set start_servers")
 	}
-	for _, want := range []string{"date.timezone = Asia/Hong_Kong", "disable_functions = exec,system", "apc.shm_size = 64M", `error_reporting = E_ALL & ~E_DEPRECATED`} {
+	for _, want := range []string{"date.timezone = Asia/Hong_Kong", "disable_functions = exec,system", "apc.shm_size = 64M", `error_reporting = E_ALL & ~E_DEPRECATED`, "mysqli.default_socket = /run/mysqld/mysqld.sock", "pdo_mysql.default_socket = /run/mysqld/mysqld.sock"} {
 		if !strings.Contains(string(ini), want) {
 			t.Errorf("ini missing %q:\n%s", want, ini)
 		}

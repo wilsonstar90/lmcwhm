@@ -281,6 +281,7 @@ func (e *Env) renderPHP(v string, c PHPConfig) (fpm, ini []byte, err error) {
 			fmt.Fprintf(&b, "%s = %s\n", k.Key, iniQuote(val))
 		}
 	}
+	fmt.Fprintf(&b, "mysqli.default_socket = %s\npdo_mysql.default_socket = %s\n", MySQLSocket, MySQLSocket)
 	if len(c.DisableFunctions) > 0 {
 		fmt.Fprintf(&b, "disable_functions = %s\n", strings.Join(c.DisableFunctions, ","))
 	}
@@ -405,7 +406,8 @@ func (e *Env) EnsurePHP(ctx context.Context, v string, log func(string, ...any))
 	}
 	dir := e.PHPDir(v)
 	slowDir := filepath.Dir(e.PHPSlowLog(v))
-	for _, d := range []string{dir, slowDir} {
+	sockDir := MySQLSocketDir(e.Home)
+	for _, d := range []string{dir, slowDir, sockDir} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			return err
 		}
@@ -435,6 +437,7 @@ func (e *Env) EnsurePHP(ctx context.Context, v string, log func(string, ...any))
 	args := append([]string{"--network", "host"}, e.rootMounts()...)
 	args = append(args,
 		"-v", slowDir+":/var/log/lmcwhm-php",
+		"-v", sockDir+":"+filepath.Dir(MySQLSocket)+":ro",
 		"-v", filepath.Join(dir, "zz-docker.conf")+":/usr/local/etc/php-fpm.d/zz-docker.conf:ro",
 		"-v", filepath.Join(dir, "zz-lmcwhm.ini")+":/usr/local/etc/php/conf.d/zz-lmcwhm.ini:ro",
 		img,

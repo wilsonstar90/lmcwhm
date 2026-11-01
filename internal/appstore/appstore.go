@@ -554,12 +554,19 @@ func (sv *Service) args(i Installed) []string {
 	data := filepath.Join(dir, "data")
 	conf := filepath.Join(dir, "conf")
 	pub := func(inner int) []string { return []string{"-p", fmt.Sprintf("127.0.0.1:%d:%d", i.Port, inner)} }
+	// The socket directory: the server on 3306 shares its socket with PHP, so
+	// DB_HOST 'localhost' works like on aaPanel; others keep their own.
+	sock := filepath.Join(dir, "run")
+	if i.Port == 3306 {
+		sock = webenv.MySQLSocketDir(sv.Home)
+	}
+	sock += ":/var/run/mysqld"
 	var a []string
 	switch i.App {
 	case "mysql":
-		a = append(pub(3306), "-e", "MYSQL_ROOT_PASSWORD="+i.secret, "-v", data+":/var/lib/mysql", "-v", conf+":/etc/mysql/conf.d:ro", i.RunImage())
+		a = append(pub(3306), "-e", "MYSQL_ROOT_PASSWORD="+i.secret, "-v", data+":/var/lib/mysql", "-v", sock, "-v", conf+":/etc/mysql/conf.d:ro", i.RunImage())
 	case "mariadb":
-		a = append(pub(3306), "-e", "MARIADB_ROOT_PASSWORD="+i.secret, "-v", data+":/var/lib/mysql", "-v", conf+":/etc/mysql/conf.d:ro", i.RunImage())
+		a = append(pub(3306), "-e", "MARIADB_ROOT_PASSWORD="+i.secret, "-v", data+":/var/lib/mysql", "-v", sock, "-v", conf+":/etc/mysql/conf.d:ro", i.RunImage())
 	case "postgres":
 		a = append(pub(5432), "-e", "POSTGRES_PASSWORD="+i.secret, "-v", data+":/var/lib/postgresql/data", i.RunImage())
 	case "mongodb":

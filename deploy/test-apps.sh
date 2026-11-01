@@ -207,6 +207,13 @@ cat > /www/wwwroot/db.test/index.php <<'EOF'
 <?php $m = new mysqli('127.0.0.1', 'shop', 'Shop-pass-123', 'shop', 3306); echo 'db-ok-' . $m->query('SELECT x FROM t')->fetch_row()[0];
 EOF
 [[ "$(get80 db.test /index.php)" == "db-ok-42" ]] || fail "php -> mariadb: $(get80 db.test /index.php)"
+# DB_HOST 'localhost' (the socket, as most wp-config.php files have) works too, with mysqli and PDO.
+cat > /www/wwwroot/db.test/sock.php <<'EOF'
+<?php $m = new mysqli('localhost', 'shop', 'Shop-pass-123', 'shop');
+$p = new PDO('mysql:host=localhost;dbname=shop', 'shop', 'Shop-pass-123');
+echo 'sock-ok-' . $m->query('SELECT x FROM t')->fetch_row()[0] . '-' . $p->query('SELECT x FROM t')->fetchColumn();
+EOF
+[[ "$(get80 db.test /sock.php)" == "sock-ok-42-42" ]] || fail "php -> mariadb via localhost: $(get80 db.test /sock.php)"
 code="$(api POST /apps/$MID/uninstall | jget "['code']")"
 [[ "$code" == app.in_use ]] || fail "engine with databases could be uninstalled: $code"
 task POST "/databases/$DBID/delete"

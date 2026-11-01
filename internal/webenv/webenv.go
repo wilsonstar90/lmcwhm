@@ -206,6 +206,14 @@ func New(home string) *Env {
 func (e *Env) EdgeDir() string  { return filepath.Join(e.Home, "edge") }
 func (e *Env) CertDir() string  { return filepath.Join(e.EdgeDir(), "certs") }
 func (e *Env) NginxDir() string { return filepath.Join(e.Home, "web", "nginx") }
+
+// MySQLSocket is where PHP finds the MySQL / MariaDB socket: DB_HOST
+// 'localhost' means the socket to PHP, not 127.0.0.1.
+const MySQLSocket = "/run/mysqld/mysqld.sock"
+
+// MySQLSocketDir is the host directory holding the socket of the MySQL or
+// MariaDB on port 3306; it is mounted into every PHP container.
+func MySQLSocketDir(home string) string { return filepath.Join(home, "run", "mysqld") }
 func (e *Env) PHPDir(v string) string {
 	return filepath.Join(e.Home, "web", "php", strings.ReplaceAll(v, ".", ""))
 }
