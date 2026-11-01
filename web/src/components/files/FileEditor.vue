@@ -5,13 +5,15 @@
 // theme, a status bar and the saved versions of each file.
 import { computed, h, nextTick, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useAsk } from '../../composables/ask'
 import { NButton, NCard, NDataTable, NDropdown, NEmpty, NInput, NModal, NPopconfirm, NSpace, NTree, useMessage, type TreeOption } from 'naive-ui'
 import { get, post, put, ApiError } from '../../api/client'
 import type { FileEntry } from '../../api/types'
 import { bytes, datetime } from '../../format'
 import { CodeEditor } from '../code-editor'
 import { useDark } from '../../theme'
-import { baseName, editorBus, iconOf, join, parentOf } from './state'
+import FileIcon from './FileIcon.vue'
+import { baseName, editorBus, join, parentOf } from './state'
 
 const { t, locale } = useI18n()
 const msg = useMessage()
@@ -93,7 +95,7 @@ async function saveAll() {
 }
 async function reload() {
   const d = cur.value
-  if (!d || (dirty(d) && !confirm(t('fe.discard', { name: baseName(d.path) })))) return
+  if (!d || (dirty(d) && !(await ask.confirm(t('fe.discard', { name: baseName(d.path) }), { danger: true })))) return
   try {
     const r = await get<{ content: string }>(`/files/read?path=${encodeURIComponent(d.path)}`)
     d.content = d.saved = r.content
@@ -101,16 +103,16 @@ async function reload() {
     fail(e)
   }
 }
-function closeDoc(path: string) {
+async function closeDoc(path: string) {
   const d = docs.value.find((x) => x.path === path)
-  if (d && dirty(d) && !confirm(t('fe.discard', { name: baseName(d.path) }))) return
+  if (d && dirty(d) && !(await ask.confirm(t('fe.discard', { name: baseName(d.path) }), { danger: true }))) return
   const i = docs.value.findIndex((x) => x.path === path)
   docs.value.splice(i, 1)
   if (active.value === path) active.value = docs.value[Math.max(0, i - 1)]?.path ?? ''
   if (!docs.value.length) visible.value = false
 }
-function closeAll() {
-  if (docs.value.some(dirty) && !confirm(t('fe.discard_all'))) return
+async function closeAll() {
+  if (docs.value.some(dirty) && !(await ask.confirm(t('fe.discard_all'), { danger: true }))) return
   docs.value = []
   visible.value = false
 }
@@ -200,7 +202,7 @@ async function children(dir: string): Promise<TreeOption[]> {
   const r = await get<{ items: FileEntry[] }>(`/files/list?path=${encodeURIComponent(dir)}`)
   return r.items
     .sort((a, b) => Number(b.is_dir) - Number(a.is_dir) || a.name.localeCompare(b.name))
-    .map((e) => ({ key: e.path, label: e.name, isLeaf: !e.is_dir, prefix: () => iconOf(e.name, e.is_dir) }))
+    .map((e) => ({ key: e.path, label: e.name, isLeaf: !e.is_dir, prefix: () => h(FileIcon, { name: e.name, dir: e.is_dir, size: 16 }) }))
 }
 async function loadTree() {
   if (!treeDir.value) return
@@ -214,11 +216,12 @@ watch(treeDir, loadTree)
 async function onLoad(node: TreeOption) {
   node.children = await children(String(node.key))
 }
+const ask = useAsk()
 const treeProps = ({ option }: { option: TreeOption }) => ({
   onClick: () => option.isLeaf && openFile(String(option.key)),
 })
 async function newInTree() {
-  const name = prompt(t('files.new_file'))?.trim()
+  const name = await ask.prompt(t('files.new_file'), { placeholder: 'index.php' })
   if (!name) return
   const p = join(treeDir.value, name)
   try {
@@ -291,7 +294,7 @@ const editorHeight = computed(() => '100%')
         <section class="main">
           <div class="tabs">
             <div v-for="d in docs" :key="d.path" class="tab" :class="{ on: d.path === active }" :title="d.path" @click="active = d.path" @auxclick.middle="closeDoc(d.path)">
-              <span>{{ iconOf(baseName(d.path), false) }} {{ baseName(d.path) }}<b v-if="dirty(d)" class="dot">●</b></span>
+              <span><FileIcon :name="baseName(d.path)" :size="14" /> {{ baseName(d.path) }}<b v-if="dirty(d)" class="dot">●</b></span>
               <a class="x" @click.stop="closeDoc(d.path)">✕</a>
             </div>
           </div>

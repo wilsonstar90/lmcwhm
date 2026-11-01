@@ -4,17 +4,19 @@
 // directory sizes, clipboard and drop-to-upload.
 import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useAsk } from '../../composables/ask'
 import { useRouter } from 'vue-router'
 import {
   NButton, NButtonGroup, NCard, NCheckbox, NDataTable, NDropdown, NForm, NFormItem, NInput, NModal, NRadioButton, NRadioGroup,
-  NSpace, NTag, useMessage, type DataTableColumns, type DropdownOption,
+  NSpace, NTag, useDialog, useMessage, type DataTableColumns, type DropdownOption,
 } from 'naive-ui'
 import { get, post, put, ApiError } from '../../api/client'
 import type { FileEntry } from '../../api/types'
 import { bytes, datetime } from '../../format'
 import FilesExtras from '../FilesExtras.vue'
+import FileIcon from './FileIcon.vue'
 import {
-  baseName, changed, clipboard, droppedFiles, iconOf, isArchive, isImage, join, openInEditor, openUpload, parentOf,
+  baseName, changed, clipboard, droppedFiles, isArchive, isImage, join, openInEditor, openUpload, parentOf,
 } from './state'
 
 const props = defineProps<{ path: string }>()
@@ -113,6 +115,11 @@ function onPointerDown(ev: PointerEvent) {
   pointer = ev.pointerType
 }
 function clickItem(e: FileEntry, ev: MouseEvent) {
+  // Keyboard shortcuts (copy, paste, delete) work on the list: take focus
+  // from the search or path box that may still hold it.
+  const active = document.activeElement as HTMLElement | null
+  if (active?.closest('input, textarea')) active.blur()
+  root.value?.focus({ preventScroll: true })
   if (ev.shiftKey && anchor.value) {
     const list = shown.value.map((i) => i.path)
     const [a, b] = [list.indexOf(anchor.value), list.indexOf(e.path)].sort((x, y) => x - y)
@@ -291,9 +298,47 @@ async function call(fn: () => Promise<unknown>, ok = t('common.done')) {
     load(cwd.value, false)
     return true
   } catch (e) {
-    fail(e)
+    if (e !== CANCELLED) fail(e)
     return false
   }
+}
+
+// ---- name conflicts (paste, move, copy, extract) ----
+const dialog = useDialog()
+const root = ref<HTMLElement | null>(null)
+const ask = useAsk()
+const CANCELLED = new Error('cancelled')
+type Choice = 'overwrite' | 'skip' | 'both'
+/** Asks what to do with paths that already exist; null = cancel. */
+function askConflict(paths: string[], keepBoth: boolean): Promise<Choice | null> {
+  return new Promise((resolve) => {
+    let done = false
+    const finish = (c: Choice | null) => {
+      if (done) return
+      done = true
+      resolve(c)
+      d.destroy()
+    }
+    const d = dialog.warning({
+      title: t('fm.conflict.title', { n: paths.length }),
+      style: 'width: min(520px, calc(100vw - 32px))',
+      content: () =>
+        h('div', [
+          h('p', { style: 'margin: 0 0 8px' }, t('fm.conflict.desc')),
+          h('ul', { class: 'conflicts' }, paths.slice(0, 8).map((p) => h('li', { title: p }, p))),
+          paths.length > 8 ? h('p', { style: 'margin: 6px 0 0; opacity: .7' }, t('fm.conflict.more', { n: paths.length - 8 })) : null,
+        ]),
+      action: () =>
+        h(NSpace, { justify: 'end', size: 8 }, () => [
+          h(NButton, { onClick: () => finish(null) }, () => t('common.cancel')),
+          h(NButton, { onClick: () => finish('skip') }, () => t('fm.conflict.skip')),
+          keepBoth ? h(NButton, { onClick: () => finish('both') }, () => t('fm.conflict.both')) : null,
+          h(NButton, { type: 'warning', onClick: () => finish('overwrite') }, () => t('fm.conflict.overwrite')),
+        ]),
+      onClose: () => finish(null),
+      onMaskClick: () => finish(null),
+    })
+  })
 }
 type Prompt = {
   title: string
@@ -364,7 +409,16 @@ function extract(e: FileEntry) {
   prompt.value = {
     title: `${t('files.extract')} · ${e.name}`,
     fields: [{ key: 'dest', label: t('files.target'), value: cwd.value }],
-    submit: (v) => post('/files/extract', { path: e.path, dest: v.dest }),
+    submit: async (v) => {
+      const { items } = await post<{ items: string[] }>('/files/extract/conflicts', { path: e.path, dest: v.dest })
+      let skip = false
+      if (items.length) {
+        const c = await askConflict(items, false)
+        if (!c) throw CANCELLED
+        skip = c === 'skip'
+      }
+      return post('/files/extract', { path: e.path, dest: v.dest, skip_existing: skip })
+    },
   }
 }
 function uniqueName(name: string) {
@@ -383,15 +437,37 @@ async function paste() {
   const c = clipboard.value
   if (!c) return
   try {
-    for (const from of c.paths) {
-      let name = baseName(from)
-      if (c.mode === 'copy' && parentOf(from) === cwd.value) name = uniqueName(name)
-      const to = join(cwd.value, name)
-      if (from === to) continue
-      await post(c.mode === 'cut' ? '/files/rename' : '/files/copy', { from, to })
+    const moves = c.paths
+      .map((from) => {
+        let name = baseName(from)
+        if (c.mode === 'copy' && parentOf(from) === cwd.value) name = uniqueName(name)
+        return { from, to: join(cwd.value, name) }
+      })
+      .filter((m) => m.from !== m.to)
+    const { items } = await post<{ items: string[] }>('/files/conflicts', { paths: moves.map((m) => m.to) })
+    const taken = new Set(items)
+    let choice: Choice = 'overwrite'
+    if (taken.size) {
+      const a = await askConflict(items, true)
+      if (!a) return
+      choice = a
+    }
+    let skipped = 0
+    for (const m of moves) {
+      let to = m.to
+      let overwrite = false
+      if (taken.has(to)) {
+        if (choice === 'skip') {
+          skipped++
+          continue
+        }
+        if (choice === 'both') to = join(cwd.value, uniqueName(baseName(to)))
+        else overwrite = true
+      }
+      await post(c.mode === 'cut' ? '/files/rename' : '/files/copy', { from: m.from, to, overwrite })
     }
     if (c.mode === 'cut') clipboard.value = null
-    msg.success(t('common.done'))
+    msg.success(skipped ? t('fm.conflict.skipped', { n: skipped }) : t('common.done'))
   } catch (e) {
     fail(e)
   }
@@ -399,12 +475,12 @@ async function paste() {
 }
 async function remove(paths: string[], permanent = false) {
   if (!paths.length) return
-  if (!confirm(permanent ? t('files.delete_permanent_confirm', { n: paths.length }) : t('files.delete_confirm', { n: paths.length }))) return
+  if (!(await ask.confirm(permanent ? t('files.delete_permanent_confirm', { n: paths.length }) : t('files.delete_confirm', { n: paths.length }), { danger: true }))) return
   try {
     await post('/files/delete', { paths, permanent })
     msg.success(t('common.done'))
   } catch (e) {
-    if (e instanceof ApiError && e.code === 'files.trash_cross_device' && confirm(t('files.cross_device_confirm'))) return remove(paths, true)
+    if (e instanceof ApiError && e.code === 'files.trash_cross_device' && (await ask.confirm(t('files.cross_device_confirm'), { danger: true }))) return remove(paths, true)
     fail(e)
   }
   selected.value = []
@@ -507,7 +583,7 @@ const columns = computed<DataTableColumns<FileEntry>>(() => [
     sorter: (a, b) => a.name.localeCompare(b.name),
     render: (e) =>
       h('span', { class: 'name' }, [
-        h('span', { class: 'icon' }, iconOf(e.name, e.is_dir)),
+        h(FileIcon, { class: 'icon', name: e.name, dir: e.is_dir, size: 20 }),
         h('a', { class: 'fname', onClick: (ev: MouseEvent) => { if (pointer !== 'touch') { ev.stopPropagation(); open(e) } } }, e.name),
         e.link ? h('span', { class: 'muted' }, ` → ${e.link}`) : null,
       ]),
@@ -609,7 +685,7 @@ onBeforeUnmount(cancelPress)
 
 <template>
   <div
-    class="browser" tabindex="0" @keydown="onKey" @dragenter.prevent="onDragEnter" @dragover.prevent @dragleave="onDragLeave" @drop.prevent="onDrop"
+    ref="root" class="browser" tabindex="0" @keydown="onKey" @dragenter.prevent="onDragEnter" @dragover.prevent @dragleave="onDragLeave" @drop.prevent="onDrop"
   >
     <div class="pathbar">
       <n-button size="small" quaternary :disabled="!history.length" :title="t('fm.back')" @click="back">←</n-button>
@@ -659,7 +735,7 @@ onBeforeUnmount(cancelPress)
           @touchstart="onTouchStart(e, $event)" @touchend="cancelPress" @touchmove="cancelPress"
         >
           <img v-if="thumb(e)" :src="thumb(e)" loading="lazy" alt="" class="thumb" />
-          <span v-else class="big">{{ iconOf(e.name, e.is_dir) }}</span>
+          <FileIcon v-else class="big" :name="e.name" :dir="e.is_dir" :size="48" />
           <span class="cname">{{ e.name }}</span>
         </div>
         <p v-if="!shown.length && !loading" class="muted">{{ t('fm.empty') }}</p>
@@ -731,6 +807,20 @@ onBeforeUnmount(cancelPress)
     </n-modal>
   </div>
 </template>
+
+<style>
+/* The conflict dialog renders outside this component. */
+ul.conflicts {
+  margin: 0;
+  padding: 8px 12px 8px 28px;
+  max-height: 180px;
+  overflow: auto;
+  background: rgba(128, 128, 128, 0.08);
+  border-radius: 6px;
+  font-size: 12px;
+  word-break: break-all;
+}
+</style>
 
 <style scoped>
 .browser {
@@ -897,8 +987,7 @@ onBeforeUnmount(cancelPress)
   background: rgba(32, 165, 58, 0.1);
 }
 .big {
-  font-size: 40px;
-  line-height: 56px;
+  margin: 4px 0;
 }
 .thumb {
   width: 64px;

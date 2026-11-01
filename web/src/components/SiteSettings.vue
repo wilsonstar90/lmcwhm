@@ -5,6 +5,7 @@
 // hotlink, tamper protection, security, logs, alerts and the rest.
 import { computed, h, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useAsk } from '../composables/ask'
 import { useRouter } from 'vue-router'
 import {
   NAlert, NButton, NCard, NCheckbox, NDataTable, NDynamicInput, NDynamicTags, NEmpty, NForm, NFormItem, NInput, NInputNumber, NModal,
@@ -201,8 +202,9 @@ function pickRewrite(v: string) {
   else if (v.startsWith('b:')) rewrite.value = rewrites.value?.builtin[v.slice(2)] ?? ''
   else rewrite.value = rewrites.value?.custom[v.slice(2)] ?? ''
 }
+const ask = useAsk()
 async function saveTemplate() {
-  const name = prompt(t('ss.rw_name'))?.trim()
+  const name = await ask.prompt(t('ss.rw_name'))
   if (!name) return
   try {
     rewrites.value!.custom = (await put<{ custom: Record<string, string> }>('/sites/rewrites', { name, body: rewrite.value })).custom

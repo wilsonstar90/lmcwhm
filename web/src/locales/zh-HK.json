@@ -294,7 +294,8 @@
       "no_source_build": "呢個版本唔支援編譯安裝",
       "invalid_build_args": "編譯參數只可以用英文、數字同 - _ = + , . / : @ %",
       "invalid_build_mode": "安裝方式無效",
-      "build_failed": "新嘅版本起動唔到，已經還原"
+      "build_failed": "新嘅版本起動唔到，已經還原",
+      "bad_password": "密碼要 8–128 個字元，唔可以有空格或者引號；或者留空"
     },
     "db": {
       "invalid_name": "名稱：英文字母、數字同 _，以字母開頭（唔可以用保留名）",
@@ -1003,7 +1004,11 @@
     "with_data": "同時還原更新前備份嘅面板數據（之後嘅改動會另存）",
     "restart": "重啟",
     "restart_desc": "重新啟動面板程式（網站同軟件唔受影響），大約 5 秒。",
-    "restarting": "面板重新啟動中…"
+    "restarting": "面板重新啟動中…",
+    "restart_panel": "重啟面板",
+    "restart_server": "重啟伺服器",
+    "reboot_desc": "重新啟動成部伺服器：所有網站、數據庫同軟件會停大約 1–3 分鐘。要輸入密碼確認。",
+    "rebooting": "伺服器重新啟動中，大約 1–3 分鐘，完成後會自動重新載入…"
   },
   "geo": {
     "lan": "內網",
@@ -2402,6 +2407,15 @@
       "latest_fork_usec": "最近一次 fork 耗時（微秒）",
       "rdb_last_save_time": "上次 RDB 快照",
       "aof_enabled": "AOF 已開啟（1）"
+    },
+    "rp": {
+      "none": "留空 = 唔使密碼",
+      "random": "隨機",
+      "change": "修改密碼",
+      "hint": "即時生效；留空即係唔使密碼（Redis 只監聽 127.0.0.1）。用緊呢個 Redis 嘅網站或程式要同時改。",
+      "changed": "Redis 密碼已更新",
+      "confirm": "改咗之後，用緊呢個 Redis 嘅網站同程式要用新密碼先連得到。繼續？",
+      "confirm_none": "Redis 會變成唔使密碼（只限本機 127.0.0.1 連入）。繼續？"
     }
   },
   "rk": {
@@ -2486,24 +2500,24 @@
     "keys": "Ctrl/⌘+S 儲存 · Ctrl/⌘+F 搜尋同取代 · Ctrl/⌘+Alt+G 跳到指定行"
   },
   "fp": {
-    "title": "選擇文件夾",
+    "title": "選擇資料夾",
     "title_file": "選擇檔案",
     "root": "根目錄",
     "filter": "篩選目前目錄",
     "new_file": "新建檔案",
-    "new_folder": "新建文件夾",
+    "new_folder": "新建資料夾",
     "file_name": "檔案名稱",
-    "folder_name": "文件夾名稱",
+    "folder_name": "資料夾名稱",
     "bad_name": "名稱唔可以有 /",
     "up": "上一層",
     "name": "名稱",
     "modified": "修改時間",
     "perm": "權限 / 所有者",
-    "chosen": "目前選中文件夾",
+    "chosen": "目前選中資料夾",
     "chosen_file": "目前選中檔案",
-    "hint": "撳一下揀文件夾，撳兩下打開。",
-    "hint_file": "撳一下揀檔案；撳兩下打開文件夾。",
-    "add_folder": "加入文件夾"
+    "hint": "撳一下揀資料夾，撳兩下打開。",
+    "hint_file": "撳一下揀檔案；撳兩下打開資料夾。",
+    "add_folder": "加入資料夾"
   },
   "theme": {
     "title": "主題",
@@ -3043,12 +3057,21 @@
       "env_file": "環境變數（可能有密碼）",
       "robots": "搜尋引擎規則",
       "xmlrpc": "WordPress XML-RPC（常被攻擊）"
+    },
+    "conflict": {
+      "title": "{n} 個項目已經存在",
+      "desc": "目標位置已經有以下同名檔案或資料夾：",
+      "more": "仲有 {n} 個…",
+      "skip": "跳過",
+      "both": "保留兩者",
+      "overwrite": "覆蓋",
+      "skipped": "完成，跳過咗 {n} 個已存在嘅項目"
     }
   },
   "fe": {
     "title": "線上文本編輯器",
     "save_all": "全部保存",
-    "search": "搜索",
+    "search": "搜尋",
     "replace": "替換",
     "goto": "跳轉行",
     "font": "字體大小",
@@ -3151,7 +3174,7 @@
     "security": "網站安全",
     "logs": "網站日誌",
     "alert": "網站告警",
-    "other": "其他設置",
+    "other": "其他設定",
     "hosts_ph": "每行一個域名，例如：\nwww.example.com\n泛解析：*.example.com",
     "hosts_hint": "呢度加嘅域名同網站共用 SSL 同設定。SSL、DNS 同連結目標喺域名頁管理。",
     "add": "新增",
@@ -3283,7 +3306,7 @@
     "days": "剩餘 {n} 日",
     "static": "靜態",
     "stats": "統計",
-    "settings": "設置",
+    "settings": "設定",
     "click_start": "撳一下啟用",
     "click_stop": "撳一下停用",
     "stop_title": "停用 {n} 個網站",
@@ -3407,10 +3430,10 @@
     "slow": "運行緩慢",
     "blocked": "運行堵塞",
     "load_at": "運行達到 {n}%",
-    "basic": "基礎信息",
+    "basic": "基礎資訊",
     "load_avg": "最近 1 / 5 / 15 分鐘平均負載",
     "procs": "活動進程 / 總進程",
-    "more_load": "更多負載信息",
+    "more_load": "更多負載資訊",
     "top_cpu": "CPU 佔用率 top 5 進程",
     "top_mem": "內存佔用 top 5 進程",
     "proc": "進程名稱",
@@ -3420,7 +3443,7 @@
     "per_core": "核心使用率",
     "core": "核心 {n}",
     "memory": "內存",
-    "mem_info": "內存信息",
+    "mem_info": "內存資訊",
     "free": "空閒",
     "used_mem": "已用",
     "total": "總共",
@@ -3436,10 +3459,10 @@
     "mount": "掛載點",
     "disk_sizes": "共 {t}，可用 {f}，已用 {u}",
     "device": "裝置",
-    "inodes": "Inode 信息",
+    "inodes": "Inode 資訊",
     "usage": "使用率",
     "alert": "告警",
-    "settings": "設置",
+    "settings": "設定",
     "threshold": "佔用率超過（%）",
     "threshold_load": "1 分鐘負載超過",
     "minutes": "持續（分鐘）",
@@ -3510,5 +3533,30 @@
     "note_archive": "zip、tar.gz 壓縮包入面要有 .sql（或 .sql.gz）檔案，例如 test.zip 入面有 test.sql。",
     "note_large": "檔案太大可以用 SFTP 上傳到 {dir}，再喺呢度匯入；亦可以撳「從本機匯入」揀伺服器上任何檔案。",
     "import": "匯入"
+  },
+  "cm": {
+    "find": "搜尋",
+    "replace": "取代",
+    "next": "下一個",
+    "previous": "上一個",
+    "all": "全部",
+    "match_case": "區分大小寫",
+    "regexp": "正則表達式",
+    "by_word": "全字",
+    "replace_one": "取代",
+    "replace_all": "全部取代",
+    "close": "關閉",
+    "goto_line": "跳轉到行",
+    "go": "跳轉",
+    "current_match": "目前符合",
+    "on_line": "喺第",
+    "replaced_on_line": "已取代第 {n} 行嘅符合項",
+    "replaced_n": "已取代 {n} 處",
+    "folded": "已摺疊",
+    "unfolded": "已展開",
+    "folded_code": "已摺疊嘅程式碼",
+    "unfold": "展開",
+    "fold_line": "摺疊",
+    "unfold_line": "展開"
   }
 }

@@ -38,6 +38,7 @@ func (s *Server) dbManageRoutes(r chi.Router) {
 
 	r.Get("/apps/{id}/redis/settings", s.handleRedisSettings)
 	r.Put("/apps/{id}/redis/settings", s.handlePutRedisSettings)
+	r.Post("/apps/{id}/redis/password", s.handleRedisPassword)
 	r.Get("/apps/{id}/redis/info", s.handleRedisInfo)
 	r.Post("/apps/{id}/redis/bgsave", s.handleRedisBGSave)
 	r.Get("/apps/{id}/redis/dbs", s.handleRedisDBs)
@@ -331,6 +332,26 @@ func (s *Server) handlePurgeBinlogs(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleRedisSettings(w http.ResponseWriter, r *http.Request) {
 	v, err := s.Apps.RedisSettings(r.Context(), idParam(r))
 	s.respond(w, v, err)
+}
+
+func (s *Server) handleRedisPassword(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Password string `json:"password"`
+	}
+	if err := decode(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := s.Apps.SetRedisPassword(r.Context(), idParam(r), in.Password); err != nil {
+		writeCodedErr(w, err, appstore.ErrNotFound)
+		return
+	}
+	detail := "changed"
+	if in.Password == "" {
+		detail = "removed"
+	}
+	s.auditCat(r, "database", "redis.password", detail)
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func (s *Server) handlePutRedisSettings(w http.ResponseWriter, r *http.Request) {

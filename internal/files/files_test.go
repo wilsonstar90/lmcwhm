@@ -129,7 +129,7 @@ func TestCompressExtract(t *testing.T) {
 		if err := f.Compress([]string{"/www/site"}, dest, format); err != nil {
 			t.Fatal(format, err)
 		}
-		if err := f.Extract(dest, "/out-"+format); err != nil {
+		if err := f.Extract(dest, "/out-"+format, false); err != nil {
 			t.Fatal(format, err)
 		}
 		if b, err := os.ReadFile(filepath.Join(root, "out-"+format, "site", "index.html")); err != nil || string(b) != "hi" {
@@ -148,7 +148,7 @@ func TestZipSlip(t *testing.T) {
 	w.Write([]byte("x"))
 	zw.Close()
 	os.WriteFile(filepath.Join(root, "evil.zip"), zb.Bytes(), 0o644)
-	if err := f.Extract("/evil.zip", "/www/x"); !errors.Is(err, ErrBadPath) {
+	if err := f.Extract("/evil.zip", "/www/x", false); !errors.Is(err, ErrBadPath) {
 		t.Errorf("zip-slip: %v", err)
 	}
 
@@ -160,7 +160,7 @@ func TestZipSlip(t *testing.T) {
 	tw.Close()
 	gz.Close()
 	os.WriteFile(filepath.Join(root, "abs.tar.gz"), tb.Bytes(), 0o644)
-	if err := f.Extract("/abs.tar.gz", "/www/x"); !errors.Is(err, ErrBadPath) {
+	if err := f.Extract("/abs.tar.gz", "/www/x", false); !errors.Is(err, ErrBadPath) {
 		t.Errorf("absolute tar entry: %v", err)
 	}
 
@@ -173,7 +173,7 @@ func TestZipSlip(t *testing.T) {
 	w.Write([]byte("x"))
 	zw.Close()
 	os.WriteFile(filepath.Join(root, "link.zip"), lb.Bytes(), 0o644)
-	if err := f.Extract("/link.zip", "/www/y"); err == nil {
+	if err := f.Extract("/link.zip", "/www/y", false); err == nil {
 		t.Error("extracted through a symlink")
 	}
 	if _, err := os.Stat(filepath.Join(outside, "pwned.txt")); err == nil {

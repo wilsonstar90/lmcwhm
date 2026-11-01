@@ -218,7 +218,7 @@ const columns: DataTableColumns<Database> = [
         <n-button v-if="current.databases" type="primary" @click="openCreate">{{ t('db.create') }}</n-button>
         <n-button v-if="isMySQL(current.app) && pma[current.id]" @click="openPMA(`/apps/${current.id}/phpmyadmin`)">{{ t('db.pma_root') }}</n-button>
         <n-button v-if="adminer && current.databases" tag="a" href="/adminer/" target="_blank">Adminer</n-button>
-        <n-button @click="settings = current">{{ t('db.settings') }}</n-button>
+        <n-button v-if="current.app !== 'redis'" @click="settings = current">{{ t('db.settings') }}</n-button>
       </n-space>
       <n-space align="center">
         <span class="hint">{{ current.name }} {{ current.full_version || current.version }} · 127.0.0.1:{{ current.port }}</span>
@@ -227,7 +227,9 @@ const columns: DataTableColumns<Database> = [
         <n-button size="small" @click="load">{{ t('common.refresh') }}</n-button>
       </n-space>
     </n-space>
-    <RedisKeys v-if="current.app === 'redis'" :key="current.id" :app="current" />
+    <RedisKeys v-if="current.app === 'redis'" :key="current.id" :app="current">
+      <template #actions><n-button @click="settings = current">{{ t('db.settings') }}</n-button></template>
+    </RedisKeys>
     <n-data-table v-else size="small" :columns="columns" :data="filtered" :loading="loading" :row-key="(r: Database) => r.id" :scroll-x="1000" />
   </template>
 

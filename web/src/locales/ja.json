@@ -294,7 +294,8 @@
       "no_source_build": "この版はコンパイル非対応",
       "invalid_build_args": "ビルドオプションは英数字と - _ = + , . / : @ % のみ",
       "invalid_build_mode": "無効なインストール方式",
-      "build_failed": "新しいビルドが起動せず元に戻しました"
+      "build_failed": "新しいビルドが起動せず元に戻しました",
+      "bad_password": "パスワードは空白や引用符を含まない 8〜128 文字にするか、空にしてください"
     },
     "db": {
       "invalid_name": "名前：英字・数字・_、英字で始まる（予約名は不可）",
@@ -1003,7 +1004,11 @@
     "with_data": "更新前にバックアップしたパネルデータも復元（以降の変更は別に保存）",
     "restart": "再起動",
     "restart_desc": "パネルを再起動します（サイトとアプリは動き続けます）。約 5 秒かかります。",
-    "restarting": "パネルを再起動しています…"
+    "restarting": "パネルを再起動しています…",
+    "restart_panel": "パネルを再起動",
+    "restart_server": "サーバーを再起動",
+    "reboot_desc": "サーバー全体を再起動します。すべてのサイト・データベース・アプリが約 1〜3 分停止します。パスワードで確認してください。",
+    "rebooting": "サーバーを再起動しています（約 1〜3 分）。完了すると自動で再読み込みします…"
   },
   "geo": {
     "lan": "LAN",
@@ -2402,6 +2407,15 @@
       "latest_fork_usec": "直近の fork 時間（µs）",
       "rdb_last_save_time": "最終 RDB スナップショット",
       "aof_enabled": "AOF 有効（1）"
+    },
+    "rp": {
+      "none": "空 = パスワードなし",
+      "random": "ランダム",
+      "change": "パスワード変更",
+      "hint": "すぐに反映されます。空にするとパスワードなし（Redis は 127.0.0.1 のみで待ち受け）。この Redis を使うサイトやプログラムも合わせて変更してください。",
+      "changed": "Redis のパスワードを更新しました",
+      "confirm": "変更後、この Redis を使うサイトとプログラムは新しいパスワードが必要になります。続けますか？",
+      "confirm_none": "Redis をパスワードなしにします（ローカル 127.0.0.1 からのみ接続可能）。続けますか？"
     }
   },
   "rk": {
@@ -3043,6 +3057,15 @@
       "env_file": "環境変数（機密を含む場合あり）",
       "robots": "検索エンジン規則",
       "xmlrpc": "WordPress XML-RPC（攻撃されやすい）"
+    },
+    "conflict": {
+      "title": "{n} 件が既に存在します",
+      "desc": "貼り付け先に同じ名前のファイルまたはフォルダがあります：",
+      "more": "ほか {n} 件…",
+      "skip": "スキップ",
+      "both": "両方残す",
+      "overwrite": "上書き",
+      "skipped": "完了しました（既存の {n} 件をスキップ）"
     }
   },
   "fe": {
@@ -3510,5 +3533,30 @@
     "note_archive": "zip・tar.gz には .sql（または .sql.gz）ファイルを含めてください。例：test.zip に test.sql。",
     "note_large": "大きなファイルは SFTP で {dir} に置いてからここでインポートするか、「サーバーから」でサーバー上の任意のファイルを選べます。",
     "import": "インポート"
+  },
+  "cm": {
+    "find": "検索",
+    "replace": "置換",
+    "next": "次へ",
+    "previous": "前へ",
+    "all": "すべて",
+    "match_case": "大文字と小文字を区別",
+    "regexp": "正規表現",
+    "by_word": "単語単位",
+    "replace_one": "置換",
+    "replace_all": "すべて置換",
+    "close": "閉じる",
+    "goto_line": "行へ移動",
+    "go": "移動",
+    "current_match": "現在の一致",
+    "on_line": "行",
+    "replaced_on_line": "{n} 行目の一致を置換しました",
+    "replaced_n": "{n} 件置換しました",
+    "folded": "折りたたみました",
+    "unfolded": "展開しました",
+    "folded_code": "折りたたまれたコード",
+    "unfold": "展開",
+    "fold_line": "折りたたむ",
+    "unfold_line": "展開"
   }
 }

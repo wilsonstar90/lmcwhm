@@ -153,6 +153,8 @@ const viewCols = computed<DataTableColumns<{ a: string; b: string }>>(() => {
         <template #trigger><n-button>{{ t('rk.flush') }}</n-button></template>
         {{ t('rk.flush_confirm', { db: db }) }}
       </n-popconfirm>
+      <!-- The database page's own buttons (設定) sit in this row. -->
+      <slot name="actions" />
     </n-space>
     <n-space>
       <n-input v-model:value="match" size="small" clearable :placeholder="t('rk.search')" style="width: 220px" @keyup.enter="scan()" @clear="scan()" />

@@ -29,6 +29,8 @@ func (s *Server) fileRoutes(r chi.Router) {
 	r.Post("/files/chown", s.handleFileChown)
 	r.Post("/files/compress", s.handleFileCompress)
 	r.Post("/files/extract", s.handleFileExtract)
+	r.Post("/files/extract/conflicts", s.handleExtractConflicts)
+	r.Post("/files/conflicts", s.handleFileConflicts)
 	r.Post("/files/upload", s.handleFileUpload)
 	r.Get("/files/download", s.handleFileDownload)
 	r.Get("/files/trash", s.handleTrash)
@@ -120,12 +122,19 @@ func (s *Server) handleFileCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleFileRename(w http.ResponseWriter, r *http.Request) {
-	var in struct{ From, To string }
+	var in struct {
+		From, To  string
+		Overwrite bool `json:"overwrite"` // replace (a folder merges) what is at To
+	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	if err := s.Files.Rename(in.From, in.To); err != nil {
+	move := s.Files.Rename
+	if in.Overwrite {
+		move = s.Files.MoveOver
+	}
+	if err := move(in.From, in.To); err != nil {
 		writeFileErr(w, err)
 		return
 	}
@@ -135,12 +144,19 @@ func (s *Server) handleFileRename(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleFileCopy(w http.ResponseWriter, r *http.Request) {
-	var in struct{ From, To string }
+	var in struct {
+		From, To  string
+		Overwrite bool `json:"overwrite"`
+	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	if err := s.Files.Copy(in.From, in.To); err != nil {
+	cp := s.Files.Copy
+	if in.Overwrite {
+		cp = s.Files.CopyOver
+	}
+	if err := cp(in.From, in.To); err != nil {
 		writeFileErr(w, err)
 		return
 	}
@@ -233,12 +249,15 @@ func (s *Server) handleFileCompress(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleFileExtract(w http.ResponseWriter, r *http.Request) {
-	var in struct{ Path, Dest string }
+	var in struct {
+		Path, Dest   string
+		SkipExisting bool `json:"skip_existing"` // keep files already there (default: replace them)
+	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	if err := s.Files.Extract(in.Path, in.Dest); err != nil {
+	if err := s.Files.Extract(in.Path, in.Dest, in.SkipExisting); err != nil {
 		writeFileErr(w, err)
 		return
 	}
@@ -374,4 +393,36 @@ func (s *Server) handleTerminalWS(w http.ResponseWriter, r *http.Request) {
 	if err := terminal.Serve(r.Context(), c, t); err != nil {
 		s.Log.Error("terminal", "err", err)
 	}
+}
+
+// handleFileConflicts lists which of the destination paths already exist.
+func (s *Server) handleFileConflicts(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Paths []string `json:"paths"`
+	}
+	if err := decode(r, &in); err != nil || len(in.Paths) > 5000 {
+		writeErr(w, http.StatusBadRequest, errBadRequest)
+		return
+	}
+	out, err := s.Files.Conflicts(in.Paths)
+	if err != nil {
+		writeFileErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": out})
+}
+
+// handleExtractConflicts lists the archive's files that already exist in the destination.
+func (s *Server) handleExtractConflicts(w http.ResponseWriter, r *http.Request) {
+	var in struct{ Path, Dest string }
+	if err := decode(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	out, err := s.Files.ExtractConflicts(in.Path, in.Dest)
+	if err != nil {
+		writeFileErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": out})
 }

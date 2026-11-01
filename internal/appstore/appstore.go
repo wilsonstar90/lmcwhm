@@ -620,7 +620,11 @@ func (sv *Service) ping(ctx context.Context, i Installed) error {
 		_, err := sv.Mongo(ctx, i, "db.adminCommand({ping: 1}).ok")
 		return err
 	case "redis":
-		out, err := dockerx.Run(ctx, "exec", "-e", "REDISCLI_AUTH="+i.secret, i.Container, "redis-cli", "ping")
+		args := []string{"exec", i.Container, "redis-cli", "ping"}
+		if i.secret != "" { // a password can be turned off
+			args = []string{"exec", "-e", "REDISCLI_AUTH=" + i.secret, i.Container, "redis-cli", "ping"}
+		}
+		out, err := dockerx.Run(ctx, args...)
 		if err == nil && out != "PONG" {
 			err = errors.New(out)
 		}

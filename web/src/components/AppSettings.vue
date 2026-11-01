@@ -3,7 +3,7 @@ import { computed, h, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   NAlert, NButton, NCard, NCheckbox, NDataTable, NDescriptions, NDescriptionsItem, NInput, NInputNumber, NModal, NPopconfirm, NSelect, NSpace,
-  NSwitch, NTabPane, NTabs, NTag, useMessage, type DataTableColumns,
+  NSwitch, NTabPane, NTabs, NTag, useDialog, useMessage, type DataTableColumns,
 } from 'naive-ui'
 import { get, post, put, ApiError } from '../api/client'
 import type { InstalledApp } from '../api/types'
@@ -20,6 +20,7 @@ const emit = defineEmits<{ close: []; changed: [] }>()
 const updates = useUpdates()
 const { t, locale } = useI18n()
 const msg = useMessage()
+const dialog = useDialog()
 const fail = (e: unknown) => msg.error(e instanceof ApiError ? e.text : String(e))
 
 const tab = ref('service')
@@ -295,6 +296,33 @@ async function loadRedis() {
     return { sec, changes: ch }
   })
 }
+// requirepass: changed live; empty turns AUTH off (the port is loopback only).
+const redisPw = ref('')
+watch(rs, (v) => (redisPw.value = v?.password ?? ''))
+function randomPassword() {
+  const a = new Uint8Array(18)
+  crypto.getRandomValues(a)
+  return btoa(String.fromCharCode(...a)).replace(/[+/=]/g, '').slice(0, 20)
+}
+function saveRedisPw() {
+  const apply = async () => {
+    try {
+      await post(`${base.value}/redis/password`, { password: redisPw.value })
+      rs.value!.password = redisPw.value
+      msg.success(t('dbs.rp.changed'))
+    } catch (e) {
+      fail(e)
+    }
+  }
+  dialog.warning({
+    title: t('dbs.rp.change'),
+    content: redisPw.value ? t('dbs.rp.confirm') : t('dbs.rp.confirm_none'),
+    positiveText: t('common.confirm'),
+    negativeText: t('common.cancel'),
+    onPositiveClick: apply,
+  })
+}
+
 async function saveRedis() {
   if (!rs.value) return
   const body = { ...rs.value, maxmemory: maxMemMBRedis.value > 0 ? `${maxMemMBRedis.value}mb` : '0', save: saveRules.value.map((r) => `${r.sec} ${r.changes}`) }
@@ -490,7 +518,13 @@ function taskDone() {
               <span class="mono k">timeout</span><n-input v-model:value="rs.timeout" size="small" style="width: 150px" /><span class="hint u">{{ t('dbs.rt.timeout') }}</span>
               <span class="mono k">maxclients</span><n-input v-model:value="rs.maxclients" size="small" style="width: 150px" /><span class="hint u">{{ t('dbs.rt.maxclients') }}</span>
               <span class="mono k">databases</span><n-input v-model:value="rs.databases" size="small" style="width: 150px" /><span class="hint u">{{ t('dbs.rt.databases') }}</span>
-              <span class="mono k">requirepass</span><n-input :value="rs.password" type="password" show-password-on="click" readonly size="small" style="width: 150px" /><span class="hint u">{{ t('dbs.rt.requirepass') }}</span>
+              <span class="mono k">requirepass</span>
+              <n-space :size="6" :wrap="false" align="center">
+                <n-input v-model:value="redisPw" type="password" show-password-on="click" size="small" :placeholder="t('dbs.rp.none')" style="width: 150px" />
+                <n-button size="tiny" quaternary @click="redisPw = randomPassword()">{{ t('dbs.rp.random') }}</n-button>
+                <n-button size="small" :disabled="redisPw === rs.password" @click="saveRedisPw">{{ t('dbs.rp.change') }}</n-button>
+              </n-space>
+              <span class="hint u">{{ t('dbs.rp.hint') }}</span>
               <span class="mono k">maxmemory</span><n-input-number v-model:value="maxMemMBRedis" :min="0" size="small" style="width: 150px" /><span class="hint u">{{ t('dbs.rt.maxmemory') }}</span>
               <span class="mono k">maxmemory-policy</span><n-select v-model:value="rs.maxmemory_policy" :options="policies" size="small" style="width: 150px" /><span class="hint u">{{ t('dbs.rt.policy') }}</span>
             </div>

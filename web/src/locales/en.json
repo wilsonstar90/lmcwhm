@@ -294,7 +294,8 @@
       "no_source_build": "This version cannot be compiled here",
       "invalid_build_args": "Build options may only use letters, digits and - _ = + , . / : @ %",
       "invalid_build_mode": "Invalid install method",
-      "build_failed": "The new build did not start and was rolled back"
+      "build_failed": "The new build did not start and was rolled back",
+      "bad_password": "The password needs 8-128 characters without spaces or quotes, or leave it empty"
     },
     "db": {
       "invalid_name": "Name: letters, digits and _, starting with a letter (not a reserved name)",
@@ -1003,7 +1004,11 @@
     "with_data": "Also restore the panel data backed up before that update (changes made since are kept aside)",
     "restart": "Restart",
     "restart_desc": "Restarts the panel program (websites and apps keep running); about 5 seconds.",
-    "restarting": "The panel is restarting…"
+    "restarting": "The panel is restarting…",
+    "restart_panel": "Restart the panel",
+    "restart_server": "Restart the server",
+    "reboot_desc": "Reboots the whole server: every website, database and app stops for about 1-3 minutes. Confirm with your password.",
+    "rebooting": "The server is rebooting (about 1-3 minutes); this page reloads by itself…"
   },
   "geo": {
     "lan": "LAN",
@@ -2402,6 +2407,15 @@
       "latest_fork_usec": "Last fork (µs)",
       "rdb_last_save_time": "Last RDB snapshot",
       "aof_enabled": "AOF on (1)"
+    },
+    "rp": {
+      "none": "Empty = no password",
+      "random": "Random",
+      "change": "Change password",
+      "hint": "Takes effect at once; empty means no password (Redis listens on 127.0.0.1 only). Websites and programs using this Redis need the new password too.",
+      "changed": "Redis password updated",
+      "confirm": "Websites and programs using this Redis will need the new password to connect. Continue?",
+      "confirm_none": "Redis will need no password (local 127.0.0.1 connections only). Continue?"
     }
   },
   "rk": {
@@ -2994,6 +3008,15 @@
       "env_file": "Environment (may hold secrets)",
       "robots": "Search engine rules",
       "xmlrpc": "WordPress XML-RPC (often attacked)"
+    },
+    "conflict": {
+      "title": "{n} items already exist",
+      "desc": "These names already exist where you are pasting:",
+      "more": "and {n} more…",
+      "skip": "Skip",
+      "both": "Keep both",
+      "overwrite": "Overwrite",
+      "skipped": "Done; skipped {n} existing items"
     }
   },
   "fe": {
@@ -3461,5 +3484,30 @@
     "note_archive": "A zip or tar.gz must contain a .sql (or .sql.gz) file, e.g. test.zip holding test.sql.",
     "note_large": "For a large file, copy it with SFTP to {dir} and import it here, or pick any file on the server with \"From the server\".",
     "import": "Import"
+  },
+  "cm": {
+    "find": "Find",
+    "replace": "Replace",
+    "next": "Next",
+    "previous": "Previous",
+    "all": "All",
+    "match_case": "Match case",
+    "regexp": "Regular expression",
+    "by_word": "Whole word",
+    "replace_one": "Replace",
+    "replace_all": "Replace all",
+    "close": "Close",
+    "goto_line": "Go to line",
+    "go": "Go",
+    "current_match": "current match",
+    "on_line": "on line",
+    "replaced_on_line": "replaced match on line {n}",
+    "replaced_n": "replaced {n} matches",
+    "folded": "Folded lines",
+    "unfolded": "Unfolded lines",
+    "folded_code": "folded code",
+    "unfold": "unfold",
+    "fold_line": "Fold line",
+    "unfold_line": "Unfold line"
   }
 }

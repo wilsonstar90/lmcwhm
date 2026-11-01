@@ -244,6 +244,21 @@ code="$(api POST "/apps/$RID/port" '{"port":22}' | jget "['code']")"
 task POST "/apps/$RID/port" '{"port":6379}'
 pass "Redis: key browser, settings applied live, port moved"
 
+# Redis password: changed live (no restart), or turned off; the panel keeps working.
+code="$(api POST "/apps/$RID/redis/password" '{"password":"bad pass"}' | jget "['code']")"
+[[ "$code" == app.bad_password ]] || fail "unusable Redis password accepted: $code"
+api POST "/apps/$RID/redis/password" '{"password":"New-redis-pass-9"}' | grep -q '"ok":true' || fail "change Redis password"
+[[ "$(docker exec -e REDISCLI_AUTH=New-redis-pass-9 lmcwhm-redis74 redis-cli ping)" == PONG ]] || fail "new Redis password refused"
+api GET "/apps/$RID/redis/key?db=3&key=lmc:a" | grep -q '"value":"hello"' || fail "panel lost Redis after the password change"
+api POST "/apps/$RID/redis/password" '{"password":""}' | grep -q '"ok":true' || fail "turn the Redis password off"
+[[ "$(docker exec lmcwhm-redis74 redis-cli ping)" == PONG ]] || fail "Redis still needs a password"
+redis-cli -h 127.0.0.1 -p 6379 ping 2>/dev/null | grep -q PONG || python3 -c "import socket; s=socket.create_connection(('127.0.0.1',6379),3); s.sendall(b'PING\r\n'); assert s.recv(16).startswith(b'+PONG')" || fail "Redis without a password refuses the host (protected mode)"
+api GET "/apps/$RID/redis/key?db=3&key=lmc:a" | grep -q '"value":"hello"' || fail "panel lost Redis without a password"
+api POST "/apps/$RID/redis/password" '{"password":"Back-to-a-pass-1"}' | grep -q '"ok":true' || fail "set a Redis password again"
+docker restart lmcwhm-redis74 >/dev/null && sleep 3
+[[ "$(docker exec -e REDISCLI_AUTH=Back-to-a-pass-1 lmcwhm-redis74 redis-cli ping)" == PONG ]] || fail "Redis password not kept in redis.conf"
+pass "Redis password: changed live, turned off and on, kept after a restart"
+
 # ---------- compile install: switch Redis to a source build and back, data kept ----------
 code="$(api POST "/apps/$RID/build" '{"build_mode":"source","build_args":"x; rm -rf /"}' | jget "['code']")"
 [[ "$code" == app.invalid_build_args ]] || fail "shell characters in build options accepted: $code"
@@ -402,6 +417,26 @@ with zipfile.ZipFile('/www/wwwroot/evil.zip', 'w') as z:
 EOF
 code="$(api POST /files/extract '{"path":"/www/wwwroot/evil.zip","dest":"/www/wwwroot/evil"}' | jget "['code']")"
 [[ "$code" == files.invalid_path && ! -e /tmp/zip-slip-pwned ]] || fail "zip-slip: $code"
+# Name conflicts: list them, then overwrite (a folder merges), skip on extract.
+mkdir -p /www/wwwroot/cf/a /www/wwwroot/cf/b/a && echo new > /www/wwwroot/cf/a/x.txt && echo old > /www/wwwroot/cf/b/a/x.txt && echo keep > /www/wwwroot/cf/b/a/keep.txt
+api POST /files/conflicts '{"paths":["/www/wwwroot/cf/b/a","/www/wwwroot/cf/b/none"]}' | grep -q '"items":\["/www/wwwroot/cf/b/a"\]' || fail "conflict list"
+[[ "$(api POST /files/copy '{"from":"/www/wwwroot/cf/a","to":"/www/wwwroot/cf/b/a"}' | jget "['code']")" == files.exists ]] || fail "copy over without overwrite"
+api POST /files/copy '{"from":"/www/wwwroot/cf/a","to":"/www/wwwroot/cf/b/a","overwrite":true}' | grep -q '"ok":true' || fail "copy with overwrite"
+[[ "$(cat /www/wwwroot/cf/b/a/x.txt)$(cat /www/wwwroot/cf/b/a/keep.txt)" == newkeep ]] || fail "copy over did not merge"
+echo moved > /www/wwwroot/cf/m.txt
+api POST /files/rename '{"from":"/www/wwwroot/cf/m.txt","to":"/www/wwwroot/cf/b/a/x.txt","overwrite":true}' | grep -q '"ok":true' || fail "move with overwrite"
+[[ "$(cat /www/wwwroot/cf/b/a/x.txt)" == moved && ! -e /www/wwwroot/cf/m.txt ]] || fail "move over"
+api POST /files/compress '{"paths":["/www/wwwroot/cf/a"],"dest":"/www/wwwroot/cf/a.zip","format":"zip"}' >/dev/null
+api POST /files/extract '{"path":"/www/wwwroot/cf/a.zip","dest":"/www/wwwroot/cf/out"}' >/dev/null
+echo mine > /www/wwwroot/cf/out/a/x.txt
+api POST /files/extract/conflicts '{"path":"/www/wwwroot/cf/a.zip","dest":"/www/wwwroot/cf/out"}' | grep -q '/www/wwwroot/cf/out/a/x.txt' || fail "extract conflicts"
+api POST /files/extract '{"path":"/www/wwwroot/cf/a.zip","dest":"/www/wwwroot/cf/out","skip_existing":true}' >/dev/null
+[[ "$(cat /www/wwwroot/cf/out/a/x.txt)" == mine ]] || fail "extract skip replaced a file"
+api POST /files/extract '{"path":"/www/wwwroot/cf/a.zip","dest":"/www/wwwroot/cf/out"}' >/dev/null
+[[ "$(cat /www/wwwroot/cf/out/a/x.txt)" == new ]] || fail "extract overwrite"
+rm -rf /www/wwwroot/cf
+# Server reboot needs the password (a wrong one is refused; CI never reboots).
+[[ "$(api POST /system/reboot '{"password":"wrong"}' | jget "['code']")" == auth.bad_password ]] || fail "reboot without the password"
 [[ "$(api POST /files/delete '{"paths":["/www/wwwroot/up.txt"]}' | jget "['ok']")" == True ]] || fail "delete to recycle bin"
 TID="$(api GET /files/trash | python3 -c "import sys,json; print([i['id'] for i in json.load(sys.stdin)['items'] if i['path']=='/www/wwwroot/up.txt'][0])")"
 api POST /files/trash/restore "{\"id\":\"$TID\"}" >/dev/null

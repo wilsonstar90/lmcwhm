@@ -3,6 +3,8 @@
 // the panel (kept as a dump). Either bin can be switched off.
 import { computed, h, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useAsk } from '../../composables/ask'
+import FileIcon from './FileIcon.vue'
 import {
   NAlert, NButton, NCard, NDataTable, NDatePicker, NInput, NModal, NPopconfirm, NSelect, NSpace, NSwitch, NTab, NTabs, useMessage,
   type DataTableColumns,
@@ -11,7 +13,7 @@ import { get, post, put, ApiError } from '../../api/client'
 import type { TrashItem } from '../../api/types'
 import { bytes, datetime } from '../../format'
 import TaskModal from '../TaskModal.vue'
-import { baseName, changed, iconOf, isDoc, isImage } from './state'
+import { baseName, changed, isDoc, isImage } from './state'
 
 const props = defineProps<{ show: boolean }>()
 const emit = defineEmits<{ close: [] }>()
@@ -52,8 +54,9 @@ async function load() {
 watch(() => props.show, (v) => v && load(), { immediate: true })
 watch(tab, () => (checked.value = []))
 
+const ask = useAsk()
 async function setSetting(key: 'enabled' | 'db', v: boolean) {
-  if (!v && !confirm(t(key === 'enabled' ? 'rb.off_confirm' : 'rb.db_off_confirm'))) return
+  if (!v && !(await ask.confirm(t(key === 'enabled' ? 'rb.off_confirm' : 'rb.db_off_confirm')))) return
   try {
     settings.value = await put('/files/trash/settings', { ...settings.value, [key]: v })
   } catch (e) {
@@ -123,10 +126,10 @@ async function emptyAll() {
   }
   load()
 }
-function runBatch() {
+async function runBatch() {
   const ids = checked.value
   if (!batch.value || !ids.length) return
-  if (batch.value === 'delete' && !confirm(t('rb.delete_n', { n: ids.length }))) return
+  if (batch.value === 'delete' && !(await ask.confirm(t('rb.delete_n', { n: ids.length }), { danger: true }))) return
   if (tab.value === 'files') fileAction(batch.value === 'restore' ? '/files/trash/restore' : '/files/trash/empty', ids as string[])
   else if (batch.value === 'delete') dbDelete(ids as number[])
   else for (const id of ids) dbRestore(dbs.value.find((d) => d.id === id)!)
@@ -135,7 +138,7 @@ function runBatch() {
 const link = (label: string, onClick: () => void, danger = false) => h('a', { class: ['op', { danger }], onClick }, label)
 const fileCols = computed<DataTableColumns<TrashItem>>(() => [
   { type: 'selection' },
-  { title: () => t('rb.name'), key: 'name', minWidth: 180, ellipsis: { tooltip: true }, render: (i) => `${iconOf(i.path, i.is_dir)} ${baseName(i.path)}` },
+  { title: () => t('rb.name'), key: 'name', minWidth: 180, ellipsis: { tooltip: true }, render: (i) => h('span', { style: 'display: inline-flex; align-items: center; gap: 6px' }, [h(FileIcon, { name: i.path, dir: i.is_dir, size: 18 }), baseName(i.path)]) },
   { title: () => t('rb.origin'), key: 'path', minWidth: 220, ellipsis: { tooltip: true } },
   { title: () => t('files.size'), key: 'size', width: 100, sorter: (a, b) => a.size - b.size, render: (i) => (i.is_dir ? '—' : bytes(i.size)) },
   { title: () => t('rb.deleted_at'), key: 'deleted_at', width: 170, sorter: (a, b) => a.deleted_at - b.deleted_at, render: (i) => datetime(i.deleted_at, locale.value) },

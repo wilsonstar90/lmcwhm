@@ -132,3 +132,16 @@ func TestClip(t *testing.T) {
 		t.Fatal("binary not flagged")
 	}
 }
+
+func TestRedisPassword(t *testing.T) {
+	for pw, ok := range map[string]bool{"": true, "Str0ng-pass": true, "short": false, "has space x": false, "quote\"xxxxx": false, "new\nlinexxx": false} {
+		if redisPassRe.MatchString(pw) != ok {
+			t.Errorf("%q: %v", pw, !ok)
+		}
+	}
+	conf := "bind 0.0.0.0\nrequirepass old\n"
+	off := setRedisConf(setRedisConf(conf, "requirepass", ""), "protected-mode", "no")
+	if strings.Contains(off, "requirepass") || !strings.Contains(off, "protected-mode no") {
+		t.Fatalf("no password:\n%s", off)
+	}
+}

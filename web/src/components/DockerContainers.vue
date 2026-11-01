@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useAsk } from '../composables/ask'
 import {
   NButton, NSpace, NTag, NInput, NModal, NCard, NForm, NFormItem, NSelect, NDropdown, NGrid, NGi, NRadioGroup, NRadioButton, NEmpty,
   NSpin, useMessage,
@@ -92,9 +93,10 @@ function menu(c: Container) {
     { label: t('common.delete'), key: 'remove', disabled: c.managed },
   ]
 }
-function onMenu(c: Container, key: string) {
+const ask = useAsk()
+async function onMenu(c: Container, key: string) {
   if (key === 'terminal' || key === 'logs' || key === 'proxy') return (open.value = { c, tab: key })
-  if (key === 'remove' && !confirm(t('docker.remove_confirm', { name: c.name }))) return
+  if (key === 'remove' && !(await ask.confirm(t('docker.remove_confirm', { name: c.name }), { danger: true }))) return
   action(c, key)
 }
 

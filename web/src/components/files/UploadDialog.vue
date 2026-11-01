@@ -3,6 +3,7 @@
 // queue with progress; 8 MB chunks that resume from what the server has.
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useAsk } from '../../composables/ask'
 import { NButton, NCard, NDropdown, NModal, NProgress, NSpace, useMessage } from 'naive-ui'
 import { get, getCsrf, ApiError } from '../../api/client'
 import type { FileEntry } from '../../api/types'
@@ -32,7 +33,7 @@ watch(() => uploadBus.value?.seq, () => {
   dir.value = b.dir
   add(b.files)
   show.value = true
-  if (b.files.length && !running.value) start()
+  // Files dropped on the list only join the queue: 開始上傳 starts them.
 })
 
 function add(list: QueuedFile[]) {
@@ -133,8 +134,9 @@ function cancel(it: Item) {
 const total = computed(() => queue.value.reduce((n, i) => n + i.file.size, 0))
 const sent = computed(() => queue.value.reduce((n, i) => n + (i.status === 'done' ? i.file.size : i.sent), 0))
 const pickMenu = computed(() => [{ label: t('up.files'), key: 'file' }, { label: t('up.folder'), key: 'dir' }])
-function close() {
-  if (running.value && !confirm(t('up.leave'))) return
+const dialogs = useAsk()
+async function close() {
+  if (running.value && !(await dialogs.confirm(t('up.leave'), { danger: true }))) return
   queue.value.forEach((i) => i.status === 'run' && cancelled.add(i.id))
   show.value = false
   if (!running.value) queue.value = []

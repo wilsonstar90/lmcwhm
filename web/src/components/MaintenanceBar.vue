@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { NAlert, NBadge, NButton, NCard, NCheckbox, NCode, NDropdown, NInput, NModal, NSelect, NSpace, NSpin, NTag, NText, useDialog, useMessage } from 'naive-ui'
+import { NAlert, NBadge, NButton, NCard, NCheckbox, NCode, NDropdown, NInput, NModal, NRadio, NRadioGroup, NSelect, NSpace, NSpin, NTag, NText, useMessage } from 'naive-ui'
 import { get, post, ApiError } from '../api/client'
 
 // compact: the header's version, 更新, 修復 and 重啟 (a menu on phones);
@@ -13,7 +13,6 @@ interface Status { running: boolean; log: string; exit: number; version: string 
 
 const { t } = useI18n()
 const msg = useMessage()
-const dialog = useDialog()
 const rel = ref<Release | null>(null)
 const checking = ref(false)
 const confirm = ref<{ action: 'update' | 'repair' | 'rollback'; password: string; rebuild: boolean; withData: boolean } | null>(null)
@@ -78,40 +77,43 @@ async function poll() {
     /* restarting */
   }
 }
-// ---- restart (重啟面板) ----
-const restarting = ref(false)
+// ---- restart: the panel, or the whole server (重啟面板 / 重啟伺服器) ----
+const restartDlg = ref<{ kind: 'panel' | 'server'; password: string; busy: boolean } | null>(null)
+const restarting = ref<'panel' | 'server' | null>(null)
 function restart() {
-  dialog.warning({
-    title: t('maint.restart'),
-    content: t('maint.restart_desc'),
-    positiveText: t('common.confirm'),
-    negativeText: t('common.cancel'),
-    onPositiveClick: async () => {
+  restartDlg.value = { kind: 'panel', password: '', busy: false }
+}
+async function doRestart() {
+  const d = restartDlg.value!
+  d.busy = true
+  try {
+    if (d.kind === 'server') await post('/system/reboot', { password: d.password })
+    else await post('/system/restart')
+  } catch (e) {
+    msg.error(e instanceof ApiError ? e.text : String(e))
+    d.busy = false
+    return
+  }
+  restartDlg.value = null
+  restarting.value = d.kind
+  // Wait for the panel to go away and come back (a server reboot takes minutes).
+  const t0 = Date.now()
+  const first = d.kind === 'server' ? 20000 : 3000
+  const limit = d.kind === 'server' ? 15 * 60000 : 120000
+  const wait = async () => {
+    if (Date.now() - t0 > first) {
       try {
-        await post('/system/restart')
-      } catch (e) {
-        msg.error(e instanceof ApiError ? e.text : String(e))
+        await get('/public/meta')
+        window.location.reload()
         return
+      } catch {
+        /* still restarting */
       }
-      restarting.value = true
-      // Wait for the panel to go away and come back.
-      const t0 = Date.now()
-      const wait = async () => {
-        if (Date.now() - t0 > 3000) {
-          try {
-            await get('/public/meta')
-            window.location.reload()
-            return
-          } catch {
-            /* still restarting */
-          }
-        }
-        if (Date.now() - t0 < 120000) setTimeout(wait, 1500)
-        else restarting.value = false
-      }
-      setTimeout(wait, 1500)
-    },
-  })
+    }
+    if (Date.now() - t0 < limit) setTimeout(wait, 2000)
+    else restarting.value = null
+  }
+  setTimeout(wait, 1500)
 }
 const mq = window.matchMedia('(max-width: 767px)')
 const narrow = ref(mq.matches)
@@ -192,9 +194,37 @@ const changed = computed(() => done.value && progress.value!.version !== started
     </n-card>
   </n-modal>
 
-  <n-modal :show="restarting" :mask-closable="false">
-    <n-card style="width: min(360px, calc(100vw - 32px))">
-      <n-space align="center"><n-spin size="small" /> {{ t('maint.restarting') }}</n-space>
+  <n-modal :show="!!restartDlg" @update:show="(v: boolean) => !v && (restartDlg = null)">
+    <n-card v-if="restartDlg" :title="t('maint.restart')" style="width: min(460px, calc(100vw - 32px))" closable @close="restartDlg = null">
+      <n-radio-group v-model:value="restartDlg.kind" class="kinds">
+        <label class="kind" :class="{ on: restartDlg.kind === 'panel' }">
+          <n-radio value="panel" />
+          <div><b>{{ t('maint.restart_panel') }}</b><p>{{ t('maint.restart_desc') }}</p></div>
+        </label>
+        <label class="kind" :class="{ on: restartDlg.kind === 'server' }">
+          <n-radio value="server" />
+          <div><b>{{ t('maint.restart_server') }}</b><p>{{ t('maint.reboot_desc') }}</p></div>
+        </label>
+      </n-radio-group>
+      <n-input
+        v-if="restartDlg.kind === 'server'" v-model:value="restartDlg.password" type="password" show-password-on="click"
+        :placeholder="t('maint.password')" style="margin-top: 12px" @keyup.enter="restartDlg.password && doRestart()"
+      />
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="restartDlg = null">{{ t('common.cancel') }}</n-button>
+          <n-button
+            :type="restartDlg.kind === 'server' ? 'error' : 'primary'" :loading="restartDlg.busy"
+            :disabled="restartDlg.kind === 'server' && !restartDlg.password" @click="doRestart"
+          >{{ restartDlg.kind === 'server' ? t('maint.restart_server') : t('maint.restart_panel') }}</n-button>
+        </n-space>
+      </template>
+    </n-card>
+  </n-modal>
+
+  <n-modal :show="!!restarting" :mask-closable="false">
+    <n-card style="width: min(380px, calc(100vw - 32px))">
+      <n-space align="center"><n-spin size="small" /> {{ restarting === 'server' ? t('maint.rebooting') : t('maint.restarting') }}</n-space>
     </n-card>
   </n-modal>
 
@@ -218,6 +248,29 @@ const changed = computed(() => done.value && progress.value!.version !== started
   display: flex;
   align-items: center;
   gap: 2px;
+}
+.kinds {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+.kind {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  border: 1px solid rgba(128, 128, 128, 0.25);
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.kind.on {
+  border-color: #20a53a;
+  background: rgba(32, 165, 58, 0.06);
+}
+.kind p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  opacity: 0.75;
 }
 .ver {
   font-size: 12px;

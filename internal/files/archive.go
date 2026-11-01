@@ -159,7 +159,8 @@ func writeTarGz(root *os.Root, base string, srcs []string, w io.Writer) error {
 // go through an os.Root opened at destDir, so entries like "../../etc/x" or
 // paths through planted symlinks are rejected (zip-slip); archive symlinks
 // are skipped.
-func (f *FS) Extract(archive, destDir string) error {
+// With skipExisting, files already in destDir are kept; otherwise they are replaced.
+func (f *FS) Extract(archive, destDir string, skipExisting bool) error {
 	a, err := rel(archive)
 	if err != nil {
 		return err
@@ -197,16 +198,16 @@ func (f *FS) Extract(archive, destDir string) error {
 		if err != nil {
 			return ErrBadFormat
 		}
-		return mapErr(extractZip(dst, zr))
+		return mapErr(extractZip(dst, zr, skipExisting))
 	case strings.HasSuffix(lower, ".tar.gz"), strings.HasSuffix(lower, ".tgz"):
 		gz, err := gzip.NewReader(in)
 		if err != nil {
 			return ErrBadFormat
 		}
 		defer gz.Close()
-		return mapErr(extractTar(dst, tar.NewReader(gz)))
+		return mapErr(extractTar(dst, tar.NewReader(gz), skipExisting))
 	case strings.HasSuffix(lower, ".tar"):
-		return mapErr(extractTar(dst, tar.NewReader(in)))
+		return mapErr(extractTar(dst, tar.NewReader(in), skipExisting))
 	}
 	return ErrBadFormat
 }
@@ -224,11 +225,18 @@ func safeName(name string) (string, error) {
 	return c, nil
 }
 
-func writeEntry(dst *os.Root, name string, mode fs.FileMode, r io.Reader) error {
+func writeEntry(dst *os.Root, name string, mode fs.FileMode, r io.Reader, skipExisting bool) error {
 	if err := dst.MkdirAll(path.Dir(name), 0o755); err != nil {
 		return err
 	}
-	out, err := dst.OpenFile(name, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode.Perm()|0o200)
+	flags := os.O_CREATE | os.O_TRUNC | os.O_WRONLY
+	if skipExisting {
+		flags = os.O_CREATE | os.O_EXCL | os.O_WRONLY
+	}
+	out, err := dst.OpenFile(name, flags, mode.Perm()|0o200)
+	if skipExisting && errors.Is(err, fs.ErrExist) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
@@ -239,7 +247,7 @@ func writeEntry(dst *os.Root, name string, mode fs.FileMode, r io.Reader) error 
 	return out.Close()
 }
 
-func extractZip(dst *os.Root, zr *zip.Reader) error {
+func extractZip(dst *os.Root, zr *zip.Reader, skipExisting bool) error {
 	for _, zf := range zr.File {
 		name, err := safeName(zf.Name)
 		if err != nil {
@@ -258,7 +266,7 @@ func extractZip(dst *os.Root, zr *zip.Reader) error {
 			if err != nil {
 				return err
 			}
-			err = writeEntry(dst, name, mode, rc)
+			err = writeEntry(dst, name, mode, rc, skipExisting)
 			rc.Close()
 			if err != nil {
 				return err
@@ -268,7 +276,7 @@ func extractZip(dst *os.Root, zr *zip.Reader) error {
 	return nil
 }
 
-func extractTar(dst *os.Root, tr *tar.Reader) error {
+func extractTar(dst *os.Root, tr *tar.Reader, skipExisting bool) error {
 	for {
 		h, err := tr.Next()
 		if errors.Is(err, io.EOF) {
@@ -287,7 +295,7 @@ func extractTar(dst *os.Root, tr *tar.Reader) error {
 				return err
 			}
 		case tar.TypeReg:
-			if err := writeEntry(dst, name, fs.FileMode(h.Mode), tr); err != nil {
+			if err := writeEntry(dst, name, fs.FileMode(h.Mode), tr, skipExisting); err != nil {
 				return err
 			}
 		}

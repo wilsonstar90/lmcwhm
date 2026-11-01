@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -463,5 +465,51 @@ func (sv *Service) RedisFlush(ctx context.Context, id int64, db int, all bool) e
 		return err
 	}
 	_, err = rc.Do("FLUSHDB", "ASYNC")
+	return err
+}
+
+// redisPassRe: an empty password (no AUTH) or 8-128 printable characters
+// without spaces or quotes, as redis.conf and CONFIG SET take them.
+var redisPassRe = regexp.MustCompile(`^$|^[!#-&(-~]{8,128}$`)
+
+// ErrBadPassword: the Redis password is not usable.
+var ErrBadPassword = errors.New("app.bad_password")
+
+// SetRedisPassword changes requirepass live (CONFIG SET, no restart) and in
+// redis.conf, and stores it for the panel's own connections. Empty turns
+// AUTH off; the port is published on 127.0.0.1 only, and protected mode,
+// which would then refuse the panel's connections through Docker, goes off.
+func (sv *Service) SetRedisPassword(ctx context.Context, id int64, pw string) error {
+	if !redisPassRe.MatchString(pw) {
+		return ErrBadPassword
+	}
+	i, err := sv.engineOf(ctx, id, func(a string) bool { return a == "redis" })
+	if err != nil {
+		return err
+	}
+	b, err := os.ReadFile(sv.confPath(i))
+	if err != nil {
+		return err
+	}
+	protected := "yes"
+	if pw == "" {
+		protected = "no"
+	}
+	body := setRedisConf(setRedisConf(string(b), "requirepass", pw), "protected-mode", protected)
+	rc, err := sv.Redis(ctx, i)
+	if err != nil {
+		return err
+	}
+	defer rc.Close()
+	if _, err := rc.Do("CONFIG", "SET", "protected-mode", protected); err != nil {
+		return err
+	}
+	if _, err := rc.Do("CONFIG", "SET", "requirepass", pw); err != nil {
+		return err
+	}
+	if err := os.WriteFile(sv.confPath(i), []byte(body), 0o644); err != nil {
+		return err
+	}
+	_, err = sv.st.DB.ExecContext(ctx, `UPDATE apps SET secret = ? WHERE id = ?`, sv.box.Seal(pw), i.ID)
 	return err
 }
