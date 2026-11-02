@@ -51,7 +51,7 @@ server {
         return {{.}};
     }
 {{- end}}
-{{- if or .WAFOff .GRPC}}
+{{- if or .WAFOff (and .GRPC .WAF)}}
 {{- if .GRPC}}
     # gRPC: ModSecurity stalls streamed HTTP/2 bodies behind grpc_pass and
     # cannot read protobuf; the edge rules (lists, custom rules, CC) still apply.
