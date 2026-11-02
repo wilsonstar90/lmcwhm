@@ -58,6 +58,14 @@ func TestGRPCConfig(t *testing.T) {
 	if w := string(ng["conf.d/web.test.conf"]); strings.Contains(w, "8081") || strings.Contains(w, "grpc") {
 		t.Error("an HTTP site got gRPC settings")
 	}
+	// Without the WAF, nginx has no ModSecurity module to switch off.
+	waf := e.WAF
+	e.WAF = func() WAFSettings { return WAFSettings{} }
+	ng, _ = e.nginxFiles(sites)
+	if strings.Contains(string(ng["conf.d/rpc.test.conf"]), "modsecurity") {
+		t.Error("modsecurity directive in a gRPC vhost without the WAF")
+	}
+	e.WAF = waf
 
 	// Switched off: nothing of it is generated.
 	on = false
