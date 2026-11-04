@@ -119,6 +119,9 @@ func New(st *store.Store, logDir string, loc *time.Location) *Service {
 	return &Service{st: st, LogDir: logDir, loc: loc, entries: map[int64]rcron.EntryID{}, running: map[int64]context.CancelFunc{}}
 }
 
+// TZ is the time zone schedules run in (the panel's).
+func (sv *Service) TZ() string { return sv.loc.String() }
+
 // Next returns the next n run times of a schedule.
 func (sv *Service) Next(schedule string, n int) ([]int64, error) {
 	s, err := parser.Parse(strings.TrimSpace(schedule))

@@ -153,7 +153,7 @@ func (s *Server) handleCronPreview(w http.ResponseWriter, r *http.Request) {
 		writeCronErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"next": next})
+	writeJSON(w, http.StatusOK, map[string]any{"next": next, "tz": s.Cron.TZ()})
 }
 
 func (s *Server) handleCronDelete(w http.ResponseWriter, r *http.Request) {
