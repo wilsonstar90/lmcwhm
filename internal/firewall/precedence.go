@@ -15,7 +15,7 @@ import (
 //     by a trusted range; where a manual block and a manual allow overlap the
 //     narrower one wins (allow 1.2.3.0/24 + block 1.2.3.4 blocks 1.2.3.4).
 //  2. The server's own addresses (every interface, loopback, container
-//     bridges): always allowed, never banned.
+//     bridges): never banned automatically (a manual block still holds).
 //  3. Trusted ranges (Cloudflare, crawlers): never banned automatically.
 //  4. Automatic blocks (CrowdSec, lists, MCP, auto-ban), skipped wherever a
 //     manual allow or the server's own address covers them.

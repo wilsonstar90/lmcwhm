@@ -757,7 +757,7 @@ func (sv *Service) Ruleset(ctx context.Context, c Config) (string, error) {
 	cls := sv.classify(ips)
 	add("allow", cls.allow, false)
 	for _, p := range cls.self {
-		sets["allow"+fam(p)] = append(sets["allow"+fam(p)], p.String())
+		sets["self"+fam(p)] = append(sets["self"+fam(p)], p.String())
 	}
 	add("over", cls.over, false)
 	add("mblock", cls.mblock, true) // timed single addresses: mban
@@ -776,6 +776,7 @@ func (sv *Service) Ruleset(ctx context.Context, c Config) (string, error) {
 		{"over4", "ipv4_addr", "interval; auto-merge;"}, {"over6", "ipv6_addr", "interval; auto-merge;"},
 		{"mblock4", "ipv4_addr", "interval; auto-merge;"}, {"mblock6", "ipv6_addr", "interval; auto-merge;"},
 		{"mban4", "ipv4_addr", "timeout;"}, {"mban6", "ipv6_addr", "timeout;"},
+		{"self4", "ipv4_addr", "interval; auto-merge;"}, {"self6", "ipv6_addr", "interval; auto-merge;"},
 		{"block4", "ipv4_addr", "interval; auto-merge;"}, {"block6", "ipv6_addr", "interval; auto-merge;"},
 		{"ban4", "ipv4_addr", "timeout;"}, {"ban6", "ipv6_addr", "timeout;"},
 		{"trust4", "ipv4_addr", "interval; auto-merge;"}, {"trust6", "ipv6_addr", "interval; auto-merge;"},
@@ -796,6 +797,9 @@ func (sv *Service) Ruleset(ctx context.Context, c Config) (string, error) {
 		match := fmt.Sprintf("%s saddr @%s", x.fam, x.set)
 		fmt.Fprintf(&drops, "\t\t%s %s\n\t\t%s counter drop\n", match, logDrop(strings.TrimPrefix(strings.TrimRight(x.set, "46"), "m")), match)
 	}
+	// The server's own addresses (container bridges) after the manual blocks,
+	// before the automatic ones: never banned, but a deliberate block holds.
+	drops.WriteString("\t\tip saddr @self4 accept\n\t\tip6 saddr @self6 accept\n")
 	// Trusted ranges (Cloudflare, crawlers) are never banned automatically,
 	// but get no other exemption: port rules and the default policy still apply.
 	// Every drop is logged first (rate limited: a limit that fails only skips

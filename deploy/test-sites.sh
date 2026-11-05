@@ -117,7 +117,7 @@ if command -v nft >/dev/null; then
   [[ "$(rcode 203.0.113.21 -A sqlmap/1.7)" == 200 ]] || fail "allowed address refused by the UA black list"
   [[ "$(rcode 198.51.100.50 -A sqlmap/1.7)" == 403 ]] || fail "UA black list no longer applies to others"
   nft list set inet lmcwhm over4 | grep -q 203.0.113.20 || fail "narrower block not in the nftables override set"
-  nft list chain inet lmcwhm input | awk '/@over4 counter drop/{o=NR} /@allow4 accept/{a=NR} /@mblock4 counter drop/{m=NR} END{exit !(o<a && a<m)}' || fail "nftables order: override, allow, manual block"
+  nft list chain inet lmcwhm input | awk '/@over4 counter/{o=NR} /@allow4 accept/{a=NR} /@mblock4 counter/{m=NR} /@self4 accept/{s=NR} /@ban4 ip saddr != @trust4 counter/{b=NR} END{exit !(o<a && a<m && m<s && s<b)}' || fail "nftables order: override, allow, manual block, server, automatic: $(nft list chain inet lmcwhm input)"
   api GET '/firewall/ips?list=allow&source=manual' | grep -q '"system_allow":\[' || fail "server addresses not listed"
   api POST /firewall/patterns/clear '{"kind":"ua","list":"block"}' >/dev/null
   for l in allow block; do

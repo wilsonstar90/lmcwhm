@@ -186,7 +186,7 @@ backend st_cc
     http-request set-header X-Lmcwhm-Pass 1 if list_pass || ip_allow
     http-request set-header X-Lmcwhm-Allow 1 if ip_allow
     http-request set-var(txn.block) str({{$.BlockStatus}}:ip) if ip_over !acme
-    http-request set-var(txn.block) str({{$.BlockStatus}}:ip) if !blocked { src -f {{.Dir}}/lists/mblock.lst } !ip_allow !ip_self !acme
+    http-request set-var(txn.block) str({{$.BlockStatus}}:ip) if !blocked { src -f {{.Dir}}/lists/mblock.lst } !ip_allow !acme
     http-request set-var(txn.block) str({{$.BlockStatus}}:ip) if !blocked { src -f {{.Dir}}/lists/block.lst } !ip_allow !ip_self !acme
     http-request set-var(txn.block) str({{$.BlockStatus}}:list) if !blocked list_block !list_pass !ip_allow !acme
     # Website protection: flags per host (",on,fake,idc,crawler,cdn,").

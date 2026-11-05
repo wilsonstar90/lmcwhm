@@ -82,7 +82,8 @@ func TestRuleset(t *testing.T) {
 	for _, want := range []string{
 		"table inet lmcwhm {", "policy drop;", "set mblock4 { type ipv4_addr; flags interval; auto-merge; elements = { 198.51.100.7 }; }",
 		"set mblock6 { type ipv6_addr; flags interval; auto-merge; elements = { 2001:db8::/48 }; }", "192.0.2.9 timeout 36",
-		"set allow4 { type ipv4_addr; flags interval; auto-merge; elements = { 192.0.2.10, 127.0.0.0/8, 203.0.113.250/32 }; }", "icmp type echo-request drop", "meta l4proto { icmp, ipv6-icmp } accept",
+		"set allow4 { type ipv4_addr; flags interval; auto-merge; elements = { 192.0.2.10 }; }",
+		"set self4 { type ipv4_addr; flags interval; auto-merge; elements = { 127.0.0.0/8, 203.0.113.250/32 }; }", "icmp type echo-request drop", "meta l4proto { icmp, ipv6-icmp } accept",
 		"tcp dport { 8888 } accept comment \"system panel\"", "tcp dport { 80, 443 } accept comment \"system web\"", "tcp dport { 3306, 6379 } drop", "udp dport { 3306, 6379 } drop",
 		"ip saddr 203.0.113.0/24 tcp dport { 9000-9100 } accept",
 		"ip saddr { 198.51.100.1, 198.51.100.2 } tcp dport { 9200 } accept", "ip6 saddr 2001:db8::/32 tcp dport { 9200 } accept", "iifname \"docker0\" accept", "chain forward",

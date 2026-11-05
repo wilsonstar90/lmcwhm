@@ -31,7 +31,7 @@ func TestRealIPConfig(t *testing.T) {
 		"http-request set-src var(txn.cip) if { var(txn.cip) -m found }",
 		"http-request set-var(txn.block) str(403:ip) if !blocked { src -f " + e.EdgeDir() + "/lists/block.lst } !ip_allow !ip_self !acme",
 		"http-request set-var(txn.block) str(403:ip) if ip_over !acme",
-		"http-request set-var(txn.block) str(403:ip) if !blocked { src -f " + e.EdgeDir() + "/lists/mblock.lst } !ip_allow !ip_self !acme",
+		"http-request set-var(txn.block) str(403:ip) if !blocked { src -f " + e.EdgeDir() + "/lists/mblock.lst } !ip_allow !acme",
 		"http-request set-var(txn.allow) bool(true) if { src -f " + e.EdgeDir() + "/lists/allow.lst } !ip_over",
 	} {
 		if !strings.Contains(cfg, want) {
