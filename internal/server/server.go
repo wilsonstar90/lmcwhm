@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"github.com/wilsonstar90/lmcwhm/internal/secevents"
 	"io/fs"
 	"log/slog"
 	"net"
@@ -85,6 +86,7 @@ type Deps struct {
 	Alerts   *alert.Service
 	Probes   *probe.Service
 	Stats    *sitestats.Service
+	Events   *secevents.Service
 	Procs    *supervisor.Service
 	WP       *wordpress.Service
 	FTP      *ftp.Service

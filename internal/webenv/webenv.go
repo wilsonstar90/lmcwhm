@@ -700,7 +700,7 @@ func (e *Env) nginxFiles(sites []Site) (map[string][]byte, error) {
 			// A gRPC site while gRPC is off cannot be proxied (proxy_pass has no grpc://).
 			"LogDir": e.WWWLogs, "NginxPort": NginxPort, "PHPPort": port, "Stopped": s.Stopped || (IsGRPC(s.Upstream) && !g),
 			"Upstream": s.Upstream, "WAFOff": w.Enabled && s.WAFOff, "WAFExclude": wafExclusions(w.Enabled, s.WAFExclude),
-			"Adv": s.Advanced, "ReqZone": zone("req", s.Domain), "ConnZone": zone("conn", s.Domain), "DenyUA": uaRegex(s.Advanced.DenyUA),
+			"Adv": s.Advanced, "ReqZone": zone("req", s.Domain), "ConnZone": zone("conn", s.Domain), "IPZone": zone("ip", s.Domain), "DenyUA": uaRegex(s.Advanced.DenyUA),
 			"Redirect": s.Redirect, "RedirectCode": redirectCode(s.RedirectCode), "RedirectPath": s.RedirectPath,
 			"BlockStatuses": BlockStatuses,
 			"ErrorPages":    errPages, "ErrDir": errDir, "Intercept": ep.Intercept[s.Domain] && !g,

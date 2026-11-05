@@ -70,7 +70,10 @@ async function keep(x: FirewallIP) {
   }
 }
 const columns: DataTableColumns<FirewallIP> = [
-  { title: () => t('common.ip'), key: 'ip', minWidth: 260, render: (x) => h(IpGeo, { ip: x.ip }) },
+  {
+    title: () => t('common.ip'), key: 'ip', minWidth: 260,
+    render: (x) => h(NSpace, { size: 6, align: 'center', wrap: false }, () => [h(IpGeo, { ip: x.ip }), x.overridden ? h(NTag, { size: 'tiny', type: 'success', bordered: false }, () => t('fwl.overridden')) : null]),
+  },
   { title: () => t('fw.list'), key: 'list', width: 90, render: (x) => h(NTag, { size: 'small', type: x.list === 'block' ? 'error' : 'success' }, () => t(`fw.lists.${x.list}`)) },
   { title: () => t('fw.origin'), key: 'source', width: 170, render: (x) => h(NTag, { size: 'small', bordered: false }, () => sourceName(x.source)) },
   { title: () => t('site.remark'), key: 'remark', ellipsis: { tooltip: true } },

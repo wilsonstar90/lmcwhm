@@ -155,7 +155,11 @@ backend st_cc
     http-request del-header CF-Connecting-IP if !{ var(txn.via_cf) -m bool }
     # From here src is the visitor. A block only names its reason (txn.block):
     # nginx refuses the request and logs why, so it is counted per site.
-    acl ip_allow src -f {{.Dir}}/lists/allow.lst
+    # Manual lists come first (the narrower entry wins where a block and an
+    # allow overlap), then the server's own addresses, then automatic blocks.
+    acl ip_over src -f {{.Dir}}/lists/over.lst
+    http-request set-var(txn.allow) bool(true) if { src -f {{.Dir}}/lists/allow.lst } !ip_over
+    acl ip_allow var(txn.allow) -m bool
     acl trusted src -f {{.Dir}}/lists/trust.lst
     acl blocked var(txn.block) -m found
     # User-Agent / URL lists: an allowed request skips the block lists, the protection and the WAF.
@@ -172,11 +176,17 @@ backend st_cc
     acl list_block path -m beg -i -f {{.Dir}}/maps/url_block_prefix.lst
     acl list_block url -m reg -i -f {{.Dir}}/maps/url_block_regex.lst
     http-request del-header X-Lmcwhm-Pass
+    http-request del-header X-Lmcwhm-Allow
     http-request del-header X-Lmcwhm-Block
     http-request del-header X-Lmcwhm-Detect
-    http-request set-header X-Lmcwhm-Pass 1 if list_pass
-    http-request set-var(txn.block) str({{$.BlockStatus}}:ip) if { src -f {{.Dir}}/lists/block.lst } !ip_allow !acme
-    http-request set-var(txn.block) str({{$.BlockStatus}}:list) if !blocked list_block !list_pass !acme
+    # Pass: nginx skips the WAF. Allow: an allowed address also skips each
+    # site's own IP / User-Agent refusals.
+    http-request set-header X-Lmcwhm-Pass 1 if list_pass || ip_allow
+    http-request set-header X-Lmcwhm-Allow 1 if ip_allow
+    http-request set-var(txn.block) str({{$.BlockStatus}}:ip) if ip_over !acme
+    http-request set-var(txn.block) str({{$.BlockStatus}}:ip) if !blocked { src -f {{.Dir}}/lists/mblock.lst } !ip_allow !acme
+    http-request set-var(txn.block) str({{$.BlockStatus}}:ip) if !blocked { src -f {{.Dir}}/lists/block.lst } !ip_allow !acme
+    http-request set-var(txn.block) str({{$.BlockStatus}}:list) if !blocked list_block !list_pass !ip_allow !acme
     # Website protection: flags per host (",on,fake,idc,crawler,cdn,").
     http-request set-var(txn.prot) var(txn.host),map_str({{.Dir}}/maps/prot_exact.map)
     http-request set-var(txn.prot) var(txn.host),map_end({{.Dir}}/maps/prot_wild.map) if !{ var(txn.prot) -m found }

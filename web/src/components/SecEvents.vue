@@ -3,9 +3,9 @@
 // dedicated rules, CC) and the WAF (OWASP CRS) together, with the actions
 // that follow from one: exclude a CRS rule, switch a dedicated rule, block
 // the address, allow the URL.
-import { computed, h, onMounted, ref } from 'vue'
+import { computed, h, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { NButton, NDataTable, NDropdown, NInput, NSelect, NSpace, NTag, useMessage, type DataTableColumns } from 'naive-ui'
+import { NButton, NDataTable, NDatePicker, NDropdown, NInput, NRadioButton, NRadioGroup, NSelect, NSpace, NTag, useMessage, type DataTableColumns } from 'naive-ui'
 import { get, patch, post, ApiError } from '../api/client'
 import { datetime } from '../format'
 import IpGeo from './IpGeo.vue'
@@ -27,25 +27,65 @@ const msg = useMessage()
 const fail = (e: unknown) => msg.error(e instanceof ApiError ? e.text : String(e))
 
 const items = ref<SecEvent[]>([])
+const total = ref(0)
+const counts = ref<{ sources: Record<string, number>; actions: Record<string, number>; top_ips: { ip: string; hits: number }[]; oldest: number }>({ sources: {}, actions: {}, top_ips: [], oldest: 0 })
 const loading = ref(false)
 const source = ref('')
 const action = ref('')
 const site = ref(props.site ?? '')
 const q = ref('')
+const ip = ref('')
 const sites = ref<SiteRef[]>([])
 const rules = ref<RuleRef[]>([])
+// When: today, yesterday, the last 7 / 30 days or one day picked (30 days are kept).
+const range = ref<'today' | 'yesterday' | '7' | '30' | 'day'>('today')
+const day = ref<number | null>(null)
+const page = ref(1)
+const pageSize = ref(50)
+
+function when(): Record<string, string> {
+  switch (range.value) {
+    case 'yesterday': return { back: '1' }
+    case '7': return { days: '7' }
+    case '30': return { days: '30' }
+    case 'day': {
+      if (!day.value) return {}
+      const d = new Date(day.value)
+      const pad = (n: number) => String(n).padStart(2, '0')
+      return { date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` }
+    }
+  }
+  return {}
+}
+const keepFrom = () => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - 29); return d.getTime() }
+const dayDisabled = (ts: number) => ts > Date.now() || ts < keepFrom()
 
 async function load() {
   loading.value = true
   try {
-    const p = new URLSearchParams({ source: source.value, action: action.value, site: site.value, q: q.value.trim(), limit: '1000' })
-    items.value = (await get<{ items: SecEvent[] }>(`/security/events?${p}`)).items
+    const p = new URLSearchParams({
+      ...when(), source: source.value, action: action.value, site: site.value, ip: ip.value, q: q.value.trim(),
+      limit: String(pageSize.value), offset: String((page.value - 1) * pageSize.value),
+    })
+    const r = await get<{ items: SecEvent[]; total: number; sources: Record<string, number>; actions: Record<string, number>; top_ips: { ip: string; hits: number }[]; oldest: number }>(`/security/events?${p}`)
+    items.value = r.items
+    total.value = r.total
+    counts.value = r
   } catch (e) {
     fail(e)
   } finally {
     loading.value = false
   }
 }
+// A new filter starts at the first page.
+function reload() {
+  page.value = 1
+  load()
+}
+watch([range, day], () => {
+  if (range.value !== 'day' || day.value) reload()
+})
+watch(ip, reload)
 onMounted(async () => {
   load()
   try {
@@ -58,8 +98,9 @@ onMounted(async () => {
 })
 defineExpose({ load })
 
-const sourceOptions = computed(() => [{ label: t('evt.all_sources'), value: '' }, ...['waf', 'rule', 'protection', 'list', 'ip', 'cc'].map((s) => ({ label: t(`evt.sources.${s}`), value: s }))])
-const actionOptions = computed(() => [{ label: t('evt.all_actions'), value: '' }, ...['blocked', 'detected', 'limited'].map((a) => ({ label: t(`evt.actions.${a}`), value: a }))])
+const withN = (label: string, n?: number) => (n ? `${label} (${n.toLocaleString()})` : label)
+const sourceOptions = computed(() => [{ label: t('evt.all_sources'), value: '' }, ...['waf', 'rule', 'protection', 'list', 'ip', 'cc'].map((s) => ({ label: withN(t(`evt.sources.${s}`), counts.value.sources[s]), value: s }))])
+const actionOptions = computed(() => [{ label: t('evt.all_actions'), value: '' }, ...['blocked', 'detected', 'limited'].map((a) => ({ label: withN(t(`evt.actions.${a}`), counts.value.actions[a]), value: a }))])
 const siteOptions = computed(() => [{ label: t('evt.all_sites'), value: '' }, ...sites.value.map((s) => ({ label: s.domain, value: s.domain }))])
 
 const ruleLabel = (e: SecEvent) => {
@@ -158,15 +199,35 @@ const detailRows = computed<DetailRow[]>(() => {
 
 <template>
   <div class="bar">
-    <n-select v-if="!props.site" v-model:value="site" :options="siteOptions" size="small" filterable style="width: 200px" @update:value="load" />
-    <n-select v-model:value="source" :options="sourceOptions" size="small" style="width: 160px" @update:value="load" />
-    <n-select v-model:value="action" :options="actionOptions" size="small" style="width: 130px" @update:value="load" />
-    <n-input v-model:value="q" size="small" clearable :placeholder="t('evt.search')" style="width: 220px" @keyup.enter="load" @clear="load" />
+    <n-radio-group v-model:value="range" size="small">
+      <n-radio-button value="today">{{ t('evt.today') }}</n-radio-button>
+      <n-radio-button value="yesterday">{{ t('evt.yesterday') }}</n-radio-button>
+      <n-radio-button value="7">{{ t('evt.last_days', { n: 7 }) }}</n-radio-button>
+      <n-radio-button value="30">{{ t('evt.last_days', { n: 30 }) }}</n-radio-button>
+      <n-radio-button value="day">{{ t('evt.pick_day') }}</n-radio-button>
+    </n-radio-group>
+    <n-date-picker v-if="range === 'day'" v-model:value="day" type="date" size="small" clearable :is-date-disabled="dayDisabled" style="width: 150px" />
+  </div>
+  <div class="bar">
+    <n-select v-if="!props.site" v-model:value="site" :options="siteOptions" size="small" filterable style="width: 200px" @update:value="reload" />
+    <n-select v-model:value="source" :options="sourceOptions" size="small" style="width: 190px" @update:value="reload" />
+    <n-select v-model:value="action" :options="actionOptions" size="small" style="width: 150px" @update:value="reload" />
+    <n-input v-model:value="q" size="small" clearable :placeholder="t('evt.search')" style="width: 220px" @keyup.enter="reload" @clear="reload" />
     <n-button size="small" @click="load">{{ t('common.refresh') }}</n-button>
   </div>
+  <div v-if="counts.top_ips.length || ip" class="top">
+    <span class="top-label">{{ t('evt.top_ips') }}</span>
+    <n-tag v-if="ip" size="small" type="primary" closable @close="ip = ''">{{ ip }}</n-tag>
+    <template v-else>
+      <n-tag v-for="x in counts.top_ips" :key="x.ip" size="small" class="top-ip" :bordered="false" @click="ip = x.ip">{{ x.ip }} · {{ x.hits.toLocaleString() }}</n-tag>
+    </template>
+  </div>
   <n-data-table
-    size="small" :columns="columns" :data="items" :loading="loading" :pagination="{ pageSize: 30 }" :scroll-x="1200"
+    remote size="small" :columns="columns" :data="items" :loading="loading" :scroll-x="1200"
+    :pagination="{ page, pageSize, itemCount: total, showSizePicker: true, pageSizes: [50, 100, 200], prefix: () => t('evt.total', { n: total.toLocaleString() }) }"
     :row-props="(e: SecEvent) => ({ style: 'cursor: pointer', onClick: () => (detail = e) })"
+    @update:page="(p: number) => { page = p; load() }"
+    @update:page-size="(n: number) => { pageSize = n; reload() }"
   />
   <DetailDrawer :show="!!detail" :title="detail ? `${detail.method} ${detail.host}` : ''" :rows="detailRows" :width="600" @close="detail = null" />
 </template>
@@ -178,5 +239,19 @@ const detailRows = computed<DetailRow[]>(() => {
   gap: 8px;
   align-items: center;
   margin-bottom: 8px;
+}
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12.5px;
+}
+.top-label {
+  opacity: 0.65;
+}
+.top-ip {
+  cursor: pointer;
 }
 </style>

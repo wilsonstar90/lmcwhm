@@ -1,148 +1,91 @@
 package server
 
 import (
+	"errors"
 	"net/http"
-	"path/filepath"
-	"sort"
 	"strings"
+	"time"
 
-	"github.com/wilsonstar90/lmcwhm/internal/logcenter"
-	"github.com/wilsonstar90/lmcwhm/internal/security"
+	"github.com/wilsonstar90/lmcwhm/internal/secevents"
 )
 
-// One list of what the security layers did to requests: refusals and
-// detections at the edge (lists, website protection, dedicated rules, CC;
-// from each site's access log) and by the WAF (ModSecurity audit log).
+// The block log (攔截記錄): what the security layers did to requests, kept
+// per day for 30 days (see secevents), and the auto-ban settings.
 
-type SecEvent struct {
-	Time     int64                `json:"time"`
-	IP       string               `json:"ip"`
-	Host     string               `json:"host"`
-	Site     string               `json:"site"`
-	Method   string               `json:"method"`
-	URI      string               `json:"uri"`
-	UA       string               `json:"ua,omitempty"`
-	Status   int                  `json:"status"`
-	Action   string               `json:"action"` // blocked | detected | limited
-	Source   string               `json:"source"` // waf | rule | list | ip | protection | cc
-	Rule     string               `json:"rule"`   // CRS id, dedicated rule code or protection check
-	Message  string               `json:"message,omitempty"`
-	Severity string               `json:"severity,omitempty"`
-	Messages []security.EventRule `json:"messages,omitempty"`
-}
-
-// edgeEvent turns an access log line with a reason into an event.
-func edgeEvent(a logcenter.Access, domain string) (SecEvent, bool) {
-	e := SecEvent{Time: a.Time, IP: a.IP, Host: a.Host, Site: domain, Method: a.Method, URI: a.Path, UA: a.UA, Status: a.Status}
-	reason := a.Block
-	e.Action = "blocked"
-	if reason == "" {
-		if a.Detect == "" {
-			return e, false
-		}
-		reason, e.Action = a.Detect, "detected"
+// dayRange reads ?date=YYYY-MM-DD (or ?back=N days before today) and
+// ?days=N, in the panel's time zone (default today, one day), as [from, to):
+// the N days that end with that day.
+func (s *Server) dayRange(r *http.Request) (int64, int64) {
+	loc := time.Local
+	if s.Stats != nil && s.Stats.Loc != nil {
+		loc = s.Stats.Loc
 	}
-	switch {
-	case strings.HasPrefix(reason, "rule-"):
-		e.Source, e.Rule = "rule", strings.TrimPrefix(reason, "rule-")
-	case reason == "cc":
-		e.Source, e.Rule, e.Action = "cc", "cc", "limited"
-	case reason == "ip" || reason == "list":
-		e.Source, e.Rule = reason, reason
-	default:
-		e.Source, e.Rule = "protection", reason
+	now := time.Now().In(loc)
+	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+	if d, err := time.ParseInLocation("2006-01-02", r.URL.Query().Get("date"), loc); err == nil {
+		start = d
+	} else if back := intParam(r, "back", 0, 365); back > 0 { // days before today
+		start = start.AddDate(0, 0, -back)
 	}
-	return e, true
-}
-
-func wafEvent(w security.Event, siteOf func(string) string) SecEvent {
-	e := SecEvent{Time: w.Time, IP: w.IP, Host: w.Host, Method: w.Method, URI: w.URI, Status: w.Status, Source: "waf", Messages: w.Messages, Action: "detected"}
-	if w.Blocked {
-		e.Action = "blocked"
-	}
-	e.Site = siteOf(strings.Split(w.Host, ":")[0])
-	if len(w.Messages) > 0 {
-		e.Rule, e.Message, e.Severity = w.Messages[0].ID, w.Messages[0].Message, w.Messages[0].Severity
-	}
-	return e
+	days := max(intParam(r, "days", 1, 31), 1)
+	end := start.AddDate(0, 0, 1)
+	return end.AddDate(0, 0, -days).Unix(), end.Unix()
 }
 
 func (s *Server) handleSecEvents(w http.ResponseWriter, r *http.Request) {
+	if s.Events == nil {
+		writeJSON(w, http.StatusOK, secevents.Page{Items: []secevents.Event{}})
+		return
+	}
 	q := r.URL.Query()
-	only, source, action, text := q.Get("site"), q.Get("source"), q.Get("action"), strings.ToLower(strings.TrimSpace(q.Get("q")))
-	limit := intParam(r, "limit", 500, 2000)
-	sites, err := s.Sites.List(r.Context())
+	from, to := s.dayRange(r)
+	f := secevents.Filter{From: from, To: to, Site: q.Get("site"), Source: q.Get("source"), Action: q.Get("action"),
+		IP: strings.TrimSpace(q.Get("ip")), Q: q.Get("q"), Limit: intParam(r, "limit", 100, 1000), Offset: intParam(r, "offset", 0, 1<<30)}
+	s.Events.Collect(r.Context(), nil) // what the logs gained in the last seconds
+	p, err := s.Events.Query(r.Context(), f)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	byHost := map[string]string{}
-	for _, x := range sites {
-		for _, h := range x.Hosts() {
-			byHost[h] = x.Domain
-		}
-	}
-	siteOf := func(h string) string {
-		if d, ok := byHost[h]; ok {
-			return d
-		}
-		for pat, d := range byHost { // wildcard aliases
-			if strings.HasPrefix(pat, "*.") && strings.HasSuffix(h, pat[1:]) {
-				return d
+	if s.Protect != nil {
+		if rules, err := s.Protect.Rules(r.Context()); err == nil {
+			names := map[string]string{}
+			for _, rl := range rules {
+				names[rl.Code] = rl.Name
 			}
-		}
-		return ""
-	}
-	var out []SecEvent
-	if source == "" || source != "waf" {
-		for _, x := range sites {
-			if only != "" && x.Domain != only || x.Passthrough { // passthrough: no nginx, no log
-				continue
-			}
-			lines, _ := logcenter.Tail(filepath.Join(s.Sites.Env.WWWLogs, x.Domain+".log"), 5000, "")
-			for _, l := range lines {
-				if e, ok := edgeEvent(logcenter.ParseAccess(l), x.Domain); ok {
-					out = append(out, e)
+			for i, e := range p.Items {
+				if e.Source == "rule" && e.Message == "" {
+					p.Items[i].Message = names[e.Rule]
 				}
 			}
 		}
 	}
-	if s.WAF != nil && (source == "" || source == "waf") {
-		evs, _ := s.WAF.Events(5000, "")
-		for _, ev := range evs {
-			e := wafEvent(ev, siteOf)
-			if only == "" || e.Site == only {
-				out = append(out, e)
-			}
-		}
+	writeJSON(w, http.StatusOK, p)
+}
+
+func (s *Server) handleAutoBan(w http.ResponseWriter, r *http.Request) {
+	if s.Events == nil {
+		writeJSON(w, http.StatusOK, secevents.DefaultAutoBan())
+		return
 	}
-	names := map[string]string{}
-	if s.Protect != nil {
-		if rules, err := s.Protect.Rules(r.Context()); err == nil {
-			for _, rl := range rules {
-				names[rl.Code] = rl.Name
-			}
-		}
+	writeJSON(w, http.StatusOK, s.Events.AutoBanSettings(r.Context()))
+}
+
+func (s *Server) handlePutAutoBan(w http.ResponseWriter, r *http.Request) {
+	if s.Events == nil {
+		writeErr(w, http.StatusServiceUnavailable, errors.New("autoban.unavailable"))
+		return
 	}
-	kept := out[:0]
-	for _, e := range out {
-		if source != "" && e.Source != source || action != "" && e.Action != action {
-			continue
-		}
-		if e.Source == "rule" && e.Message == "" {
-			e.Message = names[e.Rule]
-		}
-		if text != "" && !strings.Contains(strings.ToLower(strings.Join([]string{e.IP, e.Host, e.URI, e.UA, e.Rule, e.Message}, " ")), text) {
-			continue
-		}
-		kept = append(kept, e)
+	var in secevents.AutoBan
+	if err := decode(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
 	}
-	sort.SliceStable(kept, func(i, j int) bool { return kept[i].Time > kept[j].Time })
-	if len(kept) > limit {
-		kept = kept[:limit]
+	a, err := s.Events.SaveAutoBan(r.Context(), in)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
 	}
-	if kept == nil {
-		kept = []SecEvent{}
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": kept})
+	s.auditCat(r, "security", "autoban.update", "")
+	writeJSON(w, http.StatusOK, a)
 }

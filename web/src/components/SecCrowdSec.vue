@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, h, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { NAlert, NButton, NCard, NCheckbox, NDataTable, NInput, NInputNumber, NPopconfirm, NSpace, NStatistic, NTag, useMessage, type DataTableColumns } from 'naive-ui'
+import { NAlert, NButton, NCard, NCheckbox, NDataTable, NInput, NInputNumber, NPopconfirm, NSpace, NStatistic, NTabPane, NTabs, NTag, useMessage, type DataTableColumns } from 'naive-ui'
 import { get, post, ApiError } from '../api/client'
 import type { FirewallIP } from '../api/types'
 import { datetime } from '../format'
@@ -25,6 +25,15 @@ const ban = ref({ ip: '', hours: 4, reason: '' })
 const banDetail = ref<FirewallIP | null>(null)
 const alertDetail = ref<Alert | null>(null)
 const emit = defineEmits<{ changed: [] }>()
+// Bans (what is blocked now) and alerts (what CrowdSec saw) are two tabs.
+const tab = ref<'bans' | 'alerts'>('bans')
+const filter = ref('')
+const has = (...v: (string | number | undefined)[]) => {
+  const q = filter.value.trim().toLowerCase()
+  return !q || v.some((x) => x !== undefined && String(x).toLowerCase().includes(q))
+}
+const shownBans = computed(() => bans.value.filter((x) => has(x.ip, x.remark)))
+const shownAlerts = computed(() => alerts.value.filter((a) => has(a.scenario, a.message, a.source.ip, a.source.value, a.source.as_name, a.source.cn)))
 
 async function load() {
   try {
@@ -139,22 +148,29 @@ const alertCols: DataTableColumns<Alert> = [
     </template>
   </n-card>
 
-  <template v-if="st?.installed">
-    <n-card size="small" :title="t('cs.bans')" style="margin-top: 16px">
-      <template #header-extra>
-        <n-space align="center">
+  <n-card v-if="st?.installed" size="small" style="margin-top: 16px">
+    <n-tabs v-model:value="tab" type="line" animated>
+      <template #suffix>
+        <n-input v-model:value="filter" size="small" clearable :placeholder="t('cs.filter')" style="width: 200px" />
+      </template>
+      <n-tab-pane name="bans" :tab="`${t('cs.bans')} (${bans.length.toLocaleString()})`">
+        <n-space align="center" style="margin-bottom: 10px">
           <n-input v-model:value="ban.ip" size="small" :placeholder="t('fw.ip_placeholder')" style="width: 180px" />
           <n-input-number v-model:value="ban.hours" size="small" :min="1" :max="8760" style="width: 110px"><template #suffix>h</template></n-input-number>
           <n-button size="small" type="primary" :disabled="!ban.ip" @click="addBan">{{ t('cs.ban') }}</n-button>
+          <n-button size="small" @click="load">{{ t('common.refresh') }}</n-button>
         </n-space>
-      </template>
-      <n-data-table size="small" :columns="banCols" :data="bans" :pagination="{ pageSize: 20 }" :row-key="(x: FirewallIP) => x.id" :row-props="(x: FirewallIP) => ({ style: 'cursor: pointer', onClick: () => (banDetail = x) })" :scroll-x="900" />
-    </n-card>
-    <n-card size="small" :title="t('cs.alerts')" style="margin-top: 16px">
-      <template #header-extra><n-button size="small" @click="load">{{ t('common.refresh') }}</n-button></template>
-      <n-data-table size="small" :columns="alertCols" :data="alerts" :pagination="{ pageSize: 20 }" :row-key="(a: Alert) => a.id" :row-props="(a: Alert) => ({ style: 'cursor: pointer', onClick: () => (alertDetail = a) })" :scroll-x="1000" />
-    </n-card>
-  </template>
+        <n-data-table size="small" :columns="banCols" :data="shownBans" :pagination="{ pageSize: 20 }" :row-key="(x: FirewallIP) => x.id" :row-props="(x: FirewallIP) => ({ style: 'cursor: pointer', onClick: () => (banDetail = x) })" :scroll-x="900" />
+      </n-tab-pane>
+      <n-tab-pane name="alerts" :tab="`${t('cs.alerts')} (${alerts.length.toLocaleString()})`">
+        <n-space align="center" style="margin-bottom: 10px">
+          <span class="hint" style="margin: 0">{{ t('cs.alerts_hint') }}</span>
+          <n-button size="small" @click="load">{{ t('common.refresh') }}</n-button>
+        </n-space>
+        <n-data-table size="small" :columns="alertCols" :data="shownAlerts" :pagination="{ pageSize: 20 }" :row-key="(a: Alert) => a.id" :row-props="(a: Alert) => ({ style: 'cursor: pointer', onClick: () => (alertDetail = a) })" :scroll-x="1000" />
+      </n-tab-pane>
+    </n-tabs>
+  </n-card>
   <DetailDrawer :show="!!banDetail" :title="banDetail?.ip ?? ''" :rows="banRows" @close="banDetail = null">
     <template v-if="banDetail" #actions>
       <n-popconfirm @positive-click="unban(banDetail!.ip)">

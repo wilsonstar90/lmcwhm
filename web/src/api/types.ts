@@ -456,10 +456,11 @@ export interface FirewallIP {
   id: number
   ip: string
   list: 'block' | 'allow' | 'trust'
-  source: string // manual | crowdsec | mcp | feed:<id>
+  source: string // manual | crowdsec | mcp | autoban | feed:<id>
   remark: string
   expires_at: number
   created_at: number
+  overridden?: boolean // an automatic block the allow list (or the server's own address) overrides
 }
 
 export interface SyncReport {

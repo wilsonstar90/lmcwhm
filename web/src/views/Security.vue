@@ -13,6 +13,7 @@ import SecCloud from '../components/SecCloud.vue'
 import SecWAF from '../components/SecWAF.vue'
 import SecProtect from '../components/SecProtect.vue'
 import SecCrowdSec from '../components/SecCrowdSec.vue'
+import SecBlockLog from '../components/SecBlockLog.vue'
 import SecScan from '../components/SecScan.vue'
 import SecMalware from '../components/SecMalware.vue'
 import SecTamper from '../components/SecTamper.vue'
@@ -34,19 +35,28 @@ interface Overview {
 const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const sections = ['overview', 'firewall', 'ips', 'lists', 'cloud', 'protect', 'waf', 'crowdsec', 'scan', 'malware', 'tamper'] as const
+const sections = ['overview', 'firewall', 'ips', 'lists', 'cloud', 'protect', 'events', 'waf', 'crowdsec', 'scan', 'malware', 'tamper'] as const
 type Section = (typeof sections)[number]
 const groups: { key: string; items: Section[] }[] = [
   { key: 'overview', items: ['overview'] },
   { key: 'network', items: ['firewall', 'ips', 'lists', 'cloud'] },
-  { key: 'intrusion', items: ['protect', 'waf', 'crowdsec'] },
+  { key: 'intrusion', items: ['protect', 'events', 'waf', 'crowdsec'] },
   { key: 'checks', items: ['scan', 'malware', 'tamper'] },
 ]
 // ?tab=rules (before the WAF page had tabs) opens the WAF's dedicated rules.
 if (route.query.tab === 'rules') router.replace({ query: { ...route.query, tab: 'waf', sub: 'rules' } })
-const initial = (route.query.tab === 'rules' ? 'waf' : route.query.tab) as Section
-const tab = ref<Section>(sections.includes(initial) ? initial : 'overview')
-watch(tab, (v) => router.replace({ query: { ...route.query, tab: v } }))
+// The block log was a WAF tab before it got its own page.
+if (route.query.tab === 'waf' && route.query.sub === 'events') router.replace({ query: { tab: 'events' } })
+const fromRoute = () => {
+  const q = route.query.tab === 'rules' ? 'waf' : route.query.tab === 'waf' && route.query.sub === 'events' ? 'events' : route.query.tab
+  return sections.includes(q as Section) ? (q as Section) : 'overview'
+}
+const tab = ref<Section>(fromRoute())
+watch(tab, (v) => {
+  if (route.query.tab !== v) router.replace({ query: { tab: v } })
+})
+// Links between sections change the query.
+watch(() => route.query.tab, () => (tab.value = fromRoute()))
 
 const o = ref<Overview | null>(null)
 async function loadOverview() {
@@ -108,7 +118,7 @@ const menu = computed<MenuOption[]>(() =>
   })),
 )
 const flat = computed(() => groups.flatMap((g) => g.items.map((k) => ({ label: `${t(`sec.groups.${g.key}`)} · ${t(`sec.s.${k}.title`)}`, value: k }))))
-const comps = { overview: SecTraffic, firewall: SecFirewall, ips: SecIPs, lists: SecLists, cloud: SecCloud, protect: SecProtect, waf: SecWAF, crowdsec: SecCrowdSec, scan: SecScan, malware: SecMalware, tamper: SecTamper }
+const comps = { overview: SecTraffic, firewall: SecFirewall, ips: SecIPs, lists: SecLists, cloud: SecCloud, protect: SecProtect, events: SecBlockLog, waf: SecWAF, crowdsec: SecCrowdSec, scan: SecScan, malware: SecMalware, tamper: SecTamper }
 </script>
 
 <template>

@@ -364,7 +364,11 @@
       "duplicate_pattern": "名单中已有此条目",
       "invalid_forward": "端口转发无效：请检查协议、端口、目标（IPv4）和来源",
       "forward_port_taken": "端口 {port} 已被使用",
-      "duplicate_ip": "此 IP 已在名单中"
+      "duplicate_ip": "此 IP 已在名单中",
+      "in_allow": "该 IP 已在手动白名单，请先从白名单移除",
+      "in_block": "该 IP 已在手动黑名单，请先从黑名单移除",
+      "self_server": "这是服务器自身的 IP，封禁会导致网站和 Docker 无法连接自己",
+      "allowed": "该 IP 在白名单（或为服务器自身 IP），不会自动封禁"
     },
     "waf": {
       "invalid_settings": "WAF 设置无效",
@@ -503,6 +507,10 @@
     },
     "system": {
       "unsupported": "此服务器不支持该操作"
+    },
+    "autoban": {
+      "invalid": "自动封禁设置无效：时间 1–1440 分钟、次数至少 2、封禁 1–525600 分钟",
+      "unavailable": "自动封禁未启用"
     }
   },
   "task": {
@@ -1217,6 +1225,10 @@
       "rules": {
         "title": "专属规则",
         "desc": "针对常见 CMS 漏洞的拦截规则（目前为 WordPress），可逐条开关、编辑和新增。"
+      },
+      "events": {
+        "title": "拦截记录",
+        "desc": "所有被拦截、限流或检测到的请求：入口（黑白名单、网站防护、专属规则、CC）和 OWASP（ModSecurity）。保留 30 天，可选择日期查看。"
       }
     }
   },
@@ -1272,7 +1284,8 @@
       "manual": "手动",
       "crowdsec": "CrowdSec",
       "waf": "WAF",
-      "mcp": "MCP / AI"
+      "mcp": "MCP / AI",
+      "autoban": "自动封禁"
     },
     "expires": "到期",
     "permanent": "永久",
@@ -1421,7 +1434,9 @@
     "origin": "来源",
     "message": "信息",
     "network": "网络",
-    "no_decision": "未封锁"
+    "no_decision": "未封锁",
+    "filter": "搜索 IP / 场景",
+    "alerts_hint": "CrowdSec 从日志检测到的行为；有“决策”的才会封禁。"
   },
   "bk": {
     "tab_list": "备份文件",
@@ -2595,7 +2610,10 @@
     "auto_hint": "这里只显示自动添加的条目。“保留为手动”会将黑名单条目转为永久手动黑名单。",
     "builtin_list": "内置名单（无需下载）",
     "edit": "编辑名单条目",
-    "keep_expiry": "保持当前到期时间"
+    "keep_expiry": "保持当前到期时间",
+    "precedence": "优先级：手动黑名单和手动白名单最高（两者重叠时，范围较小者优先），其次是服务器自身 IP，然后才是信任名单和自动封禁（CrowdSec、名单源、自动封禁、MCP）。白名单 IP 不会被 WAF、网站防护、CC 或任何自动封禁拦截。",
+    "system_allow": "系统白名单（服务器自身 IP，无法删除）：",
+    "overridden": "白名单覆盖"
   },
   "prot": {
     "cols": {
@@ -2925,7 +2943,13 @@
     "rule_block": "改为拦截",
     "rule_detect": "改为只检测",
     "block_ip": "封禁 {ip}",
-    "allow_url": "将 {path} 加入 URL 白名单"
+    "allow_url": "将 {path} 加入 URL 白名单",
+    "today": "今天",
+    "yesterday": "昨天",
+    "last_days": "最近 {n} 天",
+    "pick_day": "选择日期",
+    "top_ips": "次数最多的 IP：",
+    "total": "共 {n} 条"
   },
   "ep": {
     "library": "页面库",
@@ -3606,5 +3630,17 @@
       "tls": "必须使用 HTTPS（443）；80 端口不支持 gRPC。",
       "passthrough": "另一选择：「直通」目标（后端自行处理 TLS）也支持 gRPC，但没有 WAF 和 HTTP 层规则。"
     }
+  },
+  "ab": {
+    "title": "自动封禁",
+    "summary": "{w} 分钟内被拦截 {n} 次 → 封禁 {m} 分钟",
+    "off": "未开启：被拦截多少次都不会自动封禁",
+    "within": "在",
+    "min": "分钟",
+    "refused": "内被拦截",
+    "times": "次",
+    "ban_for": "就封禁",
+    "counts": "计算以下来源：",
+    "note": "白名单 IP、服务器自身 IP 和信任名单（Cloudflare、搜索引擎）不会被封；仅检测的请求不计。封禁会在“云端黑白名单”显示，来源为“自动封禁”。"
   }
 }

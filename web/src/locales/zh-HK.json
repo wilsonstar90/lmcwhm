@@ -364,7 +364,11 @@
       "duplicate_pattern": "名單已經有呢一條",
       "invalid_forward": "端口轉發無效：檢查協議、端口、目標（IPv4）同來源",
       "forward_port_taken": "端口 {port} 已經被使用",
-      "duplicate_ip": "呢個 IP 已經喺名單入面"
+      "duplicate_ip": "呢個 IP 已經喺名單入面",
+      "in_allow": "呢個 IP 已經喺手動白名單，請先喺白名單移除",
+      "in_block": "呢個 IP 已經喺手動黑名單，請先喺黑名單移除",
+      "self_server": "呢個係伺服器自己嘅 IP，封鎖會令網站同 Docker 連唔到自己",
+      "allowed": "呢個 IP 喺白名單（或者係伺服器自己嘅 IP），唔會自動封鎖"
     },
     "waf": {
       "invalid_settings": "WAF 設定無效",
@@ -503,6 +507,10 @@
     },
     "system": {
       "unsupported": "呢部伺服器唔支援呢個操作"
+    },
+    "autoban": {
+      "invalid": "自動封鎖設定無效：時間 1–1440 分鐘、次數至少 2、封鎖 1–525600 分鐘",
+      "unavailable": "自動封鎖未啟用"
     }
   },
   "task": {
@@ -1217,6 +1225,10 @@
       "rules": {
         "title": "專屬規則",
         "desc": "針對常見 CMS 漏洞嘅攔截規則（暫時係 WordPress），可以逐條開關、編輯同新增。"
+      },
+      "events": {
+        "title": "攔截記錄",
+        "desc": "所有被攔截、限流或者偵測到嘅請求：入口（黑白名單、網站防護、專屬規則、CC）同 OWASP（ModSecurity）。保留 30 日，可以揀日子睇。"
       }
     }
   },
@@ -1272,7 +1284,8 @@
       "manual": "手動",
       "crowdsec": "CrowdSec",
       "waf": "WAF",
-      "mcp": "MCP / AI"
+      "mcp": "MCP / AI",
+      "autoban": "自動封鎖"
     },
     "expires": "到期",
     "permanent": "永久",
@@ -1421,7 +1434,9 @@
     "origin": "來源",
     "message": "訊息",
     "network": "網絡",
-    "no_decision": "冇封鎖"
+    "no_decision": "冇封鎖",
+    "filter": "搜尋 IP / 場景",
+    "alerts_hint": "CrowdSec 由日誌偵測到嘅行為；有「決定」嘅先會封鎖。"
   },
   "bk": {
     "tab_list": "備份檔",
@@ -2595,7 +2610,10 @@
     "auto_hint": "呢度只顯示自動加入嘅條目。「保留為手動」會將黑名單條目轉為永久手動黑名單。",
     "builtin_list": "內置名單（毋須下載）",
     "edit": "編輯名單條目",
-    "keep_expiry": "保持而家嘅到期時間"
+    "keep_expiry": "保持而家嘅到期時間",
+    "precedence": "優先次序：手動黑名單同手動白名單最高（兩者重疊時，範圍細嗰個贏），然後係伺服器自己嘅 IP，之後先到信任名單同自動封鎖（CrowdSec、名單源、自動封鎖、MCP）。白名單 IP 唔會被 WAF、網站防護、CC 或者任何自動封鎖攔截。",
+    "system_allow": "系統白名單（伺服器自己嘅 IP，唔可以刪除）：",
+    "overridden": "白名單覆蓋"
   },
   "prot": {
     "cols": {
@@ -2925,7 +2943,13 @@
     "rule_block": "改為攔截",
     "rule_detect": "改為只偵測",
     "block_ip": "封鎖 {ip}",
-    "allow_url": "將 {path} 加入 URL 白名單"
+    "allow_url": "將 {path} 加入 URL 白名單",
+    "today": "今日",
+    "yesterday": "昨日",
+    "last_days": "最近 {n} 日",
+    "pick_day": "揀日期",
+    "top_ips": "最多次嘅 IP：",
+    "total": "共 {n} 條"
   },
   "ep": {
     "library": "頁面庫",
@@ -3606,5 +3630,17 @@
       "tls": "一定要 HTTPS（443）；port 80 唔支援 gRPC。",
       "passthrough": "另一個選擇：「直通」目標（後端自己處理 TLS）都支援 gRPC，但冇 WAF 同 HTTP 層嘅規則。"
     }
+  },
+  "ab": {
+    "title": "自動封鎖",
+    "summary": "{w} 分鐘內被攔截 {n} 次 → 封鎖 {m} 分鐘",
+    "off": "未開：被攔截幾多次都唔會自動封鎖",
+    "within": "喺",
+    "min": "分鐘",
+    "refused": "內被攔截",
+    "times": "次",
+    "ban_for": "就封鎖",
+    "counts": "計算以下來源：",
+    "note": "白名單 IP、伺服器自己嘅 IP 同信任名單（Cloudflare、搜尋引擎）唔會被封；只偵測嘅請求唔計。封鎖會喺「雲端黑白名單」顯示，來源係「自動封鎖」。"
   }
 }

@@ -22,6 +22,8 @@ func (s *Server) protectRoutes(r chi.Router) {
 	r.Get("/protect/sites", s.handleProtectSites)
 	r.Put("/protect/sites", s.handlePutProtectSites)
 	r.Get("/security/events", s.handleSecEvents)
+	r.Get("/security/autoban", s.handleAutoBan)
+	r.Put("/security/autoban", s.handlePutAutoBan)
 	r.Get("/protect/settings", s.handleProtectSettings)
 	r.Put("/protect/settings", s.handlePutProtectSettings)
 	r.Get("/protect/rules", s.handleProtectRules)

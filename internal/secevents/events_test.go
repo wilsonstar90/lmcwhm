@@ -1,4 +1,4 @@
-package server
+package secevents
 
 import (
 	"testing"
@@ -15,15 +15,15 @@ func TestEdgeEvent(t *testing.T) {
 		{"ip", ""}:           {"blocked", "ip", "ip"},
 		{"fake_spider", ""}:  {"blocked", "protection", "fake_spider"},
 	} {
-		e, ok := edgeEvent(logcenter.Access{Block: in[0], Detect: in[1], IP: "1.2.3.4"}, "a.com")
+		e, ok := EdgeEvent(logcenter.Access{Block: in[0], Detect: in[1], IP: "1.2.3.4"}, "a.com")
 		if !ok || e.Action != want[0] || e.Source != want[1] || e.Rule != want[2] || e.Site != "a.com" {
 			t.Errorf("%v → %+v", in, e)
 		}
 	}
-	if _, ok := edgeEvent(logcenter.Access{Status: 403}, "a.com"); ok {
+	if _, ok := EdgeEvent(logcenter.Access{Status: 403}, "a.com"); ok {
 		t.Error("a 403 without a reason (the WAF's, already in its log) became an edge event")
 	}
-	w := wafEvent(security.Event{Host: "www.a.com:443", Blocked: true, Messages: []security.EventRule{{ID: "942100", Message: "SQLi"}}},
+	w := WAFEvent(security.Event{Host: "www.a.com:443", Blocked: true, Messages: []security.EventRule{{ID: "942100", Message: "SQLi"}}},
 		func(h string) string { return map[string]string{"www.a.com": "a.com"}[h] })
 	if w.Site != "a.com" || w.Rule != "942100" || w.Action != "blocked" || w.Source != "waf" {
 		t.Errorf("waf %+v", w)

@@ -14,6 +14,8 @@ func (sv *Service) ImportIPs(ctx context.Context, list string, ips []string, ttl
 	if list != "block" && list != "allow" {
 		return 0, 0, ErrBadIP
 	}
+	// Read before the transaction: the store has a single connection.
+	conflicts := sv.manualConflicts(ctx, list)
 	tx, err := sv.st.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, 0, err
@@ -26,7 +28,7 @@ func (sv *Service) ImportIPs(ctx context.Context, list string, ips []string, ttl
 	}
 	for _, ip := range ips {
 		p, norm, err := NormIP(ip)
-		if err != nil || list == "block" && self.IsValid() && p.Contains(self) {
+		if err != nil || list == "block" && self.IsValid() && p.Contains(self) || conflicts(p, norm) {
 			skipped++
 			continue
 		}
@@ -143,7 +145,25 @@ func (sv *Service) AutoIPs(ctx context.Context, f AutoFilter) (AutoPage, error) 
 			out.Sources[s] = n
 		}
 	}
-	return out, srows.Err()
+	if err := srows.Err(); err != nil {
+		return out, err
+	}
+	srows.Close()
+	// Blocks the allow list or the server's own addresses override.
+	allowP := sv.self()
+	if ips, err := sv.IPs(ctx, "allow"); err == nil {
+		for _, x := range ips {
+			if p, _, err := NormIP(x.IP); err == nil {
+				allowP = append(allowP, p)
+			}
+		}
+	}
+	for i, x := range out.Items {
+		if p, _, err := NormIP(x.IP); err == nil && x.List == "block" && coveredBy(p, allowP) {
+			out.Items[i].Overridden = true
+		}
+	}
+	return out, nil
 }
 
 // KeepIP turns an automatic block into a permanent manual one (a list
@@ -193,6 +213,11 @@ func (sv *Service) UpdateIP(ctx context.Context, id int64, ip string, ttl time.D
 	}
 	if x.List == "block" && self.IsValid() && pfx.Contains(self) {
 		return x, ErrSelf
+	}
+	if norm != x.IP {
+		if err := sv.checkManual(ctx, pfx, norm, x.List); err != nil {
+			return x, err
+		}
 	}
 	x.IP, x.Remark = norm, trimRemark(remark)
 	if !keepTTL {

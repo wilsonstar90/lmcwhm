@@ -32,11 +32,14 @@ const importing = ref(false)
 const importText = ref('')
 
 const isIP = props.kind === 'ip'
+// The server's own addresses: always allowed, shown on the IP allow list.
+const system = ref<string[]>([])
 async function load() {
   loading.value = true
   try {
     if (isIP) {
-      const r = await get<{ items: FirewallIP[] }>(`/firewall/ips?list=${props.list}&source=manual`)
+      const r = await get<{ items: FirewallIP[]; system_allow?: string[] }>(`/firewall/ips?list=${props.list}&source=manual`)
+      system.value = r.system_allow ?? []
       rows.value = r.items.map((x) => ({ id: x.id, value: x.ip, remark: x.remark, enabled: true, created_at: x.created_at, expires_at: x.expires_at, raw: x }))
     } else {
       const r = await get<{ items: Pattern[] }>(`/firewall/patterns?kind=${props.kind}&list=${props.list}`)
@@ -186,6 +189,11 @@ const columns = computed<DataTableColumns<Row>>(() => [
     <n-input v-model:value="q" size="small" clearable :placeholder="t('logs.filter_kw')" style="width: 180px" />
   </n-space>
   <p class="hint">{{ t(`fwl.hint.${kind}_${list}`) }}</p>
+  <p v-if="kind === 'ip'" class="hint prec">{{ t('fwl.precedence') }}</p>
+  <div v-if="kind === 'ip' && list === 'allow' && system.length" class="system">
+    <span class="hint" style="margin: 0">{{ t('fwl.system_allow') }}</span>
+    <n-tag v-for="a in system" :key="a" size="small" :bordered="false" type="success">{{ a }}</n-tag>
+  </div>
   <n-data-table size="small" :columns="columns" :data="shown" :loading="loading" :row-key="(r: Row) => r.id" :pagination="{ pageSize: 20 }" :scroll-x="880" />
 
   <n-modal :show="!!editing" @update:show="(v: boolean) => !v && (editing = null)">
@@ -222,6 +230,13 @@ const columns = computed<DataTableColumns<Row>>(() => [
 </template>
 
 <style scoped>
+.system {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin: 0 0 10px;
+}
 .hint {
   font-size: 12px;
   opacity: 0.65;

@@ -90,6 +90,9 @@ type IP struct {
 	Remark    string `json:"remark"`
 	ExpiresAt int64  `json:"expires_at"`
 	CreatedAt int64  `json:"created_at"`
+	// Overridden: an automatic block the allow list or the server's own
+	// addresses override (kept, never applied).
+	Overridden bool `json:"overridden,omitempty"`
 }
 
 type Service struct {
@@ -104,7 +107,9 @@ type Service struct {
 	// entry or the enabled switch changes: the edge proxy blocks by the
 	// visitor's real address too (behind a CDN the TCP source is the CDN).
 	OnListsChanged func()
-	nft            string // nft binary ("" = not installed)
+	// Self overrides the server's own addresses (tests); nil reads the interfaces.
+	Self func() []netip.Prefix
+	nft  string // nft binary ("" = not installed)
 
 	mu      sync.Mutex
 	revert  *time.Timer
@@ -458,12 +463,20 @@ func (sv *Service) AddIP(ctx context.Context, ip, list string, ttl time.Duration
 	if list != "block" && list != "allow" {
 		return IP{}, ErrBadIP
 	}
+	if source == "manual" {
+		if err := sv.checkManual(ctx, pfx, norm, list); err != nil {
+			return IP{}, err
+		}
+	} else if list == "block" && sv.Allowed(ctx, norm) {
+		return IP{}, ErrAllowed // the allow list and the server's own addresses win
+	}
 	x := IP{IP: norm, List: list, Source: source, Remark: remark, CreatedAt: time.Now().Unix()}
 	if ttl > 0 {
 		x.ExpiresAt = time.Now().Add(ttl).Unix()
 	}
 	res, err := sv.st.DB.ExecContext(ctx, `INSERT INTO fw_ips(ip, list, source, remark, expires_at, created_at) VALUES(?,?,?,?,?,?)
-		ON CONFLICT(ip, list) DO UPDATE SET source=excluded.source, remark=excluded.remark, expires_at=excluded.expires_at`,
+		ON CONFLICT(ip, list) DO UPDATE SET source=excluded.source, remark=excluded.remark, expires_at=excluded.expires_at
+		WHERE excluded.source = 'manual' OR fw_ips.source != 'manual'`, // an automatic block never replaces a manual one
 		x.IP, x.List, x.Source, x.Remark, x.ExpiresAt, x.CreatedAt)
 	if err != nil {
 		return x, err
@@ -471,11 +484,15 @@ func (sv *Service) AddIP(ctx context.Context, ip, list string, ttl time.Duration
 	x.ID, _ = res.LastInsertId()
 	c, _ := sv.Config(ctx)
 	if c.Enabled && sv.Available() {
-		if list == "block" && ttl > 0 && pfx.IsSingleIP() {
+		if list == "block" && ttl > 0 && pfx.IsSingleIP() && !(source == "manual" && sv.insideAllow(ctx, pfx)) {
 			// Fast path for bans (CrowdSec, temporary blocks): no reload.
-			set := "ban4"
+			set := "ban"
+			if source == "manual" {
+				set = "mban"
+			}
+			set += "4"
 			if pfx.Addr().Is6() {
-				set = "ban6"
+				set = strings.TrimSuffix(set, "4") + "6"
 			}
 			if err := sv.run(ctx, fmt.Sprintf("add element inet %s %s { %s timeout %ds }\n", Table, set, norm, int(ttl.Seconds())+1)); err != nil {
 				sv.logf("firewall ban", "err", err)
@@ -578,39 +595,54 @@ func (sv *Service) listsChanged() {
 	sv.listT = time.AfterFunc(2*time.Second, sv.OnListsChanged)
 }
 
-// EdgeLists are the addresses the edge proxy refuses (block, bans) and
-// never refuses (allow), both empty while the firewall is off; and the
-// trusted ranges (Cloudflare, crawlers), which website protection uses
-// whether or not the firewall is on.
-func (sv *Service) EdgeLists(ctx context.Context) (block, allow, trust []string, err error) {
+// EdgeIPs are the lists the edge proxy matches visitors' real addresses
+// against (behind a CDN the TCP source is the CDN), in the order of the
+// precedence above: Over (manual blocks narrower than an allow) before
+// Allow (manual allows and the server's own addresses), then Manual blocks,
+// then Block (automatic). All but Trust are empty while the firewall is off;
+// website protection uses the trusted ranges whether or not it is on.
+type EdgeIPs struct {
+	Over, Allow, Manual, Block, Trust []string
+}
+
+func (sv *Service) EdgeLists(ctx context.Context) (EdgeIPs, error) {
+	e := EdgeIPs{Over: []string{}, Allow: []string{}, Manual: []string{}, Block: []string{}, Trust: []string{}}
 	c, err := sv.Config(ctx)
 	if err != nil {
-		return nil, nil, nil, err
+		return e, err
 	}
 	ips, err := sv.IPs(ctx, "")
 	if err != nil {
-		return nil, nil, nil, err
+		return e, err
 	}
-	block, allow, trust = []string{}, []string{}, []string{}
+	norm := func(xs []IP) []string {
+		out := []string{}
+		for _, x := range xs {
+			if _, n, err := NormIP(x.IP); err == nil {
+				out = append(out, n)
+			}
+		}
+		sort.Strings(out)
+		return out
+	}
+	var trust []IP
 	for _, x := range ips {
-		_, norm, err := NormIP(x.IP)
-		if err != nil {
-			continue
-		}
-		switch {
-		case x.List == "trust":
-			trust = append(trust, norm)
-		case !c.Enabled:
-		case x.List == "block":
-			block = append(block, norm)
-		default:
-			allow = append(allow, norm)
+		if x.List == "trust" {
+			trust = append(trust, x)
 		}
 	}
-	sort.Strings(block)
-	sort.Strings(allow)
-	sort.Strings(trust)
-	return block, allow, trust, nil
+	e.Trust = norm(trust)
+	if !c.Enabled {
+		return e, nil
+	}
+	cls := sv.classify(ips)
+	e.Over, e.Manual, e.Block = norm(cls.over), norm(cls.mblock), norm(cls.block)
+	e.Allow = norm(cls.allow)
+	for _, p := range cls.self {
+		e.Allow = append(e.Allow, p.String())
+	}
+	sort.Strings(e.Allow)
+	return e, nil
 }
 
 // ---- ruleset ----
@@ -698,44 +730,80 @@ func (sv *Service) Ruleset(ctx context.Context, c Config) (string, error) {
 	}
 	now := time.Now().Unix()
 	sets := map[string][]string{}
-	for _, x := range ips {
-		p, norm, err := NormIP(x.IP)
-		if err != nil {
-			continue
-		}
-		fam := "4"
+	fam := func(p netip.Prefix) string {
 		if p.Addr().Is6() {
-			fam = "6"
+			return "6"
 		}
-		name := x.List + fam
-		if x.List == "block" && x.ExpiresAt > 0 && p.IsSingleIP() {
-			sets["ban"+fam] = append(sets["ban"+fam], fmt.Sprintf("%s timeout %ds", norm, x.ExpiresAt-now+1))
-			continue
-		}
-		sets[name] = append(sets[name], norm)
+		return "4"
 	}
+	add := func(base string, xs []IP, timed bool) {
+		for _, x := range xs {
+			p, norm, err := NormIP(x.IP)
+			if err != nil {
+				continue
+			}
+			if timed && x.ExpiresAt > 0 && p.IsSingleIP() {
+				sets[strings.TrimSuffix(base, "block")+"ban"+fam(p)] = append(sets[strings.TrimSuffix(base, "block")+"ban"+fam(p)], fmt.Sprintf("%s timeout %ds", norm, x.ExpiresAt-now+1))
+				continue
+			}
+			sets[base+fam(p)] = append(sets[base+fam(p)], norm)
+		}
+	}
+	cls := sv.classify(ips)
+	add("allow", cls.allow, false)
+	for _, p := range cls.self {
+		sets["allow"+fam(p)] = append(sets["allow"+fam(p)], p.String())
+	}
+	add("over", cls.over, false)
+	add("mblock", cls.mblock, true) // timed single addresses: mban
+	add("block", cls.block, true)   // timed single addresses: ban
+	var trust []IP
+	for _, x := range ips {
+		if x.List == "trust" {
+			trust = append(trust, x)
+		}
+	}
+	add("trust", trust, false)
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Generated by lmcwhm from its database — edit in the panel.\ntable inet %s {\n", Table)
 	for _, s := range []struct{ name, typ, flags string }{
 		{"allow4", "ipv4_addr", "interval; auto-merge;"}, {"allow6", "ipv6_addr", "interval; auto-merge;"},
+		{"over4", "ipv4_addr", "interval; auto-merge;"}, {"over6", "ipv6_addr", "interval; auto-merge;"},
+		{"mblock4", "ipv4_addr", "interval; auto-merge;"}, {"mblock6", "ipv6_addr", "interval; auto-merge;"},
+		{"mban4", "ipv4_addr", "timeout;"}, {"mban6", "ipv6_addr", "timeout;"},
 		{"block4", "ipv4_addr", "interval; auto-merge;"}, {"block6", "ipv6_addr", "interval; auto-merge;"},
 		{"ban4", "ipv4_addr", "timeout;"}, {"ban6", "ipv6_addr", "timeout;"},
 		{"trust4", "ipv4_addr", "interval; auto-merge;"}, {"trust6", "ipv6_addr", "interval; auto-merge;"},
 	} {
 		fmt.Fprintf(&b, "\tset %s { type %s; flags %s%s }\n", s.name, s.typ, s.flags, elems(sets[s.name]))
 	}
-	// Trusted ranges (Cloudflare, crawlers) are never blocked or banned, but
-	// get no other exemption: port rules and the default policy still apply.
+	// Manual blocks narrower than a manual allow come before the allow list;
+	// the other manual blocks right after it, with no trusted-range exemption.
+	var overDrops, drops strings.Builder
+	for _, f := range []string{"ip", "ip6"} {
+		n := "4"
+		if f == "ip6" {
+			n = "6"
+		}
+		fmt.Fprintf(&overDrops, "\t\t%s saddr @over%s %s\n\t\t%s saddr @over%s counter drop\n", f, n, logDrop("block"), f, n)
+	}
+	for _, x := range []struct{ fam, set string }{{"ip", "mblock4"}, {"ip6", "mblock6"}, {"ip", "mban4"}, {"ip6", "mban6"}} {
+		match := fmt.Sprintf("%s saddr @%s", x.fam, x.set)
+		fmt.Fprintf(&drops, "\t\t%s %s\n\t\t%s counter drop\n", match, logDrop(strings.TrimPrefix(strings.TrimRight(x.set, "46"), "m")), match)
+	}
+	// Trusted ranges (Cloudflare, crawlers) are never banned automatically,
+	// but get no other exemption: port rules and the default policy still apply.
 	// Every drop is logged first (rate limited: a limit that fails only skips
 	// the log, never the drop), for the firewall log: TCP, UDP and ICMP alike.
-	var drops strings.Builder
 	for _, x := range []struct{ fam, set string }{{"ip", "block4"}, {"ip6", "block6"}, {"ip", "ban4"}, {"ip6", "ban6"}} {
 		trust := "@trust" + x.set[len(x.set)-1:]
 		match := fmt.Sprintf("%s saddr @%s %s saddr != %s", x.fam, x.set, x.fam, trust)
 		fmt.Fprintf(&drops, "\t\t%s %s\n\t\t%s counter drop\n", match, logDrop(strings.TrimRight(x.set, "46")), match)
 	}
 	fmt.Fprintf(&b, "\tchain input {\n\t\ttype filter hook input priority -10; policy %s;\n", c.Policy)
-	b.WriteString("\t\tiif \"lo\" accept\n\t\tip saddr @allow4 accept\n\t\tip6 saddr @allow6 accept\n")
+	b.WriteString("\t\tiif \"lo\" accept\n")
+	b.WriteString(overDrops.String())
+	b.WriteString("\t\tip saddr @allow4 accept\n\t\tip6 saddr @allow6 accept\n")
 	b.WriteString(drops.String())
 	// Port forwards (their own table) were checked there: let them through.
 	b.WriteString("\t\tct status dnat accept\n")
@@ -776,7 +844,9 @@ func (sv *Service) Ruleset(ctx context.Context, c Config) (string, error) {
 	}
 	b.WriteString("\t}\n")
 	// Docker-published ports are forwarded, not delivered to input.
-	b.WriteString("\tchain forward {\n\t\ttype filter hook forward priority -10; policy accept;\n\t\tip saddr @allow4 accept\n\t\tip6 saddr @allow6 accept\n")
+	b.WriteString("\tchain forward {\n\t\ttype filter hook forward priority -10; policy accept;\n")
+	b.WriteString(overDrops.String())
+	b.WriteString("\t\tip saddr @allow4 accept\n\t\tip6 saddr @allow6 accept\n")
 	b.WriteString(drops.String())
 	b.WriteString("\t\tct status dnat accept\n")
 	b.WriteString("\t}\n}\n")
@@ -958,9 +1028,20 @@ func (sv *Service) Boot(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-t.C:
-				res, err := sv.st.DB.ExecContext(ctx, `DELETE FROM fw_ips WHERE expires_at > 0 AND expires_at <= ?`, time.Now().Unix())
+				// Single addresses time out in the kernel on their own; a range
+				// (or a block that overrides an allow) needs a new ruleset.
+				var ranges int
+				now := time.Now().Unix()
+				sv.st.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM fw_ips WHERE expires_at > 0 AND expires_at <= ? AND (ip LIKE '%/%' OR source = 'manual')`, now).Scan(&ranges)
+				res, err := sv.st.DB.ExecContext(ctx, `DELETE FROM fw_ips WHERE expires_at > 0 AND expires_at <= ?`, now)
 				if n, _ := res.RowsAffected(); err == nil && n > 0 {
-					sv.listsChanged()
+					if ranges > 0 {
+						if err := sv.applyBans(ctx); err != nil {
+							sv.logf("firewall expiry", "err", err)
+						}
+					} else {
+						sv.listsChanged()
+					}
 				}
 			}
 		}
@@ -990,6 +1071,15 @@ func (sv *Service) SyncBans(ctx context.Context, source string, add []Ban, remov
 	if len(add) == 0 && len(remove) == 0 {
 		return nil
 	}
+	// Read before the transaction: the store has a single connection.
+	allowP := sv.self()
+	if ips, err := sv.IPs(ctx, "allow"); err == nil {
+		for _, x := range ips {
+			if p, _, err := NormIP(x.IP); err == nil {
+				allowP = append(allowP, p)
+			}
+		}
+	}
 	tx, err := sv.st.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -1002,9 +1092,9 @@ func (sv *Service) SyncBans(ctx context.Context, source string, add []Ban, remov
 		}
 	}
 	for _, b := range add {
-		_, norm, err := NormIP(b.IP)
-		if err != nil || b.TTL <= 0 {
-			continue
+		p, norm, err := NormIP(b.IP)
+		if err != nil || b.TTL <= 0 || coveredBy(p, allowP) {
+			continue // allowed addresses are never banned
 		}
 		// Never shorten or replace a manual block with a ban.
 		if _, err := tx.ExecContext(ctx, `INSERT INTO fw_ips(ip, list, source, remark, expires_at, created_at) VALUES(?, 'block', ?, ?, ?, ?)

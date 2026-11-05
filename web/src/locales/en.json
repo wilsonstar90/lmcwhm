@@ -364,7 +364,11 @@
       "duplicate_pattern": "That entry is already on the list",
       "invalid_forward": "Invalid port forward: check the protocol, ports, target (IPv4) and source",
       "forward_port_taken": "Port {port} is already in use",
-      "duplicate_ip": "This IP is already on the list"
+      "duplicate_ip": "This IP is already on the list",
+      "in_allow": "This address is on the manual allow list; remove it there first",
+      "in_block": "This address is on the manual block list; remove it there first",
+      "self_server": "This is the server's own address: blocking it cuts websites and containers off from it",
+      "allowed": "This address is allowed (or the server's own) and is not banned automatically"
     },
     "waf": {
       "invalid_settings": "Invalid WAF settings",
@@ -503,6 +507,10 @@
     },
     "system": {
       "unsupported": "This server does not support that operation"
+    },
+    "autoban": {
+      "invalid": "Invalid auto-ban settings: window 1–1440 minutes, at least 2 times, ban 1–525600 minutes",
+      "unavailable": "Auto-ban is not available"
     }
   },
   "task": {
@@ -1217,6 +1225,10 @@
       "rules": {
         "title": "Dedicated rules",
         "desc": "Rules against known CMS weaknesses (WordPress for now); switch, edit or add each one."
+      },
+      "events": {
+        "title": "Block log",
+        "desc": "Every refused, rate-limited or flagged request: the edge (lists, website protection, dedicated rules, CC) and OWASP (ModSecurity). Kept for 30 days; pick the days to show."
       }
     }
   },
@@ -1272,7 +1284,8 @@
       "manual": "Manual",
       "crowdsec": "CrowdSec",
       "waf": "WAF",
-      "mcp": "MCP / AI"
+      "mcp": "MCP / AI",
+      "autoban": "Auto-ban"
     },
     "expires": "Expires",
     "permanent": "Permanent",
@@ -1421,7 +1434,9 @@
     "origin": "Source",
     "message": "Message",
     "network": "Network",
-    "no_decision": "No ban"
+    "no_decision": "No ban",
+    "filter": "Search IP / scenario",
+    "alerts_hint": "What CrowdSec detected in the logs; only alerts with a decision ban."
   },
   "bk": {
     "tab_list": "Backups",
@@ -2595,7 +2610,10 @@
     "auto_hint": "Only automatic entries are shown here. \"Keep as manual\" turns a block entry into a permanent manual block.",
     "builtin_list": "Built-in list (no download)",
     "edit": "Edit entry",
-    "keep_expiry": "Keep the current expiry"
+    "keep_expiry": "Keep the current expiry",
+    "precedence": "Precedence: manual block and allow entries come first (where they overlap, the narrower one wins), then the server's own addresses, then trusted ranges and automatic blocks (CrowdSec, lists, auto-ban, MCP). An allowed address is never refused by the WAF, website protection, CC or any automatic block.",
+    "system_allow": "System allow list (the server's own addresses, cannot be removed):",
+    "overridden": "Allowed"
   },
   "prot": {
     "cols": {
@@ -2876,7 +2894,13 @@
     "rule_block": "Make it block",
     "rule_detect": "Make it detect only",
     "block_ip": "Block {ip}",
-    "allow_url": "Allow URL {path}"
+    "allow_url": "Allow URL {path}",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "last_days": "Last {n} days",
+    "pick_day": "Pick a day",
+    "top_ips": "Top addresses:",
+    "total": "{n} in all"
   },
   "ep": {
     "library": "Pages",
@@ -3557,5 +3581,17 @@
       "tls": "HTTPS (443) only; port 80 does not carry gRPC.",
       "passthrough": "Alternative: a passthrough target (TLS ends at the backend) also carries gRPC, without the WAF or HTTP-level rules."
     }
+  },
+  "ab": {
+    "title": "Auto-ban",
+    "summary": "Refused {n} times within {w} min → banned for {m} min",
+    "off": "Off: no address is banned automatically, however often it is refused",
+    "within": "Within",
+    "min": "min",
+    "refused": "refused",
+    "times": "times",
+    "ban_for": "→ ban for",
+    "counts": "Count:",
+    "note": "Allowed addresses, the server's own addresses and trusted ranges (Cloudflare, search engines) are never banned; requests that were only detected do not count. Bans show under Auto-updated lists with the source \"Auto-ban\"."
   }
 }

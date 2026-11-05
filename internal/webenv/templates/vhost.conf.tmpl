@@ -8,6 +8,19 @@ limit_conn_zone $binary_remote_addr zone={{.ConnZone}}:10m;
 {{- if .Adv.ServerConn}}
 limit_conn_zone $server_name zone={{.SrvZone}}:1m;
 {{- end}}
+{{- if or .Adv.DenyIPs .Adv.AllowIPs}}
+# This site's IP access list; addresses on the panel's allow list (the edge
+# sends X-Lmcwhm-Allow) are never refused by it.
+geo ${{.IPZone}} {
+    default {{if .Adv.AllowIPs}}0{{else}}1{{end}};
+{{- range .Adv.DenyIPs}}
+    {{.}} 0;
+{{- end}}
+{{- range .Adv.AllowIPs}}
+    {{.}} 1;
+{{- end}}
+}
+{{- end}}
 server {
 {{- if .GRPC}}
     listen 127.0.0.1:{{.GRPCPort}};
@@ -63,17 +76,19 @@ server {
 {{- if .Adv.MaxBodyMB}}
     client_max_body_size {{.Adv.MaxBodyMB}}m;
 {{- end}}
-{{- range .Adv.DenyIPs}}
-    deny {{.}};
-{{- end}}
-{{- if .Adv.AllowIPs}}
-{{- range .Adv.AllowIPs}}
-    allow {{.}};
-{{- end}}
-    deny all;
+{{- if or .Adv.DenyIPs .Adv.AllowIPs}}
+    set $lmcwhm_ipok "${{.IPZone}}$http_x_lmcwhm_allow";
+    if ($lmcwhm_ipok = "0") {
+        return 403;
+    }
 {{- end}}
 {{- if .DenyUA}}
+    set $lmcwhm_uabad "";
     if ($http_user_agent ~* "{{.DenyUA}}") {
+        set $lmcwhm_uabad 1;
+    }
+    set $lmcwhm_uabad "${lmcwhm_uabad}${http_x_lmcwhm_allow}";
+    if ($lmcwhm_uabad = "1") {
         return 403;
     }
 {{- end}}

@@ -3,7 +3,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/wilsonstar90/lmcwhm/internal/secevents"
 	"io"
 	"log/slog"
 	"os"
@@ -192,17 +194,21 @@ func serveCmd() *cobra.Command {
 			env.ErrorPages = func() webenv.ErrorPages { return errp.Edge(ctx) }
 			env.Protection = func() webenv.Protection { return prot.Edge(ctx) }
 			// The edge refuses blocked visitors by their real address (behind a CDN).
+			var crowdsec *security.CrowdSec
 			fw.OnListsChanged = func() {
-				block, allow, trust, err := fw.EdgeLists(ctx)
+				l, err := fw.EdgeLists(ctx)
 				if err == nil {
-					err = env.SetLists(ctx, block, allow, trust)
+					err = env.SetLists(ctx, webenv.EdgeIPs{Over: l.Over, Allow: l.Allow, Manual: l.Manual, Block: l.Block, Trust: l.Trust})
+				}
+				if crowdsec != nil {
+					crowdsec.SetWhitelist(ctx, fw.AllowPrefixes(ctx))
 				}
 				if err != nil {
 					log.Error("edge ip lists", "err", err)
 				}
 			}
 			fw.Boot(ctx)
-			crowdsec := security.NewCrowdSec(a.st, box, env, tm, fw, a.paths.Home)
+			crowdsec = security.NewCrowdSec(a.st, box, env, tm, fw, a.paths.Home)
 			apps := appstore.New(a.st, box, tm, a.paths.Home)
 			apps.InUse = sites.UsesRuntime
 			sites.Runtimes = apps
@@ -263,6 +269,38 @@ func serveCmd() *cobra.Command {
 				return out
 			}
 			go stats.Run(ctx, log.Error)
+			events := secevents.New(a.st, env.WWWLogs, env.WAFLog())
+			events.Sites = stats.Sites
+			events.SiteOf = func(ctx context.Context) func(string) string {
+				byHost := map[string]string{}
+				if list, err := sites.List(ctx); err == nil {
+					for _, x := range list {
+						for _, h := range x.Hosts() {
+							byHost[h] = x.Domain
+						}
+					}
+				}
+				return func(h string) string {
+					if d, ok := byHost[h]; ok {
+						return d
+					}
+					for pat, d := range byHost { // wildcard aliases
+						if strings.HasPrefix(pat, "*.") && strings.HasSuffix(h, pat[1:]) {
+							return d
+						}
+					}
+					return ""
+				}
+			}
+			events.Exempt = func(ctx context.Context, ip string) bool { return fw.Allowed(ctx, ip) || fw.Trusted(ctx, ip) }
+			events.Ban = func(ctx context.Context, ip string, ttl time.Duration, remark string) error {
+				_, err := fw.AddIP(ctx, ip, "block", ttl, "autoban", remark)
+				if errors.Is(err, firewall.ErrAllowed) {
+					return nil
+				}
+				return err
+			}
+			go events.Run(ctx, log.Error)
 			ftpSvc := ftp.New(a.st, box, a.paths.Home, env.WWWRoot)
 			ftpSvc.PublicIP = func(ctx context.Context) string {
 				if c, err := webCfg.Get(ctx); err == nil && c.ServerIPv4 != "" {
@@ -316,7 +354,7 @@ func serveCmd() *cobra.Command {
 				Files: filesFS(a.paths.Home), Term: terminal.New(),
 				Store: a.st, Monitor: mon, Cron: jobs, GeoIP: geo, Firewall: fw, Protect: prot, ErrPages: errp, WAF: waf, CrowdSec: crowdsec, Backup: bk,
 				Tokens: apitoken.New(a.st), AI: ai.New(a.st, box, nil),
-				Alerts: alerts, Probes: probes, Stats: stats, Procs: procs, WP: wordpress.New(sites, dbs, env, tm), FTP: ftpSvc,
+				Alerts: alerts, Probes: probes, Stats: stats, Events: events, Procs: procs, WP: wordpress.New(sites, dbs, env, tm), FTP: ftpSvc,
 				Toolbox: tb, SecScan: secscan.New(a.st), Malware: malware.New(a.st, env.WWWRoot, a.paths.Home), Tamper: tp,
 				Shares: fileshare.New(a.st), Mail: mailSvc,
 			})

@@ -22,7 +22,9 @@ func TestAdvancedVhost(t *testing.T) {
 	for _, want := range []string{
 		"limit_req_zone $binary_remote_addr zone=req_a_example_com:10m rate=10r/s;",
 		"limit_req zone=req_a_example_com burst=20 nodelay;", "limit_conn conn_a_example_com 30;",
-		"deny 198.51.100.0/24;", "allow 10.0.0.0/8;", "allow 203.0.113.9;", "deny all;",
+		"geo $ip_a_example_com {\n    default 0;\n    198.51.100.0/24 0;\n    10.0.0.0/8 1;\n    203.0.113.9 1;\n}",
+		`set $lmcwhm_ipok "$ip_a_example_com$http_x_lmcwhm_allow";`, "if ($lmcwhm_ipok = \"0\") {\n        return 403;",
+		`set $lmcwhm_uabad "${lmcwhm_uabad}${http_x_lmcwhm_allow}";`,
 		`~* "MJ12bot|python-requests/2\.0"`, "autoindex on;", "location = /xmlrpc.php", "client_max_body_size 512m;",
 		"location = /old {\n        return 301 https://new.example.com/;", "valid_referers none blocked server_names *.example.com ;",
 	} {

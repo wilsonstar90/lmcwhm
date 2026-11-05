@@ -154,8 +154,9 @@ func (s *Server) handleSecurityOverview(w http.ResponseWriter, r *http.Request) 
 
 // ---- traffic overview ----
 
-// handleSecurityTraffic is the day's traffic across every website (?day=1
-// for yesterday); logs are read in first, at most every 30 seconds.
+// handleSecurityTraffic is one day's traffic across every website (?date=
+// YYYY-MM-DD, or ?day=N days back; the last 30 days are kept); logs are
+// read in first, at most every 30 seconds.
 func (s *Server) handleSecurityTraffic(w http.ResponseWriter, r *http.Request) {
 	if s.Stats == nil {
 		writeJSON(w, http.StatusOK, sitestats.Traffic{})
@@ -166,7 +167,19 @@ func (s *Server) handleSecurityTraffic(w http.ResponseWriter, r *http.Request) {
 	if s.GeoIP != nil {
 		country = func(ip string) string { return s.GeoIP.Lookup(ip).Country }
 	}
-	writeJSON(w, http.StatusOK, s.Stats.Traffic(r.Context(), intParam(r, "day", 0, 1), country))
+	back := intParam(r, "day", 0, 29)
+	if date := r.URL.Query().Get("date"); date != "" { // YYYY-MM-DD in the panel's time zone
+		from, _ := s.dayRange(r)
+		loc := s.Stats.Loc
+		now := time.Now().In(loc)
+		today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+		d := time.Unix(from, 0).In(loc)
+		back = 0
+		for t := d; t.Before(today) && back < 29; t = t.AddDate(0, 0, 1) {
+			back++
+		}
+	}
+	writeJSON(w, http.StatusOK, s.Stats.Traffic(r.Context(), back, country))
 }
 
 // handleSecurityLive is the last minute of requests and bandwidth.

@@ -259,7 +259,8 @@ func (s *Server) handleFWIPs(w http.ResponseWriter, r *http.Request) {
 			out = append(out, x)
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": out})
+	// The server's own addresses: always allowed (shown, not stored).
+	writeJSON(w, http.StatusOK, map[string]any{"items": out, "system_allow": s.Firewall.SystemAllow()})
 }
 
 // feedsView is the lists with the scheduled task that updates each kind.

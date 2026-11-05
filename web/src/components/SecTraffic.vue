@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, h, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { NButton, NCard, NDataTable, NGi, NGrid, NPopconfirm, NRadioButton, NRadioGroup, NSpace, useMessage, type DataTableColumns } from 'naive-ui'
+import { NButton, NCard, NDataTable, NDatePicker, NGi, NGrid, NPopconfirm, NRadioButton, NRadioGroup, NSpace, useMessage, type DataTableColumns } from 'naive-ui'
 import { get, post, ApiError } from '../api/client'
 import { bytes } from '../format'
 import LineChart from './LineChart.vue'
@@ -26,7 +26,17 @@ const emit = defineEmits<{ changed: [] }>()
 const { t, locale } = useI18n()
 const msg = useMessage()
 const fail = (e: unknown) => msg.error(e instanceof ApiError ? e.text : String(e))
-const day = ref(0)
+// Days back from today: today, yesterday, or a day picked within the 30 kept.
+const mode = ref<0 | 1 | 'pick'>(0)
+const picked = ref<number | null>(null)
+const midnight = (ts: number) => { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime() }
+const day = computed(() => {
+  if (mode.value !== 'pick') return mode.value
+  if (!picked.value) return 0
+  return Math.max(0, Math.min(29, Math.round((midnight(Date.now()) - midnight(picked.value)) / 86400000)))
+})
+const dayDisabled = (ts: number) => ts > Date.now() || midnight(ts) < midnight(Date.now()) - 29 * 86400000
+const dayLabel = computed(() => (day.value === 0 ? t('tr.today') : day.value === 1 ? t('tr.yesterday') : new Date(midnight(Date.now()) - day.value * 86400000).toLocaleDateString(locale.value)))
 const tr = ref<Traffic | null>(null)
 const live = ref<Live | null>(null)
 const mapMode = ref<'visit' | 'block'>('block')
@@ -116,7 +126,7 @@ const ipRows = computed<DetailRow[]>(() => {
   return [
     { label: t('common.ip'), value: () => h(IpGeo, { ip: x.key }) },
     { label: t('tr.blocked_n'), value: n(x.hits) },
-    { label: t('tr.day'), value: day.value ? t('tr.yesterday') : t('tr.today') },
+    { label: t('tr.day'), value: dayLabel.value },
   ]
 })
 async function blockIP(addr: string, minutes: number) {
@@ -145,10 +155,14 @@ const countryDetail = computed<DetailRow[]>(() => {
 
 <template>
   <n-space justify="space-between" align="center" style="margin-bottom: 12px">
-    <n-radio-group v-model:value="day" size="small">
-      <n-radio-button :value="0">{{ t('tr.today') }}</n-radio-button>
-      <n-radio-button :value="1">{{ t('tr.yesterday') }}</n-radio-button>
-    </n-radio-group>
+    <n-space align="center" :size="8">
+      <n-radio-group v-model:value="mode" size="small">
+        <n-radio-button :value="0">{{ t('tr.today') }}</n-radio-button>
+        <n-radio-button :value="1">{{ t('tr.yesterday') }}</n-radio-button>
+        <n-radio-button value="pick">{{ t('evt.pick_day') }}</n-radio-button>
+      </n-radio-group>
+      <n-date-picker v-if="mode === 'pick'" v-model:value="picked" type="date" size="small" :is-date-disabled="dayDisabled" style="width: 150px" />
+    </n-space>
     <n-button size="small" @click="load">{{ t('common.refresh') }}</n-button>
   </n-space>
 

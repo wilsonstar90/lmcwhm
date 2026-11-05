@@ -2,6 +2,7 @@ package firewall
 
 import (
 	"context"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,6 +32,9 @@ func newSvc(t *testing.T) (*Service, string) {
 	sv := New(st, box, nil)
 	sv.nft = fake
 	sv.PanelPort = func() int { return 8888 }
+	sv.Self = func() []netip.Prefix {
+		return []netip.Prefix{netip.MustParsePrefix("127.0.0.0/8"), netip.MustParsePrefix("203.0.113.250/32")}
+	}
 	return sv, log
 }
 
@@ -76,9 +80,9 @@ func TestRuleset(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"table inet lmcwhm {", "policy drop;", "set block4 { type ipv4_addr; flags interval; auto-merge; elements = { 198.51.100.7 }; }",
-		"set block6 { type ipv6_addr; flags interval; auto-merge; elements = { 2001:db8::/48 }; }", "192.0.2.9 timeout 36",
-		"elements = { 192.0.2.10 }", "icmp type echo-request drop", "meta l4proto { icmp, ipv6-icmp } accept",
+		"table inet lmcwhm {", "policy drop;", "set mblock4 { type ipv4_addr; flags interval; auto-merge; elements = { 198.51.100.7 }; }",
+		"set mblock6 { type ipv6_addr; flags interval; auto-merge; elements = { 2001:db8::/48 }; }", "192.0.2.9 timeout 36",
+		"set allow4 { type ipv4_addr; flags interval; auto-merge; elements = { 192.0.2.10, 127.0.0.0/8, 203.0.113.250/32 }; }", "icmp type echo-request drop", "meta l4proto { icmp, ipv6-icmp } accept",
 		"tcp dport { 8888 } accept comment \"system panel\"", "tcp dport { 80, 443 } accept comment \"system web\"", "tcp dport { 3306, 6379 } drop", "udp dport { 3306, 6379 } drop",
 		"ip saddr 203.0.113.0/24 tcp dport { 9000-9100 } accept",
 		"ip saddr { 198.51.100.1, 198.51.100.2 } tcp dport { 9200 } accept", "ip6 saddr 2001:db8::/32 tcp dport { 9200 } accept", "iifname \"docker0\" accept", "chain forward",

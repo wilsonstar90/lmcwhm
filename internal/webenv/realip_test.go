@@ -29,7 +29,10 @@ func TestRealIPConfig(t *testing.T) {
 		"http-request set-var(txn.cip) req.hdr_ip(X-Real-IP,-1) if { var(txn.via_cdn) -m bool } !{ var(txn.cip) -m found }",
 		"http-request set-var(txn.cip) req.hdr_ip(True-Client-IP,-1) if { var(txn.via_cdn) -m bool } !{ var(txn.cip) -m found }",
 		"http-request set-src var(txn.cip) if { var(txn.cip) -m found }",
-		"http-request set-var(txn.block) str(403:ip) if { src -f " + e.EdgeDir() + "/lists/block.lst } !ip_allow !acme",
+		"http-request set-var(txn.block) str(403:ip) if !blocked { src -f " + e.EdgeDir() + "/lists/block.lst } !ip_allow !acme",
+		"http-request set-var(txn.block) str(403:ip) if ip_over !acme",
+		"http-request set-var(txn.block) str(403:ip) if !blocked { src -f " + e.EdgeDir() + "/lists/mblock.lst } !ip_allow !acme",
+		"http-request set-var(txn.allow) bool(true) if { src -f " + e.EdgeDir() + "/lists/allow.lst } !ip_over",
 	} {
 		if !strings.Contains(cfg, want) {
 			t.Errorf("haproxy.cfg missing %q", want)
@@ -101,13 +104,13 @@ func TestSetLists(t *testing.T) {
 	e := &Env{Home: home}
 	ctx := context.Background()
 	// Not running: only the files.
-	if err := e.SetLists(ctx, []string{"192.0.2.1"}, nil, nil); err != nil {
+	if err := e.SetLists(ctx, EdgeIPs{Block: []string{"192.0.2.1"}}); err != nil {
 		t.Fatal(err)
 	}
 	os.MkdirAll(filepath.Join(home, "edge", "run"), 0o755)
 	got := fakeHAProxy(t, e.adminSock())
 	block := filepath.Join(e.listsDir(), blockList)
-	if err := e.SetLists(ctx, []string{"192.0.2.2", "2001:db8::/48"}, []string{"198.51.100.0/24"}, nil); err != nil {
+	if err := e.SetLists(ctx, EdgeIPs{Block: []string{"192.0.2.2", "2001:db8::/48"}, Allow: []string{"198.51.100.0/24"}}); err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{"add acl " + block + " 192.0.2.2", "add acl " + block + " 2001:db8::/48", "del acl " + block + " 192.0.2.1",
@@ -125,14 +128,14 @@ func TestSetLists(t *testing.T) {
 	for i := range many {
 		many[i] = "10.0." + itoa(i/250) + "." + itoa(i%250)
 	}
-	if err := e.SetLists(ctx, many, []string{"198.51.100.0/24"}, nil); err != nil {
+	if err := e.SetLists(ctx, EdgeIPs{Block: many, Allow: []string{"198.51.100.0/24"}}); err != nil {
 		t.Fatal(err)
 	}
 	if !slices.Contains(*got, "prepare acl "+block) || !slices.Contains(*got, "add acl @7 "+block+" 10.0.2.99") || (*got)[len(*got)-2] != "commit acl @7 "+block {
 		t.Errorf("versioned update: %q", (*got)[max(0, len(*got)-3):])
 	}
 	// HAProxy errors are reported.
-	if err := e.SetLists(ctx, []string{"bogus"}, nil, nil); err == nil {
+	if err := e.SetLists(ctx, EdgeIPs{Block: []string{"bogus"}}); err == nil {
 		t.Error("error answer not reported")
 	}
 }
@@ -157,8 +160,8 @@ func TestPatternLists(t *testing.T) {
 	for _, want := range []string{
 		"acl list_block req.hdr(user-agent) -m sub -i -f " + e.EdgeDir() + "/maps/ua_block_contains.lst",
 		"acl list_pass path -m beg -i -f " + e.EdgeDir() + "/maps/url_allow_prefix.lst",
-		"http-request set-var(txn.block) str(403:list) if !blocked list_block !list_pass !acme",
-		"http-request del-header X-Lmcwhm-Pass", "http-request set-header X-Lmcwhm-Pass 1 if list_pass",
+		"http-request set-var(txn.block) str(403:list) if !blocked list_block !list_pass !ip_allow !acme",
+		"http-request del-header X-Lmcwhm-Pass", "http-request set-header X-Lmcwhm-Pass 1 if list_pass || ip_allow", "http-request set-header X-Lmcwhm-Allow 1 if ip_allow",
 	} {
 		if !strings.Contains(cfg, want) {
 			t.Errorf("haproxy.cfg missing %q", want)

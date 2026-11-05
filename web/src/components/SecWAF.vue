@@ -10,7 +10,6 @@ import { get, put, ApiError } from '../api/client'
 import TaskModal from './TaskModal.vue'
 import SecRules from './SecRules.vue'
 import SecCRS from './SecCRS.vue'
-import SecEvents from './SecEvents.vue'
 import SecErrPages from './SecErrPages.vue'
 
 interface Settings { enabled: boolean; engine: 'On' | 'DetectionOnly'; paranoia: number; anomaly: number; disabled: string[] | null }
@@ -24,17 +23,27 @@ const router = useRouter()
 const msg = useMessage()
 const fail = (e: unknown) => msg.error(e instanceof ApiError ? e.text : String(e))
 
-const tabs = ['settings', 'rules', 'crs', 'events', 'pages'] as const
+const tabs = ['settings', 'rules', 'crs', 'pages'] as const
 type Tab = (typeof tabs)[number]
 const tab = ref<Tab>(tabs.includes(route.query.sub as Tab) ? (route.query.sub as Tab) : 'settings')
-watch(tab, (v) => router.replace({ query: { ...route.query, sub: v } }))
+watch(tab, (v) => {
+  if (route.query.sub !== v) router.replace({ query: { ...route.query, sub: v } })
+})
+// The block log links a CRS rule here: ?sub=crs&crs=<id>.
+watch(
+  () => [route.query.sub, route.query.crs],
+  ([sub, crs]) => {
+    if (tabs.includes(sub as Tab)) tab.value = sub as Tab
+    if (typeof crs === 'string' && crs) focusRule.value = crs
+  },
+)
 
 const s = ref<Settings | null>(null)
 const ps = ref<ProtSettings | null>(null)
 const image = ref('')
 const rules = ref<Rule[]>([])
 const task = ref<{ id: string; title: string } | null>(null)
-const focusRule = ref('')
+const focusRule = ref(typeof route.query.crs === 'string' ? route.query.crs : '')
 
 async function load() {
   try {
@@ -66,10 +75,6 @@ async function save() {
 }
 const activeRules = computed(() => rules.value.filter((r) => r.enabled && r.level <= (s.value?.paranoia ?? 1)).length)
 const statusOptions = [400, 401, 403, 404, 405, 406, 410, 418, 429, 444, 451, 500, 502, 503].map((c) => ({ label: c === 444 ? '444 (close)' : String(c), value: c }))
-function openRule(id: string) {
-  focusRule.value = id
-  tab.value = 'crs'
-}
 </script>
 
 <template>
@@ -114,9 +119,6 @@ function openRule(id: string) {
     </n-tab-pane>
     <n-tab-pane name="crs" :tab="t('waf.tabs.crs')" display-directive="show:lazy">
       <SecCRS :focus="focusRule" @task="(id: string, title: string) => (task = { id, title })" />
-    </n-tab-pane>
-    <n-tab-pane name="events" :tab="t('waf.tabs.events')" display-directive="show:lazy">
-      <SecEvents @crs="openRule" @changed="emit('changed')" @task="(id: string, title: string) => (task = { id, title })" />
     </n-tab-pane>
     <n-tab-pane name="pages" :tab="t('waf.tabs.pages')" display-directive="show:lazy">
       <SecErrPages />
