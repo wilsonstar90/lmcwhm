@@ -11,6 +11,7 @@ import TaskModal from '../components/TaskModal.vue'
 import LogsModal from '../components/LogsModal.vue'
 import PhpVersions from '../components/PhpVersions.vue'
 import AppSettings from '../components/AppSettings.vue'
+import SysBBR, { type BBRStatus } from '../components/SysBBR.vue'
 import UpdateBadge from '../components/UpdateBadge.vue'
 import BuildModeDialog, { type BuildChoice, type SourceInfo } from '../components/BuildModeDialog.vue'
 import { useUpdates } from '../stores/updates'
@@ -38,8 +39,11 @@ interface PhpVer { version: string; state: string; port: number; sites: number; 
 const source = ref<Record<string, SourceInfo>>({})
 const phps = ref<PhpVer[]>([])
 
+// TCP BBR: shown on the Installed tab while it is on.
+const bbr = ref<BBRStatus | null>(null)
 async function load() {
   loading.value = true
+  get<BBRStatus>('/apps/system/bbr').then((b) => (bbr.value = b)).catch(() => {})
   try {
     const [c, i, p] = await Promise.all([
       get<{ items: CatalogApp[]; source: Record<string, SourceInfo> }>('/apps/catalog'),
@@ -286,6 +290,11 @@ const versionOptions = (a: CatalogApp) =>
         </n-space>
       </n-space>
       <n-data-table size="small" :columns="columns" :data="rows" :loading="loading" :row-key="(r: Row) => r.key" :scroll-x="1130" />
+      <p v-if="bbr?.enabled" class="hint">
+        <n-tag size="small" type="success" :bordered="false">TCP BBR</n-tag>
+        {{ t('bbr.installed_line', { cc: bbr.current, qdisc: bbr.qdisc }) }}
+        <n-button text type="primary" size="small" @click="tab = 'system'">{{ t('app.settings') }}</n-button>
+      </p>
       <p class="hint">{{ t('app.updates_hint') }}</p>
     </n-tab-pane>
     <n-tab-pane name="php" tab="PHP" display-directive="show:lazy"><PhpVersions ref="phpRef" @changed="load" /></n-tab-pane>
@@ -305,6 +314,11 @@ const versionOptions = (a: CatalogApp) =>
             </n-space>
           </n-card>
         </n-gi>
+      </n-grid>
+    </n-tab-pane>
+    <n-tab-pane name="system" :tab="t('app.kinds.system')" display-directive="show:lazy">
+      <n-grid cols="1 m:2" responsive="screen" :x-gap="12" :y-gap="12">
+        <n-gi><SysBBR @changed="(b: BBRStatus) => (bbr = b)" /></n-gi>
       </n-grid>
     </n-tab-pane>
   </n-tabs>

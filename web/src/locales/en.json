@@ -455,7 +455,8 @@
       "invalid_port": "Invalid port",
       "invalid_key": "Not a valid SSH public key",
       "ssh_lockout": "Refused: nobody could log in over SSH afterwards",
-      "protected_process": "This process cannot be stopped here"
+      "protected_process": "This process cannot be stopped here",
+      "bbr_unsupported": "This server's kernel does not support BBR (Linux 4.9 or later with the tcp_bbr module is needed)"
     },
     "secscan": {
       "not_found": "Report not found",
@@ -628,7 +629,8 @@
     "kinds": {
       "runtime": "Runtimes",
       "database": "Databases",
-      "tool": "Tools"
+      "tool": "Tools",
+      "system": "System"
     },
     "state": {
       "running": "Running",
@@ -3556,6 +3558,32 @@
       "other": "Varnish cache and custom error pages: not applicable, skipped. Refused calls get the matching error, e.g. 403 = PERMISSION_DENIED, 429 = UNAVAILABLE.",
       "tls": "HTTPS (443) only; port 80 does not carry gRPC.",
       "passthrough": "Alternative: a passthrough target (TLS ends at the backend) also carries gRPC, without the WAF or HTTP-level rules."
+    }
+  },
+  "bbr": {
+    "desc": "Google's TCP congestion control. The server sends at the rate the path can carry instead of slowing down sharply on every lost packet; it helps most for overseas, cross-border and mobile visitors.",
+    "on": "On",
+    "off": "Off",
+    "unsupported": "Not supported",
+    "kernel": "Kernel",
+    "current": "Congestion control",
+    "available": "available:",
+    "qdisc": "Default qdisc",
+    "ifaces": "Uplinks",
+    "enable": "Install (enable BBR)",
+    "disable": "Uninstall (back to cubic)",
+    "disable_confirm": "Go back to the system defaults, cubic + fq_codel? Takes effect at once, no reboot.",
+    "enabled_ok": "BBR is on",
+    "disabled_ok": "Back to cubic",
+    "unsupported_hint": "BBR needs Linux 4.9 or later with the tcp_bbr module. The standard Ubuntu 20.04 / 22.04 / 24.04 kernels have it.",
+    "not_persisted": "BBR is on now but was not set by the panel, so a reboot may undo it. Click Install to keep it at boot.",
+    "installed_line": "on ({cc} + {qdisc})",
+    "effects": {
+      "sender": "It only changes how the server sends TCP; no ports, firewall rules or routes change.",
+      "stack": "HAProxy, nginx, Docker, the nftables firewall, the WAF, CrowdSec, Xray and the rest keep working as before.",
+      "udp": "UDP (HTTP/3, WireGuard, Hysteria) is not affected.",
+      "docker": "Running Docker containers on bridge networks use BBR once restarted; host-network ones (such as HAProxy) use it at once.",
+      "revert": "Uninstall at any time: it reverts at once, no reboot."
     }
   }
 }

@@ -848,6 +848,24 @@ api GET /toolbox/ssh | python3 -c "import sys,json; d=json.load(sys.stdin); asse
 grep -q system_logs <<<"$(api GET /toolbox/junk)" || fail "junk scan"
 pass "toolbox: system, processes, connections, SSH, cleanup scan"
 
+# ---------- App Store → System: TCP BBR (a sysctl; never a reboot) ----------
+CC0="$(cat /proc/sys/net/ipv4/tcp_congestion_control)"
+if api GET /apps/system/bbr | python3 -c "import sys,json; sys.exit(0 if json.load(sys.stdin)['supported'] else 1)"; then
+  api POST /apps/system/bbr '{"enabled":true}' | python3 -c "import sys,json; s=json.load(sys.stdin); assert s['enabled'] and s['persisted'] and s['qdisc']=='fq', s" || fail "bbr enable"
+  [[ "$(cat /proc/sys/net/ipv4/tcp_congestion_control)" == bbr ]] || fail "kernel not on bbr"
+  grep -q 'tcp_congestion_control = bbr' /etc/sysctl.d/91-lmcwhm-bbr.conf || fail "bbr sysctl file"
+  grep -qx tcp_bbr /etc/modules-load.d/lmcwhm-bbr.conf || fail "bbr module at boot"
+  # A container started afterwards (its own network namespace) inherits it.
+  [[ "$(docker run --rm alpine:3 cat /proc/sys/net/ipv4/tcp_congestion_control)" == bbr ]] || fail "new container not on bbr"
+  curl -sk -o /dev/null -w '%{http_code}' "$P/" | grep -qv '^000$' || fail "panel unreachable with bbr"
+  api POST /apps/system/bbr '{"enabled":false}' | python3 -c "import sys,json; s=json.load(sys.stdin); assert not s['enabled'] and not s['persisted'] and s['current']=='cubic', s" || fail "bbr disable"
+  [[ ! -e /etc/sysctl.d/91-lmcwhm-bbr.conf ]] || fail "bbr sysctl file left"
+  sysctl -qw net.ipv4.tcp_congestion_control="$CC0"
+  pass "TCP BBR on (sysctl, boot files, new containers) and back to cubic"
+else
+  echo "SKIP TCP BBR: kernel $(uname -r) has no tcp_bbr"
+fi
+
 # Security scan, webshell scan and quarantine.
 task POST /secscan/run
 api GET /secscan | python3 -c "import sys,json; r=json.load(sys.stdin)['items'][0]; assert 0<=r['score']<=100 and r['hostname'], r" || fail "security scan"

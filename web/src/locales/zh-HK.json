@@ -455,7 +455,8 @@
       "invalid_port": "端口無效",
       "invalid_key": "唔係有效嘅 SSH 公鑰",
       "ssh_lockout": "已拒絕：咁樣之後冇人可以經 SSH 登入",
-      "protected_process": "呢個進程唔可以喺度結束"
+      "protected_process": "呢個進程唔可以喺度結束",
+      "bbr_unsupported": "呢部伺服器嘅內核唔支援 BBR（要 Linux 4.9 或以上，並有 tcp_bbr 模組）"
     },
     "secscan": {
       "not_found": "搵唔到報告",
@@ -628,7 +629,8 @@
     "kinds": {
       "runtime": "運行環境",
       "database": "資料庫",
-      "tool": "工具"
+      "tool": "工具",
+      "system": "系統"
     },
     "state": {
       "running": "運行中",
@@ -3605,6 +3607,32 @@
       "other": "Varnish 緩存、自訂錯誤頁：唔適用，自動略過。攔截時客戶端收到對應錯誤，例如 403 = PERMISSION_DENIED、429 = UNAVAILABLE。",
       "tls": "一定要 HTTPS（443）；port 80 唔支援 gRPC。",
       "passthrough": "另一個選擇：「直通」目標（後端自己處理 TLS）都支援 gRPC，但冇 WAF 同 HTTP 層嘅規則。"
+    }
+  },
+  "bbr": {
+    "desc": "Google 嘅 TCP 擁塞控制演算法。伺服器按線路實際承受到嘅速度發送，唔會一掉包就大幅減速；對海外、跨境同手機網絡嘅訪客最有幫助。",
+    "on": "已啟用",
+    "off": "未啟用",
+    "unsupported": "唔支援",
+    "kernel": "內核",
+    "current": "擁塞控制",
+    "available": "可用：",
+    "qdisc": "預設佇列",
+    "ifaces": "對外網卡",
+    "enable": "安裝（啟用 BBR）",
+    "disable": "卸載（還原 cubic）",
+    "disable_confirm": "還原做系統預設嘅 cubic + fq_codel？即時生效，唔使重啟。",
+    "enabled_ok": "BBR 已啟用",
+    "disabled_ok": "已還原 cubic",
+    "unsupported_hint": "內核要 Linux 4.9 或以上並有 tcp_bbr 模組。Ubuntu 20.04 / 22.04 / 24.04 嘅標準內核都支援。",
+    "not_persisted": "BBR 而家生效，但唔係由面板設定，重啟後可能會變返。撳「安裝」寫入開機設定。",
+    "installed_line": "已啟用（{cc} + {qdisc}）",
+    "effects": {
+      "sender": "只改變伺服器「發送」TCP 嘅方式，唔會改端口、防火牆或者路由。",
+      "stack": "HAProxy、nginx、Docker、nftables 防火牆、WAF、CrowdSec、Xray 等全部照常運作。",
+      "udp": "UDP（HTTP/3、WireGuard、Hysteria 等）唔受影響。",
+      "docker": "已經運行緊、用 bridge 網絡嘅 Docker 容器要重啟先會用 BBR；用 host 網絡嘅（例如 HAProxy）即時生效。",
+      "revert": "隨時可以卸載，即時還原，唔使重啟伺服器。"
     }
   }
 }

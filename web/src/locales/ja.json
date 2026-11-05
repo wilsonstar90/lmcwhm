@@ -455,7 +455,8 @@
       "invalid_port": "無効なポート",
       "invalid_key": "有効な SSH 公開鍵ではありません",
       "ssh_lockout": "拒否：この設定では誰も SSH でログインできなくなります",
-      "protected_process": "このプロセスはここでは停止できません"
+      "protected_process": "このプロセスはここでは停止できません",
+      "bbr_unsupported": "このサーバーのカーネルは BBR に対応していません（Linux 4.9 以上と tcp_bbr モジュールが必要）"
     },
     "secscan": {
       "not_found": "レポートが見つかりません",
@@ -628,7 +629,8 @@
     "kinds": {
       "runtime": "ランタイム",
       "database": "データベース",
-      "tool": "ツール"
+      "tool": "ツール",
+      "system": "システム"
     },
     "state": {
       "running": "稼働中",
@@ -3605,6 +3607,32 @@
       "other": "Varnish キャッシュ、カスタムエラーページ：対象外のためスキップ。拒否された呼び出しは対応するエラー（403 = PERMISSION_DENIED、429 = UNAVAILABLE など）を受け取ります。",
       "tls": "HTTPS（443）のみ。ポート 80 では gRPC を使えません。",
       "passthrough": "別の方法：パススルー（TLS をバックエンドで終端）も gRPC に対応しますが、WAF や HTTP レベルのルールは使えません。"
+    }
+  },
+  "bbr": {
+    "desc": "Google の TCP 輻輳制御アルゴリズム。パケットロスのたびに大きく減速せず、経路が実際に運べる速度で送信します。海外・国際回線・モバイルの訪問者に特に有効です。",
+    "on": "有効",
+    "off": "無効",
+    "unsupported": "非対応",
+    "kernel": "カーネル",
+    "current": "輻輳制御",
+    "available": "利用可能：",
+    "qdisc": "既定のキュー",
+    "ifaces": "外向き NIC",
+    "enable": "インストール（BBR を有効化）",
+    "disable": "アンインストール（cubic に戻す）",
+    "disable_confirm": "システム既定の cubic + fq_codel に戻しますか？すぐに反映され、再起動は不要です。",
+    "enabled_ok": "BBR を有効にしました",
+    "disabled_ok": "cubic に戻しました",
+    "unsupported_hint": "Linux 4.9 以上と tcp_bbr モジュールが必要です。Ubuntu 20.04 / 22.04 / 24.04 の標準カーネルは対応しています。",
+    "not_persisted": "BBR は現在有効ですが、パネルの設定ではないため再起動で戻る可能性があります。「インストール」で起動時の設定に書き込みます。",
+    "installed_line": "有効（{cc} + {qdisc}）",
+    "effects": {
+      "sender": "サーバーが TCP を「送信」する方法だけを変えます。ポート、ファイアウォール、ルーティングは変わりません。",
+      "stack": "HAProxy、nginx、Docker、nftables ファイアウォール、WAF、CrowdSec、Xray などはそのまま動作します。",
+      "udp": "UDP（HTTP/3、WireGuard、Hysteria など）には影響しません。",
+      "docker": "実行中の bridge ネットワークの Docker コンテナは再起動後に BBR を使います。host ネットワークのもの（HAProxy など）はすぐに反映されます。",
+      "revert": "いつでもアンインストールでき、すぐに元に戻ります。再起動は不要です。"
     }
   }
 }

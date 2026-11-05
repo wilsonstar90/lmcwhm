@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/wilsonstar90/lmcwhm/internal/toolbox"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -23,6 +24,8 @@ import (
 
 func (s *Server) appRoutes(r chi.Router) {
 	r.Get("/apps/catalog", s.handleCatalog)
+	r.Get("/apps/system/bbr", s.handleBBR)
+	r.Post("/apps/system/bbr", s.handleSetBBR)
 	r.Get("/apps", s.handleApps)
 	r.Post("/apps/install", s.handleInstallApp)
 	r.Post("/apps/{id}/uninstall", s.handleUninstallApp)
@@ -476,4 +479,38 @@ func (s *Server) handleAppBuild(w http.ResponseWriter, r *http.Request) {
 	}
 	s.auditCat(r, "app", "app.build", strconv.FormatInt(idParam(r), 10)+" "+in.Mode)
 	writeJSON(w, http.StatusOK, map[string]string{"task_id": id})
+}
+
+// ---- system: TCP BBR ----
+
+func (s *Server) handleBBR(w http.ResponseWriter, r *http.Request) {
+	if s.Toolbox == nil {
+		writeJSON(w, http.StatusOK, toolbox.BBRStatus{Available: []string{}, Ifaces: []toolbox.Iface{}})
+		return
+	}
+	writeJSON(w, http.StatusOK, s.Toolbox.BBR(r.Context()))
+}
+
+func (s *Server) handleSetBBR(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := decode(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if s.Toolbox == nil {
+		writeErr(w, http.StatusServiceUnavailable, toolbox.ErrNoBBR)
+		return
+	}
+	if err := s.Toolbox.SetBBR(r.Context(), in.Enabled, nil); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	action := "bbr.disable"
+	if in.Enabled {
+		action = "bbr.enable"
+	}
+	s.auditCat(r, "app", action, "")
+	writeJSON(w, http.StatusOK, s.Toolbox.BBR(r.Context()))
 }
