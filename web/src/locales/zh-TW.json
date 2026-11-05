@@ -2612,7 +2612,7 @@
     "edit": "編輯名單項目",
     "keep_expiry": "保留目前的到期時間",
     "precedence": "優先順序：手動黑名單與手動白名單最高（兩者重疊時，範圍較小者優先），其次是伺服器自己的 IP，之後才是信任名單與自動封鎖（CrowdSec、名單源、自動封鎖、MCP）。白名單 IP 不會被 WAF、網站防護、CC 或任何自動封鎖攔截。",
-    "system_allow": "系統白名單（伺服器自己的 IP，無法刪除）：",
+    "system_allow": "伺服器自己的 IP（自動偵測，無需加入）：不會被 IP 封鎖、CrowdSec、自動封鎖、禁 IDC 或 CC 攔截；WAF 與 UA / URL 名單仍會檢查。",
     "overridden": "白名單覆蓋"
   },
   "prot": {

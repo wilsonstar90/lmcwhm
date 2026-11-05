@@ -102,8 +102,31 @@ if command -v nft >/dev/null; then
   sleep 4
   code="$(curl -s -o /dev/null -w '%{http_code}' -H 'X-Real-IP: 203.0.113.10' --resolve php.test:80:127.0.0.1 http://php.test/index.php)"
   [[ "$code" == 200 ]] || fail "unblocked visitor still refused ($code)"
-  api PUT /firewall '{"enabled":false,"policy":"accept","ping":true}' >/dev/null
   pass "blocked by the real visitor address at the edge"
+
+  # Precedence: manual entries first, the narrower one wins where they overlap;
+  # an allowed address skips the UA / URL lists too.
+  rcode() { curl -s -o /dev/null -w '%{http_code}' -H "X-Real-IP: $1" "${@:2}" --resolve php.test:80:127.0.0.1 http://php.test/index.php; }
+  api POST /firewall/ips '{"ip":"203.0.113.0/24","list":"allow"}' | grep -q '"id"' || fail "add allow range"
+  api POST /firewall/ips '{"ip":"203.0.113.20","list":"block"}' | grep -q '"id"' || fail "add a block inside the allow range"
+  [[ "$(api POST /firewall/ips '{"ip":"203.0.113.0/24","list":"block"}' | jget "['code']")" == fw.in_allow ]] || fail "the same range on both lists"
+  api POST /firewall/patterns '{"kind":"ua","list":"block","match":"contains","value":"sqlmap","enabled":true}' >/dev/null
+  sleep 4
+  [[ "$(rcode 203.0.113.20)" == 403 ]] || fail "a manual block inside an allowed range is let in"
+  [[ "$(rcode 203.0.113.21)" == 200 ]] || fail "allowed address refused"
+  [[ "$(rcode 203.0.113.21 -A sqlmap/1.7)" == 200 ]] || fail "allowed address refused by the UA black list"
+  [[ "$(rcode 198.51.100.50 -A sqlmap/1.7)" == 403 ]] || fail "UA black list no longer applies to others"
+  nft list set inet lmcwhm over4 | grep -q 203.0.113.20 || fail "narrower block not in the nftables override set"
+  nft list chain inet lmcwhm input | awk '/@over4 counter drop/{o=NR} /@allow4 accept/{a=NR} /@mblock4 counter drop/{m=NR} END{exit !(o<a && a<m)}' || fail "nftables order: override, allow, manual block"
+  api GET '/firewall/ips?list=allow&source=manual' | grep -q '"system_allow":\[' || fail "server addresses not listed"
+  api POST /firewall/patterns/clear '{"kind":"ua","list":"block"}' >/dev/null
+  for l in allow block; do
+    for id in $(api GET "/firewall/ips?list=$l&source=manual" | python3 -c "import sys,json; print(' '.join(str(i['id']) for i in json.load(sys.stdin)['items']))"); do
+      api POST "/firewall/ips/$id/delete" >/dev/null
+    done
+  done
+  pass "manual black and white lists come first; the narrower entry wins"
+  api PUT /firewall '{"enabled":false,"policy":"accept","ping":true}' >/dev/null
 fi
 api PUT /firewall/cdn '{"ranges":[],"headers":[]}' >/dev/null
 pass "visitor address from a trusted CDN header only"
@@ -193,6 +216,35 @@ api POST /protect/rules '{"name":"test rule","enabled":true,"match_all":true,"co
 [[ "$(code --resolve php.test:80:127.0.0.1 'http://php.test/index.php?evil=1')" == 403 ]] || fail "custom rule"
 [[ "$(code -X POST --resolve php.test:80:127.0.0.1 'http://php.test/index.php?evil=1')" != 403 ]] || fail "custom rule ignores its method condition"
 api GET '/security/events?site=php.test' | grep -q '"rule":"wp-1002"' || fail "blocked log without the rule: $(api GET '/security/events?site=php.test' | head -c 400)"
+# The block log is kept by day: today has it, yesterday does not, the last 7 days do.
+[[ "$(api GET '/security/events?site=php.test&back=1' | jget "['total']")" == 0 ]] || fail "yesterday's block log is not empty"
+api GET '/security/events?site=php.test&days=7&source=rule' | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['total']>=1 and d['sources'].get('rule',0)>=1 and d['top_ips'], d" || fail "block log over 7 days"
+today="$(TZ="$(api GET /settings | jget "['timezone']")" date +%F)" # the panel's day, not the runner's
+api GET "/security/events?site=php.test&date=$today" | grep -q '"rule":"wp-1002"' || fail "block log by date"
+api GET '/security/traffic?day=5' | grep -q '"hours"' || fail "traffic overview for an older day"
+# Auto-ban: three refusals within five minutes ban the visitor (behind a CDN
+# header); the server's own address never is.
+api PUT /firewall/cdn '{"ranges":["127.0.0.1"],"headers":[{"name":"X-Real-IP"}]}' >/dev/null
+api PUT /security/autoban '{"enabled":true,"window":5,"threshold":3,"ban_minutes":30,"sources":["rule"]}' | grep -q '"threshold":3' || fail "save auto-ban"
+[[ "$(api PUT /security/autoban '{"enabled":true,"window":0,"threshold":3,"ban_minutes":30,"sources":["rule"]}' | jget "['code']")" == autoban.invalid ]] || fail "invalid auto-ban accepted"
+sleep 2
+for i in 1 2 3 4; do
+  code -H 'X-Real-IP: 198.51.100.77' --resolve php.test:80:127.0.0.1 http://php.test/xmlrpc.php >/dev/null
+  code --resolve php.test:80:127.0.0.1 http://php.test/xmlrpc.php >/dev/null
+done
+for _ in $(seq 1 20); do
+  api GET '/firewall/ips/auto?source=autoban' | grep -q '198.51.100.77' && break
+  sleep 2
+done
+auto="$(api GET '/firewall/ips/auto?source=autoban')"
+grep -q '"ip":"198.51.100.77"' <<<"$auto" || fail "repeat offender not banned: $auto"
+grep -q '"ip":"127.0.0.1"' <<<"$auto" && fail "the server's own address was banned"
+for id in $(python3 -c "import sys,json; print(' '.join(str(i['id']) for i in json.load(sys.stdin)['items']))" <<<"$auto"); do
+  api POST "/firewall/ips/$id/delete" >/dev/null
+done
+api PUT /security/autoban '{"enabled":false,"window":5,"threshold":10,"ban_minutes":60,"sources":["waf","rule","protection","list","cc"]}' >/dev/null
+api PUT /firewall/cdn '{"ranges":[],"headers":[]}' >/dev/null
+pass "block log by day; auto-ban"
 # Scrapers and CC on php.test only.
 api PUT /protect/sites '{"items":{"php.test":{"on":true,"crawler":true,"cc":5}}}' | grep -q '"ok":true' || fail "save site protection"
 [[ "$(code -A 'python-requests/2.31' --resolve php.test:80:127.0.0.1 http://php.test/index.php)" == 403 ]] || fail "scraper User-Agent"

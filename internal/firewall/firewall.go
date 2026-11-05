@@ -598,15 +598,15 @@ func (sv *Service) listsChanged() {
 // EdgeIPs are the lists the edge proxy matches visitors' real addresses
 // against (behind a CDN the TCP source is the CDN), in the order of the
 // precedence above: Over (manual blocks narrower than an allow) before
-// Allow (manual allows and the server's own addresses), then Manual blocks,
-// then Block (automatic). All but Trust are empty while the firewall is off;
+// Allow (manual allows), then Self (the server's own addresses), Manual
+// blocks and Block (automatic). All but Trust are empty while the firewall is off;
 // website protection uses the trusted ranges whether or not it is on.
 type EdgeIPs struct {
-	Over, Allow, Manual, Block, Trust []string
+	Over, Allow, Self, Manual, Block, Trust []string
 }
 
 func (sv *Service) EdgeLists(ctx context.Context) (EdgeIPs, error) {
-	e := EdgeIPs{Over: []string{}, Allow: []string{}, Manual: []string{}, Block: []string{}, Trust: []string{}}
+	e := EdgeIPs{Over: []string{}, Allow: []string{}, Self: []string{}, Manual: []string{}, Block: []string{}, Trust: []string{}}
 	c, err := sv.Config(ctx)
 	if err != nil {
 		return e, err
@@ -638,10 +638,15 @@ func (sv *Service) EdgeLists(ctx context.Context) (EdgeIPs, error) {
 	cls := sv.classify(ips)
 	e.Over, e.Manual, e.Block = norm(cls.over), norm(cls.mblock), norm(cls.block)
 	e.Allow = norm(cls.allow)
+	// The server's own addresses skip IP blocks, IDC and CC only (the WAF and
+	// the UA / URL lists still check them). Loopback is left out: the edge
+	// sees it only for local tools and tests, never for a visitor.
 	for _, p := range cls.self {
-		e.Allow = append(e.Allow, p.String())
+		if !p.Addr().IsLoopback() {
+			e.Self = append(e.Self, p.String())
+		}
 	}
-	sort.Strings(e.Allow)
+	sort.Strings(e.Self)
 	return e, nil
 }
 

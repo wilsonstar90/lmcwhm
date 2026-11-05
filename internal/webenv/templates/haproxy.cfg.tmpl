@@ -160,6 +160,8 @@ backend st_cc
     acl ip_over src -f {{.Dir}}/lists/over.lst
     http-request set-var(txn.allow) bool(true) if { src -f {{.Dir}}/lists/allow.lst } !ip_over
     acl ip_allow var(txn.allow) -m bool
+    # The server's own addresses: never blocked by address, IDC or CC.
+    acl ip_self src -f {{.Dir}}/lists/self.lst
     acl trusted src -f {{.Dir}}/lists/trust.lst
     acl blocked var(txn.block) -m found
     # User-Agent / URL lists: an allowed request skips the block lists, the protection and the WAF.
@@ -184,15 +186,15 @@ backend st_cc
     http-request set-header X-Lmcwhm-Pass 1 if list_pass || ip_allow
     http-request set-header X-Lmcwhm-Allow 1 if ip_allow
     http-request set-var(txn.block) str({{$.BlockStatus}}:ip) if ip_over !acme
-    http-request set-var(txn.block) str({{$.BlockStatus}}:ip) if !blocked { src -f {{.Dir}}/lists/mblock.lst } !ip_allow !acme
-    http-request set-var(txn.block) str({{$.BlockStatus}}:ip) if !blocked { src -f {{.Dir}}/lists/block.lst } !ip_allow !acme
+    http-request set-var(txn.block) str({{$.BlockStatus}}:ip) if !blocked { src -f {{.Dir}}/lists/mblock.lst } !ip_allow !ip_self !acme
+    http-request set-var(txn.block) str({{$.BlockStatus}}:ip) if !blocked { src -f {{.Dir}}/lists/block.lst } !ip_allow !ip_self !acme
     http-request set-var(txn.block) str({{$.BlockStatus}}:list) if !blocked list_block !list_pass !ip_allow !acme
     # Website protection: flags per host (",on,fake,idc,crawler,cdn,").
     http-request set-var(txn.prot) var(txn.host),map_str({{.Dir}}/maps/prot_exact.map)
     http-request set-var(txn.prot) var(txn.host),map_end({{.Dir}}/maps/prot_wild.map) if !{ var(txn.prot) -m found }
     acl guard var(txn.prot) -m sub ,on,
     http-request set-var(txn.block) str({{$.BlockStatus}}:fake_spider) if !blocked guard { var(txn.prot) -m sub ,fake, } { req.hdr(user-agent) -m sub -i -f {{.Dir}}/maps/spider_ua.lst } !trusted !ip_allow !list_pass !acme
-    http-request set-var(txn.block) str({{$.BlockStatus}}:idc) if !blocked guard { var(txn.prot) -m sub ,idc, } { src -f {{.Dir}}/maps/idc.lst } !trusted !ip_allow !list_pass !acme
+    http-request set-var(txn.block) str({{$.BlockStatus}}:idc) if !blocked guard { var(txn.prot) -m sub ,idc, } { src -f {{.Dir}}/maps/idc.lst } !trusted !ip_allow !ip_self !list_pass !acme
     http-request set-var(txn.block) str({{$.BlockStatus}}:crawler) if !blocked guard { var(txn.prot) -m sub ,crawler, } { req.hdr(user-agent) -m sub -i -f {{.Dir}}/maps/crawler_ua.lst } !ip_allow !list_pass !acme
 {{- range .Rules}}
 {{- $r := .}}
@@ -207,8 +209,8 @@ backend st_cc
     # CC: requests per visitor address in 10 seconds, limit per host.
     http-request set-var(txn.cc) var(txn.host),map_str_int({{.Dir}}/maps/cc_exact.map)
     http-request set-var(txn.cc) var(txn.host),map_end_int({{.Dir}}/maps/cc_wild.map) if !{ var(txn.cc) -m found }
-    http-request track-sc0 src table st_cc if guard { var(txn.cc) -m found } !trusted !ip_allow !list_pass !acme
-    http-request set-var(txn.block) str(429:cc) if !blocked guard { var(txn.cc) -m found } { sc_http_req_rate(0),sub(txn.cc) gt 0 } !trusted !ip_allow !list_pass !acme
+    http-request track-sc0 src table st_cc if guard { var(txn.cc) -m found } !trusted !ip_allow !ip_self !list_pass !acme
+    http-request set-var(txn.block) str(429:cc) if !blocked guard { var(txn.cc) -m found } { sc_http_req_rate(0),sub(txn.cc) gt 0 } !trusted !ip_allow !ip_self !list_pass !acme
     http-request set-header X-Lmcwhm-Block %[var(txn.block)] if blocked
     # Rules that only detect pass the request and name themselves for the log.
     http-request set-header X-Lmcwhm-Detect %[var(txn.detect)] if { var(txn.detect) -m found }

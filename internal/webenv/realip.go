@@ -84,14 +84,15 @@ const (
 	blockList  = "block.lst"  // automatic blocks
 	manualList = "mblock.lst" // manual blocks
 	overList   = "over.lst"   // manual blocks narrower than a manual allow
-	allowList  = "allow.lst"  // manual allows and the server's own addresses
+	allowList  = "allow.lst"  // manual allows
+	selfList   = "self.lst"   // the server's own addresses
 	trustList  = "trust.lst"
 )
 
 // EdgeIPs are the address lists of the edge, by precedence (see
 // firewall.EdgeIPs).
 type EdgeIPs struct {
-	Over, Allow, Manual, Block, Trust []string
+	Over, Allow, Self, Manual, Block, Trust []string
 }
 
 func (e *Env) listsDir() string  { return filepath.Join(e.EdgeDir(), "lists") }
@@ -102,7 +103,7 @@ func (e *Env) ensureLists() error {
 	if err := os.MkdirAll(e.listsDir(), 0o755); err != nil {
 		return err
 	}
-	for _, n := range []string{blockList, manualList, overList, allowList, trustList} {
+	for _, n := range []string{blockList, manualList, overList, allowList, selfList, trustList} {
 		p := filepath.Join(e.listsDir(), n)
 		if _, err := os.Stat(p); os.IsNotExist(err) {
 			if err := os.WriteFile(p, nil, 0o644); err != nil {
@@ -127,7 +128,7 @@ func (e *Env) SetLists(ctx context.Context, x EdgeIPs) error {
 	for _, l := range []struct {
 		name string
 		v    []string
-	}{{blockList, x.Block}, {manualList, x.Manual}, {overList, x.Over}, {allowList, x.Allow}, {trustList, x.Trust}} {
+	}{{blockList, x.Block}, {manualList, x.Manual}, {overList, x.Over}, {allowList, x.Allow}, {selfList, x.Self}, {trustList, x.Trust}} {
 		path := filepath.Join(e.listsDir(), l.name)
 		old := readList(path)
 		next := strings.Join(l.v, "\n")

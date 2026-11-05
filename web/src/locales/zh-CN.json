@@ -2612,7 +2612,7 @@
     "edit": "编辑名单条目",
     "keep_expiry": "保持当前到期时间",
     "precedence": "优先级：手动黑名单和手动白名单最高（两者重叠时，范围较小者优先），其次是服务器自身 IP，然后才是信任名单和自动封禁（CrowdSec、名单源、自动封禁、MCP）。白名单 IP 不会被 WAF、网站防护、CC 或任何自动封禁拦截。",
-    "system_allow": "系统白名单（服务器自身 IP，无法删除）：",
+    "system_allow": "服务器自身 IP（自动检测，无需添加）：不会被 IP 封禁、CrowdSec、自动封禁、禁 IDC 或 CC 拦截；WAF 和 UA / URL 名单仍会检查。",
     "overridden": "白名单覆盖"
   },
   "prot": {

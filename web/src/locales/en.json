@@ -2612,7 +2612,7 @@
     "edit": "Edit entry",
     "keep_expiry": "Keep the current expiry",
     "precedence": "Precedence: manual block and allow entries come first (where they overlap, the narrower one wins), then the server's own addresses, then trusted ranges and automatic blocks (CrowdSec, lists, auto-ban, MCP). An allowed address is never refused by the WAF, website protection, CC or any automatic block.",
-    "system_allow": "System allow list (the server's own addresses, cannot be removed):",
+    "system_allow": "The server's own addresses (detected, nothing to add): never refused by IP blocks, CrowdSec, auto-ban, IDC or CC; the WAF and the UA / URL lists still check them.",
     "overridden": "Allowed"
   },
   "prot": {

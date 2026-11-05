@@ -198,7 +198,7 @@ func serveCmd() *cobra.Command {
 			fw.OnListsChanged = func() {
 				l, err := fw.EdgeLists(ctx)
 				if err == nil {
-					err = env.SetLists(ctx, webenv.EdgeIPs{Over: l.Over, Allow: l.Allow, Manual: l.Manual, Block: l.Block, Trust: l.Trust})
+					err = env.SetLists(ctx, webenv.EdgeIPs{Over: l.Over, Allow: l.Allow, Self: l.Self, Manual: l.Manual, Block: l.Block, Trust: l.Trust})
 				}
 				if crowdsec != nil {
 					crowdsec.SetWhitelist(ctx, fw.AllowPrefixes(ctx))

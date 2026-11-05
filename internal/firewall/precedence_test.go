@@ -77,7 +77,7 @@ func TestPrecedence(t *testing.T) {
 		t.Fatal(err)
 	}
 	if strings.Join(e.Over, ",") != "198.51.100.9" || !strings.Contains(strings.Join(e.Manual, ","), "192.0.2.0/24") ||
-		!strings.Contains(strings.Join(e.Allow, ","), "203.0.113.250/32") || strings.Contains(strings.Join(e.Block, ","), "198.51.100.30") {
+		strings.Join(e.Self, ",") != "203.0.113.250/32" || strings.Contains(strings.Join(e.Allow, ","), "127.0.0.0/8") || strings.Contains(strings.Join(e.Block, ","), "198.51.100.30") {
 		t.Errorf("edge lists %+v", e)
 	}
 	if !sv.Allowed(ctx, "198.51.100.200") || sv.Allowed(ctx, "100.64.0.1") {
