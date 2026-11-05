@@ -69,6 +69,8 @@ docker pull -q redis:7.4.0 >/dev/null && docker tag redis:7.4.0 redis:7.4
 task POST /apps/install '{"app":"redis","version":"7.4"}'
 [[ "$(docker inspect -f '{{.State.Status}}' lmcwhm-mariadb114)" == running ]] || fail "mariadb not running"
 docker port lmcwhm-mariadb114 | grep -q "127.0.0.1:3306" || fail "mariadb not published on loopback 3306"
+# The panel's settings (conf.d) are what the server runs with.
+docker exec lmcwhm-mariadb114 mariadbd --print-defaults | grep -q -- "--skip-name-resolve" || fail "mariadb does not read the panel's conf.d"
 code="$(api POST /apps/install '{"app":"node","version":"22"}' | jget "['code']")"
 [[ "$code" == app.already_installed ]] || fail "duplicate install: $code"
 pass "App Store installs runtimes and database engines"

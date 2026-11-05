@@ -68,9 +68,15 @@ func Label(ctx context.Context, name, key string) string {
 	return v
 }
 
+// Remove stops a container cleanly, then deletes it. `docker rm -f` alone
+// kills it: a database then starts with crash recovery and may mark
+// MyISAM / Aria tables as crashed.
 func Remove(ctx context.Context, name string) error {
 	if State(ctx, name) == "" {
 		return nil
+	}
+	if State(ctx, name) == "running" {
+		Run(ctx, "stop", "-t", "120", name) // a large buffer pool takes a while to flush
 	}
 	_, err := Run(ctx, "rm", "-f", name)
 	return err

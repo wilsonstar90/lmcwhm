@@ -99,11 +99,11 @@ var Recipes = map[string]Recipe{
  && make DESTDIR=/out install && make -C contrib DESTDIR=/out install`,
 	},
 	"mariadb": {
-		Minutes: 60, MinMemMB: 3000, Defaults: "-DINSTALL_LAYOUT=DEB -DWITH_SSL=system -DPLUGIN_ROCKSDB=NO -DPLUGIN_MROONGA=NO -DPLUGIN_SPIDER=NO -DPLUGIN_CONNECT=NO -DPLUGIN_S3=NO -DPLUGIN_COLUMNSTORE=NO -DPLUGIN_DUCKDB=NO",
+		Minutes: 60, MinMemMB: 3000, Defaults: "-DINSTALL_LAYOUT=DEB -DDEFAULT_SYSCONFDIR=/etc/mysql -DWITH_SSL=system -DPLUGIN_ROCKSDB=NO -DPLUGIN_MROONGA=NO -DPLUGIN_SPIDER=NO -DPLUGIN_CONNECT=NO -DPLUGIN_S3=NO -DPLUGIN_COLUMNSTORE=NO -DPLUGIN_DUCKDB=NO",
 		Deps: aptDeps + `cmake bison libncurses-dev libssl-dev zlib1g-dev libpcre2-dev libaio-dev liburing-dev libxml2-dev libcurl4-openssl-dev liblz4-dev libzstd-dev libbz2-dev liblzma-dev libfmt-dev git`,
 		Build: `RUN wget -qO- "https://archive.mariadb.org/mariadb-${VERSION}/source/mariadb-${VERSION}.tar.gz" | tar xz \
  && cd "mariadb-${VERSION}" \
- && cmake -S . -B b -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DINSTALL_LAYOUT=DEB -DWITH_SSL=system \
+ && cmake -S . -B b -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DINSTALL_LAYOUT=DEB -DDEFAULT_SYSCONFDIR=/etc/mysql -DWITH_SSL=system \
       -DPLUGIN_ROCKSDB=NO -DPLUGIN_MROONGA=NO -DPLUGIN_SPIDER=NO -DPLUGIN_CONNECT=NO -DPLUGIN_S3=NO -DPLUGIN_COLUMNSTORE=NO -DPLUGIN_DUCKDB=NO \
       -DWITH_UNIT_TESTS=OFF -DCMAKE_C_FLAGS="${EXTRA_CFLAGS}" -DCMAKE_CXX_FLAGS="${EXTRA_CFLAGS}" ${CONFIGURE_ARGS} \
  && if [ "$CHECK_ONLY" = 1 ]; then mkdir -p /out; exit 0; fi \

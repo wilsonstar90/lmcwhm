@@ -35,7 +35,7 @@ func TestSourceRecipes(t *testing.T) {
 		"postgres": {" perl "},
 		"mysql":    {"libaio-devel", "downloads.mysql.com/archives/", "$PWD/boost", "gcc-toolset-13"},
 		// 11.4.13 added a DuckDB engine whose build patches its sources with git.
-		"mariadb": {"-DPLUGIN_DUCKDB=NO"},
+		"mariadb": {"-DPLUGIN_DUCKDB=NO", "-DDEFAULT_SYSCONFDIR=/etc/mysql"}, // else only /etc/my.cnf is read: none of conf.d
 	} {
 		for _, w := range want {
 			if !strings.Contains(Recipes[app].Deps+Recipes[app].Build, w) {
