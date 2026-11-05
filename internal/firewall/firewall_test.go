@@ -203,8 +203,8 @@ func TestDropLog(t *testing.T) {
 	sv.SaveRule(ctx, Rule{Action: "drop", Proto: "udp", Ports: "53", Enabled: true})
 	rs, _ := sv.Ruleset(ctx, Config{Enabled: true, Policy: "drop"})
 	for _, want := range []string{
-		"ip saddr @block4 ip saddr != @trust4 limit rate 10/second burst 20 packets log prefix \"lmcwhm-drop block \" level info\n\t\tip saddr @block4 ip saddr != @trust4 counter drop",
-		"ip6 saddr @ban6 ip6 saddr != @trust6 limit rate 10/second burst 20 packets log prefix \"lmcwhm-drop ban \"",
+		"ip saddr @block4 ip saddr != @trust4 ip saddr != @self4 limit rate 10/second burst 20 packets log prefix \"lmcwhm-drop block \" level info\n\t\tip saddr @block4 ip saddr != @trust4 ip saddr != @self4 counter drop",
+		"ip6 saddr @ban6 ip6 saddr != @trust6 ip6 saddr != @self6 limit rate 10/second burst 20 packets log prefix \"lmcwhm-drop ban \"",
 		"udp dport { 53 } limit rate 10/second burst 20 packets log prefix \"lmcwhm-drop rule1 \"",
 		"ct state new limit rate 10/second burst 20 packets log prefix \"lmcwhm-drop policy \"",
 	} {

@@ -64,10 +64,9 @@ func TestPrecedence(t *testing.T) {
 	}
 	// Order: the narrower manual block, then allow, then manual blocks, then automatic.
 	iOver, iAllow := strings.Index(rs, "@over4 counter drop"), strings.Index(rs, "@allow4 accept")
-	iManual, iAuto := strings.Index(rs, "@mblock4 counter drop"), strings.Index(rs, "@ban4 ip saddr != @trust4 counter drop")
-	iSelf := strings.Index(rs, "@self4 accept")
-	if !(iOver < iAllow && iAllow < iManual && iManual < iSelf && iSelf < iAuto) {
-		t.Errorf("order over %d allow %d manual %d self %d auto %d", iOver, iAllow, iManual, iSelf, iAuto)
+	iManual, iAuto := strings.Index(rs, "@mblock4 counter drop"), strings.Index(rs, "@ban4 ip saddr != @trust4 ip saddr != @self4 counter drop")
+	if !(iOver < iAllow && iAllow < iManual && iManual < iAuto) || strings.Contains(rs, "@self4 accept") {
+		t.Errorf("order over %d allow %d manual %d auto %d (the server's addresses are not accepted outright)", iOver, iAllow, iManual, iAuto)
 	}
 
 	c, _ := sv.Config(ctx)

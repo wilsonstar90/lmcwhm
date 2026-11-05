@@ -797,16 +797,16 @@ func (sv *Service) Ruleset(ctx context.Context, c Config) (string, error) {
 		match := fmt.Sprintf("%s saddr @%s", x.fam, x.set)
 		fmt.Fprintf(&drops, "\t\t%s %s\n\t\t%s counter drop\n", match, logDrop(strings.TrimPrefix(strings.TrimRight(x.set, "46"), "m")), match)
 	}
-	// The server's own addresses (container bridges) after the manual blocks,
-	// before the automatic ones: never banned, but a deliberate block holds.
-	drops.WriteString("\t\tip saddr @self4 accept\n\t\tip6 saddr @self6 accept\n")
+
 	// Trusted ranges (Cloudflare, crawlers) are never banned automatically,
 	// but get no other exemption: port rules and the default policy still apply.
 	// Every drop is logged first (rate limited: a limit that fails only skips
 	// the log, never the drop), for the firewall log: TCP, UDP and ICMP alike.
 	for _, x := range []struct{ fam, set string }{{"ip", "block4"}, {"ip6", "block6"}, {"ip", "ban4"}, {"ip6", "ban6"}} {
-		trust := "@trust" + x.set[len(x.set)-1:]
-		match := fmt.Sprintf("%s saddr @%s %s saddr != %s", x.fam, x.set, x.fam, trust)
+		// Neither trusted ranges nor the server's own addresses (container
+		// bridges) are banned automatically; a manual block above still holds.
+		n := x.set[len(x.set)-1:]
+		match := fmt.Sprintf("%s saddr @%s %s saddr != @trust%s %s saddr != @self%s", x.fam, x.set, x.fam, n, x.fam, n)
 		fmt.Fprintf(&drops, "\t\t%s %s\n\t\t%s counter drop\n", match, logDrop(strings.TrimRight(x.set, "46")), match)
 	}
 	fmt.Fprintf(&b, "\tchain input {\n\t\ttype filter hook input priority -10; policy %s;\n", c.Policy)

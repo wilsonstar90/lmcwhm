@@ -140,7 +140,7 @@ func TestTrustFeeds(t *testing.T) {
 	if !strings.Contains(rs, "set trust4 { type ipv4_addr; flags interval; auto-merge; elements = { 103.21.244.0/22, 173.245.48.0/20 }") {
 		t.Fatalf("trust set missing:\n%s", rs)
 	}
-	if !strings.Contains(rs, "ip saddr @block4 ip saddr != @trust4 counter drop") || !strings.Contains(rs, "ip6 saddr @ban6 ip6 saddr != @trust6 counter drop") {
+	if !strings.Contains(rs, "ip saddr @block4 ip saddr != @trust4 ip saddr != @self4 counter drop") || !strings.Contains(rs, "ip6 saddr @ban6 ip6 saddr != @trust6 ip6 saddr != @self6 counter drop") {
 		t.Fatalf("drops do not exempt trusted ranges:\n%s", rs)
 	}
 	// Trusted ranges open nothing: no accept on them.
