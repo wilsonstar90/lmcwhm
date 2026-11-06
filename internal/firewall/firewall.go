@@ -109,7 +109,10 @@ type Service struct {
 	OnListsChanged func()
 	// Self overrides the server's own addresses (tests); nil reads the interfaces.
 	Self func() []netip.Prefix
-	nft  string // nft binary ("" = not installed)
+	// Guarded lists the database ports published for remote access: only
+	// sources the accept rules name reach them (see guard.go).
+	Guarded func(ctx context.Context) []int
+	nft     string // nft binary ("" = not installed)
 
 	mu      sync.Mutex
 	revert  *time.Timer
@@ -848,6 +851,8 @@ func (sv *Service) Ruleset(ctx context.Context, c Config) (string, error) {
 			}
 		}
 	}
+	guardIn, guardFw := guardRules(rules, sv.guarded(ctx))
+	b.WriteString(guardIn)
 	if c.Policy == "drop" {
 		b.WriteString("\t\tct state new " + logDrop("policy") + "\n")
 	}
@@ -857,6 +862,7 @@ func (sv *Service) Ruleset(ctx context.Context, c Config) (string, error) {
 	b.WriteString(overDrops.String())
 	b.WriteString("\t\tip saddr @allow4 accept\n\t\tip6 saddr @allow6 accept\n")
 	b.WriteString(drops.String())
+	b.WriteString(guardFw)
 	b.WriteString("\t\tct status dnat accept\n")
 	b.WriteString("\t}\n}\n")
 	return b.String(), nil

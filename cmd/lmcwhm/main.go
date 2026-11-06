@@ -208,9 +208,18 @@ func serveCmd() *cobra.Command {
 					log.Error("edge ip lists", "err", err)
 				}
 			}
+			// Database ports published for remote access: only the sources
+			// the firewall rules name get through.
+			var apps *appstore.Service // set below; read when the ruleset is built
+			fw.Guarded = func(ctx context.Context) []int {
+				if apps == nil {
+					return publicPorts(ctx, a.st)
+				}
+				return apps.PublicPorts(ctx)
+			}
 			fw.Boot(ctx)
 			crowdsec = security.NewCrowdSec(a.st, box, env, tm, fw, a.paths.Home)
-			apps := appstore.New(a.st, box, tm, a.paths.Home)
+			apps = appstore.New(a.st, box, tm, a.paths.Home)
 			apps.InUse = sites.UsesRuntime
 			sites.Runtimes = apps
 			go func() {
@@ -232,6 +241,7 @@ func serveCmd() *cobra.Command {
 			}
 			jobs := cron.New(a.st, env.WWWLogs, loc)
 			dbs := database.New(a.st, box, apps, tm)
+			dbs.Firewall = fw
 			bk := backup.New(a.st, box, a.paths.Home)
 			bk.WWWRoot, bk.Sites, bk.DBs, bk.Apps = env.WWWRoot, sites, dbs, apps
 			bk.DirFn = func() string { return a.settings.Get().BackupDir }
@@ -424,4 +434,22 @@ func filesFS(home string) *files.FS {
 	f := files.New(os.Getenv("LMCWHM_FILES_ROOT"))
 	f.HistDir = filepath.Join(home, "data", "filehist")
 	return f
+}
+
+// publicPorts reads the database ports published for remote access before
+// the app store service exists (the firewall boots first).
+func publicPorts(ctx context.Context, st *store.Store) []int {
+	var out []int
+	rows, err := st.DB.QueryContext(ctx, `SELECT port FROM apps WHERE public = 1`)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var p int
+		if rows.Scan(&p) == nil {
+			out = append(out, p)
+		}
+	}
+	return out
 }

@@ -48,6 +48,7 @@ func (s *Server) appRoutes(r chi.Router) {
 	}
 	r.Post("/databases/{id}/password", s.handleDatabasePassword)
 	r.Patch("/databases/{id}", s.handleDatabaseRemark)
+	s.dbToolRoutes(r)
 
 	r.Get("/sites/{id}/project", s.handleProject)
 	r.Post("/sites/{id}/project/restart", s.handleRestartProject)
@@ -284,6 +285,7 @@ func (s *Server) handleDatabases(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"items": list, "adminer": s.Apps.AdminerPort(r.Context()) > 0, "phpmyadmin": s.Apps.PMAServers(r.Context()), "backups": backups,
+		"access": s.DBs.AccessModes(r.Context()),
 	})
 }
 

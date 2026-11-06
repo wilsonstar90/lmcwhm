@@ -49,6 +49,9 @@ type Installed struct {
 	CreatedAt int64  `json:"created_at"`
 	// OOMProtect: started with a low OOM score (settings window).
 	OOMProtect bool `json:"oom_protect"`
+	// Public: the port is published on every address, not only loopback (a
+	// database allows remote access; the firewall decides who gets through).
+	Public bool `json:"public"`
 	// FullVersion is the exact version of the local image ("11.4.4").
 	FullVersion string `json:"full_version"`
 	// BuildMode is "fast" (the official pre-built image) or "source"
@@ -112,7 +115,7 @@ func (sv *Service) dir(app, version string) string {
 // ---- persistence ----
 
 func (sv *Service) list(ctx context.Context, where string, args ...any) ([]Installed, error) {
-	rows, err := sv.st.DB.QueryContext(ctx, `SELECT id, app, version, port, secret, created_at, oom_protect, build_mode, build_args, build_cflags FROM apps `+where+` ORDER BY app, version DESC`, args...)
+	rows, err := sv.st.DB.QueryContext(ctx, `SELECT id, app, version, port, secret, created_at, oom_protect, build_mode, build_args, build_cflags, public FROM apps `+where+` ORDER BY app, version DESC`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +124,7 @@ func (sv *Service) list(ctx context.Context, where string, args ...any) ([]Insta
 	for rows.Next() {
 		var i Installed
 		var sealed string
-		if err := rows.Scan(&i.ID, &i.App, &i.Version, &i.Port, &sealed, &i.CreatedAt, &i.OOMProtect, &i.BuildMode, &i.BuildArgs, &i.BuildCFlags); err != nil {
+		if err := rows.Scan(&i.ID, &i.App, &i.Version, &i.Port, &sealed, &i.CreatedAt, &i.OOMProtect, &i.BuildMode, &i.BuildArgs, &i.BuildCFlags, &i.Public); err != nil {
 			return nil, err
 		}
 		a, v, ok := Lookup(i.App, i.Version)
@@ -548,12 +551,18 @@ func (sv *Service) prepare(ctx context.Context, i Installed, dir string) error {
 }
 
 // args is the `docker run` tail for a service. Databases sit on the default
-// bridge and publish their standard port on loopback only.
+// bridge and publish their standard port on loopback only, or on every
+// address (IPv4 and IPv6) while Public.
 func (sv *Service) args(i Installed) []string {
 	dir := sv.dir(i.App, i.Version)
 	data := filepath.Join(dir, "data")
 	conf := filepath.Join(dir, "conf")
-	pub := func(inner int) []string { return []string{"-p", fmt.Sprintf("127.0.0.1:%d:%d", i.Port, inner)} }
+	pub := func(inner int) []string {
+		if i.Public {
+			return []string{"-p", fmt.Sprintf("%d:%d", i.Port, inner)}
+		}
+		return []string{"-p", fmt.Sprintf("127.0.0.1:%d:%d", i.Port, inner)}
+	}
 	// The socket directory: the server on 3306 shares its socket with PHP, so
 	// DB_HOST 'localhost' works like on aaPanel; others keep their own.
 	sock := filepath.Join(dir, "run")

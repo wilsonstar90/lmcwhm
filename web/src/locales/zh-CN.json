@@ -310,7 +310,12 @@
       "invalid_password": "密码：8-64 个字符，字母、数字和 _ % + = . , : - #",
       "exists": "已有同名数据库或用户",
       "not_found": "找不到数据库",
-      "engine_unsupported": "此引擎不支持管理数据库"
+      "engine_unsupported": "此引擎不支持管理数据库",
+      "access_unsupported": "只有 MySQL / MariaDB 支持此功能",
+      "invalid_access": "权限设置无效",
+      "invalid_ip": "IP 地址无效：每行一个 IPv4 / IPv6 地址或 IPv4 网段（最多 50 个）",
+      "invalid_table": "表不存在或名称无效",
+      "invalid_action": "不支持此操作"
     },
     "files": {
       "invalid_path": "路径无效",
@@ -3660,5 +3665,45 @@
     "ban_for": "就封禁",
     "counts": "计算以下来源：",
     "note": "白名单 IP、服务器自身 IP 和信任名单（Cloudflare、搜索引擎）不会被封；仅检测的请求不计。封禁会在“云端黑白名单”显示，来源为“自动封禁”。"
+  },
+  "dbt": {
+    "tools": "工具",
+    "title": "数据库工具箱 ·【{name}】",
+    "summary": "数据库名称：{name}　大小：{size}",
+    "table": "表名",
+    "engine": "引擎",
+    "collation": "字符集",
+    "rows": "行数",
+    "export_schema": "导出表结构",
+    "repair": "修复",
+    "optimize": "优化",
+    "to_innodb": "转为 InnoDB",
+    "to_myisam": "转为 MyISAM",
+    "bulk_pick": "请选择批量操作",
+    "bulk_run": "批量操作",
+    "bulk_run_n": "批量操作（已选中 {n} 项）",
+    "note_optimize": "【优化】执行 OPTIMIZE TABLE，回收未释放的磁盘空间，建议每月执行一次",
+    "note_repair": "【修复】执行 REPAIR TABLE 修复损坏的表（主要用于 MyISAM），仅做简单修复",
+    "note_engine": "【转换引擎】执行 ALTER TABLE … ENGINE，大表会锁表一段时间；建议全部使用 InnoDB",
+    "note_size": "大小从 information_schema 读取，与实际磁盘占用可能略有差异"
+  },
+  "dba": {
+    "col": "权限",
+    "title": "设置数据库权限",
+    "mode": "访问权限",
+    "local": "本地服务器",
+    "all": "所有人",
+    "ips": "指定 IP",
+    "ips_n": "指定 IP（{n}）",
+    "ip_list": "IP 地址",
+    "ip_hint": "每行一个，支持 IPv4、IPv6 和 IPv4 网段（例如 10.0.0.0/24）",
+    "explain_local": "仅允许本服务器上的网站和程序连接（localhost、127.0.0.1、Docker 网络）。端口 {port} 不对外开放。",
+    "explain_all": "任何 IP 都可以用账号密码连接端口 {port}。系统会在防火墙添加一条放行 TCP {port} 的规则。",
+    "explain_ips": "本服务器和上面的 IP 可以连接端口 {port}，其他 IP 会被防火墙拦截。系统会在防火墙添加只放行这些 IP 的规则（已有规则覆盖则不再添加）。IPv6 连接由防火墙限制来源。",
+    "fw_off": "防火墙未启用：开放后所有 IP 都能连接此端口，只靠密码保护。",
+    "fw_open": "前往防火墙",
+    "restart": "{engine} 会重启一次（切换对外开放的端口），期间所有网站会短暂无法连接数据库。",
+    "rule_owned": "防火墙规则 #{id} 是为此数据库自动添加的，改回“本地服务器”时会自动删除。",
+    "rule_existing": "已有防火墙规则 #{id} 放行这些 IP，系统没有另外添加规则。"
   }
 }

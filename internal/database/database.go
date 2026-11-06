@@ -62,6 +62,8 @@ type Service struct {
 	tasks *tasks.Manager
 	// BeforeDrop runs before a database is dropped (the recycle bin keeps a dump).
 	BeforeDrop func(ctx context.Context, d Database, log tasks.Logf) error
+	// Firewall admits remote clients (per-database access); nil = local only.
+	Firewall Firewall
 }
 
 func New(st *store.Store, box *secrets.Box, apps *appstore.Service, tm *tasks.Manager) *Service {
@@ -184,7 +186,12 @@ func (sv *Service) create(ctx context.Context, eng appstore.Installed, in Create
 	}
 	log("done: %s@127.0.0.1:%d/%s", in.Username, eng.Port, in.Name)
 	id, _ := res.LastInsertId()
-	return sv.Get(ctx, id)
+	d, err := sv.Get(ctx, id)
+	if err == nil && eng.Public && accessEngine(eng.App) {
+		// The port is reachable from outside: this user stays local.
+		err = sv.reconcile(ctx, eng, d, Access{Mode: AccessLocal}, log)
+	}
+	return d, err
 }
 
 // Delete drops the database and its user (task).
@@ -204,9 +211,14 @@ func (sv *Service) Delete(ctx context.Context, id int64) (string, error) {
 			}
 		}
 		log("dropping database %s and user %s", d.Name, d.Username)
-		if err := sv.exec(ctx, eng, dropScript(eng.App, d.Name, d.Username)); err != nil {
+		script := dropScript(eng.App, d.Name, d.Username)
+		if accessEngine(eng.App) {
+			script = sv.mysqlForHosts(ctx, eng, d.Username, script, "DROP USER IF EXISTS '%[1]s'@'%[2]s';\n")
+		}
+		if err := sv.exec(ctx, eng, script); err != nil {
 			return err
 		}
+		sv.dropAccess(ctx, d, log)
 		_, err := sv.st.DB.ExecContext(ctx, `DELETE FROM databases WHERE id = ?`, id)
 		return err
 	}), nil
@@ -228,7 +240,11 @@ func (sv *Service) SetPassword(ctx context.Context, id int64, pass string) (stri
 	if !passRe.MatchString(pass) {
 		return "", ErrBadPassword
 	}
-	if err := sv.exec(ctx, eng, passwordScript(eng.App, d.Name, d.Username, pass)); err != nil {
+	script := passwordScript(eng.App, d.Name, d.Username, pass)
+	if accessEngine(eng.App) {
+		script = sv.mysqlForHosts(ctx, eng, d.Username, script, "ALTER USER '%[1]s'@'%[2]s' IDENTIFIED BY '"+pass+"';\n")
+	}
+	if err := sv.exec(ctx, eng, script); err != nil {
 		return "", err
 	}
 	_, err = sv.st.DB.ExecContext(ctx, `UPDATE databases SET password = ? WHERE id = ?`, sv.box.Seal(pass), id)
@@ -244,6 +260,30 @@ func (sv *Service) SetRemark(ctx context.Context, id int64, remark string) error
 		return ErrNotFound
 	}
 	return nil
+}
+
+// mysqlForHosts adds stmt (user %[1]s, host %[2]s) for every account of the
+// user other than '%' (which script already covers).
+func (sv *Service) mysqlForHosts(ctx context.Context, eng appstore.Installed, user, script, stmt string) string {
+	hosts, err := sv.userHosts(ctx, eng, user)
+	if err != nil {
+		return script
+	}
+	var b strings.Builder
+	has := false
+	for _, h := range hosts {
+		if h == "%" {
+			has = true
+			continue
+		}
+		if safeHost(h) {
+			fmt.Fprintf(&b, stmt, user, h)
+		}
+	}
+	if !has && strings.HasPrefix(stmt, "ALTER") {
+		return b.String() // no '%' account to alter
+	}
+	return script + b.String()
 }
 
 func (sv *Service) exec(ctx context.Context, eng appstore.Installed, script string) error {

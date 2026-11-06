@@ -310,7 +310,12 @@
       "invalid_password": "密碼：8-64 字，英文字母、數字同 _ % + = . , : - #",
       "exists": "已有同名資料庫或用戶",
       "not_found": "搵唔到資料庫",
-      "engine_unsupported": "呢個引擎唔支援管理資料庫"
+      "engine_unsupported": "呢個引擎唔支援管理資料庫",
+      "access_unsupported": "只有 MySQL / MariaDB 支援呢個功能",
+      "invalid_access": "權限設定唔啱",
+      "invalid_ip": "IP 地址唔啱：每行一個 IPv4 / IPv6 地址或者 IPv4 網段（最多 50 個）",
+      "invalid_table": "資料表唔存在或者名稱唔啱",
+      "invalid_action": "唔支援呢個操作"
     },
     "files": {
       "invalid_path": "路徑無效",
@@ -3660,5 +3665,45 @@
     "ban_for": "就封鎖",
     "counts": "計算以下來源：",
     "note": "白名單 IP、伺服器自己嘅 IP 同信任名單（Cloudflare、搜尋引擎）唔會被封；只偵測嘅請求唔計。封鎖會喺「雲端黑白名單」顯示，來源係「自動封鎖」。"
+  },
+  "dbt": {
+    "tools": "工具",
+    "title": "數據庫工具箱 ·【{name}】",
+    "summary": "數據庫名稱：{name}　大小：{size}",
+    "table": "表名",
+    "engine": "引擎",
+    "collation": "字符集",
+    "rows": "行數",
+    "export_schema": "導出表結構",
+    "repair": "修復",
+    "optimize": "優化",
+    "to_innodb": "轉為 InnoDB",
+    "to_myisam": "轉為 MyISAM",
+    "bulk_pick": "請選擇批量操作",
+    "bulk_run": "批量操作",
+    "bulk_run_n": "批量操作（已選中 {n} 項）",
+    "note_optimize": "【優化】執行 OPTIMIZE TABLE，回收未釋放嘅磁碟空間，建議每月執行一次",
+    "note_repair": "【修復】執行 REPAIR TABLE 修復損壞嘅資料表（主要用於 MyISAM），只做簡單修復",
+    "note_engine": "【轉換引擎】執行 ALTER TABLE … ENGINE，大表會鎖表一段時間；建議全部用 InnoDB",
+    "note_size": "大小由 information_schema 讀取，同實際佔用嘅磁碟空間可能有少少差異"
+  },
+  "dba": {
+    "col": "權限",
+    "title": "設定數據庫權限",
+    "mode": "訪問權限",
+    "local": "本地伺服器",
+    "all": "所有人",
+    "ips": "指定 IP",
+    "ips_n": "指定 IP（{n}）",
+    "ip_list": "IP 地址",
+    "ip_hint": "每行一個，支援 IPv4、IPv6 同 IPv4 網段（例如 10.0.0.0/24）",
+    "explain_local": "只限本伺服器上嘅網站同程式連入（localhost、127.0.0.1、Docker 網絡）。端口 {port} 唔會對外開放。",
+    "explain_all": "任何 IP 都可以用帳號密碼連入端口 {port}。系統會喺防火牆加一條放行 TCP {port} 嘅規則。",
+    "explain_ips": "本伺服器同上面嘅 IP 可以連入端口 {port}，其他 IP 會被防火牆攔截。系統會喺防火牆加一條只放行呢啲 IP 嘅規則（已有規則覆蓋就唔會再加）。IPv6 連線由防火牆限制來源。",
+    "fw_off": "防火牆未啟用：開放之後所有 IP 都可以連入呢個端口，只靠密碼保護。",
+    "fw_open": "去防火牆",
+    "restart": "{engine} 會重新啟動一次（切換對外開放端口），期間所有網站會短暫連唔到數據庫。",
+    "rule_owned": "防火牆規則 #{id} 係為呢個數據庫自動加嘅，改返「本地伺服器」會自動刪除。",
+    "rule_existing": "已有防火牆規則 #{id} 放行呢啲 IP，系統冇另外加規則。"
   }
 }

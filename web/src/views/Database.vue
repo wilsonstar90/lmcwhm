@@ -15,6 +15,8 @@ import RedisKeys from '../components/RedisKeys.vue'
 import UpdateBadge from '../components/UpdateBadge.vue'
 import DbBackups from '../components/DbBackups.vue'
 import DbImport from '../components/DbImport.vue'
+import DbTools from '../components/DbTools.vue'
+import DbAccess from '../components/DbAccess.vue'
 import { useUpdates } from '../stores/updates'
 
 const { t } = useI18n()
@@ -34,6 +36,12 @@ const pma = ref<Record<number, number>>({})
 const backups = ref<Record<number, number>>({})
 const backupsOf = ref<Database | null>(null)
 const importInto = ref<Database | null>(null)
+// Tools (tables) and access (who may connect) windows, MySQL / MariaDB.
+const toolsOf = ref<Database | null>(null)
+const accessOf = ref<Database | null>(null)
+const tools = ref<InstanceType<typeof DbTools> | null>(null)
+type AccessMode = { mode: 'local' | 'all' | 'ips'; ips: string[] }
+const access = ref<Record<number, AccessMode>>({})
 const onTask = (id: string, title: string) => (task.value = { id, title })
 const bk = ref<InstanceType<typeof DbBackups> | null>(null)
 const loading = ref(false)
@@ -60,7 +68,11 @@ const f = ref(blank())
 async function load() {
   loading.value = true
   try {
-    const [d, a] = await Promise.all([get<{ items: Database[]; adminer: boolean; phpmyadmin: Record<number, number>; backups?: Record<number, number> }>('/databases'), get<{ items: InstalledApp[] }>('/apps')])
+    const [d, a] = await Promise.all([
+      get<{ items: Database[]; adminer: boolean; phpmyadmin: Record<number, number>; backups?: Record<number, number>; access?: Record<number, AccessMode> }>('/databases'),
+      get<{ items: InstalledApp[] }>('/apps'),
+    ])
+    access.value = d.access ?? {}
     dbs.value = d.items
     adminer.value = d.adminer
     pma.value = d.phpmyadmin ?? {}
@@ -143,7 +155,7 @@ function toggle(id: number) {
 }
 
 const columns: DataTableColumns<Database> = [
-  { title: () => t('db.name'), key: 'name', render: (d) => h('b', d.name) },
+  { title: () => t('db.name'), key: 'name', minWidth: 140, ellipsis: { tooltip: true }, render: (d) => h('b', d.name) },
   { title: () => t('db.username'), key: 'username', width: 140 },
   {
     title: () => t('db.password'),
@@ -169,6 +181,17 @@ const columns: DataTableColumns<Database> = [
   },
   { title: () => t('db.host'), key: 'host', width: 140, render: (d) => `${d.host}:${d.port}` },
   {
+    title: () => t('dba.col'),
+    key: 'access',
+    width: 120,
+    render: (d) => {
+      if (!isMySQL(d.engine)) return h('span', { style: 'opacity: .5' }, '—')
+      const a = access.value[d.id] ?? { mode: 'local', ips: [] }
+      const label = a.mode === 'ips' ? t('dba.ips_n', { n: a.ips.length }) : t(`dba.${a.mode}`)
+      return h('a', { class: a.mode === 'local' ? 'link' : 'link remote', title: a.ips.join('\n'), onClick: () => (accessOf.value = d) }, label)
+    },
+  },
+  {
     title: () => t('site.remark'),
     key: 'remark',
     render: (d) =>
@@ -177,10 +200,11 @@ const columns: DataTableColumns<Database> = [
   {
     title: '',
     key: 'actions',
-    width: 260,
+    width: 320,
     render: (d) =>
       h(NSpace, { size: 6 }, () => [
         pma.value[d.app_id] ? h(NButton, { size: 'tiny', type: 'primary', ghost: true, onClick: () => openPMA(`/databases/${d.id}/phpmyadmin`) }, () => 'phpMyAdmin') : null,
+        isMySQL(d.engine) ? h(NButton, { size: 'tiny', onClick: () => (toolsOf.value = d) }, () => t('dbt.tools')) : null,
         h(NButton, { size: 'tiny', onClick: () => (pw.value = { db: d, value: '' }) }, () => t('db.change_password')),
         h(
           NPopconfirm,
@@ -222,7 +246,7 @@ const columns: DataTableColumns<Database> = [
     <RedisKeys v-if="current.app === 'redis'" :key="current.id" :app="current">
       <template #actions><n-button @click="settings = current">{{ t('db.settings') }}</n-button></template>
     </RedisKeys>
-    <n-data-table v-else size="small" :columns="columns" :data="filtered" :loading="loading" :row-key="(r: Database) => r.id" :scroll-x="1000" />
+    <n-data-table v-else size="small" :columns="columns" :data="filtered" :loading="loading" :row-key="(r: Database) => r.id" :scroll-x="1300" />
   </template>
 
   <n-modal :show="show" @update:show="(v: boolean) => (show = v)">
@@ -269,7 +293,9 @@ const columns: DataTableColumns<Database> = [
   <AppSettings :app="settings" @close="settings = null" @changed="load" />
   <DbBackups ref="bk" :db="backupsOf" @close="backupsOf = null; load()" @task="onTask" />
   <DbImport :db="importInto" @close="importInto = null; load()" @task="onTask" />
-  <TaskModal :task-id="task?.id ?? null" :title="task?.title ?? ''" @close="task = null; load(); bk?.load()" @done="load" />
+  <DbTools ref="tools" :db="toolsOf" @close="toolsOf = null" @task="onTask" />
+  <DbAccess :db="accessOf" :engine="current ? `${current.name} ${current.version}` : ''" @close="accessOf = null" @task="onTask" />
+  <TaskModal :task-id="task?.id ?? null" :title="task?.title ?? ''" @close="task = null; load(); bk?.load(); tools?.load()" @done="load" />
 </template>
 
 <style scoped>
@@ -282,6 +308,9 @@ const columns: DataTableColumns<Database> = [
 }
 :deep(.link.none) {
   color: #d03050;
+}
+:deep(.link.remote) {
+  color: #f0a020;
 }
 .hint {
   font-size: 12px;

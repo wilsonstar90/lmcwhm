@@ -310,7 +310,12 @@
       "invalid_password": "Password: 8-64 characters, letters, digits and _ % + = . , : - #",
       "exists": "A database or user with this name exists",
       "not_found": "Database not found",
-      "engine_unsupported": "This engine does not manage databases"
+      "engine_unsupported": "This engine does not manage databases",
+      "access_unsupported": "Only MySQL / MariaDB support this",
+      "invalid_access": "Invalid access setting",
+      "invalid_ip": "Invalid address: one IPv4 / IPv6 address or IPv4 network per line (up to 50)",
+      "invalid_table": "No such table, or an invalid name",
+      "invalid_action": "Unsupported action"
     },
     "files": {
       "invalid_path": "Invalid path",
@@ -3611,5 +3616,45 @@
     "ban_for": "→ ban for",
     "counts": "Count:",
     "note": "Allowed addresses, the server's own addresses and trusted ranges (Cloudflare, search engines) are never banned; requests that were only detected do not count. Bans show under Auto-updated lists with the source \"Auto-ban\"."
+  },
+  "dbt": {
+    "tools": "Tools",
+    "title": "Database tools · {name}",
+    "summary": "Database: {name}   Size: {size}",
+    "table": "Table",
+    "engine": "Engine",
+    "collation": "Collation",
+    "rows": "Rows",
+    "export_schema": "Export structure",
+    "repair": "Repair",
+    "optimize": "Optimize",
+    "to_innodb": "To InnoDB",
+    "to_myisam": "To MyISAM",
+    "bulk_pick": "Bulk action",
+    "bulk_run": "Run",
+    "bulk_run_n": "Run ({n} selected)",
+    "note_optimize": "Optimize runs OPTIMIZE TABLE to reclaim unused disk space; monthly is a good habit",
+    "note_repair": "Repair runs REPAIR TABLE on damaged tables (mostly MyISAM); it is a simple repair only",
+    "note_engine": "Converting runs ALTER TABLE … ENGINE and locks big tables for a while; InnoDB is recommended",
+    "note_size": "Sizes come from information_schema and can differ a little from disk usage"
+  },
+  "dba": {
+    "col": "Access",
+    "title": "Database access",
+    "mode": "Who can connect",
+    "local": "This server",
+    "all": "Everyone",
+    "ips": "Listed IPs",
+    "ips_n": "Listed IPs ({n})",
+    "ip_list": "IP addresses",
+    "ip_hint": "One per line: IPv4, IPv6, or an IPv4 network (e.g. 10.0.0.0/24)",
+    "explain_local": "Only sites and programs on this server (localhost, 127.0.0.1, Docker networks). Port {port} stays closed to the outside.",
+    "explain_all": "Any IP can connect to port {port} with the user name and password. A firewall rule admitting TCP {port} is added.",
+    "explain_ips": "This server and the addresses above can connect to port {port}; the firewall drops everyone else. A rule admitting only these addresses is added (unless one already covers them). IPv6 sources are limited by the firewall.",
+    "fw_off": "The firewall is off: once opened, any IP can reach this port, with only the password in the way.",
+    "fw_open": "Open firewall",
+    "restart": "{engine} restarts once (its port is published or unpublished); sites lose the database for a moment.",
+    "rule_owned": "Firewall rule #{id} was added for this database and goes when it is back to This server.",
+    "rule_existing": "Firewall rule #{id} already admits these addresses; no rule was added."
   }
 }

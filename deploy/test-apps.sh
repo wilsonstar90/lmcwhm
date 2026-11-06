@@ -558,6 +558,65 @@ api GET /firewall | python3 -c "import sys,json; r=[r for r in json.load(sys.std
 api POST "/firewall/rules/$RLID/delete" >/dev/null
 [[ "$(probe 18190)" == *"Directory listing"* ]] || fail "multi-source rule still enforced after delete"
 pass "port rule with several sources"
+
+# ---------- database access (local / everyone / listed IPs) and tools ----------
+MID="$(app_id mariadb 11.4)"
+task POST /databases "{\"app_id\":$MID,\"name\":\"remote1\",\"password\":\"Remote-pass-123\"}"
+RDB="$(db_id remote1)"
+api GET "/databases/$RDB/access" | python3 -c "import sys,json; a=json.load(sys.stdin); assert a['access']['mode']=='local' and a['firewall']['enabled'], a" || fail "default access"
+# The "remote" client lives in its own network namespace on a veth pair:
+# its packets arrive on an interface like outside traffic, Docker DNATs them
+# to the published port and they cross the forward chain (and its guard).
+ip netns add lmcwhm-e2e 2>/dev/null || true
+ip link add lmcwhm-e2e0 type veth peer name lmcwhm-e2e1 2>/dev/null || true
+ip link set lmcwhm-e2e1 netns lmcwhm-e2e 2>/dev/null || true
+ip addr add 10.250.0.1/24 dev lmcwhm-e2e0 2>/dev/null || true
+ip link set lmcwhm-e2e0 up
+ip netns exec lmcwhm-e2e ip addr add 10.250.0.2/24 dev lmcwhm-e2e1 2>/dev/null || true
+ip netns exec lmcwhm-e2e ip link set lmcwhm-e2e1 up
+ip netns exec lmcwhm-e2e ip link set lo up
+mdb_greet() { ip netns exec lmcwhm-e2e timeout 4 bash -c 'exec 3<>/dev/tcp/10.250.0.1/3306 && head -c 120 <&3' 2>/dev/null | tr -cd '[:print:]'; }
+# Listed IPs: the port is published on every address, a rule admits only them.
+task PUT "/databases/$RDB/access" '{"mode":"ips","ips":["203.0.113.7","2001:db8::7"]}'
+docker port lmcwhm-mariadb114 | grep -q "0.0.0.0:3306" || fail "engine not published for remote access: $(docker port lmcwhm-mariadb114)"
+RULE="$(api GET "/databases/$RDB/access" | jget "['access']['rule_id']")"
+api GET /firewall | python3 -c "import sys,json; r=[r for r in json.load(sys.stdin)['rules'] if r['id']==$RULE][0]; assert r['ports']=='3306' and r['source']=='203.0.113.7,2001:db8::7' and 'remote1' in r['remark'], r" || fail "access rule"
+nft list chain inet lmcwhm forward | grep -q 'database guard' || fail "forward guard missing: $(nft list chain inet lmcwhm forward)"
+[[ "$(mdb_greet)" != *MariaDB* ]] || fail "unlisted source reached the published database port"
+users="$(docker exec -e MYSQL_PWD="$(api GET "/apps/$MID/credentials" | jget "['password']")" lmcwhm-mariadb114 mariadb -N -uroot -h127.0.0.1 -e "SELECT Host FROM mysql.user WHERE User='remote1'")"
+[[ "$users" == *203.0.113.7* && "$users" == *2001:db8::7* && "$users" == *localhost* && "$users" != *%* ]] || fail "remote1 accounts: $users"
+# Databases left local on the engine keep working for local sites.
+if [[ -f /www/wwwroot/db.test/index.php ]]; then
+  [[ "$(get80 db.test /index.php)" == "db-ok-42" ]] || fail "local site lost the database: $(get80 db.test /index.php)"
+  [[ "$(get80 db.test /sock.php)" == "sock-ok-42-42" ]] || fail "local site lost the socket: $(get80 db.test /sock.php)"
+fi
+# A listed address gets through (the rule follows the new list).
+task PUT "/databases/$RDB/access" '{"mode":"ips","ips":["10.250.0.2"]}'
+api GET /firewall | python3 -c "import sys,json; assert not [r for r in json.load(sys.stdin)['rules'] if '203.0.113.7' in r['source']]" || fail "old access rule kept"
+[[ "$(mdb_greet)" == *MariaDB* ]] || fail "listed address cannot reach the database port: $(mdb_greet)"
+# Back to local: rule gone, port on loopback again.
+task PUT "/databases/$RDB/access" '{"mode":"local"}'
+docker port lmcwhm-mariadb114 | grep -q "0.0.0.0:3306" && fail "engine still published after going local"
+api GET /firewall | python3 -c "import sys,json; assert not [r for r in json.load(sys.stdin)['rules'] if 'remote1' in r['remark']]" || fail "access rule left behind"
+nft list chain inet lmcwhm forward | grep -q 'database guard' && fail "guard left behind"
+docker exec -e MYSQL_PWD=Remote-pass-123 lmcwhm-mariadb114 mariadb -uremote1 -h127.0.0.1 remote1 -e "CREATE TABLE t1(x INT) ENGINE=InnoDB; INSERT INTO t1 VALUES (1)" || fail "remote1 user after going local"
+code="$(api PUT "/databases/$RDB/access" '{"mode":"ips","ips":["1.2.3.4'"'"'"]}' | jget "['code']")"
+[[ "$code" == db.invalid_ip ]] || fail "bad address accepted: $code"
+# Tools: list, optimize, convert, comment, schema.
+api GET "/databases/$RDB/tables" | python3 -c "import sys,json; t=json.load(sys.stdin)['items']; assert t[0]['name']=='t1' and t[0]['engine']=='InnoDB', t" || fail "tables"
+task POST "/databases/$RDB/tables/action" '{"action":"optimize","tables":["t1"]}'
+task POST "/databases/$RDB/tables/action" '{"action":"myisam","tables":["t1"]}'
+api PUT "/databases/$RDB/tables/comment" '{"name":"t1","comment":"it'"'"'s a test"}' | grep -q '"ok":true' || fail "table comment"
+api GET "/databases/$RDB/tables" | python3 -c "import sys,json; t=json.load(sys.stdin)['items'][0]; assert t['engine']=='MyISAM' and t['comment']==\"it's a test\", t" || fail "convert / comment"
+task POST "/databases/$RDB/tables/action" '{"action":"repair","tables":["t1"]}'
+api GET "/databases/$RDB/tables/schema?name=t1" | grep -q 'CREATE TABLE' || fail "table schema"
+code="$(api POST "/databases/$RDB/tables/action" '{"action":"optimize","tables":["nope`; DROP"]}' | jget "['code']")"
+[[ "$code" == db.invalid_table ]] || fail "unknown table accepted: $code"
+task POST "/databases/$RDB/delete"
+api POST /databases/trash/empty >/dev/null
+ip link del lmcwhm-e2e0 2>/dev/null || true
+ip netns del lmcwhm-e2e 2>/dev/null || true
+pass "database access: listed IPs admitted by a firewall rule, others dropped, back to local; table tools"
 # Deny default without confirmation reverts to allow.
 fwput '{"policy":"drop"}' | grep -q '"confirm":true' || fail "drop policy not guarded"
 nft list chain inet lmcwhm input | grep -q "policy drop" || fail "drop policy not installed"
