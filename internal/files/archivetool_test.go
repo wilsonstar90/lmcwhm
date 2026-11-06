@@ -49,8 +49,8 @@ Details: RAR 5
         Type: Directory
 
         Name: site/evil
-        Type: Symlink
-      Target: /etc
+        Type: File
+  Attributes: lrwxrwxrwx
 `)
 	l := parseRarList(out)
 	if len(l) != 3 || l[0].name != "site/index.php" || l[0].dir || !l[1].dir || !l[2].link {

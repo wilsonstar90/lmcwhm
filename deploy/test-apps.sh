@@ -458,6 +458,11 @@ ln -s /etc /www/wwwroot/cf/a/link
 (cd /www/wwwroot/cf && 7z a -snl -bd -y evil.7z a >/dev/null 2>&1 || 7zz a -snl -bd -y evil.7z a >/dev/null 2>&1)
 code="$(api POST /files/extract '{"path":"/www/wwwroot/cf/evil.7z","dest":"/www/wwwroot/cf/evil"}' | jget "['code']")"
 [[ "$code" == files.archive_has_links ]] || fail "7z with a symlink extracted: $code"
+if command -v rar >/dev/null; then
+  (cd /www/wwwroot/cf && rar a -ol -idq evil.rar a >/dev/null 2>&1)
+  code="$(api POST /files/extract '{"path":"/www/wwwroot/cf/evil.rar","dest":"/www/wwwroot/cf/evil"}' | jget "['code']")"
+  [[ "$code" == files.archive_has_links ]] || fail "rar with a symlink extracted: $code"
+fi
 rm -rf /www/wwwroot/cf
 # Server reboot needs the password (a wrong one is refused; CI never reboots).
 [[ "$(api POST /system/reboot '{"password":"wrong"}' | jget "['code']")" == auth.bad_password ]] || fail "reboot without the password"

@@ -166,7 +166,8 @@ func listTool(kind, absArchive string) ([]toolEntry, error) {
 		if e != nil {
 			return nil, e
 		}
-		out, err = runTool(filepath.Dir(absArchive), bin, "lt", "-idq", "--", absArchive)
+		// No -idq here: quiet mode also drops the listing.
+		out, err = runTool(filepath.Dir(absArchive), bin, "lt", "--", absArchive)
 		if err != nil {
 			return nil, ErrBadFormat
 		}
@@ -252,6 +253,10 @@ func parseRarList(out []byte) []toolEntry {
 			if cur != nil && v != "" {
 				cur.link = true
 			}
+		case "Attributes":
+			if cur != nil && strings.HasPrefix(v, "l") {
+				cur.link = true
+			}
 		}
 	}
 	if cur != nil {
@@ -278,6 +283,9 @@ func extractTool(kind, absArchive, absDest string, dst *os.Root, skipExisting bo
 	list, err := listTool(kind, absArchive)
 	if err != nil {
 		return err
+	}
+	if len(list) == 0 { // a listing we could not read: never extract unchecked
+		return ErrBadFormat
 	}
 	if err := checkEntries(list); err != nil {
 		return err
