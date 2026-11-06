@@ -575,7 +575,9 @@ ip link set lmcwhm-e2e0 up
 ip netns exec lmcwhm-e2e ip addr add 10.250.0.2/24 dev lmcwhm-e2e1 2>/dev/null || true
 ip netns exec lmcwhm-e2e ip link set lmcwhm-e2e1 up
 ip netns exec lmcwhm-e2e ip link set lo up
-mdb_greet() { ip netns exec lmcwhm-e2e timeout 4 bash -c 'exec 3<>/dev/tcp/10.250.0.1/3306 && head -c 120 <&3' 2>/dev/null | tr -cd '[:print:]'; }
+# The greeting is short and the server then waits: read until the timeout.
+mdb_greet() { ip netns exec lmcwhm-e2e timeout 3 bash -c 'exec 3<>/dev/tcp/10.250.0.1/3306 && cat <&3' 2>/dev/null | tr -cd '[:print:]'; }
+mdb_diag() { echo "--- forward"; nft list chain inet lmcwhm forward; echo "--- nat"; iptables -t nat -S 2>/dev/null | grep -i 3306; docker port lmcwhm-mariadb114; }
 # Listed IPs: the port is published on every address, a rule admits only them.
 task PUT "/databases/$RDB/access" '{"mode":"ips","ips":["203.0.113.7","2001:db8::7"]}'
 docker port lmcwhm-mariadb114 | grep -q "0.0.0.0:3306" || fail "engine not published for remote access: $(docker port lmcwhm-mariadb114)"
@@ -590,10 +592,13 @@ if [[ -f /www/wwwroot/db.test/index.php ]]; then
   [[ "$(get80 db.test /index.php)" == "db-ok-42" ]] || fail "local site lost the database: $(get80 db.test /index.php)"
   [[ "$(get80 db.test /sock.php)" == "sock-ok-42-42" ]] || fail "local site lost the socket: $(get80 db.test /sock.php)"
 fi
+# Everyone: reachable (also proves the test path works).
+task PUT "/databases/$RDB/access" '{"mode":"all"}'
+[[ "$(mdb_greet)" == *MariaDB* ]] || { mdb_diag; fail "everyone mode: database port not reachable: $(mdb_greet)"; }
 # A listed address gets through (the rule follows the new list).
 task PUT "/databases/$RDB/access" '{"mode":"ips","ips":["10.250.0.2"]}'
 api GET /firewall | python3 -c "import sys,json; assert not [r for r in json.load(sys.stdin)['rules'] if '203.0.113.7' in r['source']]" || fail "old access rule kept"
-[[ "$(mdb_greet)" == *MariaDB* ]] || fail "listed address cannot reach the database port: $(mdb_greet)"
+[[ "$(mdb_greet)" == *MariaDB* ]] || { mdb_diag; fail "listed address cannot reach the database port: $(mdb_greet)"; }
 # Back to local: rule gone, port on loopback again.
 task PUT "/databases/$RDB/access" '{"mode":"local"}'
 docker port lmcwhm-mariadb114 | grep -q "0.0.0.0:3306" && fail "engine still published after going local"
