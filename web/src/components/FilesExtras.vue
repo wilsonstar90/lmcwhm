@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Icon } from './icons'
 // File manager extras: favourites, search (names / contents), remote
 // download and share links. Files.vue opens these through the exposed methods.
 import { computed, h, onMounted, ref } from 'vue'
@@ -141,9 +142,11 @@ defineExpose({ share, remote: () => (fetchForm.value = { url: '', name: '' }) })
 </script>
 
 <template>
-  <n-dropdown :options="favMenu" trigger="click" @select="onFav"><n-button size="small">{{ isFav ? '★' : '☆' }} {{ t('fx.favorites') }}</n-button></n-dropdown>
-  <n-button size="small" @click="openSearch">{{ t('fx.search') }}</n-button>
-  <n-button size="small" @click="openShares">{{ t('fx.shares') }}</n-button>
+  <n-dropdown :options="favMenu" trigger="click" @select="onFav">
+    <n-button size="small"><template #icon><Icon name="star" :class="{ fav: isFav }" /></template>{{ t('fx.favorites') }}</n-button>
+  </n-dropdown>
+  <n-button size="small" @click="openSearch"><template #icon><Icon name="search" /></template>{{ t('fx.search') }}</n-button>
+  <n-button size="small" @click="openShares"><template #icon><Icon name="link" /></template>{{ t('fx.shares') }}</n-button>
 
   <n-modal :show="!!search" @update:show="(v: boolean) => !v && (search = null)">
     <n-card v-if="search" :title="`${t('fx.search')} · ${cwd}`" style="width: min(860px, calc(100vw - 32px))" closable @close="search = null">
@@ -203,6 +206,10 @@ defineExpose({ share, remote: () => (fetchForm.value = { url: '', name: '' }) })
 </template>
 
 <style scoped>
+.fav {
+  fill: #f0a020;
+  color: #f0a020;
+}
 .sub {
   font-size: 12px;
   opacity: 0.65;

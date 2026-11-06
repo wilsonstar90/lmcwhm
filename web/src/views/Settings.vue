@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import QRCode from 'qrcode'
 import {
@@ -16,6 +16,7 @@ import SettingsMenu from '../components/SettingsMenu.vue'
 import SettingsLogo from '../components/SettingsLogo.vue'
 import MaintenanceBar from '../components/MaintenanceBar.vue'
 import PathInput from '../components/PathInput.vue'
+import { knownZones, zoneLabel, zoneOptions } from '../tz'
 import { useRoute } from 'vue-router'
 
 const { t } = useI18n()
@@ -35,6 +36,23 @@ async function load() {
   loadSSL()
 }
 onMounted(load)
+
+// Time zone: the panel's (schedules, statistics, task logs) and, for a
+// warning when they differ, the server's own (工具箱 → 系統).
+const hostZone = ref('')
+const hostZones = ref<string[]>([])
+async function loadHostZone() {
+  try {
+    const r = await get<{ timezone: string; timezones?: string[] }>('/toolbox/system?zones=1')
+    hostZone.value = r.timezone
+    hostZones.value = r.timezones ?? []
+  } catch {
+    /* no toolbox access */
+  }
+}
+onMounted(loadHostZone)
+const tzOptions = computed(() => zoneOptions(knownZones(hostZones.value), [form.value?.timezone ?? '', hostZone.value]))
+const tzMismatch = computed(() => !!form.value && !!hostZone.value && hostZone.value !== form.value.timezone)
 
 /** After a port / SSL change the listener restarts: send the browser to the new origin. */
 function followRestart(s: Pick<PanelSettings, 'panel_port' | 'ssl_mode' | 'security_entry'>) {
@@ -170,7 +188,14 @@ const unauthOptions = [404, 403, 401, 400, 408, 416, 444].map((c) => ({ label: t
             <n-select v-model:value="form.language" :options="langOptions" style="width: 240px" />
           </n-form-item>
           <n-form-item :label="t('settings.timezone')">
-            <n-input v-model:value="form.timezone" style="width: 240px" />
+            <div class="tz">
+              <n-select v-model:value="form.timezone" filterable :options="tzOptions" style="width: min(340px, 100%)" />
+              <span class="tz-hint">{{ t('settings.timezone_hint') }}</span>
+              <span v-if="tzMismatch" class="tz-warn">
+                {{ t('settings.timezone_host', { zone: zoneLabel(hostZone) }) }}
+                <router-link to="/toolbox">{{ t('settings.timezone_fix') }}</router-link>
+              </span>
+            </div>
           </n-form-item>
           <n-form-item :label="t('settings.session_timeout')">
             <n-input-number v-model:value="form.session_timeout" :min="300" :step="3600" style="width: 200px" />
@@ -322,6 +347,26 @@ const unauthOptions = [404, 403, 401, 400, 408, 416, 444].map((c) => ({ label: t
 </template>
 
 <style scoped>
+.tz {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+}
+.tz-hint {
+  font-size: 12px;
+  opacity: 0.6;
+}
+.tz-warn {
+  font-size: 12px;
+  color: #e88080;
+}
+.tz-warn a {
+  color: #20a53a;
+  margin-left: 4px;
+  text-decoration: underline;
+}
 .grpc-impact {
   font-size: 12.5px;
   margin: 8px 0 18px;

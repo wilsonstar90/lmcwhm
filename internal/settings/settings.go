@@ -16,6 +16,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/wilsonstar90/lmcwhm/internal/store"
 )
@@ -102,6 +103,7 @@ var (
 	ErrInvalidDom    = errors.New("settings.invalid_domain")
 	ErrInvalidLang   = errors.New("settings.invalid_language")
 	ErrInvalidDir    = errors.New("settings.invalid_dir")
+	ErrInvalidTZ     = errors.New("settings.invalid_timezone")
 	ErrInvalidUnauth = errors.New("settings.invalid_unauth_status")
 )
 
@@ -156,6 +158,12 @@ func (s *Settings) Validate() error {
 	}
 	if !ValidDir(s.SiteRoot) || !ValidDir(s.BackupDir) {
 		return ErrInvalidDir
+	}
+	if s.Timezone == "" {
+		s.Timezone = "Asia/Hong_Kong"
+	}
+	if _, err := time.LoadLocation(s.Timezone); err != nil || s.Timezone == "Local" {
+		return ErrInvalidTZ
 	}
 	return nil
 }
@@ -259,7 +267,8 @@ func (m *Manager) Update(ctx context.Context, fn func(*Settings)) (Settings, err
 
 // RequiresRestart reports whether moving from a to b needs the listener rebuilt.
 func RequiresRestart(a, b Settings) bool {
-	return a.PanelPort != b.PanelPort || a.ListenIPv6 != b.ListenIPv6 || a.SSLMode != b.SSLMode
+	// The time zone is read at start-up (schedules, statistics, task logs, PHP).
+	return a.PanelPort != b.PanelPort || a.ListenIPv6 != b.ListenIPv6 || a.SSLMode != b.SSLMode || a.Timezone != b.Timezone
 }
 
 // RandomEntry returns a fresh "/xxxxxxxx" security entry, like aaPanel's installer.

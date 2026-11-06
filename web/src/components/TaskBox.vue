@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { atBottom, follow } from '../composables/stickScroll'
 // 消息盒子 (like aaPanel): a badge with the number of running tasks; the
 // window lists them, the finished ones and a task's log.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -52,6 +53,7 @@ async function loadHistory() {
 }
 async function loadLog() {
   if (!sel.value) return
+  const stick = atBottom(logEl.value)
   try {
     if (sel.value.live) {
       const r = await get<{ status: string; log: string[] }>(`/tasks/${sel.value.id}`)
@@ -64,7 +66,7 @@ async function loadLog() {
     // A finished task leaves memory for the history.
     if (sel.value.live) sel.value.live = false
   }
-  requestAnimationFrame(() => logEl.value && (logEl.value.scrollTop = logEl.value.scrollHeight))
+  requestAnimationFrame(() => follow(logEl.value, stick))
 }
 function openLog(id: string, live: boolean) {
   sel.value = { id, live }

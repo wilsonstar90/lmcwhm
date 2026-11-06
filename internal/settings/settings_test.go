@@ -54,3 +54,21 @@ func TestIPAllowed(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateTimezone(t *testing.T) {
+	for zone, ok := range map[string]bool{"Asia/Hong_Kong": true, "Etc/GMT+8": true, "UTC": true, "": true, "Mars/Base": false, "Local": false, "../etc": false} {
+		s := Defaults()
+		s.Timezone = zone
+		if err := s.Validate(); (err == nil) != ok {
+			t.Errorf("%q: err = %v, want ok=%v", zone, err, ok)
+		}
+		if zone == "" && s.Timezone != "Asia/Hong_Kong" {
+			t.Errorf("empty zone not defaulted: %q", s.Timezone)
+		}
+	}
+	a, b := Defaults(), Defaults()
+	b.Timezone = "UTC"
+	if !RequiresRestart(a, b) {
+		t.Error("a time zone change must restart the panel")
+	}
+}

@@ -37,6 +37,9 @@ const keep = 100
 type Manager struct {
 	// OnDone, when set, receives every task as it finishes (for the history).
 	OnDone func(Task)
+	// Loc is the time zone log lines are stamped in (the panel's); nil = the
+	// server's.
+	Loc *time.Location
 
 	mu    sync.Mutex
 	tasks map[string]*Task
@@ -75,7 +78,11 @@ func (m *Manager) start(name string, exclusive bool, timeout time.Duration, fn f
 			defer m.run.Unlock()
 		}
 		logf := func(format string, args ...any) {
-			line := fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05"), fmt.Sprintf(format, args...))
+			now := time.Now()
+			if m.Loc != nil {
+				now = now.In(m.Loc)
+			}
+			line := fmt.Sprintf("[%s] %s", now.Format("15:04:05"), fmt.Sprintf(format, args...))
 			m.mu.Lock()
 			t.Log = append(t.Log, line)
 			m.mu.Unlock()

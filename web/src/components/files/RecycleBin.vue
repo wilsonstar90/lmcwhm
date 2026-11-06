@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Icon } from '../icons'
 // Recycle bin (like aaPanel's): deleted files, and databases dropped through
 // the panel (kept as a dump). Either bin can be switched off.
 import { computed, h, ref, watch } from 'vue'
@@ -6,7 +7,7 @@ import { useI18n } from 'vue-i18n'
 import { useAsk } from '../../composables/ask'
 import FileIcon from './FileIcon.vue'
 import {
-  NAlert, NButton, NCard, NDataTable, NDatePicker, NInput, NModal, NPopconfirm, NSelect, NSpace, NSwitch, NTab, NTabs, useMessage,
+  NButton, NCard, NDataTable, NDatePicker, NInput, NModal, NPopconfirm, NSelect, NSpace, NSwitch, NTab, NTabs, useMessage,
   type DataTableColumns,
 } from 'naive-ui'
 import { get, post, put, ApiError } from '../../api/client'
@@ -188,7 +189,7 @@ const kinds = computed(() => (['all', 'dir', 'file', 'image', 'doc'] as const).m
           {{ tab === 'files' ? t('rb.files') : t('rb.db') }}
           <n-switch :value="tab === 'files' ? settings.enabled : settings.db" @update:value="(v: boolean) => setSetting(tab === 'files' ? 'enabled' : 'db', v)" />
         </span>
-        <n-alert type="warning" :show-icon="true" class="warn">{{ tab === 'files' ? t('rb.warn') : t('rb.db_warn') }}</n-alert>
+        <span class="warn"><Icon name="warning" class="warn-ico" />{{ tab === 'files' ? t('rb.warn') : t('rb.db_warn') }}</span>
         <span class="grow" />
         <n-popconfirm @positive-click="emptyAll">
           <template #trigger><n-button size="small" :disabled="tab === 'files' ? !files.length : !dbs.length">{{ t('files.empty_trash') }}</n-button></template>
@@ -241,11 +242,20 @@ const kinds = computed(() => (['all', 'dir', 'file', 'image', 'doc'] as const).m
   white-space: nowrap;
 }
 .warn {
-  width: auto;
-  padding: 0;
-}
-.warn :deep(.n-alert-body) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #b7791f;
+  background: rgba(240, 160, 32, 0.12);
+  border: 1px solid rgba(240, 160, 32, 0.35);
+}
+.warn-ico {
+  flex: none;
+  font-size: 15px;
 }
 .grow {
   flex: 1;

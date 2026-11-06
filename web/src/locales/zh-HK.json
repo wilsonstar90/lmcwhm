@@ -134,7 +134,10 @@
       "408": "408 - 請求超時",
       "416": "416 - 範圍無效",
       "444": "444 - 直接斷開連接"
-    }
+    },
+    "timezone_hint": "計劃任務、統計、任務日誌都用呢個時區。改咗面板會自動重新啟動。",
+    "timezone_host": "伺服器系統時區係 {zone}，同面板唔同。",
+    "timezone_fix": "去工具箱改"
   },
   "logs": {
     "tab_login": "面板登入",
@@ -214,7 +217,8 @@
       "invalid_dir": "目錄唔可以用：要係絕對路徑，唔可以係系統目錄（/etc、/usr、/root…）",
       "invalid_unauth_status": "未認證響應狀態無效",
       "bad_logo": "Logo 要係 PNG、SVG 或者 WebP，最大 256 KB",
-      "grpc_in_use": "仲有 {n} 個域名用緊 gRPC，請先改返 HTTP 或者刪除，先可以關閉"
+      "grpc_in_use": "仲有 {n} 個域名用緊 gRPC，請先改返 HTTP 或者刪除，先可以關閉",
+      "invalid_timezone": "時區唔啱：請喺清單揀一個"
     },
     "ssl": {
       "invalid_pair": "證書與私鑰不匹配或格式錯誤"
@@ -3102,7 +3106,14 @@
       "both": "保留兩者",
       "overwrite": "覆蓋",
       "skipped": "完成，跳過咗 {n} 個已存在嘅項目"
-    }
+    },
+    "p_user": "擁有者",
+    "p_group": "群組",
+    "p_other": "其他",
+    "p_read": "讀取",
+    "p_write": "寫入",
+    "p_exec": "執行",
+    "n_items": "{n} 個項目"
   },
   "fe": {
     "title": "線上文本編輯器",

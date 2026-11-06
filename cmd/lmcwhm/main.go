@@ -162,6 +162,7 @@ func serveCmd() *cobra.Command {
 				}
 			}()
 			tm := tasks.NewManager()
+			tm.Loc, _ = time.LoadLocation(a.settings.Get().Timezone)
 			sites := site.NewService(a.st, env, webCfg, &acme.Issuer{Cfg: webCfg, HTTP: responder}, tm)
 			sites.RebuildMarker = server.RebuildMarker(a.paths)
 			env.SiteDir = func() string { return a.settings.Get().SiteRoot }

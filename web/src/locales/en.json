@@ -134,7 +134,10 @@
       "408": "408 - Request Timeout",
       "416": "416 - Range Not Satisfiable",
       "444": "444 - Close the connection"
-    }
+    },
+    "timezone_hint": "Schedules, statistics and task logs use this time zone. The panel restarts after a change.",
+    "timezone_host": "The server's system time zone is {zone}, which differs from the panel's.",
+    "timezone_fix": "Change it in Toolbox"
   },
   "logs": {
     "tab_login": "Panel logins",
@@ -214,7 +217,8 @@
       "invalid_dir": "This directory cannot be used: it must be an absolute path and not a system directory (/etc, /usr, /root…)",
       "invalid_unauth_status": "Invalid unauthenticated response",
       "bad_logo": "The logo must be a PNG, SVG or WebP image of at most 256 KB",
-      "grpc_in_use": "{n} domains still use gRPC; switch them to HTTP or delete them first"
+      "grpc_in_use": "{n} domains still use gRPC; switch them to HTTP or delete them first",
+      "invalid_timezone": "Invalid time zone: pick one from the list"
     },
     "ssl": {
       "invalid_pair": "Certificate and key do not match or are invalid"
@@ -3053,7 +3057,14 @@
       "both": "Keep both",
       "overwrite": "Overwrite",
       "skipped": "Done; skipped {n} existing items"
-    }
+    },
+    "p_user": "Owner",
+    "p_group": "Group",
+    "p_other": "Others",
+    "p_read": "Read",
+    "p_write": "Write",
+    "p_exec": "Execute",
+    "n_items": "{n} items"
   },
   "fe": {
     "title": "Online text editor",

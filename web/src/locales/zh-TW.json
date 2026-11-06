@@ -134,7 +134,10 @@
       "408": "408 - 請求逾時",
       "416": "416 - 範圍無效",
       "444": "444 - 直接中斷連線"
-    }
+    },
+    "timezone_hint": "排程任務、統計、任務日誌都使用此時區。變更後面板會自動重新啟動。",
+    "timezone_host": "伺服器系統時區為 {zone}，與面板不同。",
+    "timezone_fix": "前往工具箱修改"
   },
   "logs": {
     "tab_login": "面板登入",
@@ -214,7 +217,8 @@
       "invalid_dir": "無法使用此目錄：必須是絕對路徑，且不可為系統目錄（/etc、/usr、/root…）",
       "invalid_unauth_status": "未認證回應狀態無效",
       "bad_logo": "Logo 須為 PNG、SVG 或 WebP，最大 256 KB",
-      "grpc_in_use": "仍有 {n} 個網域使用 gRPC，請先改回 HTTP 或刪除後再關閉"
+      "grpc_in_use": "仍有 {n} 個網域使用 gRPC，請先改回 HTTP 或刪除後再關閉",
+      "invalid_timezone": "時區無效：請從清單中選擇"
     },
     "ssl": {
       "invalid_pair": "憑證與私鑰不相符或格式錯誤"
@@ -3102,7 +3106,14 @@
       "both": "保留兩者",
       "overwrite": "覆寫",
       "skipped": "完成，已略過 {n} 個已存在的項目"
-    }
+    },
+    "p_user": "擁有者",
+    "p_group": "群組",
+    "p_other": "其他",
+    "p_read": "讀取",
+    "p_write": "寫入",
+    "p_exec": "執行",
+    "n_items": "{n} 個項目"
   },
   "fe": {
     "title": "線上文字編輯器",

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Icon } from '../components/icons'
 // File manager: several directory tabs (multi-window like aaPanel), the
 // editor window, the upload dialog and the recycle bin.
 import { computed, ref, watch } from 'vue'
@@ -78,10 +79,10 @@ const trash = ref(false)
         v-for="x in tabs" :key="x.id" class="tab" :class="{ on: x.id === active }" role="tab" :aria-selected="x.id === active" :title="x.path"
         @click="active = x.id" @auxclick.middle="closeTab(x.id)"
       >
-        <span>📁 {{ label(x.path) }}</span>
+        <span class="tl"><Icon name="folder" class="ti" />{{ label(x.path) }}</span>
         <a v-if="tabs.length > 1" class="x" :aria-label="t('common.close')" @click.stop="closeTab(x.id)">✕</a>
       </div>
-      <button type="button" class="add" :title="t('fm.new_tab')" @click="addTab()">＋</button>
+      <button type="button" class="add" :title="t('fm.new_tab')" @click="addTab()"><Icon name="plus" /></button>
     </div>
     <KeepAlive :max="20">
       <FileBrowser :key="cur.id" v-model:open-tab="openTab" :path="cur.path" @path="(p: string) => (cur.path = p)" @trash="trash = true" />
@@ -93,6 +94,14 @@ const trash = ref(false)
 </template>
 
 <style scoped>
+.tl {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.ti {
+  color: #e0a32e;
+}
 .files {
   display: flex;
   flex-direction: column;
@@ -144,6 +153,8 @@ const trash = ref(false)
   color: inherit;
   font-size: 16px;
   padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
   cursor: pointer;
 }
 </style>

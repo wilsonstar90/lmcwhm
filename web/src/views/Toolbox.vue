@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { zoneOptions } from '../tz'
 // 工具箱: swap, hostname, DNS, time, SSH, processes, connections, disks, cleanup.
 import { computed, h, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -31,6 +32,7 @@ const swapMB = ref(0)
 const host = ref('')
 const dns = ref<string[]>([])
 const tz = ref('')
+const tzOpts = computed(() => (sys.value ? zoneOptions(sys.value.timezones ?? [], [sys.value.timezone]) : []))
 async function loadSys() {
   try {
     sys.value = await get<Sys>('/toolbox/system?zones=1')
@@ -226,7 +228,7 @@ onMounted(() => onTab(typeof route.query.tab === 'string' && route.query.tab in 
           <n-card size="small" :title="t('tb.time')" style="margin-top: 16px">
             <p class="hint">{{ datetime(sys.time, locale) }} · NTP {{ sys.ntp_synced ? t('tb.synced') : t('tb.not_synced') }}</p>
             <n-space align="center">
-              <n-select v-model:value="tz" filterable :options="(sys.timezones ?? [sys.timezone]).map((z) => ({ label: z, value: z }))" style="width: 240px" />
+              <n-select v-model:value="tz" filterable :options="tzOpts" style="width: min(340px, 100%)" />
               <n-button type="primary" :disabled="tz === sys.timezone" @click="act(put('/toolbox/time', { timezone: tz }), loadSys)">{{ t('common.save') }}</n-button>
             </n-space>
             <n-space align="center" style="margin-top: 12px">

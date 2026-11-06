@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { atBottom, follow as stickTo } from '../composables/stickScroll'
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { NModal, NCard, NButton, NSpace, NSwitch } from 'naive-ui'
@@ -16,13 +17,14 @@ let timer: number | undefined
 
 async function load() {
   if (!props.url) return
+  const stick = atBottom(el.value)
   try {
     logs.value = (await get<{ logs: string }>(props.url)).logs || '—'
   } catch (e) {
     logs.value = String(e)
   }
   await nextTick()
-  el.value?.scrollTo({ top: el.value.scrollHeight })
+  stickTo(el.value, stick)
 }
 
 watch(

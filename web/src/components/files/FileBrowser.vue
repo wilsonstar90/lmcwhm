@@ -8,7 +8,7 @@ import { useAsk } from '../../composables/ask'
 import { useRouter } from 'vue-router'
 import {
   NButton, NButtonGroup, NCard, NCheckbox, NDataTable, NDropdown, NForm, NFormItem, NInput, NModal, NRadioButton, NRadioGroup,
-  NSpace, NTag, useDialog, useMessage, type DataTableColumns, type DropdownOption,
+  NSelect, NSpace, NTag, useDialog, useMessage, type DataTableColumns, type DropdownOption,
 } from 'naive-ui'
 import { get, post, put, ApiError } from '../../api/client'
 import type { FileEntry } from '../../api/types'
@@ -16,6 +16,7 @@ import { bytes, datetime } from '../../format'
 import FilesExtras from '../FilesExtras.vue'
 import FileIcon from './FileIcon.vue'
 import RemarkCell from '../RemarkCell.vue'
+import { Icon, icon } from '../icons'
 import {
   baseName, changed, clipboard, droppedFiles, isArchive, isImage, join, openInEditor, openUpload, parentOf,
 } from './state'
@@ -171,48 +172,49 @@ const menuOptions = computed<DropdownOption[]>(() => {
   const e = menu.value?.target
   if (!e) {
     return [
-      { label: t('files.new_folder'), key: 'mkdir' },
-      { label: t('files.new_file'), key: 'mkfile' },
-      { label: t('fm.paste'), key: 'paste', disabled: !clipboard.value },
-      { label: t('files.upload'), key: 'upload' },
+      { label: t('files.new_folder'), key: 'mkdir', icon: icon('folder-plus') },
+      { label: t('files.new_file'), key: 'mkfile', icon: icon('file-plus') },
+      { label: t('fm.paste'), key: 'paste', disabled: !clipboard.value, icon: icon('paste') },
+      { label: t('files.upload'), key: 'upload', icon: icon('upload') },
       { type: 'divider', key: 'd1' },
-      { label: t('fm.select_all'), key: 'all' },
-      { label: t('common.refresh'), key: 'refresh' },
+      { label: t('fm.select_all'), key: 'all', icon: icon('check') },
+      { label: t('common.refresh'), key: 'refresh', icon: icon('refresh') },
     ]
   }
   const many = selected.value.length > 1
   if (many) {
     return [
-      { label: t('fm.copy'), key: 'copy' },
-      { label: t('fm.cut'), key: 'cut' },
-      { label: t('files.compress'), key: 'compress' },
-      { label: t('files.permissions'), key: 'chmod' },
+      { label: t('fm.copy'), key: 'copy', icon: icon('copy') },
+      { label: t('fm.cut'), key: 'cut', icon: icon('cut') },
+      { label: t('files.compress'), key: 'compress', icon: icon('archive') },
+      { label: `${t('common.delete')} (${selected.value.length})`, key: 'delete', icon: icon('trash') },
       { type: 'divider', key: 'd' },
-      { label: `${t('common.delete')} (${selected.value.length})`, key: 'delete' },
+      { label: t('fm.properties'), key: 'props', icon: icon('info') },
     ]
   }
+  const arc = isArchive(e.name)
   return [
-    { label: t('fm.open'), key: 'open' },
+    { label: t('fm.open'), key: 'open', icon: icon(e.is_dir ? 'folder-open' : arc ? 'extract' : 'file') },
     ...(e.is_dir
-      ? [{ label: t('fm.open_tab'), key: 'tab' }]
-      : [{ label: t('fm.open_with'), key: 'with', children: [{ label: t('fm.editor'), key: 'edit' }, { label: t('files.download'), key: 'download' }] }]),
-    ...(isArchive(e.name) ? [{ label: t('files.extract'), key: 'extract' }] : []),
+      ? [{ label: t('fm.open_tab'), key: 'tab', icon: icon('tab') }]
+      : [{
+          label: t('fm.open_with'), key: 'with', icon: icon('window'),
+          children: [{ label: t('fm.editor'), key: 'edit', icon: icon('edit') }, { label: t('files.download'), key: 'download', icon: icon('download') }],
+        }]),
     { type: 'divider', key: 'd1' },
-    ...(e.is_dir ? [] : [{ label: t('files.download'), key: 'download' }]),
-    ...(e.is_dir ? [{ label: t('fx.fav'), key: 'fav' }] : []),
-    ...(e.is_dir ? [] : [{ label: t('fx.share'), key: 'share' }]),
-    { label: t('files.permissions'), key: 'chmod' },
-    { label: t('files.owner'), key: 'chown' },
+    ...(e.is_dir ? [] : [{ label: t('files.download'), key: 'download', icon: icon('download') }]),
+    ...(e.is_dir ? [{ label: t('fx.fav'), key: 'fav', icon: icon('star') }] : []),
+    ...(e.is_dir ? [] : [{ label: t('fx.share'), key: 'share', icon: icon('link') }]),
     { type: 'divider', key: 'd2' },
-    { label: t('fm.copy'), key: 'copy' },
-    { label: t('fm.cut'), key: 'cut' },
-    { label: t('files.rename'), key: 'rename' },
-    { label: t('common.delete'), key: 'delete' },
+    { label: t('fm.copy'), key: 'copy', icon: icon('copy') },
+    { label: t('fm.cut'), key: 'cut', icon: icon('cut') },
+    { label: t('files.rename'), key: 'rename', icon: icon('rename') },
+    { label: t('common.delete'), key: 'delete', icon: icon('trash') },
     { type: 'divider', key: 'd3' },
-    { label: t('files.compress'), key: 'compress' },
-    { label: t('fm.duplicate'), key: 'dup' },
-    { label: t('fm.remark'), key: 'remark' },
-    { label: t('fm.properties'), key: 'props' },
+    arc ? { label: t('files.extract'), key: 'extract', icon: icon('extract') } : { label: t('files.compress'), key: 'compress', icon: icon('archive') },
+    { label: t('fm.duplicate'), key: 'dup', icon: icon('duplicate') },
+    { label: t('fm.remark'), key: 'remark', icon: icon('remark') },
+    { label: t('fm.properties'), key: 'props', icon: icon('info') },
   ]
 })
 const emitTab = defineModel<string | null>('openTab', { default: null })
@@ -240,8 +242,8 @@ function act(key: string, e: FileEntry | null = menu.value?.target ?? sel.value[
       return compress(paths)
     case 'delete':
       return remove(paths)
-    case 'chmod':
-      return e && chmod(e, paths)
+    case 'props':
+      return openProps(paths)
   }
   if (!e) return
   switch (key) {
@@ -260,16 +262,12 @@ function act(key: string, e: FileEntry | null = menu.value?.target ?? sel.value[
       return post('/files/favorites', { path: e.path, on: true }).then(() => msg.success(t('common.done')), fail)
     case 'share':
       return extras.value?.share(e.path)
-    case 'chown':
-      return chown(e)
     case 'rename':
       return rename(e)
     case 'dup':
       return duplicate(e)
     case 'remark':
       return editRemark(e)
-    case 'props':
-      return (propsOf.value = e)
   }
 }
 
@@ -369,27 +367,6 @@ function rename(e: FileEntry) {
     title: t('files.rename'),
     fields: [{ key: 'name', label: t('files.name'), value: e.name }],
     submit: (v) => post('/files/rename', { from: e.path, to: join(cwd.value, v.name) }),
-  }
-}
-function chmod(e: FileEntry, paths = [e.path]) {
-  prompt.value = {
-    title: `${t('files.permissions')} · ${paths.length > 1 ? paths.length : e.name}`,
-    fields: [{ key: 'mode', label: t('files.mode'), value: e.mode.padStart(3, '0') }],
-    recursive: false,
-    submit: async (v, p) => {
-      for (const path of paths) await post('/files/chmod', { path, mode: v.mode, recursive: p.recursive })
-    },
-  }
-}
-function chown(e: FileEntry) {
-  prompt.value = {
-    title: `${t('files.owner')} · ${e.name}`,
-    fields: [
-      { key: 'owner', label: t('files.owner'), value: e.owner },
-      { key: 'group', label: t('files.group'), value: e.group },
-    ],
-    recursive: false,
-    submit: (v, p) => post('/files/chown', { path: e.path, owner: v.owner, group: v.group, recursive: p.recursive }),
   }
 }
 function compress(paths: string[]) {
@@ -524,15 +501,20 @@ function remarkCell(e: FileEntry) {
 }
 
 // ---- table ----
+// Archives offer 解壓 where other entries offer 壓縮.
 const rowOps = (e: FileEntry) => [
-  ...(e.is_dir ? [] : [['edit', t('files.edit')]]),
-  ['copy', t('fm.copy')], ['cut', t('fm.cut')], ['rename', t('files.rename')], ['chmod', t('files.permissions')],
-  ['compress', t('files.compress')], ['delete', t('common.delete')],
+  ...(e.is_dir || isArchive(e.name) ? [] : [['edit', t('files.edit')]]),
+  ['copy', t('fm.copy')], ['cut', t('fm.cut')], ['rename', t('files.rename')],
+  isArchive(e.name) ? ['extract', t('files.extract')] : ['compress', t('files.compress')],
+  ['props', t('fm.properties')], ['delete', t('common.delete')],
 ]
 const moreOps = (e: FileEntry): DropdownOption[] => [
-  ...(e.is_dir ? [{ label: t('fm.open_tab'), key: 'tab' }] : [{ label: t('files.download'), key: 'download' }, { label: t('fx.share'), key: 'share' }]),
-  ...(isArchive(e.name) ? [{ label: t('files.extract'), key: 'extract' }] : []),
-  { label: t('files.owner'), key: 'chown' }, { label: t('fm.duplicate'), key: 'dup' }, { label: t('fm.properties'), key: 'props' },
+  ...(e.is_dir
+    ? [{ label: t('fm.open_tab'), key: 'tab', icon: icon('tab') }, { label: t('fx.fav'), key: 'fav', icon: icon('star') }]
+    : [{ label: t('files.download'), key: 'download', icon: icon('download') }, { label: t('fx.share'), key: 'share', icon: icon('link') }]),
+  ...(isArchive(e.name) ? [{ label: t('files.compress'), key: 'compress', icon: icon('archive') }] : []),
+  ...(!e.is_dir && isArchive(e.name) ? [{ label: t('fm.editor'), key: 'edit', icon: icon('edit') }] : []),
+  { label: t('fm.duplicate'), key: 'dup', icon: icon('duplicate') }, { label: t('fm.remark'), key: 'remark', icon: icon('remark') },
 ]
 const columns = computed<DataTableColumns<FileEntry>>(() => [
   {
@@ -579,8 +561,9 @@ const columns = computed<DataTableColumns<FileEntry>>(() => [
     align: 'right',
     render: (e) =>
       h('div', { class: 'ops' }, [
-        ...rowOps(e).map(([k, label]) => h('a', { onClick: (ev: MouseEvent) => (ev.stopPropagation(), k === 'copy' || k === 'cut' || k === 'delete' || k === 'compress' || k === 'chmod' ? actOne(k, e) : act(k, e)) }, label)),
-        h(NDropdown, { options: moreOps(e), trigger: 'click', onSelect: (k: string) => act(k, e) }, () => h('a', { onClick: (ev: MouseEvent) => ev.stopPropagation() }, `${t('fm.more')} ▾`)),
+        ...rowOps(e).map(([k, label]) => h('a', { onClick: (ev: MouseEvent) => (ev.stopPropagation(), k === 'copy' || k === 'cut' || k === 'delete' || k === 'compress' || k === 'props' ? actOne(k, e) : act(k, e)) }, label)),
+        h(NDropdown, { options: moreOps(e), trigger: 'click', onSelect: (k: string) => (k === 'compress' ? actOne(k, e) : act(k, e)) }, () =>
+          h('a', { class: 'more', onClick: (ev: MouseEvent) => ev.stopPropagation() }, [t('fm.more'), h(Icon, { name: 'chevron', class: 'caret' })])),
       ]),
   },
 ])
@@ -630,23 +613,71 @@ function openFromExtras(p: string, dir: boolean) {
   else openInEditor(p)
 }
 const preview = ref<FileEntry | null>(null)
-const propsOf = ref<FileEntry | null>(null)
+
+// ---- properties: details, permissions and owner (one or several entries) ----
+type Props = { items: FileEntry[]; mode: string; owner: string; group: string; start: string; recursive: boolean; saving: boolean }
+const propsOf = ref<Props | null>(null)
+function openProps(paths: string[]) {
+  const list = paths.map((p) => byPath.value.get(p)).filter((e): e is FileEntry => !!e)
+  if (!list.length) return
+  const e = list[0]
+  const mode = e.mode.padStart(3, '0')
+  propsOf.value = { items: list, mode, owner: e.owner, group: e.group, start: `${mode}|${e.owner}|${e.group}`, recursive: false, saving: false }
+}
+const propOne = computed(() => (propsOf.value?.items.length === 1 ? propsOf.value.items[0] : null))
+const propDirs = computed(() => !!propsOf.value?.items.some((i) => i.is_dir))
+const propBytes = computed(() => propsOf.value?.items.reduce((n, i) => n + (i.is_dir ? 0 : i.size), 0) ?? 0)
+const modeOk = computed(() => /^[0-7]{3,4}$/.test(propsOf.value?.mode ?? ''))
+const PERM_WHO = [['fm.p_user', 6], ['fm.p_group', 3], ['fm.p_other', 0]] as const
+const PERM_BITS = [['fm.p_read', 4], ['fm.p_write', 2], ['fm.p_exec', 1]] as const
+const modeVal = () => (modeOk.value ? parseInt(propsOf.value!.mode, 8) : 0)
+const hasBit = (who: number, b: number) => !!((modeVal() >> who) & b)
+function setBit(who: number, b: number, on: boolean) {
+  const p = propsOf.value!
+  const v = on ? modeVal() | (b << who) : modeVal() & ~(b << who)
+  p.mode = v.toString(8).padStart(p.mode.length === 4 ? 4 : 3, '0')
+}
+const ownerOptions = ['www-data', 'root', 'nobody'].map((v) => ({ label: v, value: v }))
+async function saveProps() {
+  const p = propsOf.value
+  if (!p || !modeOk.value) return
+  const [mode0, owner0, group0] = p.start.split('|')
+  const chmod = p.mode !== mode0 || p.recursive
+  const chown = !!p.owner && (p.owner !== owner0 || p.group !== group0 || p.recursive)
+  if (!chmod && !chown) return (propsOf.value = null)
+  p.saving = true
+  const ok = await call(async () => {
+    for (const e of p.items) {
+      const recursive = p.recursive && e.is_dir
+      if (chmod) await post('/files/chmod', { path: e.path, mode: p.mode, recursive })
+      if (chown) await post('/files/chown', { path: e.path, owner: p.owner, group: p.group || p.owner, recursive })
+    }
+  })
+  p.saving = false
+  if (ok) propsOf.value = null
+}
 const images = computed(() => shown.value.filter((i) => !i.is_dir && isImage(i.name)))
 function step(d: number) {
   const i = images.value.findIndex((x) => x.path === preview.value?.path)
   preview.value = images.value[(i + d + images.value.length) % images.value.length] ?? preview.value
 }
 const thumb = (e: FileEntry) => (isImage(e.name) && e.size < 4 << 20 ? `/api/v1/files/download?inline=1&path=${encodeURIComponent(e.path)}` : '')
-const newMenu = computed(() => [{ label: t('files.new_folder'), key: 'mkdir' }, { label: t('files.new_file'), key: 'mkfile' }])
-const upMenu = computed(() => [{ label: t('fm.upload_files'), key: 'upload' }, { label: t('fx.remote'), key: 'remote' }])
+const newMenu = computed(() => [
+  { label: t('files.new_folder'), key: 'mkdir', icon: icon('folder-plus') },
+  { label: t('files.new_file'), key: 'mkfile', icon: icon('file-plus') },
+])
+const upMenu = computed(() => [
+  { label: t('fm.upload_files'), key: 'upload', icon: icon('upload') },
+  { label: t('fx.remote'), key: 'remote', icon: icon('globe') },
+])
 const moreMenu = computed(() => [
-  { label: t('fm.select_all'), key: 'all' },
-  { label: t('fm.paste'), key: 'paste', disabled: !clipboard.value },
-  { label: t('fm.calc_all'), key: 'calc' },
+  { label: t('fm.select_all'), key: 'all', icon: icon('check') },
+  { label: t('fm.paste'), key: 'paste', disabled: !clipboard.value, icon: icon('paste') },
+  { label: t('fm.calc_all'), key: 'calc', icon: icon('calc') },
   { type: 'divider', key: 'd' },
-  { label: t('files.compress'), key: 'compress', disabled: !selected.value.length },
-  { label: t('files.permissions'), key: 'chmod', disabled: !selected.value.length },
-  { label: t('common.delete'), key: 'delete', disabled: !selected.value.length },
+  { label: t('files.compress'), key: 'compress', disabled: !selected.value.length, icon: icon('archive') },
+  { label: t('fm.properties'), key: 'props', disabled: !selected.value.length, icon: icon('info') },
+  { label: t('common.delete'), key: 'delete', disabled: !selected.value.length, icon: icon('trash') },
 ])
 function onToolbar(k: string) {
   if (k === 'remote') return extras.value?.remote()
@@ -661,7 +692,7 @@ onBeforeUnmount(cancelPress)
     ref="root" class="browser" tabindex="0" @keydown="onKey" @dragenter.prevent="onDragEnter" @dragover.prevent @dragleave="onDragLeave" @drop.prevent="onDrop"
   >
     <div class="pathbar">
-      <n-button size="small" quaternary :disabled="!history.length" :title="t('fm.back')" @click="back">←</n-button>
+      <n-button size="small" quaternary :disabled="!history.length" :title="t('fm.back')" @click="back"><Icon name="back" /></n-button>
       <div v-if="!editingPath" class="crumbs" @click.self="editPath">
         <template v-for="(c, i) in crumbs" :key="c.path">
           <a class="crumb" @click="load(c.path)">{{ c.name }}</a>
@@ -673,26 +704,32 @@ onBeforeUnmount(cancelPress)
         v-else ref="pathEl" v-model:value="pathText" size="small" class="crumbs-input"
         @keyup.enter="goPath" @keyup.esc="editingPath = false" @blur="editingPath = false"
       />
-      <n-button size="small" quaternary :title="t('common.refresh')" @click="load(cwd, false)">⟳</n-button>
+      <n-button size="small" quaternary :title="t('common.refresh')" @click="load(cwd, false)"><Icon name="refresh" /></n-button>
       <n-input v-model:value="search" size="small" clearable :placeholder="t('fm.search')" class="search" />
     </div>
 
     <div class="toolbar">
-      <n-dropdown :options="upMenu" trigger="click" @select="onToolbar"><n-button size="small">⬆ {{ t('fm.updown') }} ▾</n-button></n-dropdown>
-      <n-dropdown :options="newMenu" trigger="click" @select="onToolbar"><n-button size="small" type="primary" ghost>＋ {{ t('fm.new') }} ▾</n-button></n-dropdown>
+      <n-dropdown :options="upMenu" trigger="click" @select="onToolbar">
+        <n-button size="small"><template #icon><Icon name="updown" /></template>{{ t('fm.updown') }}<Icon name="chevron" class="caret" /></n-button>
+      </n-dropdown>
+      <n-dropdown :options="newMenu" trigger="click" @select="onToolbar">
+        <n-button size="small" type="primary" ghost><template #icon><Icon name="plus" /></template>{{ t('fm.new') }}<Icon name="chevron" class="caret" /></n-button>
+      </n-dropdown>
       <FilesExtras ref="extras" :cwd="cwd" @open="openFromExtras" @changed="load(cwd, false)" />
-      <n-button size="small" @click="router.push({ path: '/terminal', query: { cwd } })">⌨ {{ t('fm.terminal') }}</n-button>
-      <n-button v-if="disk" size="small" quaternary :title="disk.mount">💽 {{ disk.mount }} {{ bytes(disk.free) }}</n-button>
-      <n-dropdown :options="moreMenu" trigger="click" @select="onToolbar"><n-button size="small">{{ t('fm.more_functions') }} ▾</n-button></n-dropdown>
+      <n-button size="small" @click="router.push({ path: '/terminal', query: { cwd } })"><template #icon><Icon name="terminal" /></template>{{ t('fm.terminal') }}</n-button>
+      <n-button v-if="disk" size="small" quaternary :title="disk.mount"><template #icon><Icon name="disk" /></template>{{ disk.mount }} {{ bytes(disk.free) }}</n-button>
+      <n-dropdown :options="moreMenu" trigger="click" @select="onToolbar">
+        <n-button size="small"><template #icon><Icon name="more" /></template>{{ t('fm.more_functions') }}<Icon name="chevron" class="caret" /></n-button>
+      </n-dropdown>
       <n-tag v-if="clipboard" size="small" closable type="info" @close="clipboard = null">
         <a @click="paste">{{ t(clipboard.mode === 'copy' ? 'fm.paste_copy' : 'fm.paste_cut', { n: clipboard.paths.length }) }}</a>
       </n-tag>
       <span class="grow" />
       <span v-if="selected.length" class="muted">{{ t('fm.selected_n', { n: selected.length }) }}</span>
-      <n-button size="small" @click="emit('trash')">🗑 {{ t('files.trash') }}</n-button>
+      <n-button size="small" @click="emit('trash')"><template #icon><Icon name="trash" /></template>{{ t('files.trash') }}</n-button>
       <n-button-group size="small">
-        <n-button :type="view === 'list' ? 'primary' : 'default'" :title="t('fm.list')" @click="view = 'list'">☰</n-button>
-        <n-button :type="view === 'grid' ? 'primary' : 'default'" :title="t('fm.grid')" @click="view = 'grid'">▦</n-button>
+        <n-button :type="view === 'list' ? 'primary' : 'default'" :title="t('fm.list')" @click="view = 'list'"><Icon name="list" /></n-button>
+        <n-button :type="view === 'grid' ? 'primary' : 'default'" :title="t('fm.grid')" @click="view = 'grid'"><Icon name="grid" /></n-button>
       </n-button-group>
     </div>
 
@@ -762,20 +799,58 @@ onBeforeUnmount(cancelPress)
     </n-modal>
 
     <n-modal :show="!!propsOf" @update:show="(v: boolean) => !v && (propsOf = null)">
-      <n-card v-if="propsOf" :title="`${t('fm.properties')} · ${propsOf.name}`" style="width: min(520px, calc(100vw - 32px))" closable @close="propsOf = null">
-        <dl class="props">
-          <dt>{{ t('fm.location') }}</dt><dd>{{ propsOf.path }}</dd>
-          <dt>{{ t('fm.type') }}</dt><dd>{{ propsOf.is_dir ? t('fm.folder') : t('fm.file') }}{{ propsOf.link ? ` → ${propsOf.link}` : '' }}</dd>
+      <n-card
+        v-if="propsOf" :title="`${t('fm.properties')} · ${propOne ? propOne.name : t('fm.n_items', { n: propsOf.items.length })}`"
+        style="width: min(560px, calc(100vw - 32px))" closable @close="propsOf = null"
+      >
+        <dl v-if="propOne" class="props">
+          <dt>{{ t('fm.location') }}</dt><dd>{{ propOne.path }}</dd>
+          <dt>{{ t('fm.type') }}</dt><dd>{{ propOne.is_dir ? t('fm.folder') : t('fm.file') }}{{ propOne.link ? ` → ${propOne.link}` : '' }}</dd>
           <dt>{{ t('files.size') }}</dt>
           <dd>
-            <template v-if="!propsOf.is_dir">{{ bytes(propsOf.size) }} ({{ propsOf.size.toLocaleString() }} B)</template>
-            <component :is="() => sizeCell(propsOf!)" v-else />
+            <template v-if="!propOne.is_dir">{{ bytes(propOne.size) }} ({{ propOne.size.toLocaleString() }} B)</template>
+            <component :is="() => sizeCell(propOne!)" v-else />
           </dd>
-          <dt>{{ t('files.mode') }}</dt><dd>{{ propsOf.mode.padStart(3, '0') }}</dd>
-          <dt>{{ t('files.owner') }}</dt><dd>{{ propsOf.owner }}:{{ propsOf.group }}</dd>
-          <dt>{{ t('files.mtime') }}</dt><dd>{{ datetime(propsOf.mtime, locale) }}</dd>
-          <dt>{{ t('fm.remark') }}</dt><dd>{{ propsOf.remark || autoText(propsOf) || '—' }}</dd>
+          <dt>{{ t('files.mtime') }}</dt><dd>{{ datetime(propOne.mtime, locale) }}</dd>
+          <dt>{{ t('fm.remark') }}</dt><dd>{{ propOne.remark || autoText(propOne) || '—' }}</dd>
         </dl>
+        <dl v-else class="props">
+          <dt>{{ t('fm.location') }}</dt><dd>{{ cwd }}</dd>
+          <dt>{{ t('files.size') }}</dt><dd>{{ bytes(propBytes) }}</dd>
+        </dl>
+
+        <h4 class="sec"><Icon name="lock" /> {{ t('files.permissions') }}</h4>
+        <div class="perm">
+          <table class="bits">
+            <thead>
+              <tr><th /><th v-for="[k] in PERM_BITS" :key="k">{{ t(k) }}</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="[wk, who] in PERM_WHO" :key="wk">
+                <th>{{ t(wk) }}</th>
+                <td v-for="[bk, b] in PERM_BITS" :key="bk">
+                  <n-checkbox :checked="hasBit(who, b)" :disabled="!modeOk" @update:checked="(v: boolean) => setBit(who, b, v)" />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <n-input v-model:value="propsOf.mode" size="small" :maxlength="4" class="mode" :status="modeOk ? undefined : 'error'" />
+        </div>
+
+        <h4 class="sec"><Icon name="user" /> {{ t('files.owner') }}</h4>
+        <div class="own">
+          <n-select v-model:value="propsOf.owner" size="small" filterable tag :options="ownerOptions" :placeholder="t('files.owner')" />
+          <span>:</span>
+          <n-select v-model:value="propsOf.group" size="small" filterable tag :options="ownerOptions" :placeholder="t('files.group')" />
+        </div>
+        <n-checkbox v-if="propDirs" v-model:checked="propsOf.recursive" style="margin-top: 12px">{{ t('files.recursive') }}</n-checkbox>
+
+        <template #footer>
+          <n-space justify="end">
+            <n-button @click="propsOf = null">{{ t('common.cancel') }}</n-button>
+            <n-button type="primary" :loading="propsOf.saving" :disabled="!modeOk" @click="saveProps">{{ t('common.save') }}</n-button>
+          </n-space>
+        </template>
       </n-card>
     </n-modal>
   </div>
@@ -993,5 +1068,56 @@ ul.conflicts {
 .props dd {
   margin: 0;
   word-break: break-all;
+}
+.sec {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 18px 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.perm {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.bits {
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.bits th,
+.bits td {
+  padding: 4px 10px;
+  text-align: center;
+  font-weight: normal;
+}
+.bits thead th {
+  opacity: 0.6;
+}
+.bits tbody th {
+  text-align: left;
+  padding-left: 0;
+}
+.mode {
+  width: 80px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.own {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+.caret,
+.list :deep(.caret) {
+  margin-left: 4px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+.list :deep(.more) {
+  display: inline-flex;
+  align-items: center;
 }
 </style>

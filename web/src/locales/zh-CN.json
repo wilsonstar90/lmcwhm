@@ -134,7 +134,10 @@
       "408": "408 - 客户端超时",
       "416": "416 - 无效请求",
       "444": "444 - 直接断开连接"
-    }
+    },
+    "timezone_hint": "计划任务、统计、任务日志都使用此时区。修改后面板会自动重启。",
+    "timezone_host": "服务器系统时区为 {zone}，与面板不同。",
+    "timezone_fix": "前往工具箱修改"
   },
   "logs": {
     "tab_login": "面板登录",
@@ -214,7 +217,8 @@
       "invalid_dir": "无法使用该目录：须为绝对路径，且不能是系统目录（/etc、/usr、/root…）",
       "invalid_unauth_status": "未认证响应状态无效",
       "bad_logo": "Logo 须为 PNG、SVG 或 WebP，最大 256 KB",
-      "grpc_in_use": "仍有 {n} 个域名在使用 gRPC，请先改回 HTTP 或删除后再关闭"
+      "grpc_in_use": "仍有 {n} 个域名在使用 gRPC，请先改回 HTTP 或删除后再关闭",
+      "invalid_timezone": "时区无效：请从列表中选择"
     },
     "ssl": {
       "invalid_pair": "证书与私钥不匹配或格式错误"
@@ -3102,7 +3106,14 @@
       "both": "保留两者",
       "overwrite": "覆盖",
       "skipped": "完成，已跳过 {n} 个已存在的项目"
-    }
+    },
+    "p_user": "所有者",
+    "p_group": "用户组",
+    "p_other": "其他",
+    "p_read": "读取",
+    "p_write": "写入",
+    "p_exec": "执行",
+    "n_items": "{n} 个项目"
   },
   "fe": {
     "title": "在线文本编辑器",

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { NModal, NCard, NTag, NButton, NSpin } from 'naive-ui'
 import { get } from '../api/client'
 import type { Task } from '../api/types'
+import { atBottom, follow } from '../composables/stickScroll'
 
 const props = defineProps<{ taskId: string | null; title: string }>()
 const emit = defineEmits<{ close: []; done: [ok: boolean] }>()
@@ -16,9 +17,10 @@ let timer: number | undefined
 async function poll() {
   if (!props.taskId) return
   try {
+    const stick = atBottom(logEl.value)
     task.value = await get<Task>(`/tasks/${props.taskId}`)
     await nextTick()
-    logEl.value?.scrollTo({ top: logEl.value.scrollHeight })
+    follow(logEl.value, stick)
     if (task.value.status !== 'running') {
       clearInterval(timer)
       emit('done', task.value.status === 'success')
