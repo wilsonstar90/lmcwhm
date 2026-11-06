@@ -62,11 +62,15 @@ func (sv *Service) Tables(ctx context.Context, id int64) ([]Table, error) {
 	}
 	list := []Table{}
 	for _, l := range strings.Split(out, "\n") {
+		// The comment comes last; when empty, output trimming may drop its tab.
 		f := strings.Split(l, "\t")
-		if len(f) < 7 {
+		if len(f) < 6 {
 			continue
 		}
-		t := Table{Name: f[0], Engine: f[1], Collation: f[2], Comment: unescape(f[6])}
+		t := Table{Name: f[0], Engine: f[1], Collation: f[2]}
+		if len(f) > 6 {
+			t.Comment = unescape(f[6])
+		}
 		t.Rows, _ = strconv.ParseInt(f[3], 10, 64)
 		t.Size, _ = strconv.ParseInt(f[4], 10, 64)
 		t.Free, _ = strconv.ParseInt(f[5], 10, 64)
