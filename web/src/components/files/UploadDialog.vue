@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import FileIcon from './FileIcon.vue'
 // Upload window (like aaPanel's): drop files or folders, or pick them; a
 // queue with progress; 8 MB chunks that resume from what the server has.
 import { computed, ref, watch } from 'vue'
@@ -118,14 +119,24 @@ async function start() {
       await uploadOne(it)
     } catch (e) {
       it.status = 'error'
-      it.error = e instanceof ApiError ? e.text : String(e)
+      // fetch throws TypeError when the connection drops.
+      it.error = e instanceof ApiError ? e.text : e instanceof TypeError ? t('up.network') : String(e)
     }
   }
   running.value = false
   changed.value++
-  const failed = queue.value.filter((i) => i.status === 'error').length
-  if (failed) msg.error(t('up.failed_n', { n: failed }))
-  else msg.success(t('up.done'))
+  const failed = queue.value.filter((i) => i.status === 'error')
+  if (failed.length) {
+    // Stay open: each failed row shows why, and 開始上傳 retries them.
+    msg.error(`${t('up.failed_n', { n: failed.length })}${failed[0].error ? `：${failed[0].error}` : ''}`, { duration: 8000 })
+    return
+  }
+  msg.success(t('up.done'))
+  // Everything went up: close, unless more files were added meanwhile.
+  if (show.value && !queue.value.some((i) => i.status === 'wait')) {
+    show.value = false
+    queue.value = []
+  }
 }
 function cancel(it: Item) {
   if (it.status === 'run') cancelled.add(it.id)
@@ -161,11 +172,12 @@ async function close() {
           <thead><tr><th>{{ t('files.name') }}</th><th>{{ t('files.size') }}</th><th>{{ t('up.status') }}</th><th /></tr></thead>
           <tbody>
             <tr v-for="it in queue" :key="it.id">
-              <td class="n" :title="it.rel">📄 {{ it.rel }}</td>
+              <td class="n" :title="it.rel"><FileIcon :name="it.rel" :size="16" /> {{ it.rel }}</td>
               <td>{{ bytes(it.file.size) }}</td>
               <td class="s">
                 <n-progress v-if="it.status === 'run'" type="line" :percentage="Math.floor((it.sent / Math.max(it.file.size, 1)) * 100)" :height="8" />
                 <span v-else :class="it.status" :title="it.error">{{ t(`up.st.${it.status}`) }}</span>
+                <div v-if="it.status === 'error' && it.error" class="why">{{ it.error }}</div>
               </td>
               <td><a v-if="it.status === 'wait' || it.status === 'run' || it.status === 'error'" @click.stop="cancel(it)">{{ t('common.cancel') }}</a></td>
             </tr>
@@ -255,6 +267,13 @@ async function close() {
 }
 .error {
   color: #d03050;
+}
+.why {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #d03050;
+  word-break: break-word;
 }
 .skip,
 .cancel,

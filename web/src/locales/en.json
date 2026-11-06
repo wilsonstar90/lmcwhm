@@ -3131,7 +3131,8 @@
       "skip": "Skipped",
       "error": "Failed (retry)",
       "cancel": "Cancelled"
-    }
+    },
+    "network": "The connection dropped or the server did not answer; Start upload resumes where it stopped"
   },
   "rb": {
     "files": "File recycle bin",
