@@ -185,7 +185,8 @@ export interface ServiceStatus {
 
 export interface WebStatus {
   status: { docker: boolean; installed: boolean; services: ServiceStatus[] | null; php: ServiceStatus[] | null }
-  php_versions: string[]
+  php_versions: string[] // installed, newest first
+  php_all?: string[]
 }
 
 export interface WebConfig {

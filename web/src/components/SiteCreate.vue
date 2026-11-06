@@ -42,6 +42,7 @@ watch(
   async (on) => {
     if (!on) return
     if (props.preset) f.value = { ...blank(), ...props.preset }
+    if (!props.phpVersions.includes(f.value.php_version)) f.value.php_version = defaultPHP()
     try {
       runtimes.value = (await get<{ items: InstalledApp[] }>('/apps')).items.filter((a) => a.kind === 'runtime')
     } catch {
@@ -75,6 +76,9 @@ const defaultCommand: Record<string, string> = {
   java: 'exec java -jar app.jar --server.port=$PORT',
   tomcat: '(Tomcat: serves the site root, or the first *.war as ROOT)',
 }
+// Only installed versions; 8.3 when it is there, otherwise the newest.
+const defaultPHP = () => (props.phpVersions.includes('8.3') ? '8.3' : props.phpVersions[0] ?? '')
+const noPHP = computed(() => f.value.type === 'php' && !props.phpVersions.length)
 const phpOptions = computed(() =>
   props.phpVersions.map((v) => ({ label: `PHP ${v}${['7.4', '8.0', '8.1'].includes(v) ? ' (EOL)' : ''}`, value: v })),
 )
@@ -119,10 +123,14 @@ async function submit() {
               <n-radio-button value="tomcat">Tomcat</n-radio-button>
             </n-radio-group>
           </n-form-item>
-          <n-form-item v-if="f.type === 'php'" :label="t('site.php_version')">
+          <n-form-item v-if="f.type === 'php' && !noPHP" :label="t('site.php_version')">
             <n-select v-model:value="f.php_version" :options="phpOptions" style="width: 160px" />
           </n-form-item>
         </n-space>
+        <n-alert v-if="noPHP" type="warning" :show-icon="false" style="margin-bottom: 12px">
+          {{ t('site.need_php') }}
+          <n-button text type="primary" @click="emit('close'); router.push({ name: 'appstore', query: { tab: 'php' } })">{{ t('menu.appstore') }} →</n-button>
+        </n-alert>
         <template v-if="isProject">
           <n-alert v-if="!runtimeOptions.length" type="warning" :show-icon="false" style="margin-bottom: 12px">
             {{ t('site.need_runtime') }}
@@ -173,7 +181,7 @@ async function submit() {
           <n-button
             type="primary"
             :loading="busy"
-            :disabled="!f.domain || (isProject && !f.runtime_version) || (f.type === 'proxy' && !f.proxy_target)"
+            :disabled="!f.domain || noPHP || (f.type === 'php' && !f.php_version) || (isProject && !f.runtime_version) || (f.type === 'proxy' && !f.proxy_target)"
             @click="submit"
           >{{ t('common.confirm') }}</n-button>
         </n-space>

@@ -55,6 +55,12 @@ const custom = ref('')
 const vhost = ref('')
 const runDir = ref('')
 const php = ref('')
+// Installed versions only; the site's own version stays listed.
+const phpOptions = computed(() =>
+  [...new Set([...props.phpVersions, ...(props.site?.php_version ? [props.site.php_version] : [])])]
+    .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }))
+    .map((v) => ({ label: `PHP ${v}`, value: v })),
+)
 const all = ref<Site[]>([])
 watch(() => props.site, (site, old) => {
   if (!site) return
@@ -509,7 +515,7 @@ const title = computed(() => (props.site ? `${t('ss.title', { domain: s.value.do
           <template v-else-if="sec === 'php'">
             <n-form label-placement="left" label-width="120">
               <n-form-item :label="t('site.php_version')" :feedback="t('site.php_switch_hint')">
-                <n-select v-model:value="php" :options="phpVersions.map((v) => ({ label: `PHP ${v}`, value: v }))" style="width: 200px" />
+                <n-select v-model:value="php" :options="phpOptions" style="width: 200px" />
                 <n-button type="primary" style="margin-left: 8px" :disabled="php === site.php_version" @click="save({ php_version: php }, 'PHP ' + php)">{{ t('ss.switch') }}</n-button>
               </n-form-item>
             </n-form>

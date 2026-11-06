@@ -556,7 +556,7 @@
     "type": "種類",
     "static": "静的",
     "php_version": "PHP バージョン",
-    "php_switch_hint": "即時反映。初回利用のバージョンはビルドに数分かかります。",
+    "php_switch_hint": "切り替えはすぐに反映されます。インストール済みのバージョンのみ表示します。他のバージョンは先にアプリストアでインストールしてください。",
     "dns": "Cloudflare DNS",
     "dns_hint": "A / AAAA レコードを自動作成",
     "need_cf": "先に Web 環境で Cloudflare トークンを設定してください",
@@ -611,7 +611,8 @@
     "passthrough_short": "TLS パススルー",
     "tab_project": "プロジェクト",
     "project_logs": "出力（直近 200 行）",
-    "composer_hint": "サイトの PHP コンテナ内で www-data としてサイトルートで Composer を実行します。"
+    "composer_hint": "サイトの PHP コンテナ内で www-data としてサイトルートで Composer を実行します。",
+    "need_php": "PHP がインストールされていません。先にアプリストアでインストールしてください。"
   },
   "app": {
     "installed": "インストール済み",

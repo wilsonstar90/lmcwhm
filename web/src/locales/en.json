@@ -556,7 +556,7 @@
     "type": "Type",
     "static": "Static",
     "php_version": "PHP version",
-    "php_switch_hint": "Takes effect immediately; a version used for the first time takes a few minutes to build.",
+    "php_switch_hint": "The switch takes effect at once. Only installed versions are listed; install others in the App Store first.",
     "dns": "Cloudflare DNS",
     "dns_hint": "Creates A (IPv4) and AAAA (IPv6) records pointing to this server",
     "need_cf": "Set a Cloudflare API token under Web stack first",
@@ -611,7 +611,8 @@
     "passthrough_short": "TLS passthrough",
     "tab_project": "Project",
     "project_logs": "Output (last 200 lines)",
-    "composer_hint": "Runs Composer in the site's PHP container as www-data, in the site root."
+    "composer_hint": "Runs Composer in the site's PHP container as www-data, in the site root.",
+    "need_php": "No PHP version is installed. Install one in the App Store first."
   },
   "app": {
     "installed": "Installed",

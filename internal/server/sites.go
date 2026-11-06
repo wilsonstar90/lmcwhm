@@ -82,10 +82,19 @@ func (s *Server) handleTask(w http.ResponseWriter, r *http.Request) {
 
 // ---- web environment ----
 
+// php_versions lists the installed PHP versions (newest first): the site
+// dialogs offer only these. php_all is every version the stack supports.
 func (s *Server) handleWebStatus(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status": s.Sites.Env.Status(r.Context()), "php_versions": webenv.PHPVersions,
-	})
+	st := s.Sites.Env.Status(r.Context())
+	installed := []string{}
+	for _, v := range webenv.PHPVersions {
+		for _, p := range st.PHP {
+			if p.Name == v {
+				installed = append(installed, v)
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": st, "php_versions": installed, "php_all": webenv.PHPVersions})
 }
 
 // webConfigView never returns secrets, only whether they are set.

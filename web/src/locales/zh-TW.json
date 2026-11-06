@@ -556,7 +556,7 @@
     "type": "類型",
     "static": "靜態",
     "php_version": "PHP 版本",
-    "php_switch_hint": "切換版本會即時生效；新版本首次使用需幾分鐘建置。",
+    "php_switch_hint": "切換版本會立即生效；只列出已安裝的版本，其他版本請先在軟體商店安裝。",
     "dns": "Cloudflare DNS",
     "dns_hint": "自動建立 A（IPv4）與 AAAA（IPv6）記錄指向本伺服器",
     "need_cf": "請先於「Web 環境」設定 Cloudflare API Token",
@@ -611,7 +611,8 @@
     "passthrough_short": "TLS 直通",
     "tab_project": "專案",
     "project_logs": "輸出（最後 200 行）",
-    "composer_hint": "以 www-data 身分在網站目錄、網站的 PHP 容器中執行 Composer。"
+    "composer_hint": "以 www-data 身分在網站目錄、網站的 PHP 容器中執行 Composer。",
+    "need_php": "尚未安裝任何 PHP 版本，請先在軟體商店安裝。"
   },
   "app": {
     "installed": "已安裝",

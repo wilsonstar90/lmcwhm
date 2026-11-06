@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useRoute } from 'vue-router'
 import { computed, h, nextTick, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
@@ -24,7 +25,8 @@ const fail = (e: unknown) => msg.error(e instanceof ApiError ? e.text : String(e
 const catalog = ref<CatalogApp[]>([])
 const installed = ref<InstalledApp[]>([])
 const loading = ref(false)
-const tab = ref('installed')
+// ?tab=php opens the PHP tab (link from the site dialogs).
+const tab = ref(useRoute().query.tab === 'php' ? 'php' : 'installed')
 const pick = ref<Record<string, string>>({})
 const task = ref<{ id: string; title: string } | null>(null)
 const logs = ref<{ url: string; title: string } | null>(null)
