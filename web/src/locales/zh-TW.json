@@ -323,7 +323,10 @@
       "invalid_owner": "未知的使用者或群組",
       "invalid_format": "不支援的壓縮格式",
       "trash_cross_device": "資源回收筒位於另一個磁碟",
-      "invalid_query": "請輸入至少 2 個字元"
+      "invalid_query": "請輸入至少 2 個字元",
+      "archive_tool_missing": "伺服器沒有 7z / rar 工具，自動安裝失敗（rar 需要 Ubuntu multiverse 套件來源）",
+      "archive_has_links": "壓縮檔內含符號連結，基於安全不會解壓縮",
+      "archive_tool_failed": "壓縮工具執行失敗：{detail}"
     },
     "terminal": {
       "invalid_target": "容器無效",
@@ -3114,7 +3117,9 @@
     "p_read": "讀取",
     "p_write": "寫入",
     "p_exec": "執行",
-    "n_items": "{n} 個項目"
+    "n_items": "{n} 個項目",
+    "compressing": "壓縮中，檔案較大時需要一些時間…",
+    "extracting": "解壓縮中，檔案較大時需要一些時間…"
   },
   "fe": {
     "title": "線上文字編輯器",

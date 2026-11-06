@@ -341,16 +341,29 @@ function askConflict(paths: string[], keepBoth: boolean): Promise<Choice | null>
 }
 type Prompt = {
   title: string
+  busy?: string // message shown while submit runs (compress / extract)
   fields: { key: string; label: string; value: string }[]
   recursive?: boolean
-  format?: 'zip' | 'tar.gz'
+  format?: ArchiveFormat
   submit: (v: Record<string, string>, p: Prompt) => Promise<unknown>
 }
+type ArchiveFormat = 'zip' | 'tar.gz' | '7z' | 'rar'
+const FORMATS: ArchiveFormat[] = ['zip', 'tar.gz', '7z', 'rar']
 const prompt = ref<Prompt | null>(null)
+const running = ref(false)
 async function submitPrompt() {
   const p = prompt.value!
+  if (running.value) return
   const v = Object.fromEntries(p.fields.map((f) => [f.key, f.value.trim()]))
-  if (await call(() => p.submit(v, p))) prompt.value = null
+  running.value = true
+  // Big archives take a while: say so until the server answers.
+  const note = p.busy ? msg.loading(p.busy, { duration: 0 }) : null
+  try {
+    if (await call(() => p.submit(v, p))) prompt.value = null
+  } finally {
+    note?.destroy()
+    running.value = false
+  }
 }
 function newItem(dir: boolean) {
   prompt.value = {
@@ -373,19 +386,21 @@ function compress(paths: string[]) {
   const base = paths.length === 1 ? baseName(paths[0]) : 'archive'
   prompt.value = {
     title: t('files.compress'),
+    busy: t('fm.compressing'),
     fields: [{ key: 'dest', label: t('files.target'), value: join(cwd.value, `${base}.zip`) }],
     format: 'zip',
     submit: (v, p) => post('/files/compress', { paths, dest: v.dest, format: p.format }),
   }
 }
-function setFormat(f: 'zip' | 'tar.gz') {
+function setFormat(f: ArchiveFormat) {
   const p = prompt.value!
   p.format = f
-  p.fields[0].value = p.fields[0].value.replace(/\.(zip|tar\.gz)$/, '') + '.' + f
+  p.fields[0].value = p.fields[0].value.replace(/\.(zip|tar\.gz|7z|rar)$/, '') + '.' + f
 }
 function extract(e: FileEntry) {
   prompt.value = {
     title: `${t('files.extract')} · ${e.name}`,
+    busy: t('fm.extracting'),
     fields: [{ key: 'dest', label: t('files.target'), value: cwd.value }],
     submit: async (v) => {
       const { items } = await post<{ items: string[] }>('/files/extract/conflicts', { path: e.path, dest: v.dest })
@@ -735,7 +750,7 @@ onBeforeUnmount(cancelPress)
 
     <div class="area" @contextmenu="onContext(null, $event)" @click.self="selected = []" @touchstart.self="onTouchStart(null, $event)" @touchend="cancelPress">
       <n-data-table
-        v-if="view === 'list'" size="small" class="list" :columns="columns" :data="shown" :loading="loading"
+        v-if="view === 'list'" size="small" class="list" flex-height :columns="columns" :data="shown" :loading="loading"
         :row-key="(r: FileEntry) => r.path" :row-props="rowProps" :scroll-x="1180" :pagination="shown.length > 200 ? { pageSize: 200 } : false"
       />
       <div v-else class="grid" @click.self="selected = []">
@@ -759,22 +774,21 @@ onBeforeUnmount(cancelPress)
       @select="(k: string) => act(k)" @clickoutside="menu = null"
     />
 
-    <n-modal :show="!!prompt" @update:show="(v: boolean) => !v && (prompt = null)">
-      <n-card v-if="prompt" :title="prompt.title" style="width: min(520px, calc(100vw - 32px))" closable @close="prompt = null">
+    <n-modal :show="!!prompt" :mask-closable="!running" @update:show="(v: boolean) => !v && !running && (prompt = null)">
+      <n-card v-if="prompt" :title="prompt.title" style="width: min(520px, calc(100vw - 32px))" :closable="!running" @close="prompt = null">
         <n-form label-placement="top" @submit.prevent="submitPrompt">
           <n-form-item v-for="f in prompt.fields" :key="f.key" :label="f.label">
             <n-input v-model:value="f.value" @keyup.enter="submitPrompt" />
           </n-form-item>
           <n-radio-group v-if="prompt.format" :value="prompt.format" @update:value="setFormat">
-            <n-radio-button value="zip">zip</n-radio-button>
-            <n-radio-button value="tar.gz">tar.gz</n-radio-button>
+            <n-radio-button v-for="x in FORMATS" :key="x" :value="x" :disabled="running">{{ x }}</n-radio-button>
           </n-radio-group>
           <n-checkbox v-if="prompt.recursive !== undefined" v-model:checked="prompt.recursive">{{ t('files.recursive') }}</n-checkbox>
         </n-form>
         <template #footer>
           <n-space justify="end">
-            <n-button @click="prompt = null">{{ t('common.cancel') }}</n-button>
-            <n-button type="primary" @click="submitPrompt">{{ t('common.confirm') }}</n-button>
+            <n-button :disabled="running" @click="prompt = null">{{ t('common.cancel') }}</n-button>
+            <n-button type="primary" :loading="running" @click="submitPrompt">{{ t('common.confirm') }}</n-button>
           </n-space>
         </template>
       </n-card>
@@ -877,6 +891,8 @@ ul.conflicts {
   gap: 8px;
   outline: none;
   min-width: 0;
+  flex: 1;
+  min-height: 0;
 }
 .pathbar {
   display: flex;
@@ -933,7 +949,14 @@ ul.conflicts {
 }
 .area {
   position: relative;
-  min-height: 320px;
+  flex: 1;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+}
+.list {
+  flex: 1;
+  min-height: 0;
 }
 .list :deep(.row-on td) {
   background: rgba(32, 165, 58, 0.1) !important;
@@ -985,7 +1008,9 @@ ul.conflicts {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
   gap: 8px;
-  min-height: 320px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
   align-content: start;
 }
 .cell {

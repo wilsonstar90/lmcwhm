@@ -323,7 +323,10 @@
       "invalid_owner": "未知的用户或用户组",
       "invalid_format": "不支持的压缩格式",
       "trash_cross_device": "回收站在另一块磁盘上",
-      "invalid_query": "请输入至少 2 个字符"
+      "invalid_query": "请输入至少 2 个字符",
+      "archive_tool_missing": "服务器没有 7z / rar 工具，自动安装失败（rar 需要 Ubuntu multiverse 软件源）",
+      "archive_has_links": "压缩包内含符号链接，出于安全不会解压",
+      "archive_tool_failed": "压缩工具执行失败：{detail}"
     },
     "terminal": {
       "invalid_target": "容器无效",
@@ -3114,7 +3117,9 @@
     "p_read": "读取",
     "p_write": "写入",
     "p_exec": "执行",
-    "n_items": "{n} 个项目"
+    "n_items": "{n} 个项目",
+    "compressing": "压缩中，文件较大时需要一些时间…",
+    "extracting": "解压中，文件较大时需要一些时间…"
   },
   "fe": {
     "title": "在线文本编辑器",

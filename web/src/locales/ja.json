@@ -323,7 +323,10 @@
       "invalid_owner": "不明なユーザーまたはグループ",
       "invalid_format": "未対応のアーカイブ形式です",
       "trash_cross_device": "ごみ箱は別のディスクにあります",
-      "invalid_query": "2文字以上入力してください"
+      "invalid_query": "2文字以上入力してください",
+      "archive_tool_missing": "サーバーに 7z / rar ツールがなく、自動インストールに失敗しました（rar には Ubuntu multiverse リポジトリが必要です）",
+      "archive_has_links": "アーカイブにシンボリックリンクが含まれるため、安全のため展開しません",
+      "archive_tool_failed": "圧縮ツールの実行に失敗しました：{detail}"
     },
     "terminal": {
       "invalid_target": "コンテナが無効です",
@@ -3114,7 +3117,9 @@
     "p_read": "読み取り",
     "p_write": "書き込み",
     "p_exec": "実行",
-    "n_items": "{n} 項目"
+    "n_items": "{n} 項目",
+    "compressing": "圧縮中…大きなファイルは時間がかかります",
+    "extracting": "展開中…大きなファイルは時間がかかります"
   },
   "fe": {
     "title": "オンラインエディタ",

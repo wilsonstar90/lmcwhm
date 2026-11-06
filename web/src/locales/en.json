@@ -323,7 +323,10 @@
       "invalid_owner": "Unknown user or group",
       "invalid_format": "Unsupported archive format",
       "trash_cross_device": "The recycle bin is on another disk",
-      "invalid_query": "Enter at least 2 characters"
+      "invalid_query": "Enter at least 2 characters",
+      "archive_tool_missing": "The 7z / rar tool is not on the server and could not be installed (rar needs the Ubuntu multiverse repository)",
+      "archive_has_links": "The archive contains symbolic links, so it is not extracted for safety",
+      "archive_tool_failed": "The archive tool failed: {detail}"
     },
     "terminal": {
       "invalid_target": "Invalid container",
@@ -3065,7 +3068,9 @@
     "p_read": "Read",
     "p_write": "Write",
     "p_exec": "Execute",
-    "n_items": "{n} items"
+    "n_items": "{n} items",
+    "compressing": "Compressing… large files take a while",
+    "extracting": "Extracting… large files take a while"
   },
   "fe": {
     "title": "Online text editor",

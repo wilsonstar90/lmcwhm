@@ -42,6 +42,11 @@ func (s *Server) fileRoutes(r chi.Router) {
 }
 
 func writeFileErr(w http.ResponseWriter, err error) {
+	if errors.Is(err, files.ErrArchiveTool) { // 7z / rar failed: show the tool's own message
+		detail := strings.TrimPrefix(err.Error(), files.ErrArchiveTool.Error()+": ")
+		writeJSON(w, http.StatusBadRequest, apiError{Code: files.ErrArchiveTool.Error(), Params: map[string]any{"detail": detail}})
+		return
+	}
 	if errors.Is(err, files.ErrNotFound) {
 		writeErr(w, http.StatusNotFound, err)
 		return

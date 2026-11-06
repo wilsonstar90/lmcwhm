@@ -102,11 +102,16 @@ const trash = ref(false)
 .ti {
   color: #e0a32e;
 }
+/* Fill the window below the header (content padding 16px top and bottom);
+   the file list scrolls inside. */
 .files {
   display: flex;
   flex-direction: column;
   gap: 10px;
   min-width: 0;
+  height: calc(100vh - 85px);
+  height: calc(100dvh - 85px);
+  min-height: 460px;
 }
 .tabbar {
   display: flex;

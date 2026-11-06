@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 )
 
@@ -187,6 +188,18 @@ func (f *FS) ExtractConflicts(archive, destDir string) ([]string, error) {
 		return nil, mapErr(err)
 	}
 	defer in.Close()
+	if k := ToolKind(a); k != "" {
+		list, err := listTool(k, filepath.Join(f.Root, filepath.FromSlash(a)))
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range list {
+			if !e.dir && !add(e.name) {
+				break
+			}
+		}
+		return out, nil
+	}
 	lower := strings.ToLower(a)
 	switch {
 	case strings.HasSuffix(lower, ".zip"):

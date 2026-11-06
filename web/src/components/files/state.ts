@@ -30,7 +30,7 @@ export const baseName = (p: string) => p.split('/').pop() || p
 
 const imageExt = /\.(png|jpe?g|gif|webp|bmp|ico|avif)$/i
 export const isImage = (n: string) => imageExt.test(n)
-export const isArchive = (n: string) => /\.(zip|tar\.gz|tgz|tar|gz)$/i.test(n)
+export const isArchive = (n: string) => /\.(zip|tar\.gz|tgz|tar|7z|rar)$/i.test(n)
 const docExt = /\.(pdf|docx?|xlsx?|pptx?|odt|ods|txt|md|csv|rtf)$/i
 export const isDoc = (n: string) => docExt.test(n)
 

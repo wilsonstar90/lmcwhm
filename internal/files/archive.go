@@ -9,13 +9,14 @@ import (
 	"io/fs"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 )
 
-// Compress packs paths (all in the same directory) into dest as zip or tar.gz;
-// entries are named relative to that directory.
+// Compress packs paths (all in the same directory) into dest as zip, tar.gz,
+// 7z or rar; entries are named relative to that directory.
 func (f *FS) Compress(paths []string, dest, format string) error {
-	if len(paths) == 0 || (format != "zip" && format != "tar.gz") {
+	if len(paths) == 0 || (format != "zip" && format != "tar.gz" && format != "7z" && format != "rar") {
 		return ErrBadFormat
 	}
 	d, err := rel(dest)
@@ -41,6 +42,23 @@ func (f *FS) Compress(paths []string, dest, format string) error {
 		return err
 	}
 	defer root.Close()
+	if format == "7z" || format == "rar" {
+		if _, err := root.Lstat(d); err == nil {
+			return ErrExists
+		}
+		if _, err := root.Lstat(base); err != nil {
+			return mapErr(err)
+		}
+		names := make([]string, len(srcs))
+		for i, s := range srcs {
+			names[i] = path.Base(s)
+		}
+		err := compressTool(format, filepath.Join(f.Root, filepath.FromSlash(base)), filepath.Join(f.Root, filepath.FromSlash(d)), names)
+		if err != nil {
+			root.Remove(d)
+		}
+		return err
+	}
 	out, err := root.OpenFile(d, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
 		return mapErr(err)
@@ -155,7 +173,7 @@ func writeTarGz(root *os.Root, base string, srcs []string, w io.Writer) error {
 	return err
 }
 
-// Extract unpacks a .zip / .tar.gz / .tgz / .tar archive into destDir. Writes
+// Extract unpacks a .zip / .tar.gz / .tgz / .tar / .7z / .rar archive into destDir. Writes
 // go through an os.Root opened at destDir, so entries like "../../etc/x" or
 // paths through planted symlinks are rejected (zip-slip); archive symlinks
 // are skipped.
@@ -187,6 +205,9 @@ func (f *FS) Extract(archive, destDir string, skipExisting bool) error {
 		return mapErr(err)
 	}
 	defer in.Close()
+	if k := ToolKind(a); k != "" {
+		return extractTool(k, filepath.Join(f.Root, filepath.FromSlash(a)), filepath.Join(f.Root, filepath.FromSlash(d)), dst, skipExisting)
+	}
 	lower := strings.ToLower(a)
 	switch {
 	case strings.HasSuffix(lower, ".zip"):

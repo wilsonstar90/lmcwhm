@@ -443,6 +443,21 @@ api POST /files/extract '{"path":"/www/wwwroot/cf/a.zip","dest":"/www/wwwroot/cf
 [[ "$(cat /www/wwwroot/cf/out/a/x.txt)" == mine ]] || fail "extract skip replaced a file"
 api POST /files/extract '{"path":"/www/wwwroot/cf/a.zip","dest":"/www/wwwroot/cf/out"}' >/dev/null
 [[ "$(cat /www/wwwroot/cf/out/a/x.txt)" == new ]] || fail "extract overwrite"
+# 7z and rar go through 7-Zip / RAR, installed on first use.
+for fmt in 7z rar; do
+  r="$(api POST /files/compress "{\"paths\":[\"/www/wwwroot/cf/a\"],\"dest\":\"/www/wwwroot/cf/a.$fmt\",\"format\":\"$fmt\"}")"
+  if [[ "$fmt" == rar && "$r" == *files.archive_tool_missing* ]]; then echo "  (rar is not available from apt here: skipped)"; continue; fi
+  [[ "$r" == *'"ok":true'* ]] || fail "compress $fmt: $r"
+  api POST /files/extract "{\"path\":\"/www/wwwroot/cf/a.$fmt\",\"dest\":\"/www/wwwroot/cf/$fmt\"}" | grep -q '"ok":true' || fail "extract $fmt"
+  [[ "$(cat /www/wwwroot/cf/$fmt/a/x.txt)" == new ]] || fail "$fmt round trip"
+  ls -A /www/wwwroot/cf/$fmt | grep -q lmcwhm-extract && fail "$fmt left its temp dir"
+  api POST /files/extract/conflicts "{\"path\":\"/www/wwwroot/cf/a.$fmt\",\"dest\":\"/www/wwwroot/cf/$fmt\"}" | grep -q "/www/wwwroot/cf/$fmt/a/x.txt" || fail "$fmt conflicts"
+done
+# An archive holding a symlink is refused.
+ln -s /etc /www/wwwroot/cf/a/link
+(cd /www/wwwroot/cf && 7z a -snl -bd -y evil.7z a >/dev/null 2>&1 || 7zz a -snl -bd -y evil.7z a >/dev/null 2>&1)
+code="$(api POST /files/extract '{"path":"/www/wwwroot/cf/evil.7z","dest":"/www/wwwroot/cf/evil"}' | jget "['code']")"
+[[ "$code" == files.archive_has_links ]] || fail "7z with a symlink extracted: $code"
 rm -rf /www/wwwroot/cf
 # Server reboot needs the password (a wrong one is refused; CI never reboots).
 [[ "$(api POST /system/reboot '{"password":"wrong"}' | jget "['code']")" == auth.bad_password ]] || fail "reboot without the password"
@@ -452,7 +467,7 @@ api POST /files/trash/restore "{\"id\":\"$TID\"}" >/dev/null
 [[ -f /www/wwwroot/up.txt ]] || fail "restore from recycle bin"
 code="$(api POST /terminal/ticket '{"password":"wrong"}' | jget "['code']")"
 [[ "$code" == auth.bad_password ]] || fail "terminal opened without the password: $code"
-pass "files: chunked upload, zip-slip blocked, recycle bin; terminal needs the password"
+pass "files: chunked upload, zip-slip blocked, 7z / rar, recycle bin; terminal needs the password"
 
 # ---------- M4: monitor, cron, log center, IP geolocation ----------
 api GET '/monitor/series?range=15m' | python3 -c "import sys,json; p=json.load(sys.stdin)['items']; assert len(p)>=2 and 0<=p[-1]['cpu']<=100 and p[-1]['mem']>0, p[-3:]" || fail "monitor samples"
