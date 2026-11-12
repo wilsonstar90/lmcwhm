@@ -2,7 +2,7 @@
 import { computed, h, onMounted, ref } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu, NButton, NSpace, type MenuOption } from 'naive-ui'
+import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu, NButton, NSpace, useMessage, type MenuOption } from 'naive-ui'
 import { useSession } from '../stores/session'
 import LangSwitch from '../components/LangSwitch.vue'
 import ThemeSwitch from '../components/ThemeSwitch.vue'
@@ -10,11 +10,13 @@ import BrandLogo from '../components/BrandLogo.vue'
 import TaskBox from '../components/TaskBox.vue'
 import MaintenanceBar from '../components/MaintenanceBar.vue'
 import { arrange, loadMenu, menuConfig } from '../menu'
+import { get } from '../api/client'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const session = useSession()
+const msg = useMessage()
 // The menu folds away on phones and iPads in portrait.
 const collapsed = ref(window.innerWidth < 900)
 
@@ -26,7 +28,13 @@ const can = (key: string) => {
   if (key === 'settings') return true // the account tab
   return (u.perms ?? []).includes(key)
 }
-onMounted(loadMenu)
+const ips = ref({ ipv4: '', ipv6: '' })
+onMounted(() => {
+  loadMenu()
+  if (session.user?.is_admin) {
+    get<{ ipv4: string; ipv6: string }>('/web/ips').then((r) => { ips.value = r }).catch(() => {})
+  }
+})
 const menu = computed<MenuOption[]>(() =>
   arrange(items, menuConfig.value).filter((k) => can(k) && !menuConfig.value.hidden.includes(k)).map((key) => ({
     key,
@@ -34,6 +42,14 @@ const menu = computed<MenuOption[]>(() =>
   })),
 )
 
+async function copyIP(ip: string) {
+  try {
+    await navigator.clipboard.writeText(ip)
+    msg.success(t('common.copied'))
+  } catch (e) {
+    msg.error(String(e))
+  }
+}
 async function logout() {
   await session.logout()
   router.push({ name: 'login' })
@@ -63,7 +79,13 @@ async function logout() {
             <BrandLogo />
             <TaskBox v-if="session.user?.is_admin" />
           </template>
-          <span v-else class="user">{{ session.user?.username }}</span>
+          <template v-else>
+            <span class="user">{{ session.user?.username }}</span>
+            <div v-if="session.user?.is_admin" class="ips">
+              <n-button v-if="ips.ipv4" size="tiny" quaternary class="server-ip" :title="`${t('common.copy')}: ${ips.ipv4}`" @click="copyIP(ips.ipv4)">IPv4 {{ ips.ipv4 }}</n-button>
+              <n-button v-if="ips.ipv6" size="tiny" quaternary class="server-ip v6" :title="`${t('common.copy')}: ${ips.ipv6}`" @click="copyIP(ips.ipv6)">IPv6 {{ ips.ipv6 }}</n-button>
+            </div>
+          </template>
         </div>
         <n-space :size="8" align="center" :wrap="false">
           <MaintenanceBar v-if="session.user?.is_admin" compact />
@@ -112,5 +134,29 @@ async function logout() {
 }
 .user {
   opacity: 0.75;
+}
+.ips {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+}
+.server-ip {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  opacity: 0.65;
+}
+.v6 {
+  max-width: 220px;
+}
+:deep(.v6 .n-button__content) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 1200px) {
+  .ips {
+    display: none;
+  }
 }
 </style>
