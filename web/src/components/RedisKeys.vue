@@ -20,7 +20,8 @@ interface RedisValue extends RedisKey { value?: string; items?: string[]; fields
 const dbs = ref<{ index: number; keys: number }[]>([])
 const db = ref(0)
 const keys = ref<RedisKey[]>([])
-const cursor = ref('0')
+const page = ref(1)
+const pageSize = ref(10)
 const total = ref(0)
 const match = ref('')
 const loading = ref(false)
@@ -34,27 +35,43 @@ async function loadDBs() {
     fail(e)
   }
 }
-async function scan(more = false) {
+async function scan() {
   loading.value = true
   try {
-    const q = new URLSearchParams({ db: String(db.value), cursor: more ? cursor.value : '0', match: match.value.trim(), count: '200' })
-    const r = await get<{ cursor: string; total: number; keys: RedisKey[] }>(`${base.value}/keys?${q}`)
-    keys.value = more ? [...keys.value, ...r.keys.filter((k) => !keys.value.some((x) => x.key === k.key))] : r.keys
-    cursor.value = r.cursor
+    const q = new URLSearchParams({ db: String(db.value), page: String(page.value), page_size: String(pageSize.value), match: match.value.trim() })
+    const r = await get<{ page: number; page_size: number; total: number; keys: RedisKey[] }>(`${base.value}/keys?${q}`)
+    keys.value = r.keys
+    page.value = r.page
+    pageSize.value = r.page_size
     total.value = r.total
-    if (!more) checked.value = []
+    checked.value = []
   } catch (e) {
     fail(e)
   } finally {
     loading.value = false
   }
 }
+function search() {
+  page.value = 1
+  scan()
+}
 function reload() {
   loadDBs()
   scan()
 }
-watch(() => props.app.id, reload, { immediate: true })
-watch(db, () => scan())
+watch(() => props.app.id, () => { page.value = 1; reload() }, { immediate: true })
+watch(db, () => { page.value = 1; scan() })
+const pagination = computed(() => ({
+  page: page.value,
+  pageSize: pageSize.value,
+  itemCount: total.value,
+  showSizePicker: true,
+  pageSizes: [10, 20, 50, 100],
+  showQuickJumper: true,
+  prefix: () => t('common.total', { n: total.value.toLocaleString() }),
+  onUpdatePage: (p: number) => { page.value = p; scan() },
+  onUpdatePageSize: (n: number) => { pageSize.value = n; page.value = 1; scan() },
+}))
 
 function ttl(s: number) {
   if (s < 0) return t('rk.forever')
@@ -95,11 +112,9 @@ async function save() {
 }
 async function remove(list: string[]) {
   try {
-    const r = await post<{ deleted: number }>(`${base.value}/delete`, { db: db.value, keys: list })
-    keys.value = keys.value.filter((k) => !list.includes(k.key))
-    total.value = Math.max(0, total.value - r.deleted)
+    await post(`${base.value}/delete`, { db: db.value, keys: list })
     checked.value = []
-    loadDBs()
+    reload()
   } catch (e) {
     fail(e)
   }
@@ -158,8 +173,8 @@ const viewCols = computed<DataTableColumns<{ a: string; b: string }>>(() => {
       <slot name="actions" />
     </n-space>
     <n-space>
-      <n-input v-model:value="match" size="small" clearable :placeholder="t('rk.search')" style="width: 220px" @keyup.enter="scan()" @clear="scan()" />
-      <n-button size="small" @click="scan()">{{ t('rk.find') }}</n-button>
+      <n-input v-model:value="match" size="small" clearable :placeholder="t('rk.search')" style="width: 220px" @keyup.enter="search" @clear="search" />
+      <n-button size="small" @click="search">{{ t('rk.find') }}</n-button>
       <n-button size="small" @click="reload">{{ t('common.refresh') }}</n-button>
     </n-space>
   </n-space>
@@ -167,18 +182,14 @@ const viewCols = computed<DataTableColumns<{ a: string; b: string }>>(() => {
     <n-tab v-for="d in dbs" :key="d.index" :name="d.index">DB{{ d.index }} [{{ d.keys }}]</n-tab>
   </n-tabs>
   <n-data-table
-    v-model:checked-row-keys="checked" size="small" :columns="cols" :data="keys" :loading="loading"
-    :row-key="(k: RedisKey) => k.key" :scroll-x="1100" :max-height="560"
+    remote v-model:checked-row-keys="checked" size="small" :columns="cols" :data="keys" :loading="loading"
+    :row-key="(k: RedisKey) => k.key" :scroll-x="1100" :max-height="560" :pagination="pagination"
   />
   <n-space justify="space-between" align="center" style="margin-top: 8px">
     <n-popconfirm :disabled="!checked.length" @positive-click="remove(checked.map(String))">
       <template #trigger><n-button size="small" :disabled="!checked.length">{{ t('rk.delete_selected', { n: checked.length }) }}</n-button></template>
       {{ t('rk.delete_confirm', { n: checked.length }) }}
     </n-popconfirm>
-    <n-space align="center">
-      <span class="hint">{{ t('rk.shown', { n: keys.length, total }) }}</span>
-      <n-button size="small" :disabled="cursor === '0'" :loading="loading" @click="scan(true)">{{ cursor === '0' ? t('rk.all_loaded') : t('rk.more') }}</n-button>
-    </n-space>
   </n-space>
 
   <n-modal :show="!!edit" @update:show="(x: boolean) => !x && (edit = null)">

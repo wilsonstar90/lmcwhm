@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -317,6 +318,88 @@ func (sv *Service) RedisScan(ctx context.Context, id int64, db int, cursor, patt
 		}
 	}
 	out.Cursor = cursor
+	return out, nil
+}
+
+type RedisKeyPage struct {
+	Page     int        `json:"page"`
+	PageSize int        `json:"page_size"`
+	Total    int64      `json:"total"`
+	Keys     []RedisKey `json:"keys"`
+}
+
+// RedisPage returns an arbitrary page of sorted keys. Redis SCAN cursors
+// cannot jump, so page mode scans the matching names and describes only the
+// selected page; cursor mode above remains available for very large keyspaces.
+func (sv *Service) RedisPage(ctx context.Context, id int64, db int, page, pageSize int, pattern string) (RedisKeyPage, error) {
+	i, err := sv.engineOf(ctx, id, func(a string) bool { return a == "redis" })
+	if err != nil {
+		return RedisKeyPage{}, err
+	}
+	rc, err := sv.Redis(ctx, i)
+	if err != nil {
+		return RedisKeyPage{}, err
+	}
+	defer rc.Close()
+	if err := rc.selectDB(db); err != nil {
+		return RedisKeyPage{}, err
+	}
+	return rc.page(ctx, page, pageSize, pattern)
+}
+
+func (rc *RedisConn) page(ctx context.Context, page, pageSize int, pattern string) (RedisKeyPage, error) {
+	out := RedisKeyPage{Page: 1, PageSize: 10, Keys: []RedisKey{}}
+	if pageSize >= 1 && pageSize <= 100 {
+		out.PageSize = pageSize
+	}
+	if pattern == "" {
+		pattern = "*"
+	} else if !strings.ContainsAny(pattern, "*?[") {
+		pattern = "*" + pattern + "*"
+	}
+	seen := map[string]bool{}
+	names := []string{}
+	cursor := "0"
+	for {
+		if err := ctx.Err(); err != nil {
+			return out, err
+		}
+		v, err := rc.Do("SCAN", cursor, "MATCH", pattern, "COUNT", "1000")
+		if err != nil {
+			return out, err
+		}
+		arr, _ := v.([]any)
+		if len(arr) != 2 {
+			return out, errors.New("redis: bad SCAN reply")
+		}
+		cursor, _ = arr[0].(string)
+		for _, key := range asStrings(arr[1]) {
+			if !seen[key] {
+				seen[key] = true
+				names = append(names, key)
+			}
+		}
+		if cursor == "0" {
+			break
+		}
+	}
+	sort.Strings(names)
+	out.Total = int64(len(names))
+	pages := (len(names) + out.PageSize - 1) / out.PageSize
+	if pages < 1 {
+		pages = 1
+	}
+	if page > 1 {
+		out.Page = page
+	}
+	if out.Page > pages {
+		out.Page = pages
+	}
+	start := (out.Page - 1) * out.PageSize
+	end := min(start+out.PageSize, len(names))
+	for _, key := range names[start:end] {
+		out.Keys = append(out.Keys, rc.describe(key, 120))
+	}
 	return out, nil
 }
 

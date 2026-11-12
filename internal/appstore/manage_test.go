@@ -124,6 +124,64 @@ func TestRedisClient(t *testing.T) {
 	}
 }
 
+func TestRedisKeyPage(t *testing.T) {
+	scanReply := func(cursor string, keys []string) string {
+		var b strings.Builder
+		fmt.Fprintf(&b, "*2\r\n$%d\r\n%s\r\n*%d\r\n", len(cursor), cursor, len(keys))
+		for _, key := range keys {
+			fmt.Fprintf(&b, "$%d\r\n%s\r\n", len(key), key)
+		}
+		return b.String()
+	}
+	addr := fakeRedis(t, func(a []string) string {
+		switch strings.ToUpper(a[0]) {
+		case "SCAN":
+			start, end := 1, 16
+			if a[1] != "0" {
+				start, end = 16, 26
+			}
+			keys := []string{}
+			for i := start; i < end; i++ {
+				keys = append(keys, fmt.Sprintf("k%02d", i))
+			}
+			if start == 1 {
+				keys = append(keys, "k01") // SCAN may return duplicates.
+				return scanReply("9", keys)
+			}
+			return scanReply("0", keys)
+		case "TYPE":
+			return "+string\r\n"
+		case "TTL":
+			return ":-1\r\n"
+		case "STRLEN":
+			return ":1\r\n"
+		case "GETRANGE":
+			return "$1\r\nx\r\n"
+		}
+		return "-ERR unknown\r\n"
+	})
+	rc, err := DialRedis(context.Background(), addr, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rc.Close()
+	page, err := rc.page(context.Background(), 2, 10, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Total != 25 || page.Page != 2 || page.PageSize != 10 || len(page.Keys) != 10 || page.Keys[0].Key != "k11" || page.Keys[9].Key != "k20" {
+		t.Fatalf("second page: %+v", page)
+	}
+	page, err = rc.page(context.Background(), 99, 10, "")
+	if err != nil || page.Page != 3 || len(page.Keys) != 5 || page.Keys[0].Key != "k21" {
+		t.Fatalf("clamped last page: %+v %v", page, err)
+	}
+	page, err = rc.page(context.Background(), 0, 0, "")
+	if err != nil || page.Page != 1 || page.PageSize != 10 || len(page.Keys) != 10 || page.Keys[0].Key != "k01" {
+		t.Fatalf("defaults: %+v %v", page, err)
+	}
+}
+
 func TestClip(t *testing.T) {
 	if s, bin := clip("héllo world", 3); s != "hé…" || bin {
 		t.Fatalf("clip %q %v", s, bin)

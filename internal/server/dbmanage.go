@@ -390,6 +390,11 @@ func queryInt(r *http.Request, k string) int {
 
 func (s *Server) handleRedisKeys(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
+	if q.Has("page") {
+		v, err := s.Apps.RedisPage(r.Context(), idParam(r), queryInt(r, "db"), queryInt(r, "page"), queryInt(r, "page_size"), q.Get("match"))
+		s.respond(w, v, err)
+		return
+	}
 	v, err := s.Apps.RedisScan(r.Context(), idParam(r), queryInt(r, "db"), q.Get("cursor"), q.Get("match"), queryInt(r, "count"))
 	s.respond(w, v, err)
 }
