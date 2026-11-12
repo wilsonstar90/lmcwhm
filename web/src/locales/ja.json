@@ -2475,6 +2475,7 @@
     "delete_selected": "選択を削除（{n}）",
     "shown": "{total} 件中 {n} 件を表示",
     "more": "さらに読み込む",
+    "all_loaded": "すべて読み込み済み",
     "binary": "バイナリ",
     "binary_readonly": "バイナリ値：ここでは編集できません",
     "field": "フィールド",

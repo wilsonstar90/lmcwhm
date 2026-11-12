@@ -37,7 +37,7 @@ async function loadDBs() {
 async function scan(more = false) {
   loading.value = true
   try {
-    const q = new URLSearchParams({ db: String(db.value), cursor: more ? cursor.value : '0', match: match.value.trim(), count: '50' })
+    const q = new URLSearchParams({ db: String(db.value), cursor: more ? cursor.value : '0', match: match.value.trim(), count: '200' })
     const r = await get<{ cursor: string; total: number; keys: RedisKey[] }>(`${base.value}/keys?${q}`)
     keys.value = more ? [...keys.value, ...r.keys.filter((k) => !keys.value.some((x) => x.key === k.key))] : r.keys
     cursor.value = r.cursor
@@ -95,8 +95,9 @@ async function save() {
 }
 async function remove(list: string[]) {
   try {
-    await post(`${base.value}/delete`, { db: db.value, keys: list })
+    const r = await post<{ deleted: number }>(`${base.value}/delete`, { db: db.value, keys: list })
     keys.value = keys.value.filter((k) => !list.includes(k.key))
+    total.value = Math.max(0, total.value - r.deleted)
     checked.value = []
     loadDBs()
   } catch (e) {
@@ -114,15 +115,15 @@ async function flush() {
 
 const cols = computed<DataTableColumns<RedisKey>>(() => [
   { type: 'selection' },
-  { title: () => t('rk.key'), key: 'key', minWidth: 260, render: (k) => h('span', { class: 'mono', style: 'word-break: break-all' }, k.key) },
-  { title: () => t('rk.value'), key: 'preview', minWidth: 240, ellipsis: { tooltip: true }, render: (k) => (k.binary ? h(NTag, { size: 'small' }, () => t('rk.binary')) : k.preview) },
-  { title: () => t('rk.type'), key: 'type', width: 90 },
-  { title: () => t('rk.length'), key: 'length', width: 100 },
-  { title: () => t('rk.ttl'), key: 'ttl', width: 170, render: (k) => ttl(k.ttl) },
+  { title: () => t('rk.key'), key: 'key', minWidth: 240, ellipsis: { tooltip: true }, render: (k) => h('span', { class: 'mono key', title: k.key }, k.key) },
+  { title: () => t('rk.value'), key: 'preview', minWidth: 200, ellipsis: { tooltip: true }, render: (k) => (k.binary ? h(NTag, { size: 'small' }, () => t('rk.binary')) : k.preview) },
+  { title: () => t('rk.type'), key: 'type', width: 80 },
+  { title: () => t('rk.length'), key: 'length', width: 90 },
+  { title: () => t('rk.ttl'), key: 'ttl', width: 160, render: (k) => ttl(k.ttl) },
   {
-    title: '', key: 'a', width: 130,
+    title: '', key: 'a', width: 120, fixed: 'right',
     render: (k) =>
-      h(NSpace, { size: 6 }, () => [
+      h(NSpace, { size: 6, wrap: false }, () => [
         h(NButton, { size: 'tiny', onClick: () => open(k) }, () => t('rk.edit')),
         h(NPopconfirm, { onPositiveClick: () => remove([k.key]) }, {
           trigger: () => h(NButton, { size: 'tiny', ghost: true, type: 'error' }, () => t('common.delete')),
@@ -162,7 +163,7 @@ const viewCols = computed<DataTableColumns<{ a: string; b: string }>>(() => {
       <n-button size="small" @click="reload">{{ t('common.refresh') }}</n-button>
     </n-space>
   </n-space>
-  <n-tabs v-model:value="db" type="card" size="small" style="margin-bottom: 8px">
+  <n-tabs v-model:value="db" type="line" size="small" class="db-tabs">
     <n-tab v-for="d in dbs" :key="d.index" :name="d.index">DB{{ d.index }} [{{ d.keys }}]</n-tab>
   </n-tabs>
   <n-data-table
@@ -176,7 +177,7 @@ const viewCols = computed<DataTableColumns<{ a: string; b: string }>>(() => {
     </n-popconfirm>
     <n-space align="center">
       <span class="hint">{{ t('rk.shown', { n: keys.length, total }) }}</span>
-      <n-button size="small" :disabled="cursor === '0'" :loading="loading" @click="scan(true)">{{ t('rk.more') }}</n-button>
+      <n-button size="small" :disabled="cursor === '0'" :loading="loading" @click="scan(true)">{{ cursor === '0' ? t('rk.all_loaded') : t('rk.more') }}</n-button>
     </n-space>
   </n-space>
 
@@ -207,6 +208,15 @@ const viewCols = computed<DataTableColumns<{ a: string; b: string }>>(() => {
 .hint {
   font-size: 12px;
   opacity: 0.65;
+}
+.db-tabs {
+  margin-bottom: 8px;
+}
+.key {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .mono,
 :deep(.mono textarea) {

@@ -53,6 +53,8 @@ make linux
 
 ## CI 與交付
 
+預設完整交付流程係：**本機驗證 → commit → push → 跟進 GitHub CI 全部 jobs → 建立新版本 tag → 跟進 Release workflow → 核對 amd64、arm64、SHA256SUMS、install.sh 及 `releases/latest`**。只 push 而未完成 CI 同 Release，唔算完成交付；實際更新或重啟 Server 仍需用戶明確確認。
+
 - PR／push 必須保持 `ci.yml` 的 Go、frontend、Linux build 及 Ubuntu E2E 通過。
 - 修改 source compile recipes 時，需要相關 `source-check.yml` 驗證。
 - 本機 macOS 測試不能替代 Linux、systemd、Docker、nftables 或真實網站 E2E。

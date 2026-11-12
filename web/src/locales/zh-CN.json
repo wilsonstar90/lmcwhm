@@ -2475,6 +2475,7 @@
     "delete_selected": "删除已选（{n}）",
     "shown": "显示 {n} 个，共 {total} 个 key",
     "more": "加载更多",
+    "all_loaded": "已加载全部",
     "binary": "二进制",
     "binary_readonly": "二进制值：无法在此编辑",
     "field": "字段",

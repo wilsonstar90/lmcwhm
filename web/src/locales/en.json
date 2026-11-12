@@ -2475,6 +2475,7 @@
     "delete_selected": "Delete selected ({n})",
     "shown": "{n} shown of {total} keys",
     "more": "Load more",
+    "all_loaded": "All keys loaded",
     "binary": "binary",
     "binary_readonly": "Binary value: not editable here",
     "field": "Field",
