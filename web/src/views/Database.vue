@@ -92,6 +92,19 @@ const isMySQL = (app: string) => app === 'mysql' || app === 'mariadb'
 const hasMySQL = computed(() => engines.value.some((e) => isMySQL(e.app)))
 const hasPMA = computed(() => Object.keys(pma.value).length > 0)
 const filtered = computed(() => dbs.value.filter((d) => d.app_id === engine.value))
+const page = ref(1)
+const pageSize = ref(10)
+const pagination = computed(() => ({
+  page: page.value,
+  pageSize: pageSize.value,
+  itemCount: filtered.value.length,
+  showSizePicker: true,
+  pageSizes: [10, 20, 50, 100],
+  showQuickJumper: true,
+  prefix: () => t('common.total', { n: filtered.value.length.toLocaleString() }),
+  onUpdatePage: (p: number) => { page.value = p },
+  onUpdatePageSize: (n: number) => { pageSize.value = n; page.value = 1 },
+}))
 
 // phpMyAdmin opens through a one-time sign-on link: from a database row as
 // that database's own user (only it is shown), from the toolbar as root.
@@ -225,7 +238,7 @@ const columns: DataTableColumns<Database> = [
     {{ t('db.pma_hint') }}
     <n-button text type="primary" @click="router.push({ name: 'appstore' })">{{ t('menu.appstore') }} →</n-button>
   </n-alert>
-  <n-tabs v-if="services.length" :value="engine ?? undefined" type="line" @update:value="(v: number) => (engine = v)" style="margin-bottom: 12px">
+  <n-tabs v-if="services.length" :value="engine ?? undefined" type="line" @update:value="(v: number) => { engine = v; page = 1 }" style="margin-bottom: 12px">
     <n-tab v-for="e in services" :key="e.id" :name="e.id">{{ e.name }} {{ e.version }}</n-tab>
   </n-tabs>
   <template v-if="current">
@@ -246,7 +259,7 @@ const columns: DataTableColumns<Database> = [
     <RedisKeys v-if="current.app === 'redis'" :key="current.id" :app="current">
       <template #actions><n-button @click="settings = current">{{ t('db.settings') }}</n-button></template>
     </RedisKeys>
-    <n-data-table v-else size="small" :columns="columns" :data="filtered" :loading="loading" :row-key="(r: Database) => r.id" :scroll-x="1300" />
+    <n-data-table v-else size="small" :columns="columns" :data="filtered" :loading="loading" :row-key="(r: Database) => r.id" :scroll-x="1300" :pagination="pagination" />
   </template>
 
   <n-modal :show="show" @update:show="(v: boolean) => (show = v)">

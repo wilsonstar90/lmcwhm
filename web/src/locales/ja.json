@@ -27,7 +27,8 @@
     "confirm_delete": "削除しますか？",
     "create": "作成",
     "created": "作成日時",
-    "deleted": "削除しました"
+    "deleted": "削除しました",
+    "total": "合計 {n} 件"
   },
   "login": {
     "title": "ログイン",

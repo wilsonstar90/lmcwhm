@@ -31,6 +31,12 @@ func TestAllowed(t *testing.T) {
 		{"GET", "/api/v1/tokens", false},
 		{"GET", "/api/v1/brand-new-route", false},
 		{"GET", "/api/v1/auth/me", true},
+		{"GET", "/api/v1/tasks", false},
+		{"GET", "/api/v1/tasks/history", false},
+		{"GET", "/api/v1/tasks/history/Abcd1234efgh", false},
+		{"POST", "/api/v1/tasks/history/clear", false},
+		{"GET", "/api/v1/tasks/Abcd1234efgh", true},
+		{"GET", "/api/v1/tasks/not-a-task", false},
 	}
 	for _, c := range cases {
 		r := httptest.NewRequest(c.method, c.path, nil)
@@ -97,6 +103,15 @@ func TestSubUserSession(t *testing.T) {
 		t.Fatalf("sub-user on users: %d", r.StatusCode)
 	}
 	csrf := body["csrf"].(string)
+	if r, _ := e.do("GET", "/api/v1/tasks", nil, nil); r.StatusCode != 403 {
+		t.Fatalf("sub-user on global tasks: %d", r.StatusCode)
+	}
+	if r, _ := e.do("GET", "/api/v1/tasks/history", nil, nil); r.StatusCode != 403 {
+		t.Fatalf("sub-user on task history: %d", r.StatusCode)
+	}
+	if r, _ := e.do("POST", "/api/v1/tasks/history/clear", nil, map[string]string{"X-CSRF-Token": csrf}); r.StatusCode != 403 {
+		t.Fatalf("sub-user clearing task history: %d", r.StatusCode)
+	}
 	if r, b := e.do("POST", "/api/v1/settings/password", map[string]string{"current": "password123", "new": "password456"}, map[string]string{"X-CSRF-Token": csrf}); r.StatusCode == 403 {
 		t.Fatalf("own password change forbidden: %v", b)
 	}

@@ -1,349 +1,180 @@
-# 自研伺服器控制面板（代號 lmcwhm）— 架構與功能藍圖 v2
+# lmcwhm 架構與驗證
 
-## Context
-由零開始（`/Users/lmc/Claude/whm` 目前係空目錄）開發一套 **aaPanel/寶塔式單機管理面板**，核心用 **HAProxy SNI（443）+ Host（80）邊緣分流**，整合 Cloudflare、Linode Cloud Firewall、雙重 WAF、CrowdSec、Docker、MCP AI 運維同多語言。
-已確認：**後台 Go 單一 Binary**、**前端 Vue 3 + Naive UI**、**唔做 cPanel 多租戶 / Reseller / 套餐**，亦**唔分獨立/共享模式** — 統一網站模型；邏輯上分 **網站管理** 同 **Docker 管理** 兩大模組。系統設定、CLI 工具全面跟 aaPanel 嘅做法。
+本文描述 **`v0.21.0` 實際實作**，唔再將早期構想當成現狀。最後一節先係尚未完成嘅方向。
 
-> ⚠️ Ubuntu 20.04 標準支援已於 2025-05 結束（只剩 ESM）。以 20.04 為主要目標，安裝腳本同時支援 22.04 / 24.04。HAProxy 用官方 Docker image 3.0 LTS（`network_mode: host`），唔用 20.04 內建嘅 2.0。
+## 1. 核心決策
 
----
+- **單機、單面板、root 運維**：唔做 cPanel 多租戶、Reseller、套餐或共享／獨立站點模式。
+- **Go 單一 Binary**：REST API、WebSocket、CLI、MCP、背景服務及內嵌 Vue production build 由同一進程提供。
+- **HAProxy 作 Edge**：統一處理 80/443、SNI、Host、TLS 終止或直通，再交 Nginx、Varnish 或後端。
+- **Docker CLI 管理運行環境**：Web、runtime、資料庫及應用主要以容器執行；面板核心本身由 systemd 管理。
+- **SQLite 作面板元數據**：適合單機，WAL、foreign keys、busy timeout、單一 writer connection。
+- **UI、REST、CLI、MCP 共用 service 層**：高風險操作需要明確權限及審計。
 
-## 1. 參考整合（取 aaPanel / 寶塔 優點）
+## 2. 運行架構
 
-| 參考 | 採納 | 落地 |
-|---|---|---|
-| aaPanel/寶塔 系統設定 | 面板端口、安全入口、面板 SSL、2FA、授權 IP、綁定域名、BasicAuth、Session 超時 | §3.1 面板設定 |
-| `bt` CLI | 數字選單 + 子命令救援工具 | §3.2 `lmcwhm` |
-| 網站項目類型 | PHP / Java / Node / Python / HTML | §3.4 Runtime 插件化 |
-| 軟件商店 | 一鍵多版本安裝 | §3.5 App Store |
-| 寶塔 IP 歸屬地 | 日誌/登入/攻擊 IP 顯示地區 | §3.12 |
-| cPanel | 只取「一切皆 API」+ 完整備份/還原思路，**唔要多租戶** | REST API 同時俾 UI / CLI / MCP 用 |
-
----
-
-## 2. 總體架構
-
-```
-            Internet (IPv4 + IPv6)
+```text
+Internet / Cloudflare / Linode Cloud Firewall
                     │
-   ┌────────────────┴─────────────────┐
-   │ Linode Cloud Firewall (API 管理)   │ ← 網絡層白名單/封鎖（最外層）
-   └────────────────┬─────────────────┘
-   ┌────────────────┴─────────────────┐
-   │ Cloudflare（可選橙雲）              │ ← DNS A/AAAA、WAF、Firewall Rules
-   └────────────────┬─────────────────┘
-          :443 (SNI) │ :80 (Host)
-┌───────────────────▼──────────────────────────────────────────┐
-│ Edge HAProxy 3.0 LTS  bind :::443 v4v6 / :::80 v4v6           │
-│  fe_tls  (tcp) req.ssl_sni → map_dom(sni.map)                 │
-│     ├─ mode=passthrough → 後端容器自己持證書 (send-proxy-v2)    │
-│     └─ mode=terminate   → fe_https (crt-list) → be_web         │
-│  fe_http (http) Host → map → 301 HTTPS / 純 HTTP 站 / ACME     │
-│  Runtime API socket ← lmcwhm 動態 add/del map、熱換證書（免 reload）│
-└───────┬──────────────────────────────────┬───────────────────┘
-        │                                  │
-┌───────▼──────── 網站管理 ──────────┐ ┌──────▼──── Docker 管理 ─────┐
-│ web: Nginx + ModSecurity + CRS     │ │ 任意容器 / Compose 項目       │
-│ runtimes (App Store 安裝):          │ │ Images / Volumes / Networks  │
-│  php74…php83-fpm · java(jdk) ·     │ │ 可綁域名 → Edge 路由          │
-│  node · python · html(static)      │ └──────────────────────────────┘
-│ db (App Store): MySQL/MariaDB ·    │
-│  PostgreSQL · MongoDB · SQL Server │
-│  · Redis · SQLite(檔案)            │
-│ cache: Redis/Memcached/Varnish     │
-└────────────────────────────────────┘
-┌──────────────────────────────────────────────────────────────┐
-│ lmcwhm (Go Binary, systemd) — 內嵌 Vue 前端 (go:embed)          │
-│  面板自己監聽 <panel_port>（預設隨機 8000-60000）+ 安全入口 /console │
-│  REST /api/v1 · WS /ws · MCP /mcp · CLI 子命令                  │
-│  元數據：SQLite（WAL，單機足夠、零依賴，似 aaPanel）              │
-│  背景：任務佇列（內建 goroutine worker + SQLite 持久化）           │
-└──────────────────────────────────────────────────────────────┘
+             HAProxy :80 / :443
+                    │
+       ┌────────────┼──────────────────┐
+       │            │                  │
+  Nginx / WAF    Varnish          TLS passthrough
+       │            │                  │
+ PHP / static   back to Nginx      後端自己處理 TLS
+ Node / Python / Java / proxy
+       │
+ Docker runtime、DB、mail、FTP、CrowdSec
+
+ lmcwhm（systemd、Go binary）
+ ├─ 內嵌 Vue SPA
+ ├─ /api/v1、WebSocket、/mcp、CLI
+ ├─ SQLite + migrations
+ ├─ task / cron / monitor / alerts / stats workers
+ └─ Docker、HAProxy、Nginx、nftables、systemd integrations
 ```
 
-### 2.1 Edge 分流要點
-- **443**：只睇 ClientHello SNI；每個域名一條 map 記錄 `domain → backend,mode`。網站管理嘅站點預設 terminate（統一由 HAProxy 持證書、方便 WAF/日誌）；Docker 項目可揀 passthrough（例如自帶 TLS 嘅應用）。
-- **80**：HTTP Host 路由；每站可設「強制 HTTPS 301」或保留 HTTP；`/.well-known/acme-challenge/` 轉面板做 HTTP-01。
-- 真實 IP：passthrough 用 PROXY v2；terminate 加 `X-Forwarded-For`；橙雲時信任 CF IP 段取 `CF-Connecting-IP`。
-- 無 SNI / 未知域名 → `be_default`（空白頁或 drop，防掃描）。
-- 雙棧：Edge 監聽 v4+v6，容器內部只需 IPv4 bridge。
+面板自己監聽獨立 port，預設使用安全入口；唔係一定要經 443 進入。
 
-### 2.2 Go 技術選型
-| 用途 | 套件 |
+## 3. 實際技術選型
+
+| 範圍 | 實作 |
 |---|---|
-| HTTP | `go-chi/chi` v5 |
-| DB | SQLite `modernc.org/sqlite`（純 Go 免 CGO）+ `sqlc` + `goose` |
-| Docker | `github.com/docker/docker/client` |
-| 監察 | `shirou/gopsutil/v4` |
-| Cron | `robfig/cron/v3`（秒級） |
-| WS / PTY | `coder/websocket` / `creack/pty` |
-| CLI | `spf13/cobra` + 互動選單 |
-| ACME | `go-acme/lego/v4`（Let's Encrypt + LiteSSL，支援 EAB、HTTP-01 / DNS-01） |
-| Cloudflare / Linode | `cloudflare/cloudflare-go` / `linode/linodego` |
-| 備份雲端 | `rclone/rclone` backend 庫（Google Drive、OneDrive，OAuth + 分塊上傳） |
-| IP 歸屬地 | `oschwald/maxminddb-golang`（GeoLite2-City/ASN）+ `ip2region`（中文地區更準） |
-| MCP / i18n | `modelcontextprotocol/go-sdk` / `nicksnyder/go-i18n/v2` |
-| 檔案沙盒 | Go 1.24+ `os.Root` |
+| Go | Go 1.27.3、`go-chi/chi/v5`、Cobra |
+| DB | `modernc.org/sqlite`；`internal/store/migrations` 順序執行，冇使用 sqlc／goose |
+| Frontend | Vue 3、TypeScript、Vite、Naive UI、Pinia、Vue Router、vue-i18n |
+| Editors / terminal | CodeMirror 6、xterm.js；唔係 Monaco |
+| Charts / maps | 自製 SVG／CSS 圖表、D3 geo；唔係 uPlot |
+| WS / PTY | `coder/websocket`、`creack/pty` |
+| Docker | `docker` CLI 及 JSON output；唔係 Docker Engine Go SDK |
+| ACME | `go-acme/lego/v4`、HTTP-01、Cloudflare DNS-01、EAB |
+| Cloud APIs | 自行使用 Cloudflare／Linode HTTP API |
+| Backup cloud | 自行實作 OAuth device flow 及 Drive／OneDrive resumable upload；冇使用 rclone |
+| GeoIP | DB-IP Lite country／ASN，可選 city database；唔係 GeoLite2 + ip2region |
+| MCP | 自行實作 JSON-RPC、Streamable HTTP 及 stdio unix-socket bridge |
+| i18n | 前端 vue-i18n；後端穩定錯誤碼及 CLI 自製翻譯 |
+| File sandbox | Go `os.Root`，並處理 symlink、archive traversal 及 zip-slip |
 
----
+## 4. 目錄與主要模組
 
-## 3. 功能模組
-
-### 3.1 面板系統設定（跟 aaPanel）
-- **面板端口**：可改（檢查佔用、自動同步 Linode Firewall / UFW 放行），改完自動重啟。
-- **安全入口**：如 `/console`，設定後只可經該路徑登入，其他路徑回 404（唔洩露面板存在）。
-- **面板 SSL**：自簽 / Let's Encrypt / LiteSSL / 上傳自有證書；可開關。
-- 面板帳號/密碼、TOTP 2FA、BasicAuth 額外保護、**授權 IP**、**綁定域名**（只可經指定域名進入）、Session 超時、登入失敗鎖定、面板別名、時區 & 時間同步、IPv6 監聽開關、離線模式、API 接口（Token + IP 白名單）、通知渠道（Email / Telegram / Webhook）、語言。
-- 面板亦可經 443 用域名進入（SNI map `panel.domain → lmcwhm`），兩種方式並存。
-
-### 3.2 SSH 命令 `lmcwhm`（似 `bt`）
-- `lmcwhm` 無參數 → 數字選單；亦支援子命令：
-  `start|stop|restart|reload|status`、`default`（顯示面板地址/入口/用戶）、`passwd`、`username`、`port <n>`、`entry <path>|--disable`、`ssl --disable`、`2fa --disable`、`domain --unbind`、`ip --clear`（清授權 IP）、`unlock`（清登入限制）、`log`（面板錯誤日誌）、`repair`、`update`、`uninstall`、`mysql-root-passwd`、`firewall allow <port>`、`backup run`、`mcp --stdio`。
-- CLI 直接讀寫本機 SQLite/設定，**面板唔運行時都可救援**。
-
-### 3.3 Docker 管理
-- 容器：列表、啟停/重啟/刪除、即時 CPU/RAM、WS 日誌串流、`exec` 終端。
-- Images（pull/刪除/清理）、Volumes、Networks、Compose 項目（上傳/編輯 yml，一鍵 up/down）。
-- 容器/Compose 服務可「綁定域名」→ 自動寫 Edge 路由 + SSL + DNS。
-- 系統容器加 `lmcwhm.managed=true` 標籤防誤刪。
-
-### 3.4 網站管理
-- **內建 PHP**；App Store 裝咗 runtime 後先出現 **Java（jar/Spring Boot）、Node（npm/pm2）、Python（uwsgi/gunicorn/command）、HTML 靜態** 項目類型。Runtime 以插件介面實現：`Runtime{Install, CreateProject, Start, Stop, Logs, Health}`。
-- 建站流程：域名/別名 → 類型 + 版本 → （可選）建 DB → CF DNS A+AAAA → SSL → Edge 路由；一條任務鏈，失敗回滾，前端 WS 睇進度。
-- 偽靜態模板（WordPress、Laravel、ThinkPHP、SPA try_files…）、重定向、反向代理、目錄密碼、防盜鏈、強制 HTTPS / HSTS、流量限制、站點日誌、PHP 版本切換 / 擴展 / php.ini、WordPress 一鍵部署、Git webhook 部署。
-
-### 3.5 App Store（一鍵多版本）
-- `catalog/<app>/<version>/manifest.yaml` + `compose.tmpl`（image、參數、健康檢查、依賴、面板入口）。
-- Runtime：PHP 7.4–8.3（EOL 標示）、JDK 8/11/17/21、Node 18/20/22、Python 3.8–3.12。
-- 資料庫：MySQL 5.7/8.0/8.4、MariaDB 10.6/10.11/11.4、PostgreSQL 13–17、MongoDB 6/7、SQL Server 2019/2022（需 ≥2GB RAM 檢查）、Redis 6/7、SQLite（只係檔案管理 + 線上查詢）。
-- 其他：Memcached、Varnish、**phpMyAdmin**（MySQL/MariaDB 必備，面板一鍵登入）/ Adminer / pgAdmin / Mongo Express。
-
-#### 3.5.1 每個已安裝軟件嘅「設定」視窗（跟 aaPanel 軟件設定）
-每個版本獨立管理（例如 PHP 7.4 同 PHP 8.3 各自一套），manifest 定義有咩 tab：
-
-| 軟件 | 安裝列表（擴展/插件） | 配置修改 | 其他 tab |
-|---|---|---|---|
-| **PHP 每版本** | 擴展清單逐個裝/卸：opcache、redis、memcached、imagick、swoole、xdebug、ioncube、sodium、intl、gd、zip、pdo_mysql/pgsql/sqlsrv、mongodb、exif、fileinfo、apcu…（顯示已裝/可裝/該版本唔支援） | `php.ini` 全文編輯（Monaco）+ 常用項表單（memory_limit、upload_max_filesize、post_max_size、max_execution_time、display_errors、date.timezone）、`disable_functions` 勾選、`php-fpm.conf` pool | 服務啟停/重載、性能調整（pm 模式、max_children 按 RAM 建議值）、負載狀態（fpm status）、錯誤日誌、慢日誌、切換 CLI 預設版本 |
-| **MySQL / MariaDB 每版本** | 插件/組件（如 validate_password、audit） | `my.cnf` 全文編輯 + 表單（innodb_buffer_pool_size、max_connections、character set、bind-address） | 性能調整預設（1G/2G/4G/8G/16G RAM 方案一鍵套用）、當前狀態（QPS、連接數、緩衝命中率）、慢查詢日誌、錯誤日誌、root 密碼、存儲位置、端口、phpMyAdmin 入口 |
-| **Redis 每版本** | 模組（RedisJSON、RediSearch、RedisBloom） | `redis.conf` 全文編輯 + 表單（bind、port、requirepass、maxmemory、maxmemory-policy、timeout、databases） | 持久化（RDB/AOF）設定、負載狀態（INFO：記憶體、命中率、連接數、keys）、日誌 |
-| 其他（PG/Mongo/MSSQL/Memcached/Varnish/JDK/Node/Python） | 同一框架：Node 全域 npm 包、Python pip 包、PG extensions | 對應主設定檔 | 狀態 + 日誌 |
-
-- 實作：擴展安裝 = 喺該版本容器 `docker-php-ext-install` / `pecl install` 後 commit 成 `lmcwhm/php:<ver>-<hash>` image（重建可復現），或預建「全擴展 image」+ ini 啟用/停用（速度快，預設用此方式）。
-- 配置修改：保存前語法檢查（`php-fpm -t`、`mysqld --validate-config`、`redis-server --test-config`），失敗唔覆蓋並顯示錯誤；每次保存自動留歷史版本可回滾。
-- phpMyAdmin：作為 App Store 項目安裝，經面板反代 + 臨時 token 單點登入，唔直接暴露公網端口。
-
-### 3.6 資料庫管理
-- 統一介面 `DBDriver{CreateDB, CreateUser, Grant, Dump, Restore, ChangePassword, Query}`，按已安裝引擎動態出現 tab：MySQL、PostgreSQL、MongoDB、SQL Server、Redis（key 瀏覽/清空/持久化設定）、SQLite（上傳/瀏覽/查詢）。
-- 遠端存取開關（同步 Linode Firewall 規則）、慢查詢日誌。
-
-### 3.7 SSL
-- CA：**Let's Encrypt**、**LiteSSL**（ACME + EAB 憑據）；驗證：HTTP-01（經 port 80）或 DNS-01（Cloudflare，支援 Wildcard）。
-- 到期前 30 日自動續期，失敗通知；上傳自有證書；經 HAProxy Runtime API 熱載入。
-
-### 3.8 Cloudflare 整合
-- 多個 CF 帳戶 Token（AES-GCM 加密存）；DNS 記錄 CRUD、自動 A/AAAA（自動偵測公網 v4/v6）、橙雲開關、WAF Managed Rules、Security Level / Under Attack、Custom Rules、清快取。
-
-### 3.9 防火牆（三層）
-- **Linode Cloud Firewalls API**：設定 Linode Token → 列出/建立 Firewall、綁定本 Linode、管理 inbound/outbound 規則（port、v4/v6 CIDR）；面板改端口 / 開 DB 遠端 / 封 IP 時自動同步。
-- **系統防火牆**：nftables（UFW 相容），端口規則、IP 黑白名單、Ping 開關、SSH 端口修改。
-- 規則同步策略：封鎖 IP 可揀落 nftables（即時）/ Cloudflare（邊緣）/ Linode（網絡層，受規則數上限限制，只放持久黑名單）。
-
-### 3.10 WAF + CrowdSec
-- 第一層 Cloudflare；第二層 Nginx ModSecurity v3 + OWASP CRS v4（每站開關、Paranoia Level、誤殺白名單）。
-- CrowdSec agent + LAPI：讀 nginx/ModSec/SSH/面板登入日誌；bouncer 落 nftables + Cloudflare；可選 Community Blocklist；面板顯示攔截記錄連 IP 歸屬地。
-
-### 3.11 日誌管理與分類
-統一日誌中心，分類 tab：
-| 分類 | 來源 |
-|---|---|
-| 面板操作 | 審計日誌（誰、幾時、IP、做咗咩） |
-| 面板登入 | 成功/失敗、IP + 歸屬地 |
-| SSH 登入 | `/var/log/auth.log` 解析，IP + 歸屬地 |
-| 網站 | 每站 access / error log |
-| Runtime | PHP-FPM slow/error、Java/Node/Python stdout |
-| 資料庫 | 各引擎 error / slow log |
-| Docker | 容器 stdout/stderr |
-| 系統 | journald / syslog / kern |
-| 安全 | WAF 攔截、CrowdSec decisions、防火牆 drop |
-| 計劃任務 | 每次 Cron 執行輸出 |
-| 備份 / SSL | 任務結果 |
-- 功能：即時 tail（WS）、關鍵字/時間/IP 篩選、下載、清理、保留策略、logrotate 生成；異常偵測 Worker（5xx 突增、404 掃描、高頻 IP、SQLi pattern）→ 警報 + 交 CrowdSec；MCP 俾 AI 解讀。
-
-### 3.12 IP 歸屬地
-- 本地 mmdb 查詢（GeoLite2 + ip2region），每月自動更新；顯示國家/地區/城市/ISP/ASN + 國旗。
-- 用喺：日誌中心、登入記錄、網站訪問統計、威脅 IP、防火牆規則。
-
-### 3.13 備份
-- 對象：網站檔案、資料庫（按引擎 dump）、面板設定、Docker volumes。
-- 目的地：本地、**Google Drive**、**OneDrive**（面板內 OAuth 授權流程，token 加密存）；排程 + 保留份數；一鍵還原。
-
-### 3.14 檔案管理器 / Web Terminal / Cron / 監察
-- **檔案**：`os.Root` 沙盒、上傳（分塊續傳）、下載、改名、刪除入回收站、chmod/chown、Zip/Unzip/tar.gz（防 zip-slip）、Monaco 編輯器。
-- **Terminal**：xterm.js ↔ WS ↔ PTY（主機）或 docker exec；開啟前二次驗證；SSH 常用命令收藏。
-- **Cron**：Shell / PHP / URL / 備份 / 日誌切割；秒級；超時、並發策略；執行記錄。
-- **監察**：gopsutil 2 秒採集 CPU（每核）、RAM、磁碟 IO/空間、網絡速率、Load；服務健康（HAProxy、Docker、Nginx、DB、Redis、Varnish、CrowdSec）；uPlot 實時圖；閾值通知。
-
-### 3.15 MCP
-- `/mcp`（Streamable HTTP，API Token + scope：read / operate / admin）+ `lmcwhm mcp --stdio`。
-- Tools 包裝 service 層：`list_sites`、`create_site`、`site_logs`、`analyze_logs`、`docker_restart`、`server_stats`、`ban_ip`（可揀 nftables/CF/Linode）、`issue_cert`、`run_backup`…；破壞性 tool 標 `destructiveHint`，全部入審計。
-
-### 3.16 多語言
-- `zh-HK`（預設）、`zh-TW`、`zh-CN`、`en`、`ja`；前端 vue-i18n 懶加載；後端只回錯誤碼 + 參數；CLI `lmcwhm` 同樣跟系統設定語言。
-
----
-
-## 3A. 對照 cPanel / aaPanel / 寶塔 / 1Panel 後補充嘅功能（之前遺漏）
-
-| # | 功能 | 參考來源 | 說明 / 落地 |
-|---|---|---|---|
-| 1 | **首頁儀表板** | 全部 | 系統概覽、資源圓環、網站/DB/FTP 數量、安全風險提示、快捷入口、可拖動卡片 |
-| 2 | **WordPress Toolkit** | aaPanel WP Toolkit、Softaculous | WP 一鍵安裝、WP Sets（預設插件/主題組合）、克隆/Staging、插件/主題批量更新、核心完整性檢查、安全加固（禁 XML-RPC、改登入路徑） |
-| 3 | **進程守護 (Supervisor)** | 寶塔進程守護管理器 | Node/Python/Java/自訂命令常駐、自動重啟、日誌；Runtime 項目底層用佢 |
-| 4 | **FTP / SFTP 帳戶** | 寶塔、aaPanel、cPanel | Pure-FTPd（App Store）+ 受限 SFTP chroot 帳戶，綁定網站目錄、配額、限 IP |
-| 5 | **Composer / Tomcat** | 寶塔、aaPanel | PHP 站點內一鍵 composer install/update；Java Runtime 支援 Tomcat 8/9/10 部署 war |
-| 6 | **網站進階** | cPanel、寶塔 | 自訂錯誤頁（404/500…）、目錄列表 (Indexes) 開關、訪問限制（IP/UA/國家，配合 GeoIP）、流量/並發/速率限制、默認站點、防跨站 (open_basedir)、子目錄綁定 |
-| 7 | **網站監控報表** | 寶塔網站監控報表、cPanel Metrics | 按站點統計 PV/UV/IP/頻寬/狀態碼/蜘蛛/來源/熱門 URL/地區分佈（解析 access log 入 SQLite 聚合表） |
-| 8 | **網站可用性監測 (撥測)** | 寶塔拨测、1Panel 網站監測 | HTTP/HTTPS/TCP/Ping 定時探測、SSL 到期、關鍵字檢查、響應時間圖 → 通知 |
-| 9 | **網站防篡改 / 檔案保護** | 寶塔文件防篡改、aaPanel File Protection | inotify/fanotify 監察網站目錄，保護目錄禁寫或改動即還原 + 告警 |
-| 10 | **木馬 / Webshell 掃描** | 寶塔文件管理器 | 規則 + YARA + ClamAV（App Store）掃描網站目錄，顯示風險檔案 |
-| 11 | **檔案管理補充** | aaPanel、寶塔 | 檔案內容全文搜尋、外鏈分享（有效期 + 密碼）、回收站、收藏夾、遠端下載 (URL → 伺服器) |
-| 12 | **安全風險掃描 / 安全報告** | 寶塔首頁風險、1Panel 安全運維報表 | 基線檢查（SSH 弱設定、root 登入、弱密碼、開放端口、面板預設設定、PHP 漏洞版本、未更新套件）→ 評分 + 一鍵修復 + 定期 PDF/HTML 報告 |
-| 13 | **工具箱 (Toolbox)** | 1Panel 工具箱 | Swap 管理、主機名、DNS 伺服器、時區/NTP、SSH 管理（端口、root 登入、密碼/金鑰登入開關、金鑰管理）、Fail2ban（可由 CrowdSec 取代，二揀一）、進程管理器、網絡連接列表、磁碟管理（掛載/分區/使用分析）、系統垃圾清理 |
-| 14 | **面板快照 & 遷移** | 1Panel 快照 | 一鍵快照（面板設定 + App + 網站 + DB）上傳 Google Drive/OneDrive，喺新機器還原 = 整機搬遷 |
-| 15 | **告警中心** | 1Panel、寶塔 | 統一規則：CPU/RAM/磁碟閾值、服務掛咗、SSL 到期、撥測失敗、登入異常、備份失敗 → Email/Telegram/Webhook/企業微信/釘釘 |
-| 16 | **面板子用戶（非租戶）** | aaPanel Sub accounts | 只係面板操作員帳號 + 模組級權限（例如只可管網站 A/B、唔可用 Terminal），**唔涉及套餐/配額/Reseller**，保持單機管理模式 |
-| 17 | **郵件伺服器（可選插件）** | aaPanel Mail Server、cPanel Email Deliverability | App Store 插件（Stalwart 或 Postfix+Dovecot+Rspamd）；自動經 CF 加 MX/SPF/DKIM/DMARC；寄信能力檢測（SPF/DKIM/PTR 檢查）|
-| 18 | **DNS Zone Editor 完整版** | cPanel Zone Editor | A/AAAA/CNAME/MX/TXT/SRV/CAA/NS 全類型（經 Cloudflare），模板（Google Workspace / M365 一鍵加記錄） |
-| 19 | **AI 功能** | 寶塔 AI、1Panel AI | 除 MCP 外：頁面上「一鍵 AI 分析」按鈕（日誌/錯誤/安全報告）、Skills（運維/WAF/郵件技能包，寫成 MCP prompts/resources）、App Store「AI」分類（Ollama、Open WebUI、n8n、Dify 等）|
-| 20 | **多 Web Server（後期）** | aaPanel Multi-WebServer | 預設 Nginx；後期 Runtime 加 OpenResty / Apache / OpenLiteSpeed 選項（Edge 層唔受影響） |
-| 21 | **多機管理（後期）** | 寶塔多機、1Panel 多節點 | 見 §2.3 Agent 模式 |
-| 22 | **PWA 手機版** | aaPanel mobile、1Panel mobile | 前端響應式 + PWA，手機睇監控、收告警、啟停服務 |
-| 23 | **API Token 管理 + OpenAPI** | cPanel API Tokens、1Panel API | 多 Token、scope、到期、IP 白名單；自動生成 OpenAPI 3 文檔 (`/api/docs`) |
-| 24 | **面板升級 / 回滾 / 離線安裝** | 1Panel、寶塔 | 穩定/測試通道、更新前自動備份、失敗回滾；離線安裝包（內含 images） |
-
-## 2.3 架構補充
-- **插件系統**：App Store manifest 分三類 — `app`（Docker compose 應用）、`runtime`（網站語言環境）、`plugin`（擴展面板功能：前端掛載點 + 後端以獨立進程經 gRPC/unix socket 註冊 API，例如郵件伺服器、防篡改）。第三方插件需簽名校驗。
-- **App Store 倉庫**：Git/HTTP 倉庫（似 1Panel appstore repo）+ 本地自訂應用；支援離線同步。
-- **事件總線**：內部 pub/sub（site.created、cert.renewed、ip.banned…），告警中心、審計、MCP 通知全部訂閱事件，模組間解耦。
-- **Agent 模式（多機預留）**：`lmcwhm` 可用 `--role=master|agent` 啟動；agent 經 mTLS gRPC 向 master 註冊，master UI 切換節點。M0 起所有 service 都經 `NodeClient` 介面呼叫（本機實作 = 直接呼叫），日後加遠端實作唔使改上層。
-- **目錄規範**：`/opt/lmcwhm/{bin,data(db),apps,runtimes,backup,logs,certs,geoip}`、網站 `/www/wwwroot/<domain>`（沿用寶塔習慣，方便用戶遷移）；設定檔集中 `/opt/lmcwhm/data/conf/`。
-- **寶塔/aaPanel 遷移工具（後期）**：讀取 `/www/server/panel` 站點/DB 資料匯入。
-
----
-
-## 4. 專案目錄結構
-```
-whm/
-├── cmd/lmcwhm/main.go         # serve / CLI 子命令 / 選單 / mcp --stdio
-├── internal/
-│   ├── api/ auth/ settings/   # 面板設定（端口/入口/SSL/2FA/授權IP）
-│   ├── edge/                  # HAProxy cfg 生成 + Runtime API
-│   ├── site/ runtime/{php,java,node,python,html}/
-│   ├── db/{mysql,pgsql,mongo,mssql,redis,sqlite}/
-│   ├── appstore/ docker/
-│   ├── cert/ dns/ firewall/{nft,linode,cloudflare}/ security/{waf,crowdsec}/
-│   ├── logs/ geoip/ backup/{local,gdrive,onedrive}/
-│   ├── files/ terminal/ cron/ monitor/ notify/ mcp/ i18n/ store/
-├── catalog/  images/  migrations/
-├── deploy/install.sh          # 一鍵安裝（似 aaPanel install.sh）
-└── web/                       # Vue 3 + Naive UI + vue-i18n + Monaco + xterm.js + uPlot
+```text
+cmd/lmcwhm/             process entrypoint、serve、CLI、maintenance
+internal/
+  server/               HTTP routes、middleware、OpenAPI、MCP、permissions
+  store/                SQLite connection 及 append-only SQL migrations
+  auth/                 users、sessions、TOTP、sub-user permissions
+  site/  webenv/        sites、routing、HAProxy/Nginx/PHP/Varnish generation
+  appstore/ database/   app catalog、source build、DB management/tools
+  dockermgr/ dockerx/   Docker resources 及 command helpers
+  files/ fileshare/     file operations、archives、sharing
+  firewall/ protect/    nftables、cloud sync、lists、edge protection
+  security/ secevents/  WAF、CrowdSec、traffic/security events、auto-ban
+  backup/               local/cloud backup、DB import、snapshot
+  cron/ tasks/          scheduled jobs 及 background task execution
+  monitor/ sysinfo/     metrics、host detail、dashboard
+  ai/ mcp/              read-only AI tools、MCP protocol
+  ...                   acme、mail、ftp、wordpress、geoip、audit 等
+web/src/                Vue views、components、stores、locales
+deploy/                 install、offline bundle、Linux E2E scripts
+.github/workflows/      CI、source-check、release
 ```
 
----
+## 5. 資料與檔案位置
 
-## 4A. M1 實作備註（與原設計嘅差異）
-- **HAProxy 動態更新**：用「由資料庫重新生成整份設定 → `haproxy -c` 驗證 → master-worker 熱重載（USR2）」取代 Runtime API 逐條改 map。效果同樣唔斷線，但更簡單、可自動還原；Runtime API 留待需要極高頻改動時先加。
-- **Docker**：M1 經 `docker` CLI 操作（安裝腳本必定提供）；M3 Docker 管理中心需要即時統計 / 日誌串流時再加 Engine API。
-- **IPv4 / IPv6**：Edge 分開 `bind 0.0.0.0` 同 `bind ::: v6only`，避免 IPv4 客戶 IP 變成 `::ffff:` 格式（影響日誌、IP 歸屬地、CrowdSec）。
-- **PHP**：每版本一個 PHP-FPM 容器（host network，監聽 `127.0.0.1:90xx`），官方 image 加 mysqli / pdo_mysql / opcache / bcmath / exif；其他擴展喺 M2 軟件設定入面逐個裝。
-- **CI**：`deploy/test-sites.sh` 喺 Ubuntu runner 用真 Docker 測試建站、SNI、IPv6、PHP 切換、強制 HTTPS，並用 Pebble（Let's Encrypt 官方測試 CA）測試 ACME HTTP-01。DNS-01 / Cloudflare 只有單元測試（需要真 Cloudflare 帳戶）。
+預設 panel home 係 `/opt/lmcwhm`，開發可用 `LMCWHM_HOME` 隔離。
 
-## 4B. M2 / M3 實作備註（與原設計嘅差異）
-- **App Store 目錄**：暫時內置喺 binary（`internal/appstore/catalog.go`），未做 Git/HTTP 倉庫同 `manifest.yaml`；加新軟件 = 加一項 Catalog + 容器參數。
-- **服務網絡**：資料庫 / Redis / Memcached 用預設 bridge，只發佈 `127.0.0.1:<端口>`（同引擎多版本自動揀下一個空閒端口）；面板經 `docker exec` 用引擎自帶 CLI（mysql / mariadb / psql / mongosh / sqlcmd）管理，唔需要 Go 資料庫驅動。Adminer 用 host network（可直達所有 127.0.0.1 資料庫），由面板 `/adminer/` 反代並檢查面板 session。
-- **Runtime 項目**：唔用 pm2 / supervisor，每個項目一個容器（`lmcwhm-proj-<域名>`，host network、`--restart always`），Docker 就係守護進程；Python 預設命令會喺項目目錄建 `.venv`，重建容器都唔使重裝依賴。
-- **反向代理 / 綁定域名**：網站類型 `proxy` 統一處理「容器綁域名」；TLS 直通網站唔生成 Nginx 設定，直接寫入 HAProxy SNI map（v0.4 起係 `sni_exact.map` / `sni_wild.map`），port 80 一律 301 去 HTTPS。
-- **Docker 管理**：繼續用 `docker` CLI（`--format '{{json .}}'`），即時用量用 `docker stats --no-stream` 每 5 秒輪詢，日誌用輪詢代替 WS 串流。
-- **檔案管理器**：根目錄預設 `/`（同 aaPanel 一樣，管理員本身係 root），可用 `LMCWHM_FILES_ROOT` 收窄；回收站喺 `/www/.Recycle_bin`，跨磁碟時提示改為永久刪除。編輯器暫用純文字框，未接 Monaco。
-- **未包括（留待之後）**：資料庫備份 / 還原（M6）、PHP 擴展管理 / php.ini 編輯、Tomcat、Redis key 瀏覽。phpMyAdmin 已經喺 v0.3.1 加咗，以 root 自動登入，經 `/phpmyadmin/` 反代。
-- **CI**：`deploy/test-apps.sh` 喺 Ubuntu runner 用真 Docker 測試安裝 runtime / 資料庫、Node / Python 項目、MariaDB / PostgreSQL 建庫 + PHP 連線、設定檔回滾、容器綁域名、Compose、TLS 直通、分塊上傳、zip-slip。
+- `data/panel.db`：面板設定、用戶、網站、任務、安全及應用元數據。
+- `data/master.key`：AES-256-GCM 加密本機保存嘅第三方 credentials；權限 `0600`。
+- `data/ssl/`：面板證書。
+- `apps/`、`web/`、`backup/`、`logs/`、`geoip/`：各類運行資料。
+- 網站預設 `/www/wwwroot/<domain>`，日誌 `/www/wwwlogs/`；新版可由面板設定調整部分根目錄。
+- 檔案管理預設 root `/`，可用 `LMCWHM_FILES_ROOT` 收窄。
 
-## 4C. SNI / 域名管理：架構檢查同處理方式
-**原則：每個域名只有一個擁有者。** 網站、Docker 綁定、遠端伺服器、TLS 直通全部都係 `sites` 表入面嘅一個站點（類型 php / static / node / python / java / proxy），域名就係主域名或者別名。SNI 管理頁（「域名 / SNI」）只係呢張表嘅檢視同捷徑，冇另一張路由表，所以面板顯示嘅同 HAProxy 實際行緊嘅唔會唔一致。新增域名有兩個方法：加做現有站點嘅別名，或者開一個新嘅 proxy 站點（Docker 端口、http(s)://伺服器、host:port 直通）。
+加密 key 同資料庫放喺同一台機只係保護靜態外洩，唔可以抵抗 root compromise；備份及還原必須同時保護兩者。
 
-**搵到嘅衝突（v0.4 已修正）**
-| # | 問題 | 影響 | 處理 |
-|---|---|---|---|
-| 1 | 直通用 `map_dom` 匹配：只要域名嘅其中一段相同就當中 | `pass.test` 會連 `x.pass.test`、`pass.test.evil.example` 都直通，子域名唔可以另外指去其他服務 | 改成兩張 map：`*_exact.map`（`map_str`，完全匹配）同 `*_wild.map`（`map_end`，`*.a.com` 存做 `.a.com`，長嘅排先）。完全匹配一定贏通配符，較深嘅通配符贏較淺嘅，同 nginx `server_name` 一致 |
-| 2 | `force_https` / `hsts` 用完全匹配 | 通配符別名（`*.a.com`）永遠唔會 301 去 HTTPS，亦唔會送 HSTS | 用同一套 exact + wild map，而且每個域名都有一項（`0` / `1`），子域名唔會被上層通配符嘅設定影響 |
-| 3 | 每個直通域名一個 backend | 同一目標重複 backend | 相同目標共用一個 `be_pass_N` |
-| 4 | Cloudflare 橙雲 + TLS 直通 | Cloudflare 自己終止 TLS，後端證書要 Cloudflare 接受 | SNI 頁顯示警告，建議灰雲 |
-| 5 | Docker 綁定之後容器被刪 | 域名變成上游無回應 | SNI 頁檢查上游 TCP，顯示「上游冇回應」同埋容器名 |
-| 6 | 通配符站點入面有其他站點嘅子域名 | 容易以為通配符涵蓋晒 | 通配符行列出被覆蓋嘅子域名 |
+## 6. Edge、網站與應用
 
-SNI 頁亦會檢查證書係咪涵蓋該域名、DNS 係咪指向本機、亦有「路由測試」：輸入一個域名，就會顯示由邊條規則處理（完全 / 通配符 / 預設），同 HAProxy 用嘅規則一樣（`webenv.MatchHost`）。
+### Routing
 
-**仍然未做**：面板本身經 443 用域名入（SNI → 面板端口）。可以先用一個直通 proxy 站點指去 `127.0.0.1:<面板端口>`；改面板端口時要同步修改。
+- 每個 hostname 只有一個 site owner；SNI 頁係 `sites` 資料嘅 read model，冇另一份可漂移路由表。
+- exact match 優先於 wildcard；較深 wildcard 優先於較淺。
+- TLS terminate 由 Edge 使用域名證書；passthrough 將 ClientHello 原封轉交後端。
+- HAProxy 設定由 DB 重新生成，先 `haproxy -c`，再 master-worker reload，失敗還原；**冇使用 Runtime API 逐條改 map**。
+- Nginx vhost 同樣先驗證再套用；真實 IP、CDN trusted ranges、黑白名單及 protection exemptions 會生成入 Edge 設定。
+- gRPC 網站需要繞過會阻礙 streaming body 嘅 ModSecurity 處理，唔等於全局關閉 WAF。
 
-## 4D. M4 / M5 實作備註
-- **更新 / 修復（首頁）**：面板查 GitHub 最新 release（API 被限流時讀 `releases/latest` 轉址），用 `systemd-run` 開一個獨立單元行 `lmcwhm update|repair`，所以安裝程式重啟面板都唔會中斷；需要再輸入密碼。修復可以選擇按資料庫重建 HAProxy / nginx / PHP 容器（下次啟動時處理）。
-- **監察**：每 5 秒取樣；最近 1 小時放記憶體，每分鐘平均值寫入 SQLite（`metrics`，保留 30 日）。圖表係自己寫嘅 SVG，冇加圖表庫。
-- **計劃任務**：robfig/cron（可選秒欄位，用面板時區）；Shell（root、獨立 process group，逾時會殺成棵進程樹）、URL、網站日誌切割（gzip + `nginx -s reopen`）。上次未完成就略過並記錄；每個任務保留最近 200 次輸出尾段（64 KB）。
-- **日誌中心**：檔案由尾讀起（每次最多掃 64 MB）；SSH 由 `/var/log/auth.log` 讀，冇就讀 journal（支援 RFC 3339 同傳統時間格式）；網站訪問日誌解析成表格。
-- **IP 歸屬地**：用 DB-IP Lite（CC BY 4.0），唔使註冊；預設國家 + ASN（約 18 MB），可以改用城市庫（約 130 MB）；每月自動更新。
-- **防火牆**：只管理自己嘅 nftables 表 `inet lmcwhm`，由資料庫生成，先 `nft -c` 驗證再一次過原子替換；唔會掂 ufw / Docker 規則。input chain priority −10，黑名單亦套用到 forward chain（Docker 發佈端口）。「預設拒絕」要瀏覽器喺 60 秒內用新連線確認：改動嘅回應會關閉舊連線，因為已建立嘅連線唔會被新規則擋，用舊連線確認證明唔到乜嘢。冇確認或者期間面板重啟，就自動還原做「允許」。SSH 救援：`lmcwhm firewall-off`。
-- **Cloudflare / Linode**：只同步永久封鎖（臨時封鎖變動太快，會撞 API 限額）。Cloudflare 用每個 Zone 嘅 IP Access Rules（備註 `lmcwhm`）；Linode 喺所選雲防火牆最前面放一條 `lmcwhm-block` DROP 規則，可以再加一條 `lmcwhm-ports` ACCEPT 規則。其他規則唔會改；每條規則最多 255 個地址，超出部分只喺本機生效。
-- **WAF**：開啟時 nginx 容器換成官方 `owasp/modsecurity-crs`（CRS 4.25 LTS，固定日期 tag），用同一份生成設定（兩個映像都掛載喺 `/etc/nginx/lmcwhm`，以 `-c` 啟動）；ModSecurity / CRS 參數由映像 entrypoint 按環境變數生成。每個站點可以關閉 WAF 或者排除規則 ID；攔截記錄來自 JSON audit log。
-- **CrowdSec**：容器以 host network 運行，LAPI 喺 `127.0.0.1:8085`（8080 已經俾 nginx 用咗），讀網站日誌同 auth.log；面板就係 bouncer，每 10 秒拉 decision stream，用一個 transaction 寫入防火牆 ban set，社群黑名單幾萬個 IP 都只會重載一次。
-- **CI**：`deploy/test-apps.sh` 用 bridge 網絡上嘅 busybox 容器扮外部客戶，實測黑名單、端口規則、受保護端口、drop 確認 / 自動還原、CRS 攔 SQL 注入同站點豁免、CrowdSec decision 寫入 nftables，同埋 `firewall-off`。Linode / Cloudflare 只有用假 API 嘅單元測試。
+### Runtime 與 App Store
 
-## 4E. M6 / M7 / M8 實作備註
-- **備份**：計劃唔另開排程器，係計劃任務嘅「backup」類型（命令係 JSON 計劃），共用執行記錄、逾時同略過重疊。每份備份一行記錄（類型、對象、儲存位置），保留份數按「對象 + 儲存位置」計。資料庫用引擎自己嘅工具喺容器入面 dump（mysqldump / mariadb-dump、pg_dump、mongodump、SQL Server `BACKUP DATABASE`），經 gzip 串流，唔落中間檔。面板備份用 `VACUUM INTO` 拍 SQLite 快照，加 data / edge / web 目錄；唔包 App 數據、日誌同備份本身。
-- **Google Drive / OneDrive**：冇用 rclone，直接寫 OAuth 2.0 裝置碼流程同可續傳上載（Drive 8 MiB、OneDrive 10 MiB 分塊，失敗會問伺服器收到幾多再續）。Drive 用 `drive.file` 權限（只見自己建立嘅檔案），OneDrive 用 App Folder；用戶要自己註冊 OAuth 應用。
-- **MCP**：自己實作 JSON-RPC（tools、prompts，支援 2024-11-05 至 2025-06-18），HTTP 回應用 JSON（唔開 SSE）。`/mcp` 唔受安全入口 / 綁定域名 / BasicAuth 限制，但仍受授權 IP 限制；冇 token 一律 404。`--stdio` 係一個橋接，經 root 專用 unix socket（`data/mcp.sock`）連返運行中嘅面板，權限等同管理員（SSH 帳號就係憑證）。
-- **AI 助手**：用官方 Anthropic Go SDK，工具同 MCP 共用；只會提供唯讀工具，最多 12 步；開咗 server-side fallback。對話只保留文字，每次提問重新查資料。
-- **告警**：指標規則每分鐘檢查（用監察嘅平均值），事件規則（撥測、計劃任務 / 備份失敗）由其他服務觸發；狀態（告警中 / 已回復）放記憶體，面板重啟後如果問題仍然存在會再通知一次。
-- **網站報表**：每 5 分鐘讀新增嘅日誌（按 inode + offset，識別切割），寫每小時同每日聚合；UV = 當日不同 IP（爬蟲除外）；每個網站每日最多 5000 個 URL / 來源（IP 20000），超出歸入「(other)」，防掃描器塞爆資料庫。
-- **進程守護**：每個進程一個 systemd 單元 + 腳本檔（命令唔使經 systemd 轉義），所以面板更新 / 重啟都唔會停。
-- **網站進階設定**：全部欄位先驗證再寫入 vhost（IP 用 netip 正規化，UA 轉成 regex 前 QuoteMeta，重定向只接受安全字元）；open_basedir 寫入 root 擁有嘅 `.user.ini`，PHP 改唔到。國家訪問限制未做（nginx 冇 GeoIP 模組）。
-- **FTP / SFTP**：SFTP 帳戶係 uid 33（同 www-data）嘅系統用戶，sshd `Match Group lmcwhm-sftp` chroot 去 `/www/sftp/<用戶>`，網站目錄 bind mount 到 `/site`（開機由面板重新掛載）；Match 區塊加喺 `sshd_config` 最尾並先 `sshd -t`。FTP 用 Pure-FTPd 容器（host network，被動端口 39000–39100）。
-- **WordPress**：WP-CLI 放喺 `/www/wwwroot/.lmcwhm/`（PHP 容器睇到但冇網站會公開），下載後核對官方 SHA-512，以 www-data 喺網站嘅 PHP 容器執行。Clone / Staging 未做。
-- **未驗證**：真實 Google Drive / OneDrive 帳戶（只有假 API 測試）、真實 Claude API 調用（只有假伺服器測試）、Email / Telegram 等實際送達（CI 只測 Webhook）。
+- PHP 每版本獨立容器、設定、extensions、FPM pool、狀態及 slow log。
+- Node、Python、Java 項目以獨立容器及 restart policy 運行；一般自訂長駐命令則可經 systemd process guardian。
+- 資料庫預設只發佈到 loopback；遠端存取要同步防火牆來源限制。
+- App Store catalog 內置於 binary，支援容器 image 或 source compile；source recipes 有獨立 GitHub workflow。
+- App／DB 設定改動先驗證；更新及還原操作經背景任務記錄。
 
-## 4F. M9 / M10 實作備註
-- **PHP 設定**：每版本 `web/php/<ver>/settings.json`；擴展用 `install-php-extensions` 喺基礎映像上加一層（tag `lmcwhm/php:<v>-2-x<hash>`），儲存時先 `php-fpm -t` 測試再換；配置改動用 SIGUSR2 平滑重載。FPM 狀態經內建 FastCGI client 讀 `/fpm-status?json`。
-- **Varnish**：`lmcwhm-varnish`（varnish:7.6，127.0.0.1:6081，malloc）只喺有網站開啟時運行；HAProxy 按 `cache_*.map` 將主機送去 `be_varnish`，Varnish 回源 nginx。VCL 由網站列表生成，`varnishreload` 熱換。
-- **權限**：`/api/v1/<首段>` 對應模組（`internal/server/perms.go`），未列出 = 只限管理員；限定網站嘅子用戶只可以用 `/sites/{id}`、`/wordpress/{id}`。REST API 同 MCP 共用 API Token。
-- **防篡改**：鎖定 = `chattr +i`（受保護檔案同目錄，排除目錄保持可寫）；監察 = inotify + `tamper/<id>/base` 基準副本。刪除網站前會自動解鎖。
-- **快照**：`home/`（面板 home，唔包 bin / backup / logs / geoip）+ `www/`（網站），`snapshot.json` 喺最前；App 容器喺複製 `apps/` 期間 `docker pause`。還原保留擁有者同權限，寫入 rebuild 標記令面板重建 web stack。
-- **郵件**：docker-mailserver 15（橋接網絡 + 發佈端口，因為 `--hostname` 唔可以配 host 網絡）；證書只複製郵件主機名嗰張入容器，每 6 小時同步並 reload。
-- **未驗證**：郵件伺服器實際收發（CI 未跑 docker-mailserver）、ClamAV、離線安裝包、PWA 安裝、beta 通道（未有 pre-release）。
+## 7. 認證、授權與高風險操作
 
-## 5. 路線圖
-| 階段 | 內容 | 完成標準 |
-|---|---|---|
-| **M0** | Go 骨架、SQLite、登入、**面板設定（端口/安全入口 /console/面板 SSL/2FA/授權 IP）**、`lmcwhm` CLI、i18n、Vue 外殼、install.sh | 裝完顯示地址+入口，非入口路徑 404；`lmcwhm` 可改端口/密碼 |
-| **M1** | HAProxy 443 SNI + 80 Host 雙棧、CF DNS、LE/LiteSSL、PHP 站點 | 面板加域名 → HTTPS v4/v6 可訪問 |
-| **M2** | App Store、Runtime 插件（Java/Node/Python/HTML）、DB 管理（全引擎） | 各類型項目 + 各 DB 可建立 |
-| **M3** | Docker 管理、檔案管理器、Terminal | 容器綁域名可用；穿越測試通過 |
-| **M4** | 日誌中心分類 + IP 歸屬地、Cron、監察 | 全部分類可查、IP 顯示地區 |
-| **M5** | 防火牆（nftables + Linode + CF）、WAF、CrowdSec | SQLi 被攔、IP 同步封鎖到 Linode |
-| **M6** ✅ | 備份（本地/Google Drive/OneDrive） | 排程備份上傳 + 還原成功 |
-| **M7** ✅ | MCP + AI 一鍵分析 + Skills | Claude Code 經 MCP 操作 |
-| **M8** ✅ | 儀表板完善、WP Toolkit、Supervisor、FTP/SFTP、Composer/Tomcat、網站進階、網站報表、撥測、告警中心 | 3A #1–8、#15 |
-| **M9** ✅ | 防篡改、木馬掃描、安全風險掃描報告、工具箱、面板子用戶、API Token/OpenAPI | 3A #9–13、#16、#23 |
-| **M10** ✅ | 面板快照遷移、升級/回滾/離線安裝、PWA、郵件插件、Zone Editor 模板 | 3A #14、#17、#18、#22、#24 |
-| **後期** | 多 Web Server、多機 Agent、寶塔遷移工具 | 3A #20、#21 |
+- Browser：HttpOnly + SameSite session、非 GET CSRF、bcrypt、TOTP、按 IP 登入鎖定。
+- Gates：授權 IP → 綁定域名 → BasicAuth → 安全入口；可自訂未認證回應。
+- API Token：只保存 SHA-256 hash，scope 為 read／operate／admin，可設 expiry 及 IP allowlist。
+- 子用戶：按模組及可選網站 IDs 授權；未映射嘅新 API route 預設只限管理員。
+- 全局 running tasks、task history 及清除歷史只限管理員。隨機 12 字元 task ID 作為 caller 查詢自己背景工作進度嘅 capability，避免列出或讀取他人任務。
+- Terminal 開啟前需要再次驗證；主機及容器 terminal 都係高權限功能。
+- MCP AI 助手只提供 read-only tools；operate／admin MCP tools 具有真實系統修改能力，全部需要審計。
 
-批准後由 **M0** 開始實作。
+## 8. 背景服務與一致性
 
----
+- `tasks.Manager` 序列化重型工作，並為備份等長工作提供較長 timeout。
+- Task logs 短期保存在 memory，完成後寫入 SQLite history，設數量及長度上限。
+- Cron 支援秒級 schedule、timeout、避免重疊、輸出及告警；SSL renew、security scan、app update check 等係內建 jobs。
+- Monitor、probe、site stats、security events、CrowdSec、GeoIP refresh、mail certificate sync 各自以 goroutine 運行。
+- SQLite 只允許一個 writer；migration 逐個 transaction 執行，新 migration 只應追加，唔應修改已發佈版本。
 
-## 6. 驗證
-- Ubuntu 20.04 VM（Multipass，開 IPv6）+ 22.04 兼容測；真 Linode（測試用 Firewall）驗 Linode API；測試 CF zone。
-- Edge：`haproxy -c`；`openssl s_client -servername`；`curl -6 --resolve`；Runtime API 加 map 免 reload 生效；port 80 → 301。
-- 面板設定：改端口/入口後舊路徑 404；`lmcwhm entry --disable` 救援成功。
-- `go test ./...`（edge 生成 golden、files 穿越/zip-slip、geoip 查詢、firewall 規則 diff）；`golangci-lint`。
-- 前端 Vitest + Playwright（建站、語言切換、設定頁）。
-- 備份：Google Drive / OneDrive 測試帳戶上傳 + 還原。
-- MCP：MCP Inspector + `claude mcp add` 實測。
+## 9. 備份、快照與更新
+
+- 網站及目錄使用 safe archive 處理；資料庫使用引擎工具 dump／restore。
+- Panel backup 以 SQLite `VACUUM INTO` 建立一致快照。
+- Drive／OneDrive 採用 device OAuth、分塊及續傳；token 加密保存。
+- Snapshot 包含面板 home、App 數據及網站；複製 App 數據時短暫 pause 容器，還原後重建 web stack。
+- Installer 先下載新 binary，官方 Release 必須取得並通過 SHA256SUMS，再備份資料、停止服務、替換、migration 及健康檢查。
+- Rollback 預設還原 binary；`--with-data` 會同時還原舊資料，屬高風險操作。
+
+## 10. 測試與交付
+
+### 本機
+
+```bash
+go vet ./...
+go test ./...
+cd web && npm run build
+for f in deploy/*.sh; do bash -n "$f"; done
+```
+
+### GitHub Actions
+
+- 每次 push／PR：Go、前端、Linux build。
+- Ubuntu 22.04／24.04：fresh install、upgrade、reset-panel、rollback。
+- Ubuntu 24.04：真 Docker websites、SNI、PHP、ACME/Pebble、apps、DB、files、firewall、WAF、CrowdSec 等 E2E。
+- Source-check：按相關修改及每週跑官方 images／source configure matrix。
+- Tag release：測試、跨平台 build、checksums、GitHub Release。
+
+E2E scripts 會安裝套件、操作 Docker、nftables 及 systemd，只可以在拋棄式 Ubuntu runner／VM 執行，**唔可以在使用中的 Server 執行**。
+
+### 第三方驗收邊界
+
+單元測試及 CI 唔代表以下項目已完成真實帳戶驗收：
+
+- Google Drive／OneDrive、真實 Cloudflare／Linode 生產帳戶。
+- Claude／OpenRouter API、Email／Telegram／Slack 等實際送達。
+- docker-mailserver 實際收發、ClamAV、離線安裝包、PWA 安裝及 beta channel。
+- 前端目前主要依靠 TypeScript build 及 E2E，冇獨立 Vitest／Playwright suite。
+
+## 11. 尚未完成／後續方向
+
+- 多 Web Server（OpenResty、Apache、OpenLiteSpeed）。
+- 多機 Agent、集中節點管理及寶塔／aaPanel 遷移工具。
+- WordPress clone／staging、國家訪問限制等早期藍圖功能。
+- 更完整嘅前端自動化測試、真實第三方服務驗收及災難還原演練。
+- 任務模型可進一步保存 owner／module，取代單靠隨機 task ID capability 嘅查詢方式。
+
+早期設計中嘅 Runtime API、rclone、Monaco、uPlot、sqlc／goose、官方 MCP SDK、Git/HTTP App Store repository、插件 gRPC 及事件總線，唔係目前實作，不應再當成已完成架構。

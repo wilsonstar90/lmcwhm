@@ -26,6 +26,7 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/config"
 	"github.com/wilsonstar90/lmcwhm/internal/settings"
 	"github.com/wilsonstar90/lmcwhm/internal/store"
+	"github.com/wilsonstar90/lmcwhm/internal/tasks"
 )
 
 type env struct {
@@ -59,8 +60,9 @@ func newEnv(t *testing.T, mut func(*settings.Settings)) *env {
 	}
 	srv, err := New(Deps{
 		Paths: config.Paths{CertDir: filepath.Join(dir, "ssl")}, Settings: sm, Auth: a, Audit: audit.New(st),
-		WebFS:  fstest.MapFS{"index.html": {Data: []byte("<html>spa</html>")}},
-		Log:    slog.New(slog.NewTextHandler(io.Discard, nil)),
+		WebFS: fstest.MapFS{"index.html": {Data: []byte("<html>spa</html>")}},
+		Log:   slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Store: st, Tasks: tasks.NewManager(),
 		Tokens: apitoken.New(st),
 	})
 	if err != nil {

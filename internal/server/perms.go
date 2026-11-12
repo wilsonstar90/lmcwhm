@@ -20,7 +20,7 @@ var errForbidden = errors.New("auth.forbidden")
 // "" = any signed-in user; "admin" = administrators only (also the default
 // for anything not listed, so a new route is closed until it is mapped).
 var moduleOf = map[string]string{
-	"auth": "", "tasks": "", "geoip": "", "openapi.json": "",
+	"auth": "", "tasks": "admin", "geoip": "", "openapi.json": "",
 	"sites": "website", "routes": "website", "web": "website", "wordpress": "website", "sitestats": "website", "varnish": "website",
 	"dns": "domains", "forwards": "domains",
 	"ui":        "",
@@ -53,10 +53,15 @@ var selfService = map[string]bool{
 // position of the site id; every other website route needs full access.
 var siteScoped = regexp.MustCompile(`^/(sites|wordpress|wordpress/install)/(\d+)(/|$)`)
 
+// A random task ID is returned only to the caller that started the task. It
+// works as a capability so that caller can poll progress; global task lists and
+// history remain administrator-only. The pattern also excludes /tasks/history.
+var taskDetail = regexp.MustCompile(`^/tasks/[A-Za-z0-9]{12}$`)
+
 // module returns the module of an /api/v1 path.
 func module(p string) string {
 	p = strings.TrimPrefix(p, "/api/v1")
-	if selfService[p] {
+	if selfService[p] || taskDetail.MatchString(p) {
 		return ""
 	}
 	seg, _, _ := strings.Cut(strings.TrimPrefix(p, "/"), "/")

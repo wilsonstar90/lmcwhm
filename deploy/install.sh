@@ -229,10 +229,12 @@ else
   URL="${LMCWHM_DOWNLOAD_URL:-$BASE/lmcwhm-linux-${ARCH}}"
   step "Downloading $URL"
   curl -fL --retry 3 --progress-bar "$URL" -o "$NEW_BIN" || die "download failed: $URL"
-  if [[ -z "${LMCWHM_DOWNLOAD_URL:-}" ]] && curl -fsSL "$BASE/SHA256SUMS" -o "$WORK/SHA256SUMS" 2>/dev/null; then
+  if [[ -z "${LMCWHM_DOWNLOAD_URL:-}" ]]; then
+    curl -fsSL "$BASE/SHA256SUMS" -o "$WORK/SHA256SUMS" || die "checksum download failed: $BASE/SHA256SUMS"
     want="$(awk -v f="lmcwhm-linux-${ARCH}" '$2==f {print $1}' "$WORK/SHA256SUMS")"
+    [[ -n "$want" ]] || die "checksum entry missing for lmcwhm-linux-${ARCH}"
     got="$(sha256sum "$NEW_BIN" | awk '{print $1}')"
-    [[ -z "$want" || "$want" == "$got" ]] || die "checksum mismatch for lmcwhm-linux-${ARCH}"
+    [[ "$want" == "$got" ]] || die "checksum mismatch for lmcwhm-linux-${ARCH}"
   fi
 fi
 chmod 0755 "$NEW_BIN"

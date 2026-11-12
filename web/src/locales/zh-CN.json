@@ -27,7 +27,8 @@
     "confirm_delete": "确定删除？",
     "create": "创建",
     "created": "创建时间",
-    "deleted": "已删除"
+    "deleted": "已删除",
+    "total": "共 {n} 条"
   },
   "login": {
     "title": "登录面板",

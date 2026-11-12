@@ -12,7 +12,7 @@ export const LANGUAGES = [
 export type Lang = (typeof LANGUAGES)[number]['value']
 
 const loaders: Record<Lang, () => Promise<{ default: Record<string, unknown> }>> = {
-  'zh-HK': () => import('./locales/zh-HK.json'),
+  'zh-HK': () => Promise.resolve({ default: zhHK }),
   'zh-TW': () => import('./locales/zh-TW.json'),
   'zh-CN': () => import('./locales/zh-CN.json'),
   en: () => import('./locales/en.json'),

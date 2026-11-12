@@ -27,7 +27,8 @@
     "confirm_delete": "Delete this?",
     "create": "Create",
     "created": "Created",
-    "deleted": "Deleted"
+    "deleted": "Deleted",
+    "total": "{n} total"
   },
   "login": {
     "title": "Sign in",

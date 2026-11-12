@@ -1,185 +1,134 @@
 # lmcwhm
 
-自研伺服器控制面板（aaPanel / 寶塔式），Go 單一 Binary + Vue 3 / Naive UI。
-完整架構與路線圖：[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+自研單機 Linux 伺服器控制面板，定位接近 aaPanel／寶塔：**Go 單一 Binary + Vue 3 / Naive UI**，以網頁管理網站、資料庫、Docker、安全、備份及系統設定。
 
-## 目前進度：M10（安全運維、工具箱、子用戶、快照遷移、郵件）
+目前文件對應 **`v0.21.0`**。實際架構、驗證範圍及後續路線見 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)；開發及 AI agent 工作守則見 [AGENTS.md](AGENTS.md)。
 
-**M10 — 遷移、升級、郵件**
-- 整機快照：面板資料庫同設定、App Store 數據（複製時短暫暫停資料庫）、所有網站檔案打包成一個檔（備份 → 整機快照，可存本地 / Google Drive / OneDrive）；新機器裝好 lmcwhm 後 `sudo lmcwhm snapshot restore <檔案或面板產生嘅 24 小時下載連結>` 即搬晒過去
-- 升級：穩定 / 測試（含 pre-release）通道、更新前自動備份數據、失敗自動回滾；之後亦可以 `sudo lmcwhm rollback`（`--with-data` 連數據一齊還原）或喺首頁一鍵回滾
-- 離線安裝：喺有網絡嘅機器跑 `deploy/make-offline.sh` 打包（binary、Docker 靜態程式、核心映像同已建好嘅 PHP 映像），再 `install.sh --offline <包>`
-- PWA：可以喺手機 / 電腦「安裝」面板（由安全入口開始）
-- DNS 記錄編輯器（Cloudflare）：A / AAAA / CNAME / MX / TXT / SRV / CAA / NS，模板一鍵加 Google Workspace、Microsoft 365、Zoho、本機郵件、CAA、DMARC、「唔寄信」
-- 郵件伺服器（docker-mailserver：Postfix、Dovecot、OpenDKIM、Fail2ban）：網域、信箱（容量限制）、別名 / 全收、DKIM 自動產生，MX / SPF / DKIM / DMARC 一鍵寫入 Cloudflare，寄信能力檢測（MX、A、PTR、SPF、DKIM、DMARC、TLS、外發 25 端口）
+## 功能總覽
 
-**M9 — 安全運維、工具箱、子用戶**
-- 安全風險掃描：SSH（root 密碼登入、預設端口…）、系統帳戶（uid 0、空密碼）、未裝安全更新、需要重開機、自動更新、內核加固、公網開放端口、EOL PHP、網站可寫權限、uploads 內 PHP，連面板設定檢查；評分、一鍵修復、下載 HTML 報告、每週自動掃描並告警
-- 木馬掃描：PHP / JSP / ASP Webshell 規則、圖片內藏 PHP，可選 ClamAV；隔離（可還原）、按內容忽略
-- 網站防篡改：監察模式（inotify，改動自動由基準副本還原，新檔移走）或鎖定模式（chattr +i），可排除 uploads / cache 目錄，改動記錄同告警
-- 工具箱：Swap、主機名、DNS 伺服器、時區 / NTP、SSH（端口、root 登入、密碼 / 金鑰登入、授權金鑰；防止鎖死自己）、進程管理、網絡連接、磁碟同目錄佔用分析、垃圾清理
-- 面板子用戶：按模組授權，可限指定網站；API Token 亦可以直接呼叫 REST API（read / operate / admin），附自動產生嘅 OpenAPI 文檔
-- 檔案管理：全文搜尋、分享連結（有效期、密碼、次數）、收藏夾、遠程下載
-- PHP 每版本設定：擴展（redis、imagick、swoole、xdebug、ioncube、sqlsrv… 共 35 個）、php.ini 表單、disable_functions、自訂 ini、FPM 進程池（按記憶體建議值）、負載狀態、慢日誌；儲存前用 `php-fpm -t` 測試
-- Varnish 頁面緩存：逐個網站開啟、緩存時間、排除路徑、清除緩存；登入用戶 / POST / 後台 / 設 Cookie 嘅回應唔會緩存
+| 範圍 | 主要功能 |
+|---|---|
+| 面板核心 | 管理員及子用戶、模組／網站權限、bcrypt、TOTP 2FA、Session + CSRF、安全入口、授權 IP、綁定域名、BasicAuth、面板 SSL、操作日誌 |
+| 網站 | PHP、靜態、Node.js、Python、Java、反向代理、TLS 直通、別名、通配符、到期停用、偽靜態、gRPC、自訂錯誤頁 |
+| Edge / SSL | HAProxy 80/443、IPv4/IPv6、SNI exact/wildcard routing、Nginx、HTTP-01 / DNS-01、Let's Encrypt、LiteSSL、自訂 ACME CA、自動續期 |
+| App Store | 多版本 PHP、Node.js、Python、Java、MySQL、MariaDB、PostgreSQL、MongoDB、SQL Server、Redis、Memcached、Adminer、phpMyAdmin；容器或 source compile 安裝、patch update |
+| 資料庫 | 建庫及用戶、權限、設定、Redis keys、phpMyAdmin、備份／匯入、回收站、資料表 repair／optimize／engine／comment／structure tools |
+| Docker | Containers、Images、Volumes、Networks、Compose、registries、即時用量、日誌、exec terminal、綁定域名 |
+| 檔案 / Terminal | `os.Root` 路徑沙盒、分塊上傳、編輯歷史、權限／擁有者、回收站、分享、全文搜尋、遠程下載、zip/tar.gz/7z/rar、CodeMirror、xterm.js PTY |
+| 安全 | nftables、Cloudflare／Linode 封鎖同步、IP/UA/URL lists、可信 IP feeds、WAF + OWASP CRS、CrowdSec、自動封鎖、流量總覽、安全掃描、Webshell 掃描、防篡改 |
+| 運維 | Dashboard、資源監控、日誌中心、Cron、systemd 進程守護、撥測、網站報表、告警、FTP/SFTP、WordPress、Composer、Varnish、工具箱 |
+| 備份 / 遷移 | 網站、資料庫、Docker volumes、任意目錄及面板備份；本地、Google Drive、OneDrive；整機快照、升級、回滾、離線安裝 |
+| 整合 | Cloudflare DNS Zone Editor、郵件伺服器、REST API + OpenAPI、API Token、MCP、Claude／OpenRouter AI 助手 |
+| UX | 五種語言、響應式介面、PWA、深色主題、可自訂選單及品牌 Logo、任務訊息盒 |
 
-**M8 — 網站運維**
-- 首頁：網站、資料庫、容器、計劃任務、守護進程、撥測、備份、今日流量、封鎖 IP、告警數字；安全檢查評分（安全入口、預設端口、面板 SSL、兩步驗證、防火牆、WAF、CrowdSec、備份、告警渠道、證書到期…）連「處理」捷徑
-- 告警中心：Email（SMTP / STARTTLS / TLS）、Telegram、Webhook、企業微信、釘釘（加簽）、Slack、Discord；規則：CPU / 記憶體 / 負載 / 磁碟閾值、服務停止、SSL 到期、撥測失敗、計劃任務 / 備份失敗、面板登入失敗次數、面板 / SSH 登入通知；問題持續會按間隔重發，回復正常會通知
-- 網站撥測：HTTP(S)（狀態碼、關鍵字、證書剩餘日數）、TCP、Ping；24 小時 / 7 日可用率、響應時間圖、失敗記錄
-- 網站報表：由 Nginx 日誌每 5 分鐘統計 PV、UV、流量、4xx / 5xx、爬蟲、熱門頁面 / IP / 來源 / 國家（保留 30 日）
-- 進程守護：常駐命令以 systemd 服務運行（崩潰自動重啟、開機啟動），網頁啟停、睇日誌
-- 網站進階設定：只允許 / 封鎖 IP、封鎖 User-Agent、每 IP 速率同並發限制、上載上限、目錄列表、自訂錯誤頁、防跨站 open_basedir、防盜鏈、重定向、封鎖 xmlrpc.php
-- WordPress 工具箱：一鍵安裝（自動建 MySQL / MariaDB 資料庫、wp-config、管理員），核心 / 外掛 / 主題更新、完整性檢查、停用後台檔案編輯、重設管理員密碼（WP-CLI，經 SHA-512 校驗）
-- Composer（PHP 映像內置，另加 gd / zip / intl）；Tomcat 9 / 10.1 / 11 項目（部署目錄或 *.war）
-- FTP（Pure-FTPd 容器，開啟時自動加防火牆規則）同 SFTP（sshd chroot，只可以 SFTP，唔可以登入 shell）帳戶，綁定網站目錄
+呢個係**單機管理面板**：子用戶只係操作員，唔係 cPanel tenant；目前冇 Reseller、套餐或多機 Agent。
 
-**M7 — MCP / AI**
-- MCP 伺服器：`/mcp`（Streamable HTTP + API Token，權限分唯讀 / 操作 / 管理員，可限 IP、到期）或者經 SSH：`claude mcp add lmcwhm -- ssh root@伺服器 lmcwhm mcp --stdio`
-- 約 35 個工具（網站、日誌分析、容器、資料庫、防火牆、WAF、CrowdSec、SSH、計劃任務、備份、撥測、報表…），每次調用記入操作日誌；5 個 Skills（MCP prompts），亦可以下載成 Claude Code `SKILL.md`
-- 面板內 AI 助手同「AI 分析」按鈕（日誌、SSH、WAF、網站報表、首頁安全檢查）：用 Claude（預設 `claude-opus-5-5`，可改模型同思考深度），只可以用唯讀工具；API key 加密儲存
+## 系統需求
 
-**M6 — 備份**
-- 網站、資料庫（MySQL / MariaDB / PostgreSQL / MongoDB / SQL Server）、Docker 卷、任意目錄、面板設定
-- 儲存到本地、Google Drive、OneDrive（OAuth 裝置碼授權，唔使回調網址；分塊上載、斷線續傳），按對象保留最新幾份
-- 排程（計劃任務入面嘅「備份」類型）、立即備份、下載、還原（網站 / 目錄先完整解壓再替換）、匯入其他伺服器嘅備份檔
-- 面板設定還原：`systemctl stop lmcwhm && lmcwhm backup restore-panel <檔案>`
+- 建議 **Ubuntu 22.04 / 24.04**，root、systemd、Docker、nftables。
+- 安裝腳本仍接受 Ubuntu 20.04，但其標準支援已於 2025-05 完結，只應喺 ESM 環境使用。
+- 網站功能需要本機 **80 / 443**；面板使用獨立 port。FTP、郵件或資料庫遠端存取會按設定使用額外 ports。
+- 本機開發支援 macOS；防火牆、systemd、容器及完整網站 E2E 必須喺隔離 Ubuntu 環境執行，**唔好喺生產 Server 跑測試腳本**。
 
-**M5 — 安全（防火牆、WAF、CrowdSec）**
+## 本機開發
 
-**M5 — 安全**
-- 伺服器防火牆（nftables，獨立表 `inet lmcwhm`，唔會改 ufw / Docker 規則）：IP 黑名單 / 白名單（CIDR、IPv4 / IPv6、永久或限時）、端口規則（TCP / UDP、範圍、來源）、Ping 開關、受保護端口（SSH、面板、80、443）；「預設拒絕」要 60 秒內確認仲連得到面板，否則自動還原；救援：`lmcwhm firewall-off`
-- 封鎖同步到 Cloudflare（每個 Zone 嘅 IP Access Rules，另可改安全等級 / Under Attack）同 Linode 雲防火牆
-- WAF：ModSecurity v3 + OWASP CRS 4.25 LTS（攔截 / 只偵測、偏執等級、異常分數門檻），每個網站可以單獨關閉或者排除規則，攔截記錄可以一鍵排除
-- CrowdSec：分析網站同 SSH 日誌，封鎖決定由面板寫入防火牆；可選社群黑名單、警報、手動封鎖 / 解封
-
-**M4 — 監察 / 計劃任務 / 日誌**
-- 監察：CPU、記憶體、負載、磁碟 I/O、網絡（15 分鐘至 30 日）、資源用得最多嘅進程、面板服務狀態
-- 計劃任務：Shell（root）、訪問 URL、網站日誌切割；可用秒級週期、預覽之後幾次執行時間、上次未完成會略過、保留每次輸出；有範本（日誌切割、清理 Docker 映像、系統更新）
-- 日誌中心：面板操作 / 登入、SSH 登入（失敗最多嘅 IP）、網站訪問（解析成表格）/ 錯誤日誌（搜尋、下載、清空）、容器、系統 journal、計劃任務
-- IP 歸屬地：每個 IP 旁邊顯示國旗、地區、ASN（DB-IP Lite，每月自動更新）
-
-**域名 / SNI 管理 + 更新 / 修復**
-- 「域名 / SNI」頁：列出 443 / 80 上每個域名同佢連去邊（網站、Docker 容器、伺服器、TLS 直通），並檢查證書、DNS 同上游；有路由測試；可以加子域名 / 通配符
-- 邊緣路由：完全匹配優先於通配符，較深嘅通配符優先於較淺嘅；修正咗直通域名誤中子域名嘅問題
-- 首頁「更新」（檢查 GitHub 最新版）同「修復」（重裝目前版本，可以重建網站環境容器）；網站、資料庫、設定全部保留
-
-**M3 — Docker 管理 / 檔案管理器 / Terminal**
-- Docker：容器列表（即時 CPU / 記憶體 / 網絡）、建立（端口、環境變數、掛載、重啟策略、資源限制）、啟停 / 暫停 / 刪除、日誌、詳細資料、`docker exec` 終端；Images（拉取 / 刪除 / 清理）、Volumes、網絡；Compose 項目（網頁編輯 yml + .env，up / down / restart / pull、日誌）
-- 容器「綁定域名」＝建立反向代理網站（`http://127.0.0.1:端口`），自動 HAProxy 路由 + SSL + DNS；亦可揀 **TLS 直通**（按 SNI 原封轉發，由後端自己持證書）
-- 面板自己嘅容器（`lmcwhm.managed`）唔可以喺 Docker 頁刪除
-- 檔案管理器：全部操作經 Go `os.Root`，路徑（包括符號連結）唔可以走出根目錄；瀏覽、編輯（5 MB 內文字檔）、新增、改名、複製 / 移動、權限 / 擁有者（可遞歸）、zip / tar.gz 壓縮及解壓（防 zip-slip）、8 MB 分塊上傳（可續傳）、下載、回收站（`/www/.Recycle_bin`，可還原）
-- Web Terminal：xterm.js ↔ WebSocket ↔ PTY，主機 root shell 或容器 shell；每次開啟前要再輸入面板密碼
-
-**M2 — App Store / 運行環境 / 資料庫**
-- App Store（每個版本獨立安裝）：Node.js 18–24、Python 3.9–3.13、Java（Temurin JDK 8/11/17/21）、MySQL 5.7/8.0/8.4、MariaDB 10.6/10.11/11.4、PostgreSQL 13–17、MongoDB 6/7、SQL Server 2019/2022、Redis 6.2/7.2/7.4、Memcached、Adminer
-- 資料庫 / 快取以容器運行，只發佈到 `127.0.0.1:端口`；管理員密碼加密儲存；MySQL / MariaDB / Redis 設定檔可網頁編輯，保存後重啟，起唔返自動還原
-- 網站新增 **Node.js / Python / Java 項目**（專用容器運行啟動命令，監聽 `127.0.0.1:PORT`，Nginx 反代，支援 WebSocket）同 **反向代理** 類型；項目狀態、輸出日誌、重啟
-- 資料庫管理：MySQL、MariaDB、PostgreSQL、MongoDB、SQL Server 一鍵建立資料庫 + 專屬用戶、改密碼、刪除；Adminer 經面板 `/adminer/` 打開（需已登入面板）
-
-**M1 — 網站管理**
-- HAProxy 3.0 邊緣：80 / 443（IPv4 + IPv6 分開監聽，客戶真實 IP 正確傳遞），按 TLS SNI 分流：
-  需要直通嘅域名原封轉發（passthrough），其餘喺本機終止 TLS，每個域名自動揀返自己張證書
-- Nginx + PHP-FPM 7.4 / 8.0 / 8.1 / 8.2 / 8.3 / 8.4（Docker 容器，每版本一個，內置 mysqli / pdo_mysql / opcache / bcmath / exif），亦支援靜態網站
-- 網站：新增、別名、切換 PHP 版本、停止 / 啟動、刪除（可選刪檔案 + DNS）、強制 HTTPS、HSTS、睇 Nginx 設定
-- Cloudflare：API Token 加密儲存，自動建立 / 更新 / 清理 A（IPv4）+ AAAA（IPv6）記錄，可選橙雲代理
-- SSL：Let's Encrypt、LiteSSL 或任何 ACME CA（支援 EAB）；HTTP-01 經 port 80，或 DNS-01 經 Cloudflare（支援萬用字元）；每日自動續期（到期前 30 日）；可上傳自訂證書
-- 所有設定由資料庫生成，改動先驗證（`nginx -t`、`haproxy -c`）再熱重載，失敗自動還原；面板重啟 / 修復會重新生成
-- 網站檔案：`/www/wwwroot/<域名>`，日誌：`/www/wwwlogs/`
-
-**M0 — 面板核心**
-- 面板端口（改完即時熱重啟監聽）、安全入口（如 `/console`，未經入口一律 404）、面板 SSL、授權 IP、綁定域名、BasicAuth
-- 登入：bcrypt、TOTP 兩步驗證、按 IP 失敗鎖定、HttpOnly session + CSRF
-- 面板登入 / 操作日誌、首頁儀表板、5 種語言、`lmcwhm` CLI（似 `bt`）
-
-> 使用網站功能前：Web 環境會佔用 80 / 443 端口（VPS 上唔可以有其他 Nginx / Apache 監聽）；
-> 喺「網站 → Web 環境」設定 ACME 電郵（同埋 Cloudflare Token 如需自動 DNS / DNS-01）。
-
-## 開發
+需要 Go `1.27.3`、Node.js 22 及 npm。
 
 ```bash
-make web        # 建置前端（web/dist，會 embed 入 binary）
-make dev-init   # 喺 ./.dev 初始化：admin / admin12345，端口 18888，入口 /console
-make dev        # 啟動面板：https://127.0.0.1:18888/console
-make test       # go vet + go test（包括檔案穿越 / zip-slip 測試）
-make linux      # 交叉編譯 bin/lmcwhm-linux-{amd64,arm64}
+make web        # npm ci、TypeScript 檢查及建置 web/dist
+make dev-init   # 全新 ./.dev 初始化：admin / admin12345、port 18888、入口 /console
+make dev        # https://127.0.0.1:18888/console
+make test       # go vet ./... + go test ./...
+make linux      # Linux amd64 / arm64 binaries
 ```
 
-前端熱更新：`make dev` 運行中，另開 `cd web && npm run dev`，瀏覽 `http://localhost:5173/console`。
+前端熱更新：保持 `make dev`，另開：
 
-## 安裝到 VPS（Ubuntu 20.04 / 22.04 / 24.04）
+```bash
+cd web
+npm run dev
+# http://localhost:5173/console
+```
 
-以 root 喺 VPS 執行：
+`dev-init` 只應用於全新開發資料目錄；現有 `.dev` 內嘅帳號及設定唔應當作生產備份。
+
+## 安裝到 VPS
+
+以 root 執行：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/wilsonstar90/lmcwhm/main/deploy/install.sh | sudo bash
 ```
 
-自訂參數（端口 / 安全入口 / 帳號）：
+自訂 port、安全入口及帳號：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/wilsonstar90/lmcwhm/main/deploy/install.sh | sudo bash -s -- --port 8888 --entry /console --username admin
 ```
 
-其他選項：`--password xxx`、`--version v0.1.0`（指定版本）、`--skip-docker`、`--binary ./lmcwhm-linux-amd64`（用本地編譯檔）。
-安裝完會顯示面板地址、安全入口、用戶名同密碼；記得喺 Linode Cloud Firewall / 安全組放行面板端口。
+其他選項包括 `--password`、`--version v0.21.0`、`--skip-docker`、`--binary ./lmcwhm-linux-amd64`、`--channel beta` 及 `--offline <包>`。
 
-## 修復 / 強制更新
+安裝後請立即：
 
-已安裝嘅機器重跑同一條安裝命令，會自動進入**修復/更新模式**：
+1. 保存隨機產生嘅密碼及安全入口，並修改預設／開發密碼。
+2. 喺雲防火牆只放行必要來源及 ports。
+3. 啟用面板 SSL、TOTP 2FA，按需要設定授權 IP。
+4. 設定 ACME email；需要自動 DNS／DNS-01 時再設定 Cloudflare Token。
+5. 另找獨立機器驗證備份還原，唔好只確認備份檔存在。
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/wilsonstar90/lmcwhm/main/deploy/install.sh | sudo bash
-```
+## 更新、修復及救援
 
-| 重建 | 保留（永遠唔刪） |
-|---|---|
-| 面板程式、systemd 服務、`/usr/bin/lmcwhm`；Docker 壞咗會重啟 / 重裝套件（容器同數據 volume 保留） | 網站檔案 `/www/wwwroot`、面板設定同帳號（`/opt/lmcwhm/data`）、證書、所有防火牆規則（ufw 只會加唔會刪） |
-
-流程：先備份 `data/` 去 `/opt/lmcwhm/backup/reinstall-<時間>.tar.gz`（保留最近 5 份）→ 換程式 → 資料庫 migration → 重啟 → 健康檢查；新版起唔到會**自動還原**舊程式同數據。
-
-喺 VPS 亦可以直接用：
+重跑安裝命令會進入修復／更新模式。流程包括備份 `data/`、更換 binary、migration、重啟及健康檢查；啟動失敗會還原舊 binary 同資料。官方 Release 下載必須通過 SHA256 校驗。
 
 | 命令 | 作用 |
 |---|---|
-| `sudo lmcwhm update` | 更新到最新版（`--version v0.1.1` 指定版本，`--channel beta` 包括測試版） |
-| `sudo lmcwhm rollback` | 返回上次更新前嘅版本（`--with-data` 同時還原當時備份嘅數據） |
-| `sudo lmcwhm repair` | 重新安裝目前版本，修復被改壞嘅程式 / 服務 |
-| `sudo lmcwhm reset-panel` | 鎖死自己入唔到面板時用：新安全入口 + 新管理員密碼、自簽 SSL、關閉 2FA / 授權 IP / 綁定域名 / BasicAuth；**端口保持不變**（可加 `--port`） |
+| `sudo lmcwhm update` | 更新；可用 `--version` 或 `--channel beta` |
+| `sudo lmcwhm rollback` | 回滾 binary；`--with-data` 同時還原更新前資料 |
+| `sudo lmcwhm repair` | 重裝目前版本及修復服務 |
+| `sudo lmcwhm reset-panel` | 重設安全入口、管理員密碼及面板存取限制 |
+| `sudo lmcwhm firewall-off` | 鎖死自己時關閉面板管理嘅 nftables 規則 |
+| `sudo lmcwhm snapshot restore <檔案或連結>` | 還原整機快照 |
 
-`update` / `repair` 都可以加 `--reset-panel`；安裝命令亦可：`... | sudo bash -s -- --reset-panel`。
+以上命令會改變實際 Server；執行前必須確認目標機器、版本及備份。
 
-## 發佈新版本
+## CLI
 
-推送 `v*` tag，GitHub Actions 會自動建置前端 + Linux amd64/arm64 binary 並建立 Release（安裝腳本預設下載最新 Release）：
+直接輸入 `lmcwhm` 顯示選單。常用子命令：
+
+- `default`、`start|stop|restart|reload|status`、`log`
+- `passwd`、`username`、`port`、`entry`、`ssl-off`、`2fa-off`
+- `domain-unbind`、`ip-clear`、`basicauth-off`、`unlock`
+- `update`、`repair`、`reset-panel`、`firewall-off`
+- `backup list`、`backup panel`、`backup restore-panel <檔案>`
+- `snapshot restore <檔案或連結>`、`mcp --stdio`
+
+CLI 可直接讀寫 `/opt/lmcwhm/data/panel.db`，所以救援命令具有完整管理權限，必須限制 root 登入及 sudo 權限。
+
+## 測試及 CI
+
+本機基本驗證：
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+make test
+cd web && npm run build
+for f in deploy/*.sh; do bash -n "$f"; done
 ```
 
-## `lmcwhm` 命令
+GitHub Actions：
 
-直接輸入 `lmcwhm` 顯示數字選單；或者用子命令：
+- `ci.yml`：Go vet/test、前端及 Linux build、Ubuntu 22.04/24.04 installer E2E、Ubuntu 24.04 sites/apps Docker E2E。
+- `source-check.yml`：按修改及每週檢查 source compile recipes。
+- `release.yml`：推送 `v*` tag 後測試、建置 amd64/arm64、產生 SHA256SUMS 並建立 Release。
 
-| 命令 | 作用 |
-|---|---|
-| `lmcwhm default` | 顯示面板地址、安全入口、用戶名 |
-| `lmcwhm start\|stop\|restart\|status` | 控制 systemd 服務 |
-| `lmcwhm reload` | 重新載入設定（SIGHUP，免重啟） |
-| `lmcwhm passwd [新密碼]` / `username [新用戶名]` | 修改管理員帳號 |
-| `lmcwhm port [新端口]` | 顯示 / 修改面板端口 |
-| `lmcwhm entry [/path]` / `entry --disable` | 修改 / 關閉安全入口 |
-| `lmcwhm ssl-off` | 關閉面板 SSL |
-| `lmcwhm 2fa-off` | 關閉兩步驗證 |
-| `lmcwhm domain-unbind` / `ip-clear` / `basicauth-off` | 解除域名綁定 / 授權 IP / BasicAuth |
-| `lmcwhm unlock` | 解除登入失敗鎖定 |
-| `lmcwhm log` | 面板日誌最後 100 行 |
-| `lmcwhm update` / `repair` / `reset-panel` | 見上面「修復 / 強制更新」 |
-| `lmcwhm firewall-off` | 關閉面板防火牆（鎖死自己時用；ufw / Docker 規則唔受影響） |
-| `lmcwhm backup list` / `backup panel` | 列出備份 / 立即備份面板設定 |
-| `lmcwhm backup restore-panel <檔案>` | 還原面板設定（先停止面板） |
-| `lmcwhm snapshot restore <檔案或連結>` | 還原整機快照（搬機） |
-| `lmcwhm mcp --stdio` | MCP（經 SSH 俾 AI 客戶端用） |
+雲帳戶、真實郵件收發、AI API、通知送達、PWA 安裝及離線包需要各自嘅外部驗收；CI 通過唔代表呢啲第三方服務已實測。
 
-CLI 直接讀寫 `/opt/lmcwhm/data/panel.db`，面板無運行都可以救援。
+## 發佈
+
+正式發佈只應由維護者喺確認 CI、版本內容及備份後執行：
+
+```bash
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
+
+一般開發、文件修改及本機測試唔需要落 tag、push 或改版本號。
