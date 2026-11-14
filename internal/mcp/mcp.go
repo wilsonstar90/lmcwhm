@@ -66,6 +66,14 @@ type Caller struct {
 	IP    string
 }
 
+type callerKey struct{}
+
+// CallerFrom returns the authenticated caller attached to a tool invocation.
+func CallerFrom(ctx context.Context) (Caller, bool) {
+	c, ok := ctx.Value(callerKey{}).(Caller)
+	return c, ok
+}
+
 type Server struct {
 	Name, Version, Instructions string
 	tools                       map[string]Tool
@@ -111,6 +119,7 @@ func (s *Server) Call(ctx context.Context, c Caller, name string, args json.RawM
 	if len(args) == 0 || string(args) == "null" {
 		args = json.RawMessage("{}")
 	}
+	ctx = context.WithValue(ctx, callerKey{}, c)
 	res, err := t.Handler(ctx, args)
 	if s.OnCall != nil {
 		s.OnCall(ctx, c, name, args, err)
@@ -270,7 +279,7 @@ func (s *Server) dispatch(ctx context.Context, c Caller, req request) (any, *rpc
 			list = append(list, map[string]any{
 				"name": t.Name, "title": t.Title, "description": t.Description, "inputSchema": t.Schema,
 				"annotations": map[string]any{
-					"title": t.Title, "readOnlyHint": t.Scope == ScopeRead,
+					"title": t.Title, "readOnlyHint": t.Scope == ScopeRead && !t.Destructive,
 					"destructiveHint": t.Destructive, "openWorldHint": false,
 				},
 			})

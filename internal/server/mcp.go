@@ -30,8 +30,8 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/tasks"
 )
 
-const mcpInstructions = `lmcwhm manages this Linux server: websites behind an HAProxy SNI edge and nginx (+ ModSecurity WAF), PHP-FPM, runtime projects, Docker containers, App Store databases, an nftables firewall synced to Linode / Cloudflare, CrowdSec, cron jobs and backups.
-Start with server_overview or list_sites. Read tools are safe; operate tools change state (restart, ban, run jobs); admin tools can run shell commands. Prefer the narrowest tool. Prompts (skills) describe common investigations.`
+const mcpInstructions = `lmcwhm manages this Linux server: websites, SSL, runtimes, Docker, databases, files, firewall, WAF, CrowdSec, cron, backups, mail and panel settings.
+Start with server_overview or list_sites. Use list_api_endpoints and call_api for any panel function without a dedicated tool. Read tools are safe; operate tools change state; admin tools include root shell and panel administration. Prefer the narrowest tool and confirm destructive actions. Prompts describe common investigations.`
 
 // MCPSocket is the root-only unix socket that "lmcwhm mcp --stdio" bridges to.
 func MCPSocket(p config.Paths) string { return filepath.Join(p.DataDir, "mcp.sock") }
@@ -43,6 +43,11 @@ func (s *Server) buildMCP() *mcp.Server {
 	m := mcp.NewServer("lmcwhm", config.Version, mcpInstructions)
 	m.OnCall = func(ctx context.Context, c mcp.Caller, tool string, args json.RawMessage, err error) {
 		detail := tool + " " + string(args)
+		if tool == "call_api" {
+			var a struct{ Method, Path string }
+			json.Unmarshal(args, &a)
+			detail = tool + " " + a.Method + " " + a.Path
+		}
 		if len(detail) > 500 {
 			detail = detail[:500]
 		}
@@ -454,6 +459,7 @@ func (s *Server) buildMCP() *mcp.Server {
 				return list, err
 			})
 	}
+	s.addMCPAPITools(m)
 	addPrompts(m)
 	return m
 }

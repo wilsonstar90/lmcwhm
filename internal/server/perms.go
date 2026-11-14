@@ -122,6 +122,12 @@ func (s *Server) tokenUser(r *http.Request) (auth.User, bool) {
 	return u, true
 }
 
+type mcpAPIUserKey struct{}
+
+func withMCPAPIUser(r *http.Request, u auth.User) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), mcpAPIUserKey{}, u))
+}
+
 func (s *Server) withUser(r *http.Request, sess auth.Session) *http.Request {
 	return r.WithContext(context.WithValue(r.Context(), sessionKey, sess))
 }

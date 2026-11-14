@@ -111,3 +111,99 @@ func mustMarshal(v any) string {
 	b, _ := json.Marshal(v)
 	return string(b)
 }
+
+func (e *env) mcpTool(token, name string, args any) map[string]any {
+	e.t.Helper()
+	params, _ := json.Marshal(map[string]any{"name": name, "arguments": args})
+	body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 100, "method": "tools/call", "params": json.RawMessage(params)})
+	_, m := e.rpc(token, string(body))
+	result, ok := m["result"].(map[string]any)
+	if !ok {
+		e.t.Fatalf("tool %s: %v", name, m)
+	}
+	return result
+}
+
+func mcpStructured(t *testing.T, result map[string]any) map[string]any {
+	t.Helper()
+	v, ok := result["structuredContent"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing structured content: %v", result)
+	}
+	return v
+}
+
+func TestMCPFullAPIAccess(t *testing.T) {
+	e := newEnv(t, nil)
+	ctx := context.Background()
+	_, readTok, _ := e.srv.Tokens.Create(ctx, apitoken.Input{Name: "reader", Scope: "read"})
+	_, opTok, _ := e.srv.Tokens.Create(ctx, apitoken.Input{Name: "operator", Scope: "operate"})
+	_, adminTok, _ := e.srv.Tokens.Create(ctx, apitoken.Input{Name: "administrator", Scope: "admin"})
+
+	readRoutes := mcpStructured(t, e.mcpTool(readTok, "list_api_endpoints", map[string]any{}))
+	adminRoutes := mcpStructured(t, e.mcpTool(adminTok, "list_api_endpoints", map[string]any{"module": "panel"}))
+	if readRoutes["count"].(float64) == 0 || adminRoutes["count"].(float64) == 0 {
+		t.Fatalf("routes missing: read=%v admin=%v", readRoutes, adminRoutes)
+	}
+	readJSON, adminJSON := mustMarshal(readRoutes), mustMarshal(adminRoutes)
+	if !strings.Contains(readJSON, "/api/v1/system/summary") || strings.Contains(readJSON, "/api/v1/settings") {
+		t.Fatalf("read route filtering: %s", readJSON)
+	}
+	if !strings.Contains(adminJSON, "/api/v1/settings") {
+		t.Fatalf("admin routes missing: %s", adminJSON)
+	}
+
+	result := e.mcpTool(readTok, "call_api", map[string]any{"path": "/system/summary"})
+	if got := mcpStructured(t, result)["status"]; got != float64(http.StatusOK) {
+		t.Fatalf("read GET: %v", result)
+	}
+	result = e.mcpTool(readTok, "call_api", map[string]any{"path": "/logs/operation", "query": map[string]string{"limit": "1"}})
+	if got := mcpStructured(t, result)["status"]; got != float64(http.StatusOK) {
+		t.Fatalf("GET with query: %v", result)
+	}
+	for _, tc := range []struct {
+		token, method, path string
+	}{
+		{readTok, "PUT", "/settings"},
+		{readTok, "GET", "/settings"},
+		{opTok, "GET", "/settings"},
+	} {
+		result = e.mcpTool(tc.token, "call_api", map[string]any{"method": tc.method, "path": tc.path, "body": map[string]any{}})
+		if result["isError"] != true {
+			t.Fatalf("%s %s was not denied: %v", tc.method, tc.path, result)
+		}
+	}
+
+	result = e.mcpTool(adminTok, "call_api", map[string]any{
+		"method": "PUT", "path": "/settings",
+		"body": map[string]any{"panel_alias": "via-mcp", "basic_auth_password": "do-not-log"},
+	})
+	if got := mcpStructured(t, result)["status"]; got != float64(http.StatusOK) {
+		t.Fatalf("admin update: %v", result)
+	}
+	if got := e.srv.Settings.Get().PanelAlias; got != "via-mcp" {
+		t.Fatalf("real handler did not save settings: %q", got)
+	}
+	entries, _, _ := e.srv.Audit.List(ctx, 100, 0)
+	if audit := mustMarshal(entries); strings.Contains(audit, "do-not-log") || !strings.Contains(audit, "call_api PUT /settings") {
+		t.Fatalf("unsafe or missing API audit: %s", audit)
+	}
+
+	result = e.mcpTool(adminTok, "call_api", map[string]any{"path": "/../settings"})
+	if result["isError"] != true {
+		t.Fatalf("path traversal accepted: %v", result)
+	}
+
+	_, m := e.rpc(readTok, `{"jsonrpc":"2.0","id":101,"method":"tools/list"}`)
+	for _, item := range m["result"].(map[string]any)["tools"].([]any) {
+		tool := item.(map[string]any)
+		if tool["name"] == "call_api" {
+			annotations := tool["annotations"].(map[string]any)
+			if annotations["readOnlyHint"] != false || annotations["destructiveHint"] != true {
+				t.Fatalf("call_api annotations: %v", annotations)
+			}
+			return
+		}
+	}
+	t.Fatal("call_api not listed")
+}

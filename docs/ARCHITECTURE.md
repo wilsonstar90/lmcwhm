@@ -185,7 +185,7 @@
 
 ### 3.15 MCP
 - `/mcp`（Streamable HTTP，API Token + scope：read / operate / admin）+ `lmcwhm mcp --stdio`。
-- Tools 包裝 service 層：`list_sites`、`create_site`、`site_logs`、`analyze_logs`、`docker_restart`、`server_stats`、`ban_ip`（可揀 nftables/CF/Linode）、`issue_cert`、`run_backup`…；破壞性 tool 標 `destructiveHint`，全部入審計。
+- Tools 包裝 service 層：`list_sites`、`site_logs`、`analyze_access_log`、`container_action`、`server_overview`、`ban_ip`、`issue_certificate`、`run_backup`…；`list_api_endpoints` / `call_api` 經主 router 覆蓋所有已註冊 JSON REST 路由，按 method、模組及 Token scope 授權。破壞性 tool 標 `destructiveHint`，全部入審計；通用 API 調用唔記錄 body。
 
 ### 3.16 多語言
 - `zh-HK`（預設）、`zh-TW`、`zh-CN`、`en`、`ja`；前端 vue-i18n 懶加載；後端只回錯誤碼 + 參數；CLI `lmcwhm` 同樣跟系統設定語言。
@@ -300,7 +300,7 @@ SNI 頁亦會檢查證書係咪涵蓋該域名、DNS 係咪指向本機、亦有
 ## 4E. M6 / M7 / M8 實作備註
 - **備份**：計劃唔另開排程器，係計劃任務嘅「backup」類型（命令係 JSON 計劃），共用執行記錄、逾時同略過重疊。每份備份一行記錄（類型、對象、儲存位置），保留份數按「對象 + 儲存位置」計。資料庫用引擎自己嘅工具喺容器入面 dump（mysqldump / mariadb-dump、pg_dump、mongodump、SQL Server `BACKUP DATABASE`），經 gzip 串流，唔落中間檔。面板備份用 `VACUUM INTO` 拍 SQLite 快照，加 data / edge / web 目錄；唔包 App 數據、日誌同備份本身。
 - **Google Drive / OneDrive**：冇用 rclone，直接寫 OAuth 2.0 裝置碼流程同可續傳上載（Drive 8 MiB、OneDrive 10 MiB 分塊，失敗會問伺服器收到幾多再續）。Drive 用 `drive.file` 權限（只見自己建立嘅檔案），OneDrive 用 App Folder；用戶要自己註冊 OAuth 應用。
-- **MCP**：自己實作 JSON-RPC（tools、prompts，支援 2024-11-05 至 2025-06-18），HTTP 回應用 JSON（唔開 SSE）。`/mcp` 唔受安全入口 / 綁定域名 / BasicAuth 限制，但仍受授權 IP 限制；冇 token 一律 404。`--stdio` 係一個橋接，經 root 專用 unix socket（`data/mcp.sock`）連返運行中嘅面板，權限等同管理員（SSH 帳號就係憑證）。
+- **MCP**：自己實作 JSON-RPC（tools、prompts，支援 2024-11-05 至 2025-06-18），HTTP 回應用 JSON（唔開 SSE）。`/mcp` 唔受安全入口 / 綁定域名 / BasicAuth 限制，但仍受授權 IP 限制；冇 token 一律 404。`--stdio` 係一個橋接，經 root 專用 unix socket（`data/mcp.sock`）連返運行中嘅面板，權限等同管理員（SSH 帳號就係憑證）。通用 `call_api` 會以乾淨 routing context 經主 router 調用真實 handler，唔繼承 MCP POST 嘅路由狀態；只略過已驗證 MCP caller 嘅瀏覽器 gate，REST 模組權限照舊生效。
 - **AI 助手**：用官方 Anthropic Go SDK，工具同 MCP 共用；只會提供唯讀工具，最多 12 步；開咗 server-side fallback。對話只保留文字，每次提問重新查資料。
 - **告警**：指標規則每分鐘檢查（用監察嘅平均值），事件規則（撥測、計劃任務 / 備份失敗）由其他服務觸發；狀態（告警中 / 已回復）放記憶體，面板重啟後如果問題仍然存在會再通知一次。
 - **網站報表**：每 5 分鐘讀新增嘅日誌（按 inode + offset，識別切割），寫每小時同每日聚合；UV = 當日不同 IP（爬蟲除外）；每個網站每日最多 5000 個 URL / 來源（IP 20000），超出歸入「(other)」，防掃描器塞爆資料庫。

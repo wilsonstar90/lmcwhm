@@ -102,6 +102,8 @@ async function delToken(tk: Token) {
 const panelURL = computed(() => `${info.value?.tls ? 'https' : 'http'}://${location.hostname}:${info.value?.port ?? location.port}/mcp`)
 const httpCmd = computed(() => `claude mcp add --transport http lmcwhm ${panelURL.value} --header "Authorization: Bearer ${secret.value || '<token>'}"`)
 const sshCmd = computed(() => `claude mcp add lmcwhm -- ssh root@${location.hostname} lmcwhm mcp --stdio`)
+const connectPrompt = computed(() => t('ai.connect_prompt', { url: panelURL.value }))
+const copy = (text: string) => navigator.clipboard?.writeText(text).then(() => msg.success(t('common.copied')))
 const scopeType = (s: string) => (s === 'admin' ? 'error' : s === 'operate' ? 'warning' : 'success')
 const tokenCols = computed<DataTableColumns<Token>>(() => [
   { title: () => t('alert.name'), key: 'name', render: (x) => h('div', [h('b', x.name), h('div', { style: 'font-size:12px;opacity:.6' }, x.hint + '…')]) },
@@ -166,8 +168,11 @@ onMounted(() => {
         <n-code :code="sshCmd" language="bash" word-wrap />
         <p class="hint">{{ t('ai.connect_http') }}</p>
         <n-code :code="httpCmd" language="bash" word-wrap />
+        <p class="hint">{{ t('ai.connect_prompt_hint') }}</p>
+        <n-input :value="connectPrompt" type="textarea" readonly :autosize="{ minRows: 8, maxRows: 16 }" />
         <n-space style="margin-top: 12px">
           <n-button type="primary" @click="tf = { name: 'Claude Code', scope: 'read', ips: [], ttl_days: 90 }">{{ t('ai.new_token') }}</n-button>
+          <n-button @click="copy(connectPrompt)">{{ t('ai.copy_prompt') }}</n-button>
           <n-button tag="a" href="/api/v1/mcp/skill">{{ t('ai.download_skill') }}</n-button>
         </n-space>
       </n-card>

@@ -128,6 +128,7 @@ func (s *Server) handler() http.Handler {
 		r.HandleFunc(appstore.PMAPrefix+"/*", s.handlePMA)
 	}
 	r.NotFound(s.spa)
+	s.apiRoot = r
 	return r
 }
 

@@ -97,13 +97,14 @@ description: Operate and troubleshoot a server managed by the lmcwhm panel throu
 
 # lmcwhm server operations
 
-The lmcwhm MCP server exposes this host. Its tools are grouped by scope: read tools are always safe; operate tools change state (restart, block IPs, run jobs, start backups, issue certificates); admin tools run shell commands as root.
+The lmcwhm MCP server exposes this host. Its tools are grouped by scope: read tools are safe; operate tools change state (restart, block IPs, run jobs, start backups, issue certificates); admin tools include panel administration and root shell. list_api_endpoints and call_api expose every JSON REST route, with the caller's scope checked for each method and path.
 
 ## Ground rules
 - Investigate with read tools first and quote evidence (log lines, counts, IPs).
 - Before an operate or admin tool, say what you will change and why; prefer the narrowest action (unban_ip exists, blocks can expire with minutes).
 - Never block the admin's own IP, the panel port, SSH or 80/443 for everyone.
 - Long actions (issue_certificate, run_backup) return a task id: follow it with get_task.
+- If no dedicated tool fits, discover the real route with list_api_endpoints and call it with call_api; never guess path parameters or request fields.
 
 ## Layout
 - Sites live in /www/wwwroot/<domain>; nginx logs in /www/wwwlogs/<domain>.log and <domain>.error.log.

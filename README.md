@@ -35,8 +35,8 @@
 - FTP（Pure-FTPd 容器，開啟時自動加防火牆規則）同 SFTP（sshd chroot，只可以 SFTP，唔可以登入 shell）帳戶，綁定網站目錄
 
 **M7 — MCP / AI**
-- MCP 伺服器：`/mcp`（Streamable HTTP + API Token，權限分唯讀 / 操作 / 管理員，可限 IP、到期）或者經 SSH：`claude mcp add lmcwhm -- ssh root@伺服器 lmcwhm mcp --stdio`
-- 約 35 個工具（網站、日誌分析、容器、資料庫、防火牆、WAF、CrowdSec、SSH、計劃任務、備份、撥測、報表…），每次調用記入操作日誌；5 個 Skills（MCP prompts），亦可以下載成 Claude Code `SKILL.md`
+- MCP 伺服器：`/mcp`（Streamable HTTP + API Token，權限分唯讀 / 操作 / 管理員，可限 IP、到期）或者經 SSH：`claude mcp add lmcwhm -- ssh root@伺服器 lmcwhm mcp --stdio`；[Kimi / Claude / Codex 設定教學](docs/MCP.md)
+- 常用專用工具（網站、日誌分析、容器、資料庫、防火牆、WAF、CrowdSec、SSH、計劃任務、備份、撥測、報表…）加上 `list_api_endpoints` / `call_api`，可探索及控制面板所有 JSON REST 功能；每次調用記入操作日誌，API body 唔會寫入 MCP 審計；5 個 Skills（MCP prompts），亦可以下載成 Claude Code `SKILL.md`
 - 面板內 AI 助手同「AI 分析」按鈕（日誌、SSH、WAF、網站報表、首頁安全檢查）：用 Claude（預設 `claude-opus-5-5`，可改模型同思考深度），只可以用唯讀工具；API key 加密儲存
 
 **M6 — 備份**
