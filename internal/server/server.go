@@ -104,7 +104,8 @@ type Server struct {
 	secret  string
 	restart chan struct{}
 	MCP     *mcp.Server
-	api     chi.Router // /api/v1, for the OpenAPI description
+	api     chi.Router   // /api/v1, for the OpenAPI description
+	apiRoot http.Handler // authenticated internal MCP API calls
 }
 
 func New(d Deps) (*Server, error) {

@@ -1,6 +1,6 @@
 # lmcwhm 架構與驗證
 
-本文描述 **`v0.21.0` 實際實作**，唔再將早期構想當成現狀。最後一節先係尚未完成嘅方向。
+本文描述 **`v0.21.4` 實際實作**，唔再將早期構想當成現狀。最後一節先係尚未完成嘅方向。
 
 ## 1. 核心決策
 
@@ -121,6 +121,7 @@ deploy/                 install、offline bundle、Linux E2E scripts
 - 全局 running tasks、task history 及清除歷史只限管理員。隨機 12 字元 task ID 作為 caller 查詢自己背景工作進度嘅 capability，避免列出或讀取他人任務。
 - Terminal 開啟前需要再次驗證；主機及容器 terminal 都係高權限功能。
 - MCP AI 助手只提供 read-only tools；operate／admin MCP tools 具有真實系統修改能力，全部需要審計。
+- `list_api_endpoints` / `call_api` 經主 router 覆蓋所有已註冊 JSON REST 路由，按 method、模組及 Token scope 授權。通用調用以乾淨 routing context 執行真實 handler，只略過已驗證 MCP caller 嘅瀏覽器 gate；審計只記錄 method 及 path，唔記錄 body。
 
 ## 8. 背景服務與一致性
 

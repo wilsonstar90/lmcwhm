@@ -72,6 +72,10 @@ func unauthorized(w http.ResponseWriter, status int) {
 // security entry. Only after all pass does a request reach the router.
 func (s *Server) gate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := r.Context().Value(mcpAPIUserKey{}).(auth.User); ok {
+			next.ServeHTTP(w, r)
+			return
+		}
 		cfg := s.Settings.Get()
 
 		if !cfg.IPAllowed(net.ParseIP(clientIP(r))) {
@@ -153,6 +157,14 @@ func (s *Server) hasEntry(r *http.Request, entry string) bool {
 // state-changing requests.
 func (s *Server) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if u, ok := r.Context().Value(mcpAPIUserKey{}).(auth.User); ok {
+			if !allowed(u, r) {
+				writeErr(w, http.StatusForbidden, errForbidden)
+				return
+			}
+			next.ServeHTTP(w, s.withUser(r, auth.Session{User: u}))
+			return
+		}
 		c, err := r.Cookie(sessionCookie)
 		if err != nil {
 			// Scripts use API tokens instead of a session (no CSRF: not a browser).
