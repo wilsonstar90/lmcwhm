@@ -2,7 +2,7 @@
 
 自研單機 Linux 伺服器控制面板，定位接近 aaPanel／寶塔：**Go 單一 Binary + Vue 3 / Naive UI**，以網頁管理網站、資料庫、Docker、安全、備份及系統設定。
 
-目前文件對應 **`v0.21.4`**。實際架構、驗證範圍及後續路線見 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)；開發及 AI agent 工作守則見 [AGENTS.md](AGENTS.md)。
+目前文件對應 **`v0.21.5`**。實際架構、驗證範圍及後續路線見 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)；開發及 AI agent 工作守則見 [AGENTS.md](AGENTS.md)。
 
 ## 功能總覽
 
@@ -11,14 +11,14 @@
 | 面板核心 | 管理員及子用戶、模組／網站權限、bcrypt、TOTP 2FA、Session + CSRF、安全入口、授權 IP、綁定域名、BasicAuth、面板 SSL、操作日誌 |
 | 網站 | PHP、靜態、Node.js、Python、Java、反向代理、TLS 直通、別名、通配符、到期停用、偽靜態、gRPC、自訂錯誤頁 |
 | Edge / SSL | HAProxy 80/443、IPv4/IPv6、SNI exact/wildcard routing、Nginx、HTTP-01 / DNS-01、Let's Encrypt、LiteSSL、自訂 ACME CA、自動續期 |
-| App Store | 多版本 PHP、Node.js、Python、Java、MySQL、MariaDB、PostgreSQL、MongoDB、SQL Server、Redis、Memcached、Adminer、phpMyAdmin；容器或 source compile 安裝、patch update |
+| App Store | 多版本 PHP（FPM 記憶體方案預設及自訂）、Node.js、Python、Java、MySQL、MariaDB、PostgreSQL、MongoDB、SQL Server、Redis、Memcached、WP-CLI、Adminer、phpMyAdmin；容器或 source compile 安裝、patch update |
 | 資料庫 | 建庫及用戶、權限、設定、Redis keys、phpMyAdmin、備份／匯入、回收站、資料表 repair／optimize／engine／comment／structure tools |
 | Docker | Containers、Images、Volumes、Networks、Compose、registries、即時用量、日誌、exec terminal、綁定域名 |
 | 檔案 / Terminal | `os.Root` 路徑沙盒、分塊上傳、編輯歷史、權限／擁有者、回收站、分享、全文搜尋、遠程下載、zip/tar.gz/7z/rar、CodeMirror、xterm.js PTY |
 | 安全 | nftables、Cloudflare／Linode 封鎖同步、IP/UA/URL lists、可信 IP feeds、WAF + OWASP CRS、CrowdSec、自動封鎖、流量總覽、安全掃描、Webshell 掃描、防篡改 |
 | 運維 | Dashboard、資源監控、日誌中心、Cron、systemd 進程守護、撥測、網站報表、告警、FTP/SFTP、WordPress、Composer、Varnish、工具箱 |
 | 備份 / 遷移 | 網站、資料庫、Docker volumes、任意目錄及面板備份；本地、Google Drive、OneDrive；整機快照、升級、回滾、離線安裝 |
-| 整合 | Cloudflare DNS Zone Editor、郵件伺服器、REST API + OpenAPI、API Token、完整 MCP 工具及 Kimi／Claude／Codex 連線 Prompt、Claude／OpenRouter AI 助手 |
+| 整合 | Cloudflare DNS Zone Editor、郵件伺服器、REST API + OpenAPI、可加密翻查／編輯到期／暫停嘅 API Token、完整 MCP 工具及按權限產生嘅 Kimi／Claude／Codex 連線 Prompt、Claude／OpenRouter AI 助手 |
 | UX | 五種語言、響應式介面、PWA、深色主題、可自訂選單及品牌 Logo、任務訊息盒 |
 
 呢個係**單機管理面板**：子用戶只係操作員，唔係 cPanel tenant；目前冇 Reseller、套餐或多機 Agent。
@@ -68,7 +68,7 @@ curl -fsSL https://raw.githubusercontent.com/wilsonstar90/lmcwhm/main/deploy/ins
 curl -fsSL https://raw.githubusercontent.com/wilsonstar90/lmcwhm/main/deploy/install.sh | sudo bash -s -- --port 8888 --entry /console --username admin
 ```
 
-其他選項包括 `--password`、`--version v0.21.4`、`--skip-docker`、`--binary ./lmcwhm-linux-amd64`、`--channel beta` 及 `--offline <包>`。
+其他選項包括 `--password`、`--version v0.21.5`、`--skip-docker`、`--binary ./lmcwhm-linux-amd64`、`--channel beta` 及 `--offline <包>`。
 
 安裝後請立即：
 

@@ -420,7 +420,8 @@
       "invalid": "Token 设置无效",
       "invalid_name": "请输入名称（最多 64 字）",
       "invalid_scope": "权限无效",
-      "invalid_ip": "IP 或 CIDR 无效"
+      "invalid_ip": "IP 或 CIDR 无效",
+      "not_recoverable": "旧版 Token 无法查看，请重新创建"
     },
     "alert": {
       "not_found": "找不到",
@@ -1721,10 +1722,32 @@
     "prompt_waf": "检查最近的 WAF 事件：哪些是真攻击、哪些像误报？建议每个网站要排除哪些规则。",
     "connect_title": "连接 AI 客户端（MCP）",
     "connect_ssh": "通过 SSH（无需 token，使用你的 SSH 登录；推荐）：",
-    "connect_http": "通过 HTTPS 和 API Token（面板端口需可访问；自签证书需被客户端信任）：",
-    "connect_prompt_hint": "或复制以下 Prompt，粘贴给 Kimi Code、Claude Code 或 Codex，让 AI 协助配置连接：",
+    "connect_clients": "支持 Kimi Code、Claude Code 及 Codex。创建 Token 后，在该 Token 内获取完整 Token 和对应权限的连接 Prompt。",
     "copy_prompt": "复制连接 Prompt",
-    "connect_prompt": "请帮我在当前客户端（Kimi Code、Claude Code 或 Codex）配置并连接以下 lmcwhm MCP 服务器：\n\nTransport: Streamable HTTP\nURL: {url}\nAuthentication: Authorization: Bearer $LMCWHM_TOKEN\n\n请使用当前客户端支持的 MCP 配置方式。Token 只能从环境变量 LMCWHM_TOKEN 读取；不要要求我把 Token 粘贴到对话，也不要提交到 Git。修改配置文件或执行配置命令前，请先说明将要做什么。连接后请列出工具，再调用 server_overview 验证。如果失败，请解释原因；不要关闭 TLS 证书验证。",
+    "token_prompt": "Token / Prompt",
+    "full_token": "完整 Token",
+    "copy_token": "复制 Token",
+    "not_recoverable": "这是旧版 hash-only Token，无法查看完整内容。请撤销并重新创建；现有 Token 在撤销前仍然有效。",
+    "connection_prompt": "连接 Prompt",
+    "edit_expiry": "编辑有效日期",
+    "expiry_date": "到期日期及时间",
+    "expiry_never": "留空即永久有效。",
+    "pause": "立即暂停",
+    "resume": "恢复",
+    "status": { "active": "有效", "paused": "已暂停", "expired": "已到期" },
+    "prompt_intro": "请帮我配置并连接 lmcwhm MCP，Token 名称：{name}。先在启动 AI 客户端的环境设置 LMCWHM_TOKEN（使用上方完整 Token），不要将 Token 提交到 Git。",
+    "client_prompts": {
+      "kimi": "Kimi Code：在 mcp.json 添加以下配置，然后打开新 session 并用 /mcp 检查：\n{\n  \"mcpServers\": {\n    \"lmcwhm\": {\n      \"url\": \"{url}\",\n      \"bearerTokenEnvVar\": \"LMCWHM_TOKEN\"\n    }\n  }\n}",
+      "claude": "Claude Code：执行以下命令，再用 claude mcp list 检查：\nclaude mcp add --transport http lmcwhm {url} --header \"Authorization: Bearer $LMCWHM_TOKEN\"",
+      "codex": "Codex：在 ~/.codex/config.toml 添加以下配置，再用 codex mcp list 检查：\n[mcp_servers.lmcwhm]\nurl = \"{url}\"\nbearer_token_env_var = \"LMCWHM_TOKEN\""
+    },
+    "scope_prompts": {
+      "read": "此 Token 只有 read 权限：只能查询，不可执行新增、修改、删除、重启、shell 或其他状态变更操作。",
+      "operate": "此 Token 有 operate 权限：可执行一般网站、Docker、数据库、安全及备份操作，但不可修改面板管理设置或使用 root shell。高风险操作前要先确认。",
+      "admin": "此 Token 有 admin 权限：可修改面板管理设置及使用 root shell。每次修改、删除、更新、重启或高风险操作前，都要先说明影响并取得确认。"
+    },
+    "cloudflare_prompt": "HTTPS 连接会通过 Cloudflare。请保留 Cloudflare proxy 和 TLS 验证；如遇到 403，检查 WAF、Bot Fight Mode、Cloudflare Access 和来源 IP 限制；如遇到 520／522／524，检查 origin、Cloudflare 到面板端口的连接及 proxy timeout。长时间操作请使用后台 task，再用 get_task 查询进度，不要关闭安全规则。完成后列出工具并调用 server_overview 验证。",
+    "cloudflare_hint": "HTTPS 经 Cloudflare：如果连接失败，请检查 WAF／Bot／Access、来源 IP 限制、origin 及 proxy timeout；无需关闭 TLS 或安全规则。",
     "new_token": "新建 API Token",
     "download_skill": "下载 Claude Code Skill",
     "tokens": "API Token",
@@ -1856,6 +1879,9 @@
     "unknown": "未知"
   },
   "wp": {
+    "cli_unavailable": "WP-CLI 暂时不可用（下载或连接失败）。已显示网站基本资料；请检查服务器网络后重试。",
+    "plugins_unavailable": "插件列表暂时读取失败，其他 WordPress 资料仍可查看。请检查 WP-CLI 和 PHP 错误日志。",
+    "themes_unavailable": "主题列表暂时读取失败，其他 WordPress 资料仍可查看。",
     "install_intro": "将 WordPress 安装到此网站：自动创建 MySQL/MariaDB 数据库、写入 wp-config.php，再用 WP-CLI 创建管理员。",
     "need_mysql": "请先在软件商店安装 MySQL 或 MariaDB。",
     "site_title": "网站标题",
@@ -1918,6 +1944,7 @@
     "custom": "自定义 ini",
     "custom_hint": "追加在上面设置之后的额外 php.ini 行，例如扩展选项。应用前会用 php-fpm -t 测试整个配置。",
     "fpm": "FPM 性能",
+    "memory_preset": "内存方案",
     "suggest": "按 {mem} MB 内存推荐",
     "slowlog": "慢日志",
     "status": "负载状态",

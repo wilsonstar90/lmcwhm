@@ -4,7 +4,7 @@ lmcwhm 內建 MCP server，支援 **Streamable HTTP** 及 **SSH stdio**。常用
 
 ## 1. 準備連線
 
-在面板「設定 → API tokens」建立 Token：
+在面板「AI 助手 → MCP」建立 Token：
 
 | Scope | 權限 |
 |---|---|
@@ -14,7 +14,9 @@ lmcwhm 內建 MCP server，支援 **Streamable HTTP** 及 **SSH stdio**。常用
 
 可按需要設定來源 IP 及到期日。HTTP URL 是 `https://伺服器:面板port/mcp`，**不要**加安全入口 `/console`。建議使用有效 TLS 憑證；若客戶端不接受自簽憑證，請改用 SSH stdio，不要關閉憑證驗證。
 
-介面「AI 助手 → MCP」亦提供可複製的連線 Prompt，會自動帶入目前 MCP URL；貼畀 Kimi Code、Claude Code 或 Codex 後，AI 會按目前客戶端協助配置及驗證連線。
+介面「AI 助手 → MCP」的每個 Token 都有「Token / Prompt」管理視窗：管理員可翻查完整 Token，並複製按 Token scope 及 Kimi／Claude／Codex 分別產生的連線 Prompt。新 Token 以面板 master key 加密保存；舊 hash-only Token 無法翻查，需要撤銷後重建。Token 可編輯到期日、即時暫停／恢復或撤銷。
+
+Prompt 會註明 HTTPS 經 Cloudflare：遇到 403 應檢查 WAF、Bot Fight Mode、Cloudflare Access 及來源 IP 限制；遇到 520／522／524 應檢查 origin、面板端口及 proxy timeout。長時間操作應使用背景 task，不用關閉 TLS 或安全規則。
 
 把 Token 放進啟動客戶端前的環境，不要提交到 Git：
 

@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/wilsonstar90/lmcwhm/internal/appstore"
 	"github.com/wilsonstar90/lmcwhm/internal/database"
 	"github.com/wilsonstar90/lmcwhm/internal/dockerx"
 	"github.com/wilsonstar90/lmcwhm/internal/site"
@@ -49,11 +50,16 @@ type Service struct {
 	Sites *site.Service
 	DBs   *database.Service
 	Env   *webenv.Env
+	Apps  *appstore.Service
 	tasks *tasks.Manager
 }
 
-func New(sites *site.Service, dbs *database.Service, env *webenv.Env, tm *tasks.Manager) *Service {
-	return &Service{Sites: sites, DBs: dbs, Env: env, tasks: tm}
+func New(sites *site.Service, dbs *database.Service, env *webenv.Env, tm *tasks.Manager, apps ...*appstore.Service) *Service {
+	sv := &Service{Sites: sites, DBs: dbs, Env: env, tasks: tm}
+	if len(apps) > 0 {
+		sv.Apps = apps[0]
+	}
+	return sv
 }
 
 // WPSite is a website that has WordPress in its root.
@@ -112,9 +118,23 @@ func (sv *Service) cliPath() string {
 	return filepath.Join(sv.Env.WWWRoot, toolsDirName, wpCLIFileName)
 }
 
-// ensureCLI downloads WP-CLI (checked against its published SHA-512) into a
-// directory the PHP containers see but no website serves.
+func (sv *Service) wpCLIContainer(ctx context.Context) string {
+	if sv.Apps == nil {
+		return ""
+	}
+	i, err := sv.Apps.WPCLI(ctx)
+	if err == nil && dockerx.State(ctx, i.Container) == "running" {
+		return i.Container
+	}
+	return ""
+}
+
+// ensureCLI uses the App Store tool when installed, or downloads WP-CLI
+// (checked against its published SHA-512) into a directory no website serves.
 func (sv *Service) ensureCLI(ctx context.Context, log tasks.Logf) error {
+	if sv.wpCLIContainer(ctx) != "" {
+		return nil
+	}
 	p := sv.cliPath()
 	if fi, err := os.Stat(p); err == nil && fi.Size() > 0 && time.Since(fi.ModTime()) < 30*24*time.Hour {
 		return nil
@@ -153,10 +173,16 @@ func (sv *Service) ensureCLI(ctx context.Context, log tasks.Logf) error {
 	return os.Rename(p+".tmp", p)
 }
 
-// wp runs WP-CLI as www-data in the site's PHP container.
+// wp runs WP-CLI as www-data, using the installed tool app when available.
 func (sv *Service) wp(ctx context.Context, s site.Site, args ...string) (string, error) {
-	cmd := append([]string{"exec", "-u", "33", "-w", s.Root, "-e", "HOME=/tmp", "-e", "WP_CLI_CACHE_DIR=/tmp/wp-cli-cache",
-		webenv.PHPName(s.PHPVersion), "php", "-d", "memory_limit=512M", sv.cliPath(), "--path=" + s.Root, "--no-color"}, args...)
+	container, command := sv.wpCLIContainer(ctx), []string{"wp"}
+	if container == "" {
+		container = webenv.PHPName(s.PHPVersion)
+		command = []string{"php", "-d", "memory_limit=512M", sv.cliPath()}
+	}
+	cmd := append([]string{"exec", "-u", "33", "-w", s.Root, "-e", "HOME=/tmp", "-e", "WP_CLI_CACHE_DIR=/tmp/wp-cli-cache", container}, command...)
+	cmd = append(cmd, "--path="+s.Root, "--no-color")
+	cmd = append(cmd, args...)
 	return dockerx.Run(ctx, cmd...)
 }
 
@@ -384,6 +410,7 @@ type Info struct {
 	FileEdit    bool     `json:"file_edit"` // dashboard plugin / theme editor allowed
 	Debug       bool     `json:"debug"`
 	Admins      []string `json:"admins"`
+	Warnings    []string `json:"warnings"`
 }
 
 func (sv *Service) wpSite(ctx context.Context, id int64) (site.Site, error) {
@@ -402,11 +429,12 @@ func (sv *Service) Info(ctx context.Context, id int64) (Info, error) {
 	if err != nil {
 		return Info{}, err
 	}
-	if err := sv.ensureCLI(ctx, func(string, ...any) {}); err != nil {
-		return Info{}, err
-	}
 	in := Info{WPSite: WPSite{SiteID: s.ID, Domain: s.Domain, Root: s.Root, PHP: s.PHPVersion, Version: version(s.Root)},
-		CoreUpdates: []string{}, Plugins: []Plugin{}, Themes: []Plugin{}, Admins: []string{}}
+		CoreUpdates: []string{}, Plugins: []Plugin{}, Themes: []Plugin{}, Admins: []string{}, Warnings: []string{}}
+	if err := sv.ensureCLI(ctx, func(string, ...any) {}); err != nil {
+		in.Warnings = append(in.Warnings, "cli_unavailable")
+		return in, nil
+	}
 	in.SiteURL, _ = sv.wp(ctx, s, "option", "get", "siteurl")
 	var core []struct {
 		Version string `json:"version"`
@@ -416,9 +444,11 @@ func (sv *Service) Info(ctx context.Context, id int64) (Info, error) {
 		in.CoreUpdates = append(in.CoreUpdates, c.Version)
 	}
 	if err := sv.wpJSON(ctx, s, &in.Plugins, "plugin", "list", "--fields=name,title,status,version,update,update_version"); err != nil {
-		return in, err
+		in.Warnings = append(in.Warnings, "plugins_unavailable")
 	}
-	sv.wpJSON(ctx, s, &in.Themes, "theme", "list", "--fields=name,title,status,version,update,update_version")
+	if err := sv.wpJSON(ctx, s, &in.Themes, "theme", "list", "--fields=name,title,status,version,update,update_version"); err != nil {
+		in.Warnings = append(in.Warnings, "themes_unavailable")
+	}
 	fe, _ := sv.wp(ctx, s, "config", "get", "DISALLOW_FILE_EDIT")
 	in.FileEdit = strings.TrimSpace(fe) != "1"
 	dbg, _ := sv.wp(ctx, s, "config", "get", "WP_DEBUG")

@@ -146,12 +146,8 @@ async function logout() {
   font-size: 11px;
   opacity: 0.65;
 }
-.v6 {
-  max-width: 220px;
-}
 :deep(.v6 .n-button__content) {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
   white-space: nowrap;
 }
 @media (max-width: 1200px) {

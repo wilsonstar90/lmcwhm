@@ -420,7 +420,8 @@
       "invalid": "Invalid token settings",
       "invalid_name": "Enter a name (up to 64 characters)",
       "invalid_scope": "Invalid scope",
-      "invalid_ip": "Invalid IP or CIDR"
+      "invalid_ip": "Invalid IP or CIDR",
+      "not_recoverable": "This legacy token cannot be recovered; create a new one"
     },
     "alert": {
       "not_found": "Not found",
@@ -1721,10 +1722,32 @@
     "prompt_waf": "Review the recent WAF events: which are real attacks and which look like false positives? Propose rule exclusions per site.",
     "connect_title": "Connect an AI client (MCP)",
     "connect_ssh": "Over SSH (no token, uses your SSH login; recommended):",
-    "connect_http": "Over HTTPS with an API token (the panel port must be reachable; a self-signed certificate must be trusted by the client):",
-    "connect_prompt_hint": "Or copy this prompt into Kimi Code, Claude Code or Codex and ask the AI to configure the connection:",
+    "connect_clients": "Kimi Code, Claude Code and Codex are supported. Open a token to retrieve it and get a connection prompt tailored to its scope.",
     "copy_prompt": "Copy connection prompt",
-    "connect_prompt": "Please configure and connect me to this lmcwhm MCP server in the current client (Kimi Code, Claude Code, or Codex):\n\nTransport: Streamable HTTP\nURL: {url}\nAuthentication: Authorization: Bearer $LMCWHM_TOKEN\n\nUse the MCP configuration method supported by the current client. Read the token only from the LMCWHM_TOKEN environment variable; never ask me to paste it into chat or commit it to Git. Tell me before editing config files or running setup commands. After connecting, list the tools and call server_overview to verify. If it fails, explain the cause; do not disable TLS certificate verification.",
+    "token_prompt": "Token / Prompt",
+    "full_token": "Full token",
+    "copy_token": "Copy token",
+    "not_recoverable": "This is a legacy hash-only token, so its full value cannot be recovered. Revoke and recreate it; it remains valid until revoked.",
+    "connection_prompt": "Connection prompt",
+    "edit_expiry": "Edit expiry",
+    "expiry_date": "Expiry date and time",
+    "expiry_never": "Leave empty for no expiry.",
+    "pause": "Pause now",
+    "resume": "Resume",
+    "status": { "active": "Active", "paused": "Paused", "expired": "Expired" },
+    "prompt_intro": "Configure and connect lmcwhm MCP for the token named {name}. Set LMCWHM_TOKEN in the environment used to start the AI client (use the full token above), and never commit it to Git.",
+    "client_prompts": {
+      "kimi": "Kimi Code: add this to mcp.json, then start a new session and check /mcp:\n{\n  \"mcpServers\": {\n    \"lmcwhm\": {\n      \"url\": \"{url}\",\n      \"bearerTokenEnvVar\": \"LMCWHM_TOKEN\"\n    }\n  }\n}",
+      "claude": "Claude Code: run this command, then check with claude mcp list:\nclaude mcp add --transport http lmcwhm {url} --header \"Authorization: Bearer $LMCWHM_TOKEN\"",
+      "codex": "Codex: add this to ~/.codex/config.toml, then check with codex mcp list:\n[mcp_servers.lmcwhm]\nurl = \"{url}\"\nbearer_token_env_var = \"LMCWHM_TOKEN\""
+    },
+    "scope_prompts": {
+      "read": "This token has read scope only: query information but never create, modify, delete, restart, run shell commands or make any other state change.",
+      "operate": "This token has operate scope: normal website, Docker, database, security and backup operations are allowed, but panel administration and root shell are not. Confirm high-impact actions first.",
+      "admin": "This token has admin scope: it can change panel administration and run root shell commands. Before every modification, deletion, update, restart or high-impact action, explain the impact and obtain confirmation."
+    },
+    "cloudflare_prompt": "HTTPS access goes through Cloudflare. Keep the Cloudflare proxy and TLS verification enabled. For 403, check WAF, Bot Fight Mode, Cloudflare Access and source IP restrictions. For 520/522/524, check the origin, Cloudflare's connection to the panel port and proxy timeouts. Use background tasks for long operations and get_task for progress; do not disable security rules. Finally, list tools and call server_overview to verify.",
+    "cloudflare_hint": "HTTPS uses Cloudflare: if connection fails, check WAF/Bot/Access, source IP restrictions, origin and proxy timeouts. Do not disable TLS or security rules.",
     "new_token": "New API token",
     "download_skill": "Download Claude Code skill",
     "tokens": "API tokens",
@@ -1856,6 +1879,9 @@
     "unknown": "Unknown"
   },
   "wp": {
+    "cli_unavailable": "WP-CLI is temporarily unavailable (download or connection failed). Basic site information is shown; check the server network and retry.",
+    "plugins_unavailable": "The plugin list could not be read. Other WordPress information is still available; check WP-CLI and the PHP error log.",
+    "themes_unavailable": "The theme list could not be read. Other WordPress information is still available.",
     "install_intro": "Install WordPress into this site: a MySQL / MariaDB database is created, wp-config.php is written and the admin user is set up with WP-CLI.",
     "need_mysql": "Install MySQL or MariaDB from the App Store first.",
     "site_title": "Site title",
@@ -1918,6 +1944,7 @@
     "custom": "Custom ini",
     "custom_hint": "Extra php.ini lines appended after the settings above, e.g. extension options. The whole configuration is tested with php-fpm -t before it is applied.",
     "fpm": "FPM pool",
+    "memory_preset": "Memory preset",
     "suggest": "Suggest for {mem} MB RAM",
     "slowlog": "Slow log",
     "status": "Status",

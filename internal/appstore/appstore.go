@@ -188,6 +188,11 @@ func (sv *Service) find(ctx context.Context, app, version string) (Installed, er
 	return all[0], nil
 }
 
+// WPCLI returns the installed WP-CLI tool used by the WordPress toolkit.
+func (sv *Service) WPCLI(ctx context.Context) (Installed, error) {
+	return sv.find(ctx, "wp-cli", "2")
+}
+
 // RuntimeImage returns the image of an installed runtime version.
 func (sv *Service) RuntimeImage(ctx context.Context, app, version string) (string, error) {
 	i, err := sv.find(ctx, app, version)
@@ -303,9 +308,11 @@ func (sv *Service) Install(ctx context.Context, key, version string, avoid map[i
 			}
 		}
 		if a.Kind != KindRuntime {
-			inst.Port = sv.pickPort(ctx, a.Port, avoid)
-			if inst.Port == 0 {
-				return fmt.Errorf("no free port near %d", a.Port)
+			if a.Port > 0 {
+				inst.Port = sv.pickPort(ctx, a.Port, avoid)
+				if inst.Port == 0 {
+					return fmt.Errorf("no free port near %d", a.Port)
+				}
 			}
 			inst.secret = newPassword()
 			inst.Container = ContainerName(key, version)
@@ -322,7 +329,11 @@ func (sv *Service) Install(ctx context.Context, key, version string, avoid map[i
 			if err := sv.prepare(ctx, inst, dir); err != nil {
 				return err
 			}
-			log("starting %s on 127.0.0.1:%d", inst.Container, inst.Port)
+			if inst.Port > 0 {
+				log("starting %s on 127.0.0.1:%d", inst.Container, inst.Port)
+			} else {
+				log("starting %s", inst.Container)
+			}
 			if err := sv.start(ctx, inst, log); err != nil {
 				dockerx.Remove(ctx, inst.Container)
 				os.RemoveAll(dir)
@@ -586,6 +597,9 @@ func (sv *Service) args(i Installed) []string {
 		a = append(pub(6379), "-v", data+":/data", "-v", conf+":/usr/local/etc/redis:ro", i.RunImage(), "redis-server", "/usr/local/etc/redis/redis.conf")
 	case "memcached":
 		a = append(pub(11211), i.RunImage(), "memcached", "-m", "64")
+	case "wp-cli":
+		www := webenv.New(sv.Home).WWWRoot
+		a = []string{"--network", "host", "-v", www + ":" + www, "--entrypoint", "sleep", i.RunImage(), "infinity"}
 	case "adminer":
 		// Host network so it reaches every database on 127.0.0.1; the panel proxies /adminer/ to it.
 		a = []string{"--network", "host", i.RunImage(), "php", "-S", fmt.Sprintf("127.0.0.1:%d", i.Port), "-t", "/var/www/html"}
@@ -644,6 +658,9 @@ func (sv *Service) ping(ctx context.Context, i Installed) error {
 		if err == nil && out != "PONG" {
 			err = errors.New(out)
 		}
+		return err
+	case "wp-cli":
+		_, err := dockerx.Run(ctx, "exec", i.Container, "wp", "--version")
 		return err
 	case "adminer", "phpmyadmin":
 		c, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", i.Port), time.Second)

@@ -135,6 +135,7 @@ async function openSettings(v: Ver) {
   try {
     const r = await get<{ config: Conf; modules?: string[]; status?: Record<string, number | string>; status_error?: string }>(`/php/${v.version}`)
     cur.value = { v, conf: r.config, modules: r.modules ?? [], status: r.status, statusError: r.status_error }
+    fpmPreset.value = 'custom'
     tab.value = 'ext'
   } catch (e) {
     fail(e)
@@ -170,6 +171,15 @@ async function save() {
 }
 function applySuggest() {
   if (meta.value && cur.value) cur.value.conf.fpm = { ...cur.value.conf.fpm, ...meta.value.suggest }
+}
+const fpmPreset = ref('custom')
+const fpmPresetOptions = [1, 2, 4, 8, 16, 32, 48, 64].map((gb) => ({ label: `${gb}GB`, value: String(gb) }))
+fpmPresetOptions.push({ label: 'Custom', value: 'custom' })
+function applyFPMPreset(value: string) {
+  fpmPreset.value = value
+  if (value === 'custom' || !cur.value) return
+  const n = Math.min(Math.max(Math.floor(Number(value) * 1024 / 2 / 40), 5), 300)
+  cur.value.conf.fpm = { ...cur.value.conf.fpm, pm: 'dynamic', max_children: n, start_servers: Math.max(Math.floor(n / 10), 2), min_spare: Math.max(Math.floor(n / 10), 1), max_spare: Math.max(Math.floor(n / 4), 4), max_requests: 500 }
 }
 const pmOptions = ['dynamic', 'static', 'ondemand'].map((v) => ({ label: v, value: v }))
 const statusKeys = ['pool', 'process manager', 'accepted conn', 'listen queue', 'max listen queue', 'idle processes', 'active processes', 'total processes', 'max active processes', 'max children reached', 'slow requests']
@@ -217,6 +227,7 @@ const statusKeys = ['pool', 'process manager', 'accepted conn', 'listen queue', 
         </n-tab-pane>
         <n-tab-pane name="fpm" :tab="t('php.fpm')">
           <n-form label-placement="left" label-width="200" size="small">
+            <n-form-item :label="t('php.memory_preset')"><n-select :value="fpmPreset" :options="fpmPresetOptions" style="width: 220px" @update:value="applyFPMPreset" /></n-form-item>
             <n-form-item label="pm"><n-select v-model:value="cur.conf.fpm.pm" :options="pmOptions" style="width: 160px" /></n-form-item>
             <n-form-item label="pm.max_children"><n-input-number v-model:value="cur.conf.fpm.max_children" :min="1" :max="2000" /></n-form-item>
             <template v-if="cur.conf.fpm.pm === 'dynamic'">

@@ -1,6 +1,6 @@
 # lmcwhm 架構與驗證
 
-本文描述 **`v0.21.4` 實際實作**，唔再將早期構想當成現狀。最後一節先係尚未完成嘅方向。
+本文描述 **`v0.21.5` 實際實作**，唔再將早期構想當成現狀。最後一節先係尚未完成嘅方向。
 
 ## 1. 核心決策
 
@@ -106,7 +106,8 @@ deploy/                 install、offline bundle、Linux E2E scripts
 
 ### Runtime 與 App Store
 
-- PHP 每版本獨立容器、設定、extensions、FPM pool、狀態及 slow log。
+- PHP 每版本獨立容器、設定、extensions、FPM pool（1–64GB 記憶體方案預設及自訂）、狀態及 slow log。
+- WP-CLI 可作 App Store 工具安裝，掛載網站目錄並以常駐容器提供命令；WordPress Toolkit 優先使用，未安裝時先用內置 phar。WP-CLI 下載或個別插件／主題列表失敗只顯示警告，唔再令整個網站設定頁 500。
 - Node、Python、Java 項目以獨立容器及 restart policy 運行；一般自訂長駐命令則可經 systemd process guardian。
 - 資料庫預設只發佈到 loopback；遠端存取要同步防火牆來源限制。
 - App Store catalog 內置於 binary，支援容器 image 或 source compile；source recipes 有獨立 GitHub workflow。
@@ -116,7 +117,7 @@ deploy/                 install、offline bundle、Linux E2E scripts
 
 - Browser：HttpOnly + SameSite session、非 GET CSRF、bcrypt、TOTP、按 IP 登入鎖定。
 - Gates：授權 IP → 綁定域名 → BasicAuth → 安全入口；可自訂未認證回應。
-- API Token：只保存 SHA-256 hash，scope 為 read／operate／admin，可設 expiry 及 IP allowlist。
+- API Token：驗證使用 SHA-256 hash；新 Token 另用面板 master key 以 AES-256-GCM 加密保存，管理員可按需翻查。scope 為 read／operate／admin，可設 expiry、IP allowlist、編輯到期日或即時暫停／恢復。舊 hash-only Token 不可翻查，只可撤銷後重建。
 - 子用戶：按模組及可選網站 IDs 授權；未映射嘅新 API route 預設只限管理員。
 - 全局 running tasks、task history 及清除歷史只限管理員。隨機 12 字元 task ID 作為 caller 查詢自己背景工作進度嘅 capability，避免列出或讀取他人任務。
 - Terminal 開啟前需要再次驗證；主機及容器 terminal 都係高權限功能。

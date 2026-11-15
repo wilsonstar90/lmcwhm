@@ -364,8 +364,8 @@ func serveCmd() *cobra.Command {
 				Apps: apps, DBs: dbs, Docker: dockermgr.New(tm, a.paths.Home),
 				Files: filesFS(a.paths.Home), Term: terminal.New(),
 				Store: a.st, Monitor: mon, Cron: jobs, GeoIP: geo, Firewall: fw, Protect: prot, ErrPages: errp, WAF: waf, CrowdSec: crowdsec, Backup: bk,
-				Tokens: apitoken.New(a.st), AI: ai.New(a.st, box, nil),
-				Alerts: alerts, Probes: probes, Stats: stats, Events: events, Procs: procs, WP: wordpress.New(sites, dbs, env, tm), FTP: ftpSvc,
+				Tokens: apitoken.New(a.st, box), AI: ai.New(a.st, box, nil),
+				Alerts: alerts, Probes: probes, Stats: stats, Events: events, Procs: procs, WP: wordpress.New(sites, dbs, env, tm, apps), FTP: ftpSvc,
 				Toolbox: tb, SecScan: secscan.New(a.st), Malware: malware.New(a.st, env.WWWRoot, a.paths.Home), Tamper: tp,
 				Shares: fileshare.New(a.st), Mail: mailSvc,
 			})

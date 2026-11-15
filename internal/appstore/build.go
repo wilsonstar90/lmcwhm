@@ -63,6 +63,7 @@ var SourceUnsupported = map[string]string{
 	"sqlserver":  "closed",   // no public source
 	"phpmyadmin": "script",   // PHP scripts
 	"adminer":    "script",
+	"wp-cli":     "script",
 }
 
 // aptDeps starts the build dependencies of the Debian / Ubuntu based images.

@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wilsonstar90/lmcwhm/internal/apitoken"
 	"github.com/wilsonstar90/lmcwhm/internal/settings"
@@ -206,4 +209,57 @@ func TestMCPFullAPIAccess(t *testing.T) {
 		}
 	}
 	t.Fatal("call_api not listed")
+}
+
+func TestTokenRecoveryPauseAndExpiry(t *testing.T) {
+	e := newEnv(t, nil)
+	ctx := context.Background()
+	token, secret, err := e.srv.Tokens.Create(ctx, apitoken.Input{Name: "manage-me", Scope: "read"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !token.Recoverable || token.Disabled {
+		t.Fatalf("new token flags: %+v", token)
+	}
+	if got, err := e.srv.Tokens.Secret(ctx, token.ID); err != nil || got != secret {
+		t.Fatalf("recover token: %v", err)
+	}
+
+	_, body := e.do("POST", "/api/v1/auth/login", map[string]string{"username": "admin", "password": "password123"}, nil)
+	csrf, _ := body["csrf"].(string)
+	r, body := e.do("GET", "/api/v1/tokens/"+strconv.FormatInt(token.ID, 10)+"/secret", nil, nil)
+	if r.StatusCode != http.StatusOK || body["secret"] != secret {
+		t.Fatalf("secret endpoint: %d %v", r.StatusCode, body)
+	}
+	disabled := true
+	r, body = e.do("PUT", "/api/v1/tokens/"+strconv.FormatInt(token.ID, 10), map[string]any{"disabled": disabled}, map[string]string{"X-CSRF-Token": csrf})
+	if r.StatusCode != http.StatusOK || body["token"].(map[string]any)["disabled"] != true {
+		t.Fatalf("pause endpoint: %d %v", r.StatusCode, body)
+	}
+	if _, err := e.srv.Tokens.Verify(ctx, secret, "127.0.0.1"); !errors.Is(err, apitoken.ErrInvalid) {
+		t.Fatalf("paused token still works: %v", err)
+	}
+	disabled = false
+	if _, err := e.srv.Tokens.Update(ctx, token.ID, apitoken.UpdateInput{Disabled: &disabled}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.srv.Tokens.Verify(ctx, secret, "127.0.0.1"); err != nil {
+		t.Fatalf("resumed token rejected: %v", err)
+	}
+
+	past := time.Now().Add(-time.Hour).Unix()
+	r, _ = e.do("PUT", "/api/v1/tokens/"+strconv.FormatInt(token.ID, 10), map[string]any{"expires_at": past}, map[string]string{"X-CSRF-Token": csrf})
+	if r.StatusCode != http.StatusOK {
+		t.Fatalf("expiry endpoint: %d", r.StatusCode)
+	}
+	if _, err := e.srv.Tokens.Verify(ctx, secret, "127.0.0.1"); !errors.Is(err, apitoken.ErrInvalid) {
+		t.Fatalf("expired token still works: %v", err)
+	}
+
+	if _, err := e.srv.Store.DB.ExecContext(ctx, `UPDATE api_tokens SET token_secret = '' WHERE id = ?`, token.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.srv.Tokens.Secret(ctx, token.ID); !errors.Is(err, apitoken.ErrNotRecoverable) {
+		t.Fatalf("legacy token recovery: %v", err)
+	}
 }

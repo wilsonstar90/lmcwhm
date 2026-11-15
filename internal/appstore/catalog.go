@@ -74,6 +74,9 @@ var Catalog = []App{
 	{Key: "phpmyadmin", Name: "phpMyAdmin", Kind: KindTool, Port: 8091, Versions: []Version{
 		{"5.2", "phpmyadmin:5.2", false},
 	}},
+	{Key: "wp-cli", Name: "WP-CLI", Kind: KindTool, Versions: []Version{
+		{"2", "wordpress:cli", false},
+	}},
 	{Key: "adminer", Name: "Adminer", Kind: KindTool, Port: 8090, Versions: []Version{
 		{"4", "adminer:4", false},
 	}},

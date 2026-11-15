@@ -24,6 +24,7 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/audit"
 	"github.com/wilsonstar90/lmcwhm/internal/auth"
 	"github.com/wilsonstar90/lmcwhm/internal/config"
+	"github.com/wilsonstar90/lmcwhm/internal/secrets"
 	"github.com/wilsonstar90/lmcwhm/internal/settings"
 	"github.com/wilsonstar90/lmcwhm/internal/store"
 	"github.com/wilsonstar90/lmcwhm/internal/tasks"
@@ -58,12 +59,16 @@ func newEnv(t *testing.T, mut func(*settings.Settings)) *env {
 	if err := a.CreateUser(ctx, "admin", "password123", true); err != nil {
 		t.Fatal(err)
 	}
+	box, err := secrets.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	srv, err := New(Deps{
 		Paths: config.Paths{CertDir: filepath.Join(dir, "ssl")}, Settings: sm, Auth: a, Audit: audit.New(st),
 		WebFS: fstest.MapFS{"index.html": {Data: []byte("<html>spa</html>")}},
 		Log:   slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Store: st, Tasks: tasks.NewManager(),
-		Tokens: apitoken.New(st),
+		Tokens: apitoken.New(st, box),
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -689,6 +689,8 @@ func (s *Server) m7Routes(r chi.Router) {
 	if s.Tokens != nil {
 		r.Get("/tokens", s.handleTokens)
 		r.Post("/tokens", s.handleTokenCreate)
+		r.Get("/tokens/{id}/secret", s.handleTokenSecret)
+		r.Put("/tokens/{id}", s.handleTokenUpdate)
 		r.Post("/tokens/{id}/delete", s.handleTokenDelete)
 	}
 	if s.AI != nil {
@@ -741,6 +743,31 @@ func (s *Server) handleTokenCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	s.auditCat(r, "mcp", "token.create", t.Name+" ("+t.Scope+")")
 	writeJSON(w, http.StatusOK, map[string]any{"token": t, "secret": secret})
+}
+
+func (s *Server) handleTokenSecret(w http.ResponseWriter, r *http.Request) {
+	secret, err := s.Tokens.Secret(r.Context(), idParam(r))
+	if err != nil {
+		writeCodedErr(w, err, apitoken.ErrNotFound)
+		return
+	}
+	s.auditCat(r, "mcp", "token.reveal", chi.URLParam(r, "id"))
+	writeJSON(w, http.StatusOK, map[string]string{"secret": secret})
+}
+
+func (s *Server) handleTokenUpdate(w http.ResponseWriter, r *http.Request) {
+	var in apitoken.UpdateInput
+	if err := decode(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	t, err := s.Tokens.Update(r.Context(), idParam(r), in)
+	if err != nil {
+		writeCodedErr(w, err, apitoken.ErrNotFound)
+		return
+	}
+	s.auditCat(r, "mcp", "token.update", chi.URLParam(r, "id"))
+	writeJSON(w, http.StatusOK, map[string]any{"token": t})
 }
 
 func (s *Server) handleTokenDelete(w http.ResponseWriter, r *http.Request) {

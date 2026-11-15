@@ -9,7 +9,7 @@ import { get, post, ApiError } from '../api/client'
 import type { InstalledApp, Site } from '../api/types'
 
 interface Plugin { name: string; title: string; status: string; version: string; update: string; update_version: string }
-interface Info { version: string; site_url: string; core_updates: string[]; plugins: Plugin[]; themes: Plugin[]; file_edit: boolean; debug: boolean; admins: string[] }
+interface Info { version: string; site_url: string; core_updates: string[]; plugins: Plugin[]; themes: Plugin[]; file_edit: boolean; debug: boolean; admins: string[]; warnings: string[] }
 
 const props = defineProps<{ site: Site }>()
 const emit = defineEmits<{ task: [id: string, title: string] }>()
@@ -107,6 +107,7 @@ const updates = computed(() => (info.value ? info.value.plugins.filter((p) => p.
       </n-form>
     </template>
     <template v-else-if="info">
+      <n-alert v-for="warning in info.warnings" :key="warning" type="warning" :show-icon="false" style="margin-bottom: 12px">{{ t(`wp.${warning}`) }}</n-alert>
       <n-descriptions :column="2" label-placement="left" bordered size="small">
         <n-descriptions-item :label="t('wp.version')">
           {{ info.version }} <n-tag v-if="info.core_updates.length" size="small" type="warning">→ {{ info.core_updates[0] }}</n-tag>

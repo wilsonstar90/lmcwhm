@@ -420,7 +420,8 @@
       "invalid": "トークン設定が無効です",
       "invalid_name": "名前を入力してください（64 文字まで）",
       "invalid_scope": "権限が無効です",
-      "invalid_ip": "IP / CIDR が無効です"
+      "invalid_ip": "IP / CIDR が無効です",
+      "not_recoverable": "旧版 Token は復元できません。再作成してください"
     },
     "alert": {
       "not_found": "見つかりません",
@@ -1721,10 +1722,32 @@
     "prompt_waf": "最近の WAF イベントを確認：本当の攻撃と誤検知を見分け、サイトごとの除外ルールを提案してください。",
     "connect_title": "AI クライアントを接続（MCP）",
     "connect_ssh": "SSH 経由（トークン不要・SSH ログインを使用。推奨）：",
-    "connect_http": "HTTPS と API トークン（パネルのポートに到達でき、自己署名証明書をクライアントが信頼する必要あり）：",
-    "connect_prompt_hint": "または次の Prompt を Kimi Code、Claude Code、Codex に貼り付け、AI に接続設定を依頼できます：",
+    "connect_clients": "Kimi Code、Claude Code、Codex に対応。各 Token を開くと、完全な Token と権限に応じた接続 Prompt を取得できます。",
     "copy_prompt": "接続 Prompt をコピー",
-    "connect_prompt": "現在のクライアント（Kimi Code、Claude Code、Codex）で、次の lmcwhm MCP サーバーを設定して接続してください：\n\nTransport: Streamable HTTP\nURL: {url}\nAuthentication: Authorization: Bearer $LMCWHM_TOKEN\n\n現在のクライアントがサポートする MCP 設定方法を使用してください。トークンは環境変数 LMCWHM_TOKEN からのみ読み取り、チャットに貼り付けるよう求めたり Git にコミットしたりしないでください。設定ファイルの編集や設定コマンドの実行前に内容を説明してください。接続後はツールを一覧表示し、server_overview を呼び出して確認してください。失敗した場合は原因を説明し、TLS 証明書検証を無効にしないでください。",
+    "token_prompt": "Token / Prompt",
+    "full_token": "完全な Token",
+    "copy_token": "Token をコピー",
+    "not_recoverable": "これは旧版の hash-only Token のため、完全な値は復元できません。失効させて再作成してください。失効までは有効です。",
+    "connection_prompt": "接続 Prompt",
+    "edit_expiry": "有効期限を編集",
+    "expiry_date": "有効期限の日時",
+    "expiry_never": "空欄の場合は無期限です。",
+    "pause": "今すぐ停止",
+    "resume": "再開",
+    "status": { "active": "有効", "paused": "停止中", "expired": "期限切れ" },
+    "prompt_intro": "lmcwhm MCP を Token「{name}」で設定して接続してください。AI クライアントを起動する環境に LMCWHM_TOKEN（上記の完全な Token）を設定し、Git にコミットしないでください。",
+    "client_prompts": {
+      "kimi": "Kimi Code：mcp.json に次を追加し、新しい session で /mcp を確認：\n{\n  \"mcpServers\": {\n    \"lmcwhm\": {\n      \"url\": \"{url}\",\n      \"bearerTokenEnvVar\": \"LMCWHM_TOKEN\"\n    }\n  }\n}",
+      "claude": "Claude Code：次のコマンドを実行し、claude mcp list で確認：\nclaude mcp add --transport http lmcwhm {url} --header \"Authorization: Bearer $LMCWHM_TOKEN\"",
+      "codex": "Codex：~/.codex/config.toml に次を追加し、codex mcp list で確認：\n[mcp_servers.lmcwhm]\nurl = \"{url}\"\nbearer_token_env_var = \"LMCWHM_TOKEN\""
+    },
+    "scope_prompts": {
+      "read": "この Token は read 権限のみです。参照以外の作成、変更、削除、再起動、shell、その他の状態変更は行わないでください。",
+      "operate": "この Token は operate 権限です。通常のサイト、Docker、データベース、セキュリティ、バックアップ操作は可能ですが、パネル管理と root shell は不可です。影響の大きい操作前に確認してください。",
+      "admin": "この Token は admin 権限です。パネル管理と root shell が可能です。変更、削除、更新、再起動、影響の大きい操作の前に、必ず影響を説明して確認を得てください。"
+    },
+    "cloudflare_prompt": "HTTPS アクセスは Cloudflare 経由です。Cloudflare proxy と TLS 検証を有効に保ってください。403 の場合は WAF、Bot Fight Mode、Cloudflare Access、送信元 IP 制限を確認し、520／522／524 の場合は origin、パネルポートへの接続、proxy timeout を確認してください。長時間処理はバックグラウンド task と get_task を使用し、セキュリティ規則を無効にしないでください。最後にツールを一覧表示し、server_overview で検証してください。",
+    "cloudflare_hint": "HTTPS は Cloudflare 経由：接続できない場合は WAF／Bot／Access、送信元 IP 制限、origin、proxy timeout を確認。TLS やセキュリティ規則は無効にしないでください。",
     "new_token": "API トークン作成",
     "download_skill": "Claude Code スキルをダウンロード",
     "tokens": "API トークン",
@@ -1856,6 +1879,9 @@
     "unknown": "不明"
   },
   "wp": {
+    "cli_unavailable": "WP-CLI を一時的に利用できません（ダウンロードまたは接続エラー）。基本情報を表示しています。サーバーのネットワークを確認して再試行してください。",
+    "plugins_unavailable": "プラグイン一覧を読み取れませんでした。他の WordPress 情報は表示できます。WP-CLI と PHP エラーログを確認してください。",
+    "themes_unavailable": "テーマ一覧を読み取れませんでした。他の WordPress 情報は表示できます。",
     "install_intro": "このサイトに WordPress をインストールします：MySQL / MariaDB データベースを作成し、wp-config.php を書き込み、WP-CLI で管理者を作成します。",
     "need_mysql": "まず App Store で MySQL か MariaDB をインストールしてください。",
     "site_title": "サイトのタイトル",
@@ -1918,6 +1944,7 @@
     "custom": "カスタム ini",
     "custom_hint": "上の設定の後に追加する php.ini の行（拡張機能のオプションなど）。適用前に php-fpm -t で全体をテストします。",
     "fpm": "FPM プール",
+    "memory_preset": "メモリプリセット",
     "suggest": "{mem} MB の RAM 向け推奨値",
     "slowlog": "スローログ",
     "status": "ステータス",
