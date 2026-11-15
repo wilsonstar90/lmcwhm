@@ -198,6 +198,7 @@ const detailRows = computed<DetailRow[]>(() => {
 </script>
 
 <template>
+  <div class="events">
   <div class="bar">
     <n-radio-group v-model:value="range" size="small">
       <n-radio-button value="today">{{ t('evt.today') }}</n-radio-button>
@@ -230,9 +231,19 @@ const detailRows = computed<DetailRow[]>(() => {
     @update:page-size="(n: number) => { pageSize = n; reload() }"
   />
   <DetailDrawer :show="!!detail" :title="detail ? `${detail.method} ${detail.host}` : ''" :rows="detailRows" :width="600" @close="detail = null" />
+  </div>
 </template>
 
 <style scoped>
+.events {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+.events :deep(.n-data-table) {
+  max-width: 100%;
+  overflow: hidden;
+}
 .bar {
   display: flex;
   flex-wrap: wrap;

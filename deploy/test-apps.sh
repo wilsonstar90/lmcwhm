@@ -669,6 +669,13 @@ pass "firewall: block list, port rules, protected ports, drop policy confirm / r
 # WAF: OWASP CRS blocks an SQL injection; a site can opt out.
 task PUT /waf '{"enabled":true,"engine":"On","paranoia":1,"anomaly":5}'
 [[ "$(docker inspect -f '{{.Config.Image}}' lmcwhm-nginx)" == owasp/modsecurity-crs:* ]] || fail "nginx not switched to the WAF image"
+for _ in $(seq 1 30); do
+  health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' lmcwhm-nginx)"
+  [[ "$health" == healthy ]] && break
+  sleep 2
+done
+[[ "$health" == healthy ]] || fail "nginx WAF healthcheck: $health"
+[[ "$(curl -fsS http://127.0.0.1:8080/healthz)" == ok ]] || fail "nginx health endpoint"
 [[ "$(get80 db.test /index.php)" == "db-ok-42" ]] || fail "WAF blocks a normal request: $(get80 db.test /index.php)"
 code="$(curl -s -o /dev/null -w '%{http_code}' --resolve db.test:80:127.0.0.1 "http://db.test/index.php?id=1%27%20OR%20%271%27=%271")"
 [[ "$code" == 403 ]] || fail "SQL injection not blocked: $code"

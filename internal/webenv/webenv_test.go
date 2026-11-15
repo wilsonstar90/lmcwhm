@@ -130,6 +130,9 @@ func TestWAF(t *testing.T) {
 		{Domain: "b.com", Type: "static", Root: "/www/wwwroot/b.com", WAFOff: true},
 	}
 	ng, _ := e.nginxFiles(sites)
+	if !strings.Contains(string(ng["nginx.conf"]), "location = /healthz") || !strings.Contains(string(ng["nginx.conf"]), "return 200") {
+		t.Error("nginx health endpoint missing")
+	}
 	if strings.Contains(string(ng["nginx.conf"]), "modsecurity") || strings.Contains(string(ng["conf.d/a.com.conf"]), "modsecurity") {
 		t.Error("modsecurity rendered while the WAF is off")
 	}
@@ -149,7 +152,7 @@ func TestWAF(t *testing.T) {
 		t.Errorf("b.com:\n%s", b)
 	}
 	a := strings.Join(e.nginxArgs(), " ")
-	for _, want := range []string{WAFImage + " nginx -c", "--user 0", "MODSEC_RULE_ENGINE=On", "PARANOIA=4", "ANOMALY_INBOUND=5", "MODSEC_AUDIT_LOG=/www/wwwlogs/waf/audit.log"} {
+	for _, want := range []string{WAFImage + " nginx -c", "--user 0", "MODSEC_RULE_ENGINE=On", "PARANOIA=4", "ANOMALY_INBOUND=5", "MODSEC_AUDIT_LOG=/www/wwwlogs/waf/audit.log", "--health-cmd curl -fsS http://127.0.0.1:8080/healthz"} {
 		if !strings.Contains(a, want) {
 			t.Errorf("WAF args missing %q: %s", want, a)
 		}

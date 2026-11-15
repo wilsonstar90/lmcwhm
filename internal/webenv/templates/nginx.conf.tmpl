@@ -85,6 +85,10 @@ http {
             alias {{.ErrDir}}/;
         }
 {{- end}}
+        location = /healthz {
+            access_log off;
+            return 200 "ok\n";
+        }
         location / {
             return 404;
         }

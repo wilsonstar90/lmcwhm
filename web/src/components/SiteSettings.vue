@@ -193,20 +193,32 @@ const trafficOn = computed({
 
 // ---- rewrite ----
 const rewrites = ref<{ names: string[]; builtin: Record<string, string>; custom: Record<string, string> } | null>(null)
+const rewritesLoading = ref(false)
 const rwPick = ref('0.current')
-async function loadRewrites() {
-  rewrites.value = await get<{ names: string[]; builtin: Record<string, string>; custom: Record<string, string> }>('/sites/rewrites').catch(() => null)
+let rewriteRequest: Promise<void> | null = null
+function loadRewrites() {
+  if (rewriteRequest) return rewriteRequest
+  rewritesLoading.value = true
+  rewriteRequest = get<{ names: string[]; builtin: Record<string, string>; custom: Record<string, string> }>('/sites/rewrites')
+    .then((r) => { rewrites.value = r })
+    .finally(() => { rewritesLoading.value = false; rewriteRequest = null })
+  return rewriteRequest
 }
 const rwOptions = computed(() => [
   { label: t('ss.rw_current'), value: '0.current' },
   ...(rewrites.value?.names ?? []).map((n) => ({ label: n, value: 'b:' + n })),
   ...Object.keys(rewrites.value?.custom ?? {}).map((n) => ({ label: `★ ${n}`, value: 'c:' + n })),
 ])
-function pickRewrite(v: string) {
+async function pickRewrite(v: string) {
   rwPick.value = v
-  if (v === '0.current') rewrite.value = s.value.rewrite ?? ''
-  else if (v.startsWith('b:')) rewrite.value = rewrites.value?.builtin[v.slice(2)] ?? ''
-  else rewrite.value = rewrites.value?.custom[v.slice(2)] ?? ''
+  try {
+    await loadRewrites()
+    if (v === '0.current') rewrite.value = s.value.rewrite ?? ''
+    else if (v.startsWith('b:')) rewrite.value = rewrites.value?.builtin[v.slice(2)] ?? ''
+    else rewrite.value = rewrites.value?.custom[v.slice(2)] ?? ''
+  } catch (e) {
+    fail(e)
+  }
 }
 const ask = useAsk()
 async function saveTemplate() {
@@ -468,7 +480,7 @@ const title = computed(() => (props.site ? `${t('ss.title', { domain: s.value.do
           <!-- 偽靜態 -->
           <template v-else-if="sec === 'rewrite'">
             <div class="row wrap">
-              <n-select :value="rwPick" :options="rwOptions" style="width: 220px" filterable @update:value="pickRewrite" />
+              <n-select :value="rwPick" :options="rwOptions" :loading="rewritesLoading" style="width: 220px" filterable @update:value="pickRewrite" />
               <span class="grow" />
               <a class="op" href="https://www.winginx.com/en/htaccess" target="_blank" rel="noopener">{{ t('ss.rw_convert') }}</a>
             </div>
@@ -695,10 +707,13 @@ const title = computed(() => (props.site ? `${t('ss.title', { domain: s.value.do
 }
 .win :deep(.n-card__content) {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 .body {
   flex: 1;
   display: flex;
+  min-width: 0;
   min-height: 0;
 }
 .menu {
@@ -735,6 +750,10 @@ const title = computed(() => (props.site ? `${t('ss.title', { domain: s.value.do
   min-width: 0;
   overflow: auto;
   padding: 16px;
+}
+.pane :deep(.n-data-table) {
+  max-width: 100%;
+  overflow: hidden;
 }
 .row {
   display: flex;

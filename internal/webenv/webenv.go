@@ -204,6 +204,7 @@ func (e *Env) nginxArgs() []string {
 			// Match nginx's client_max_body_size instead of rejecting uploads over 13 MB.
 			"-e", "MODSEC_REQ_BODY_LIMIT=134217728", "-e", "MODSEC_REQ_BODY_LIMIT_ACTION=ProcessPartial",
 			"-e", "PORT=8081", "-e", "SSL_PORT=8444", // the image's own (unused) server blocks
+			"--health-cmd", fmt.Sprintf("curl -fsS http://127.0.0.1:%d/healthz", NginxPort),
 		)
 	}
 	return append(append(a, image, "nginx"), append(nginxConf, "-g", "daemon off;")...)
