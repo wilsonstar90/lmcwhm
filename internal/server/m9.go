@@ -769,7 +769,7 @@ func (s *Server) handlePublicShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.Shares.Count(r.Context(), sh.ID)
-	s.Audit.Record(r.Context(), "share", clientIP(r), "files", "files.share_download", sh.Path)
+	s.Audit.Record(r.Context(), "share", s.clientIP(r), "files", "files.share_download", sh.Path)
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
 	w.Header().Set("Content-Type", "application/octet-stream")
 	http.ServeContent(w, r, "", fi.ModTime(), f)

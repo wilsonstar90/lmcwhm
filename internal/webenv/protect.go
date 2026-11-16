@@ -20,7 +20,7 @@ type SiteProtect struct {
 	FakeSpider bool `json:"fake_spider"` // crawler User-Agent from outside its trusted ranges
 	// CDN: the site is reached through a CDN (any); the visitor's address is
 	// read from the first of CDNHeaders (empty = DefaultCDNHeaders) that
-	// holds one, from any connection (like aaPanel).
+	// holds one, but only from a trusted CDN or Tunnel connection.
 	CDN        bool        `json:"cdn"`
 	CDNHeaders []CDNHeader `json:"cdn_headers,omitempty"`
 	IDC        bool        `json:"idc"`     // refuse data-centre addresses

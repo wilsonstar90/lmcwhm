@@ -24,19 +24,6 @@ type ctxKey int
 
 const sessionKey ctxKey = iota
 
-func clientIP(r *http.Request) string {
-	// The panel port is reached directly (not through the edge proxy), so the
-	// socket peer is authoritative; forwarded headers are deliberately ignored.
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	if ip := net.ParseIP(host); ip != nil && ip.To4() != nil {
-		return ip.To4().String() // normalise ::ffff:1.2.3.4
-	}
-	return host
-}
-
 // notFound mimics a plain web server so a gated panel does not reveal itself.
 func notFound(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -78,7 +65,7 @@ func (s *Server) gate(next http.Handler) http.Handler {
 		}
 		cfg := s.Settings.Get()
 
-		if !cfg.IPAllowed(net.ParseIP(clientIP(r))) {
+		if !cfg.IPAllowed(net.ParseIP(s.clientIP(r))) {
 			unauthorized(w, cfg.UnauthStatus)
 			return
 		}
@@ -88,7 +75,7 @@ func (s *Server) gate(next http.Handler) http.Handler {
 		// BasicAuth, security entry).
 		// REST calls with an API token are authenticated in requireAuth.
 		apiToken := strings.HasPrefix(r.URL.Path, "/api/v1/") && strings.HasPrefix(r.Header.Get("Authorization"), "Bearer lmc_")
-		if r.URL.Path == "/mcp" || strings.HasPrefix(r.URL.Path, "/s/") || apiToken {
+		if r.URL.Path == "/mcp" || strings.HasPrefix(r.URL.Path, "/mcp/") || strings.HasPrefix(r.URL.Path, "/s/") || apiToken {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -118,7 +105,7 @@ func (s *Server) gate(next http.Handler) http.Handler {
 			if r.URL.Path == cfg.SecurityEntry || r.URL.Path == cfg.SecurityEntry+"/" {
 				http.SetCookie(w, &http.Cookie{
 					Name: entryCookie, Value: s.entryToken(cfg.SecurityEntry), Path: "/",
-					HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteStrictMode,
+					HttpOnly: true, Secure: s.externalTLS(r), SameSite: http.SameSiteStrictMode,
 				})
 				http.Redirect(w, r, "/login", http.StatusFound)
 				return

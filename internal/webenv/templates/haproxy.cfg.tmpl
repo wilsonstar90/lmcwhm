@@ -127,11 +127,18 @@ backend st_cc
 {{- end}}
     # Visitor address: only connections from a CDN's ranges may set it.
     acl from_cf src -f {{.Dir}}/maps/cdn_cf.lst
+{{- if .Tunnel}}
+    acl from_cf src 127.0.0.0/8
+    acl from_cf src ::1
+{{- end}}
     http-request set-var(txn.via_cf) bool(1) if from_cf
+    http-request set-var(txn.cdn_peer) bool(1) if from_cf
 {{- if .CDNHeaders}}
     acl from_cdn src -f {{.Dir}}/maps/cdn_custom.lst
     http-request set-var(txn.via_cdn) bool(1) if from_cdn !from_cf
+    http-request set-var(txn.cdn_peer) bool(1) if from_cdn
 {{- end}}
+    acl cdn_peer var(txn.cdn_peer) -m bool
     http-request set-src req.hdr_ip(CF-Connecting-IP,1) if { var(txn.via_cf) -m bool } { req.hdr(CF-Connecting-IP) -m found }
 {{- if .CDNHeaders}}
 {{- range .CDNHeaders}}
@@ -141,13 +148,13 @@ backend st_cc
 {{- end}}
 {{- if .CDNGroups}}
     # Sites behind a CDN (網站防護 → CDN): the first listed header holding an
-    # address is the visitor, whatever the connection's source (like aaPanel).
+    # address is the visitor, but only a trusted CDN or Tunnel peer may set it.
     http-request set-var(txn.cdng) var(txn.host),map_str({{.Dir}}/maps/cdn_exact.map)
     http-request set-var(txn.cdng) var(txn.host),map_end({{.Dir}}/maps/cdn_wild.map) if !{ var(txn.cdng) -m found }
 {{- range .CDNGroups}}
 {{- $g := .ID}}
 {{- range .Headers}}
-    http-request set-var(txn.rip) req.hdr_ip({{.}},-1) if { var(txn.cdng) -m str {{$g}} } !{ var(txn.rip) -m found } { req.hdr({{.}}) -m found }
+    http-request set-var(txn.rip) req.hdr_ip({{.}},-1) if cdn_peer { var(txn.cdng) -m str {{$g}} } !{ var(txn.rip) -m found } { req.hdr({{.}}) -m found }
 {{- end}}
 {{- end}}
     http-request set-src var(txn.rip) if { var(txn.rip) -m found }

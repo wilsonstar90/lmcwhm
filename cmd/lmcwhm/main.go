@@ -185,7 +185,7 @@ func serveCmd() *cobra.Command {
 			fw.PanelPort = func() int { return a.settings.Get().PanelPort }
 			env.CDN = func() webenv.CDN {
 				c := fw.CDN(ctx)
-				return webenv.CDN{Cloudflare: fw.CloudflareTrust(ctx), Ranges: c.Ranges, Headers: webenv.HeaderNames(c.Headers)}
+				return webenv.CDN{Cloudflare: fw.CloudflareTrust(ctx), Ranges: c.Ranges, Headers: webenv.HeaderNames(c.Headers), Tunnel: c.CloudflareTunnel}
 			}
 			env.Patterns = func() []webenv.PatternList { return fw.EdgePatterns(ctx) }
 			geo := geoip.New(filepath.Join(a.paths.Home, "geoip"))
@@ -337,6 +337,10 @@ func serveCmd() *cobra.Command {
 				return nil
 			}
 			tp := tamper.New(a.st, env.WWWRoot, a.paths.Home)
+			tokens, err := apitoken.New(a.st, box)
+			if err != nil {
+				return err
+			}
 			mailSvc := mail.New(a.st, a.paths.Home)
 			go mailSvc.Boot(ctx)
 			mailSvc.Cert = func(host string) string {
@@ -364,7 +368,7 @@ func serveCmd() *cobra.Command {
 				Apps: apps, DBs: dbs, Docker: dockermgr.New(tm, a.paths.Home),
 				Files: filesFS(a.paths.Home), Term: terminal.New(),
 				Store: a.st, Monitor: mon, Cron: jobs, GeoIP: geo, Firewall: fw, Protect: prot, ErrPages: errp, WAF: waf, CrowdSec: crowdsec, Backup: bk,
-				Tokens: apitoken.New(a.st, box), AI: ai.New(a.st, box, nil),
+				Tokens: tokens, AI: ai.New(a.st, box, nil),
 				Alerts: alerts, Probes: probes, Stats: stats, Events: events, Procs: procs, WP: wordpress.New(sites, dbs, env, tm, apps), FTP: ftpSvc,
 				Toolbox: tb, SecScan: secscan.New(a.st), Malware: malware.New(a.st, env.WWWRoot, a.paths.Home), Tamper: tp,
 				Shares: fileshare.New(a.st), Mail: mailSvc,

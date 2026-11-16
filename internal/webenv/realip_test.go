@@ -55,6 +55,14 @@ func TestRealIPConfig(t *testing.T) {
 	if strings.Contains(string(edge["haproxy.cfg"]), "from_cdn") {
 		t.Error("custom CDN rule without ranges")
 	}
+	e.CDN = func() CDN { return CDN{Tunnel: true} }
+	edge, _ = e.edgeFiles(nil, nil)
+	cfg = string(edge["haproxy.cfg"])
+	for _, want := range []string{"acl from_cf src 127.0.0.0/8", "acl from_cf src ::1", "acl cdn_peer var(txn.cdn_peer) -m bool"} {
+		if !strings.Contains(cfg, want) {
+			t.Errorf("Tunnel config lacks %q", want)
+		}
+	}
 }
 
 // fakeHAProxy answers the admin socket in prompt mode and records commands.

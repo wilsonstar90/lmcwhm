@@ -5,11 +5,14 @@ package apitoken
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 	"time"
@@ -36,6 +39,8 @@ type Token struct {
 	Name        string   `json:"name"`
 	Hint        string   `json:"hint"` // first characters, to tell tokens apart
 	Scope       string   `json:"scope"`
+	MCPID       string   `json:"mcp_id"`
+	Client      string   `json:"client"`
 	IPs         []string `json:"ips"`
 	ExpiresAt   int64    `json:"expires_at"` // 0 = never
 	LastUsed    int64    `json:"last_used"`
@@ -50,19 +55,65 @@ type Service struct {
 	box *secrets.Box
 }
 
-func New(st *store.Store, box *secrets.Box) *Service { return &Service{st: st, box: box} }
+func New(st *store.Store, box *secrets.Box) (*Service, error) {
+	sv := &Service{st: st, box: box}
+	if err := sv.ensureMCPIDs(context.Background()); err != nil {
+		return nil, err
+	}
+	return sv, nil
+}
+
+func newMCPID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	b[6], b[8] = b[6]&0x0f|0x40, b[8]&0x3f|0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]), nil
+}
+
+func (sv *Service) ensureMCPIDs(ctx context.Context) error {
+	rows, err := sv.st.DB.QueryContext(ctx, `SELECT id FROM api_tokens WHERE mcp_id = ''`)
+	if err != nil {
+		return err
+	}
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+	for _, id := range ids {
+		uuid, err := newMCPID()
+		if err != nil {
+			return err
+		}
+		if _, err := sv.st.DB.ExecContext(ctx, `UPDATE api_tokens SET mcp_id = ? WHERE id = ? AND mcp_id = ''`, uuid, id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 func hash(tok string) string {
 	h := sha256.Sum256([]byte(tok))
 	return hex.EncodeToString(h[:])
 }
 
-const cols = `id, name, hint, scope, ips, expires_at, last_used, last_ip, created_at, disabled, token_secret != ''`
+const cols = `id, name, hint, scope, mcp_id, client, ips, expires_at, last_used, last_ip, created_at, disabled, token_secret != ''`
 
 func scan(row interface{ Scan(...any) error }) (Token, error) {
 	var t Token
 	var ips string
-	err := row.Scan(&t.ID, &t.Name, &t.Hint, &t.Scope, &ips, &t.ExpiresAt, &t.LastUsed, &t.LastIP, &t.CreatedAt, &t.Disabled, &t.Recoverable)
+	err := row.Scan(&t.ID, &t.Name, &t.Hint, &t.Scope, &t.MCPID, &t.Client, &ips, &t.ExpiresAt, &t.LastUsed, &t.LastIP, &t.CreatedAt, &t.Disabled, &t.Recoverable)
 	json.Unmarshal([]byte(ips), &t.IPs)
 	if t.IPs == nil {
 		t.IPs = []string{}
@@ -90,6 +141,7 @@ func (sv *Service) List(ctx context.Context) ([]Token, error) {
 type Input struct {
 	Name    string   `json:"name"`
 	Scope   string   `json:"scope"`
+	Client  string   `json:"client"`
 	IPs     []string `json:"ips"`
 	TTLDays int      `json:"ttl_days"` // 0 = never expires
 }
@@ -102,6 +154,12 @@ func (sv *Service) Create(ctx context.Context, in Input) (Token, string, error) 
 	}
 	if !mcp.ValidScope(in.Scope) {
 		return Token{}, "", ErrScope
+	}
+	if in.Client == "" {
+		in.Client = mcp.ClientAny
+	}
+	if !mcp.ValidClient(in.Client) {
+		return Token{}, "", ErrInvalid
 	}
 	for i, ip := range in.IPs {
 		n, err := settings.ParseIPOrCIDR(ip)
@@ -117,6 +175,10 @@ func (sv *Service) Create(ctx context.Context, in Input) (Token, string, error) 
 		return Token{}, "", ErrInvalid
 	}
 	secret := prefix + settings.RandomString(40, settings.Alnum)
+	uuid, err := newMCPID()
+	if err != nil {
+		return Token{}, "", err
+	}
 	var exp int64
 	now := time.Now()
 	if in.TTLDays > 0 {
@@ -126,8 +188,8 @@ func (sv *Service) Create(ctx context.Context, in Input) (Token, string, error) 
 	if sv.box == nil {
 		return Token{}, "", ErrInvalid
 	}
-	res, err := sv.st.DB.ExecContext(ctx, `INSERT INTO api_tokens(name, token_hash, token_secret, hint, scope, ips, expires_at, last_used, last_ip, created_at)
-		VALUES(?,?,?,?,?,?,?,0,'',?)`, in.Name, hash(secret), sv.box.Seal(secret), secret[:len(prefix)+4], in.Scope, string(ips), exp, now.Unix())
+	res, err := sv.st.DB.ExecContext(ctx, `INSERT INTO api_tokens(name, token_hash, token_secret, hint, scope, mcp_id, client, ips, expires_at, last_used, last_ip, created_at)
+		VALUES(?,?,?,?,?,?,?,?,?,0,'',?)`, in.Name, hash(secret), sv.box.Seal(secret), secret[:len(prefix)+4], in.Scope, uuid, in.Client, string(ips), exp, now.Unix())
 	if err != nil {
 		return Token{}, "", err
 	}
@@ -155,8 +217,9 @@ func (sv *Service) Secret(ctx context.Context, id int64) (string, error) {
 }
 
 type UpdateInput struct {
-	ExpiresAt *int64 `json:"expires_at"`
-	Disabled  *bool  `json:"disabled"`
+	ExpiresAt *int64  `json:"expires_at"`
+	Disabled  *bool   `json:"disabled"`
+	Client    *string `json:"client"`
 }
 
 func (sv *Service) Update(ctx context.Context, id int64, in UpdateInput) (Token, error) {
@@ -170,6 +233,14 @@ func (sv *Service) Update(ctx context.Context, id int64, in UpdateInput) (Token,
 	}
 	if in.Disabled != nil {
 		if _, err := sv.st.DB.ExecContext(ctx, `UPDATE api_tokens SET disabled = ? WHERE id = ?`, *in.Disabled, id); err != nil {
+			return Token{}, err
+		}
+	}
+	if in.Client != nil {
+		if !mcp.ValidClient(*in.Client) {
+			return Token{}, ErrInvalid
+		}
+		if _, err := sv.st.DB.ExecContext(ctx, `UPDATE api_tokens SET client = ? WHERE id = ?`, *in.Client, id); err != nil {
 			return Token{}, err
 		}
 	}
@@ -193,6 +264,18 @@ func (sv *Service) Delete(ctx context.Context, id int64) error {
 
 // Verify resolves a bearer token used from ip.
 func (sv *Service) Verify(ctx context.Context, secret, ip string) (Token, error) {
+	return sv.verify(ctx, secret, ip, "")
+}
+
+// VerifyMCP also requires the token's own random MCP endpoint.
+func (sv *Service) VerifyMCP(ctx context.Context, secret, ip, endpoint string) (Token, error) {
+	if endpoint == "" {
+		return Token{}, ErrInvalid
+	}
+	return sv.verify(ctx, secret, ip, endpoint)
+}
+
+func (sv *Service) verify(ctx context.Context, secret, ip, endpoint string) (Token, error) {
 	if !strings.HasPrefix(secret, prefix) || len(secret) > 200 {
 		return Token{}, ErrInvalid
 	}
@@ -207,6 +290,9 @@ func (sv *Service) Verify(ctx context.Context, secret, ip string) (Token, error)
 		return Token{}, ErrInvalid
 	}
 	if t.ExpiresAt > 0 && time.Now().Unix() > t.ExpiresAt {
+		return Token{}, ErrInvalid
+	}
+	if endpoint != "" && subtle.ConstantTimeCompare([]byte(t.MCPID), []byte(endpoint)) != 1 {
 		return Token{}, ErrInvalid
 	}
 	if len(t.IPs) > 0 {

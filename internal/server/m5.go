@@ -181,8 +181,16 @@ func (s *Server) handlePutFirewall(w http.ResponseWriter, r *http.Request) {
 
 // ---- visitor addresses behind a CDN ----
 
+func (s *Server) fwCDNResponse(r *http.Request, c firewall.CDNConfig) map[string]any {
+	a := s.requestAddress(r)
+	return map[string]any{
+		"config": c, "cloudflare": netinfo.CloudflareRanges,
+		"request": map[string]any{"peer_ip": a.Peer, "client_ip": a.Client, "trusted_proxy": a.TrustedProxy, "external_tls": a.ExternalTLS},
+	}
+}
+
 func (s *Server) handleFWCDN(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"config": s.Firewall.CDN(r.Context()), "cloudflare": webenv.CloudflareRanges})
+	writeJSON(w, http.StatusOK, s.fwCDNResponse(r, s.Firewall.CDN(r.Context())))
 }
 
 func (s *Server) handlePutFWCDN(w http.ResponseWriter, r *http.Request) {
@@ -191,19 +199,23 @@ func (s *Server) handlePutFWCDN(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
+	old := s.Firewall.CDN(r.Context())
 	c, err := s.Firewall.SaveCDN(r.Context(), in)
 	if err != nil {
 		writeFWErr(w, err)
 		return
 	}
-	s.auditCat(r, "security", "firewall.cdn", c.Header+" "+strconv.Itoa(len(c.Ranges)))
 	if s.Sites.Env.Installed(r.Context()) {
 		if err := s.Sites.Apply(r.Context()); err != nil {
+			if _, rollbackErr := s.Firewall.SaveCDN(r.Context(), old); rollbackErr != nil {
+				s.Log.Error("CDN settings rollback", "err", rollbackErr)
+			}
 			writeErr(w, http.StatusInternalServerError, err)
 			return
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"config": c})
+	s.auditCat(r, "security", "firewall.cdn", "tunnel="+strconv.FormatBool(c.CloudflareTunnel)+" ranges="+strconv.Itoa(len(c.Ranges)))
+	writeJSON(w, http.StatusOK, s.fwCDNResponse(r, c))
 }
 
 func (s *Server) handleFirewallConfirm(w http.ResponseWriter, r *http.Request) {
@@ -357,7 +369,7 @@ func (s *Server) handleAddFWIP(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.List == "block" {
 		p, _, err := firewall.NormIP(in.IP)
-		if a, aerr := netip.ParseAddr(clientIP(r)); err == nil && aerr == nil && p.Contains(a.Unmap()) {
+		if a, aerr := netip.ParseAddr(s.clientIP(r)); err == nil && aerr == nil && p.Contains(a.Unmap()) {
 			writeErr(w, http.StatusBadRequest, firewall.ErrSelf)
 			return
 		}
@@ -381,7 +393,7 @@ func (s *Server) handleUpdateFWIP(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	self, _ := netip.ParseAddr(clientIP(r))
+	self, _ := netip.ParseAddr(s.clientIP(r))
 	x, err := s.Firewall.UpdateIP(r.Context(), idParam(r), in.IP, time.Duration(in.Minutes)*time.Minute, in.Minutes < 0, in.Remark, self.Unmap())
 	if err != nil {
 		writeFWErr(w, err)

@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/wilsonstar90/lmcwhm/internal/netinfo"
 	"github.com/wilsonstar90/lmcwhm/internal/webenv"
 )
 
@@ -215,7 +216,7 @@ func (sv *Service) Check(ctx context.Context, routes []Route) {
 		}
 	}
 	var cf []netip.Prefix
-	for _, r := range webenv.CloudflareRanges {
+	for _, r := range netinfo.CloudflareRanges {
 		cf = append(cf, netip.MustParsePrefix(r))
 	}
 	ctx, cancel := context.WithTimeout(ctx, 4*time.Second)

@@ -1,4 +1,4 @@
-# MCP：用 Kimi、Claude、Codex 管理 lmcwhm
+# MCP：用 Kimi、DeepSeek、Claude、Codex 管理 lmcwhm
 
 lmcwhm 內建 MCP server，支援 **Streamable HTTP** 及 **SSH stdio**。常用功能有專用工具；`list_api_endpoints` + `call_api` 亦會暴露面板實際註冊的 REST 路由，因此網站、SSL、App Store、資料庫、Docker、檔案、Cron、安全、備份、撥測、WordPress、郵件、面板設定等都可由 AI 操作。
 
@@ -12,9 +12,9 @@ lmcwhm 內建 MCP server，支援 **Streamable HTTP** 及 **SSH stdio**。常用
 | `operate` | 加上一般網站、Docker、資料庫、安全、備份等操作；不可修改面板管理設定 |
 | `admin` | 全部功能，包括面板管理及 root shell |
 
-可按需要設定來源 IP 及到期日。HTTP URL 是 `https://伺服器:面板port/mcp`，**不要**加安全入口 `/console`。建議使用有效 TLS 憑證；若客戶端不接受自簽憑證，請改用 SSH stdio，不要關閉憑證驗證。
+可按需要設定來源 IP、到期日及指定 AI Agent（任何 Agent、Kimi、DeepSeek、Claude 或 Codex）。經 Cloudflare Tunnel 使用時，在「防火牆 → CDN 真實 IP」開啟 Tunnel，Token 來源 IP 就會按真實 Client IP 判斷。每個 Token 都有獨立 UUIDv4，HTTP URL 格式是 `https://伺服器:面板port/mcp/<uuid>`；URL 同 Token 必須屬於同一組，錯誤組合、不完整路徑及舊 `/mcp` 入口一律回應 404。**不要**加安全入口 `/console`。建議使用有效 TLS 憑證；若客戶端不接受自簽憑證，請改用 SSH stdio，不要關閉憑證驗證。
 
-介面「AI 助手 → MCP」的每個 Token 都有「Token / Prompt」管理視窗：管理員可翻查完整 Token，並複製按 Token scope 及 Kimi／Claude／Codex 分別產生的連線 Prompt。新 Token 以面板 master key 加密保存；舊 hash-only Token 無法翻查，需要撤銷後重建。Token 可編輯到期日、即時暫停／恢復或撤銷。
+介面「AI 助手 → MCP」的每個 Token 都有「Token / Prompt」管理視窗：管理員可翻查完整 Token，並複製按 Token scope 及 Agent 產生的連線 Prompt；Prompt 會直接列出實際 MCP URL 同 API Token。新 Token 以面板 master key 加密保存；舊 hash-only Token 無法翻查，需要撤銷後重建。Token 可編輯 Agent、到期日、即時暫停／恢復或撤銷。
 
 Prompt 會註明 HTTPS 經 Cloudflare：遇到 403 應檢查 WAF、Bot Fight Mode、Cloudflare Access 及來源 IP 限制；遇到 520／522／524 應檢查 origin、面板端口及 proxy timeout。長時間操作應使用背景 task，不用關閉 TLS 或安全規則。
 
@@ -32,7 +32,7 @@ export LMCWHM_TOKEN='lmc_...'
 {
   "mcpServers": {
     "lmcwhm": {
-      "url": "https://server.example.com:8888/mcp",
+      "url": "https://server.example.com:8888/mcp/93ee7937-ba25-4a48-8ec9-3e92edf6534f",
       "bearerTokenEnvVar": "LMCWHM_TOKEN",
       "toolTimeoutMs": 900000
     }
@@ -58,7 +58,7 @@ SSH stdio（不需 API Token，但 SSH root 身份等同 `admin`）：
 ## 3. Claude Code
 
 ```bash
-claude mcp add --transport http lmcwhm https://server.example.com:8888/mcp \
+claude mcp add --transport http lmcwhm https://server.example.com:8888/mcp/93ee7937-ba25-4a48-8ec9-3e92edf6534f \
   --header "Authorization: Bearer $LMCWHM_TOKEN"
 ```
 
@@ -76,7 +76,7 @@ claude mcp add lmcwhm -- ssh root@server.example.com lmcwhm mcp --stdio
 
 ```toml
 [mcp_servers.lmcwhm]
-url = "https://server.example.com:8888/mcp"
+url = "https://server.example.com:8888/mcp/93ee7937-ba25-4a48-8ec9-3e92edf6534f"
 bearer_token_env_var = "LMCWHM_TOKEN"
 tool_timeout_sec = 900
 default_tools_approval_mode = "writes"
@@ -94,7 +94,11 @@ default_tools_approval_mode = "writes"
 
 用 `codex mcp list` 或 TUI 的 `/mcp` 檢查。
 
-## 5. 工具用法
+## 5. DeepSeek
+
+在支援 Streamable HTTP 嘅 DeepSeek MCP 客戶端使用面板提供嘅完整 UUID URL，並以 `Authorization: Bearer $LMCWHM_TOKEN` 驗證。介面嘅 DeepSeek 連線 Prompt 已包含實際 URL 同 Token；如所用客戶端需要 JSON 設定，可參考 Kimi Code 嘅 `url` 格式。
+
+## 6. 工具用法
 
 優先使用語意明確的專用工具，例如 `server_overview`、`list_sites`、`issue_certificate`、`container_action`、`ban_ip`、`run_backup`。背景工作會回傳 `task_id`，再用 `get_task` 查進度。
 
@@ -118,7 +122,7 @@ default_tools_approval_mode = "writes"
 
 回應包含 HTTP `status`、`ok` 及 JSON `body`。API 錯誤會保留原狀態碼及穩定錯誤碼。每次工具調用都寫入操作日誌；`call_api` 只記錄 method 和 path，不記錄可能含密碼的 body。
 
-## 6. 安全及限制
+## 7. 安全及限制
 
 - 先以 `read` Token 驗證連線，只給自動化流程所需的最小 scope。
 - `operate`、`admin`、`call_api` 的非 GET 調用及 `run_shell` 可改變真實 Server；保持客戶端的人工審批。

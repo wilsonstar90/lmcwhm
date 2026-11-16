@@ -24,6 +24,7 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/audit"
 	"github.com/wilsonstar90/lmcwhm/internal/auth"
 	"github.com/wilsonstar90/lmcwhm/internal/config"
+	"github.com/wilsonstar90/lmcwhm/internal/firewall"
 	"github.com/wilsonstar90/lmcwhm/internal/secrets"
 	"github.com/wilsonstar90/lmcwhm/internal/settings"
 	"github.com/wilsonstar90/lmcwhm/internal/store"
@@ -63,12 +64,16 @@ func newEnv(t *testing.T, mut func(*settings.Settings)) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
+	tokens, err := apitoken.New(st, box)
+	if err != nil {
+		t.Fatal(err)
+	}
 	srv, err := New(Deps{
 		Paths: config.Paths{CertDir: filepath.Join(dir, "ssl")}, Settings: sm, Auth: a, Audit: audit.New(st),
 		WebFS: fstest.MapFS{"index.html": {Data: []byte("<html>spa</html>")}},
 		Log:   slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Store: st, Tasks: tasks.NewManager(),
-		Tokens: apitoken.New(st, box),
+		Tokens: tokens,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -202,6 +207,49 @@ func TestIPAndDomainAndBasicAuth(t *testing.T) {
 	u.User = url.UserPassword("ba", "bapass")
 	if r, err := e.c.Get(u.String() + "/api/v1/public/meta"); err != nil || r.StatusCode != 200 {
 		t.Fatalf("basic auth with creds: %v %v", err, r)
+	}
+}
+
+func TestCloudflareTunnelPanelClientIP(t *testing.T) {
+	const client = "203.0.113.55"
+	e := newEnv(t, func(s *settings.Settings) { s.AllowedIPs = []string{client} })
+	fw := firewall.New(e.srv.Store, nil, nil)
+	e.srv.Firewall = fw
+	if _, err := fw.SaveCDN(context.Background(), firewall.CDNConfig{CloudflareTunnel: true}); err != nil {
+		t.Fatal(err)
+	}
+	cf := map[string]string{"CF-Connecting-IP": client, "X-Forwarded-Proto": "https"}
+	if r, _ := e.do("GET", "/api/v1/public/meta", nil, cf); r.StatusCode != http.StatusOK {
+		t.Fatalf("allowed Cloudflare client rejected: %d", r.StatusCode)
+	}
+	if r, _ := e.do("GET", "/api/v1/public/meta", nil, map[string]string{"CF-Connecting-IP": "203.0.113.66"}); r.StatusCode != http.StatusNotFound {
+		t.Fatalf("different Cloudflare client bypassed panel allow-list: %d", r.StatusCode)
+	}
+	if _, err := e.srv.Settings.Update(context.Background(), func(s *settings.Settings) { s.AllowedIPs = nil }); err != nil {
+		t.Fatal(err)
+	}
+	_, secret, err := e.srv.Tokens.Create(context.Background(), apitoken.Input{Name: "tunnel", Scope: "read", IPs: []string{client}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	headers := map[string]string{"Authorization": "Bearer " + secret, "CF-Connecting-IP": client}
+	if r, _ := e.do("GET", "/api/v1/auth/me", nil, headers); r.StatusCode != http.StatusOK {
+		t.Fatalf("token's real client IP rejected: %d", r.StatusCode)
+	}
+	headers["CF-Connecting-IP"] = "203.0.113.66"
+	if r, _ := e.do("GET", "/api/v1/auth/me", nil, headers); r.StatusCode != http.StatusNotFound {
+		t.Fatalf("token IP allow-list used the proxy peer: %d", r.StatusCode)
+	}
+	r, _ := e.do("POST", "/api/v1/auth/login", map[string]string{"username": "admin", "password": "password123"}, cf)
+	if r.StatusCode != http.StatusOK {
+		t.Fatalf("tunnel login: %d", r.StatusCode)
+	}
+	if len(r.Cookies()) == 0 || !r.Cookies()[0].Secure {
+		t.Fatal("externally HTTPS tunnel session cookie is not Secure")
+	}
+	logins, _, err := e.srv.Audit.ListLogins(context.Background(), 10, 0)
+	if err != nil || len(logins) == 0 || logins[0].IP != client {
+		t.Fatalf("login audit did not use real client: %+v %v", logins, err)
 	}
 }
 

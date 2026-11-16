@@ -12,9 +12,10 @@ import (
 // CDNConfig names another CDN (besides Cloudflare, which is built in) whose
 // header carries the visitor's address: only its ranges may set it.
 type CDNConfig struct {
-	Ranges  []string           `json:"ranges"`
-	Headers []webenv.CDNHeader `json:"headers"`          // tried in order
-	Header  string             `json:"header,omitempty"` // before v0.19: one header
+	Ranges           []string           `json:"ranges"`
+	Headers          []webenv.CDNHeader `json:"headers"`          // tried in order
+	Header           string             `json:"header,omitempty"` // before v0.19: one header
+	CloudflareTunnel bool               `json:"cloudflare_tunnel"`
 }
 
 const cdnKey = "edge_cdn"
@@ -47,7 +48,7 @@ func (sv *Service) SaveCDN(ctx context.Context, c CDNConfig) (CDNConfig, error) 
 	if len(c.Ranges) > 1000 || (len(c.Ranges) > 0 && len(c.Headers) == 0) || !webenv.ValidHeaders(c.Headers) {
 		return c, ErrBadCDN
 	}
-	out := CDNConfig{Ranges: []string{}, Headers: c.Headers}
+	out := CDNConfig{Ranges: []string{}, Headers: c.Headers, CloudflareTunnel: c.CloudflareTunnel}
 	if out.Headers == nil {
 		out.Headers = []webenv.CDNHeader{}
 	}

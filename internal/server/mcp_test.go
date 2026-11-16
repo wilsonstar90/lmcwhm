@@ -18,9 +18,27 @@ import (
 
 func (e *env) rpc(token, body string) (int, map[string]any) {
 	e.t.Helper()
-	req, _ := http.NewRequest("POST", e.ts.URL+"/mcp", strings.NewReader(body))
+	endpoint := "missing"
+	if token != "" {
+		if tk, err := e.srv.Tokens.Verify(context.Background(), token, "127.0.0.1"); err == nil {
+			endpoint = tk.MCPID
+		}
+	}
+	return e.rpcEndpoint(endpoint, token, body)
+}
+
+func (e *env) rpcEndpoint(endpoint, token, body string) (int, map[string]any) {
+	return e.rpcAgent(endpoint, token, "", body)
+}
+
+func (e *env) rpcAgent(endpoint, token, agent, body string) (int, map[string]any) {
+	e.t.Helper()
+	req, _ := http.NewRequest("POST", e.ts.URL+"/mcp/"+endpoint, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
+	if agent != "" {
+		req.Header.Set("User-Agent", agent)
+	}
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
@@ -39,21 +57,36 @@ func TestMCPTokensAndScopes(t *testing.T) {
 	// The browser gates (security entry, BasicAuth, bound domain) do not apply to /mcp.
 	e := newEnv(t, func(s *settings.Settings) { s.SecurityEntry = "/console"; s.BindDomain = "panel.example.com" })
 	ctx := context.Background()
-	_, readTok, err := e.srv.Tokens.Create(ctx, apitoken.Input{Name: "ro", Scope: "read"})
+	read, readTok, err := e.srv.Tokens.Create(ctx, apitoken.Input{Name: "ro", Scope: "read"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, adminTok, _ := e.srv.Tokens.Create(ctx, apitoken.Input{Name: "root", Scope: "admin"})
-	_, ipTok, _ := e.srv.Tokens.Create(ctx, apitoken.Input{Name: "ip", Scope: "admin", IPs: []string{"203.0.113.0/24"}})
+	admin, adminTok, _ := e.srv.Tokens.Create(ctx, apitoken.Input{Name: "root", Scope: "admin"})
+	ip, ipTok, _ := e.srv.Tokens.Create(ctx, apitoken.Input{Name: "ip", Scope: "admin", IPs: []string{"203.0.113.0/24"}})
 
-	if code, _ := e.rpc("", `{"jsonrpc":"2.0","id":1,"method":"ping"}`); code != 404 {
+	if code, _ := e.rpcEndpoint(read.MCPID, "", `{"jsonrpc":"2.0","id":1,"method":"ping"}`); code != 404 {
 		t.Fatalf("no token: %d, want 404", code)
 	}
-	if code, _ := e.rpc("lmc_nope", `{"jsonrpc":"2.0","id":1,"method":"ping"}`); code != 401 {
+	if code, _ := e.rpcEndpoint(read.MCPID, "lmc_nope", `{"jsonrpc":"2.0","id":1,"method":"ping"}`); code != 404 {
 		t.Fatalf("bad token: %d", code)
 	}
-	if code, _ := e.rpc(ipTok, `{"jsonrpc":"2.0","id":1,"method":"ping"}`); code != 401 {
+	if code, _ := e.rpcEndpoint(ip.MCPID, ipTok, `{"jsonrpc":"2.0","id":1,"method":"ping"}`); code != 404 {
 		t.Fatalf("token from a non-allowed IP: %d", code)
+	}
+	if code, _ := e.rpcEndpoint(admin.MCPID, readTok, `{"jsonrpc":"2.0","id":1,"method":"ping"}`); code != 404 {
+		t.Fatalf("token used at another token's endpoint: %d", code)
+	}
+	for _, path := range []string{"/mcp", "/mcp/" + read.MCPID[:12], "/mcp/" + read.MCPID + "/extra"} {
+		req, _ := http.NewRequest("POST", e.ts.URL+path, strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"ping"}`))
+		req.Header.Set("Authorization", "Bearer "+readTok)
+		res, err := e.c.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != 404 {
+			t.Fatalf("invalid MCP path %s: %d", path, res.StatusCode)
+		}
 	}
 
 	code, m := e.rpc(readTok, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"t","version":"1"}}}`)
@@ -94,7 +127,7 @@ func TestMCPTokensAndScopes(t *testing.T) {
 		t.Fatalf("extra args accepted: %v", m)
 	}
 	// Batch + prompts.
-	req, _ := http.NewRequest("POST", e.ts.URL+"/mcp", bytes.NewBufferString(`[{"jsonrpc":"2.0","id":6,"method":"prompts/list"},{"jsonrpc":"2.0","id":7,"method":"prompts/get","params":{"name":"diagnose_site","arguments":{"domain":"a.com"}}}]`))
+	req, _ := http.NewRequest("POST", e.ts.URL+"/mcp/"+read.MCPID, bytes.NewBufferString(`[{"jsonrpc":"2.0","id":6,"method":"prompts/list"},{"jsonrpc":"2.0","id":7,"method":"prompts/get","params":{"name":"diagnose_site","arguments":{"domain":"a.com"}}}]`))
 	req.Header.Set("Authorization", "Bearer "+readTok)
 	r, _ := e.c.Do(req)
 	var batch []map[string]any
@@ -107,6 +140,51 @@ func TestMCPTokensAndScopes(t *testing.T) {
 	entries, _, _ := e.srv.Audit.List(ctx, 50, 0)
 	if len(entries) == 0 || !strings.Contains(mustMarshal(entries), "run_shell") {
 		t.Fatal("tool call not audited")
+	}
+}
+
+func TestMCPClientRestrictions(t *testing.T) {
+	e := newEnv(t, nil)
+	ctx := context.Background()
+	agents := []struct{ key, name string }{
+		{"kimi", "Kimi Code"},
+		{"deepseek", "DeepSeek MCP"},
+		{"claude", "Claude Code"},
+		{"codex", "Codex CLI"},
+	}
+	for _, agent := range agents {
+		t.Run(agent.key, func(t *testing.T) {
+			tk, secret, err := e.srv.Tokens.Create(ctx, apitoken.Input{Name: agent.key, Scope: "read", Client: agent.key})
+			if err != nil {
+				t.Fatal(err)
+			}
+			init := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","clientInfo":{"name":"Other Agent","version":"1"}}}`
+			_, m := e.rpcAgent(tk.MCPID, secret, "Other Agent", init)
+			if m["error"] == nil {
+				t.Fatalf("unselected agent initialized: %v", m)
+			}
+			init = `{"jsonrpc":"2.0","id":2,"method":"initialize","params":{"protocolVersion":"2025-06-18","clientInfo":{"name":"` + agent.name + `","version":"1"}}}`
+			_, m = e.rpcAgent(tk.MCPID, secret, agent.name, init)
+			if m["error"] != nil || m["result"] == nil {
+				t.Fatalf("selected agent rejected: %v", m)
+			}
+			_, m = e.rpcAgent(tk.MCPID, secret, agent.name, `{"jsonrpc":"2.0","id":3,"method":"tools/list"}`)
+			if m["error"] != nil || m["result"] == nil {
+				t.Fatalf("selected agent could not list tools: %v", m)
+			}
+			_, m = e.rpcAgent(tk.MCPID, secret, "Other Agent", `{"jsonrpc":"2.0","id":4,"method":"tools/list"}`)
+			if m["error"] == nil {
+				t.Fatalf("agent switch accepted: %v", m)
+			}
+		})
+	}
+	tk, secret, err := e.srv.Tokens.Create(ctx, apitoken.Input{Name: "ua-fallback", Scope: "read", Client: "kimi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, m := e.rpcAgent(tk.MCPID, secret, "KimiCode/1.0", `{"jsonrpc":"2.0","id":5,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}`)
+	if m["error"] != nil || m["result"] == nil {
+		t.Fatalf("User-Agent fallback rejected: %v", m)
 	}
 }
 

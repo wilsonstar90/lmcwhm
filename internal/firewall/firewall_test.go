@@ -11,6 +11,7 @@ import (
 
 	"github.com/wilsonstar90/lmcwhm/internal/secrets"
 	"github.com/wilsonstar90/lmcwhm/internal/store"
+	"github.com/wilsonstar90/lmcwhm/internal/webenv"
 )
 
 // newSvc uses a fake nft that records every script it is given.
@@ -214,5 +215,19 @@ func TestDropLog(t *testing.T) {
 	}
 	if rs, _ := sv.Ruleset(ctx, Config{Enabled: true, Policy: "accept"}); strings.Contains(rs, "drop policy") {
 		t.Error("policy drop logged under accept")
+	}
+}
+
+func TestCDNConfigPersistence(t *testing.T) {
+	sv, _ := newSvc(t)
+	ctx := context.Background()
+	in := CDNConfig{CloudflareTunnel: true, Ranges: []string{"203.0.113.0/24"}, Headers: []webenv.CDNHeader{{Name: "X-Real-IP"}}}
+	saved, err := sv.SaveCDN(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := sv.CDN(ctx)
+	if !saved.CloudflareTunnel || !got.CloudflareTunnel || len(got.Ranges) != 1 || len(got.Headers) != 1 || got.Headers[0].Name != "X-Real-IP" {
+		t.Fatalf("CDN settings did not persist: %+v", got)
 	}
 }
