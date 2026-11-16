@@ -1365,6 +1365,11 @@
     "cdn": {
       "title": "CDN 真實 IP",
       "hint": "經 CDN（例如 Cloudflare 橘雲）連入時，伺服器看到的是 CDN 的 IP。只有從 CDN IP 段連入的請求，才會依序從下列 header 取得訪客 IP；日誌、WAF、CrowdSec、限流與 IP 黑名單都會改用真實訪客 IP。",
+      "request": "目前請求：Peer IP = {peer}；Client IP = {client}；外部連線 = {tls}。",
+      "tunnel": "Cloudflare Tunnel",
+      "tunnel_hint": "僅在 cloudflared 經 loopback 連入時啟用；網站 Edge、面板、REST 及 MCP 都會使用。",
+      "tunnel_warn": "啟用後，本機 loopback 可提供 CF-Connecting-IP。如並非使用 Tunnel，請關閉。",
+      "scope": "可信來源同時套用於網站、面板、REST API 及 MCP；面板授權 IP 與 Token IP 白名單會按 Client IP 判斷。",
       "builtin": "內建",
       "ranges_n": "{n} 個 IP 段",
       "other": "其他 CDN",
@@ -1756,6 +1761,15 @@
     "tool": "工具",
     "description": "說明",
     "scope": "權限",
+    "client": "AI Agent",
+    "client_hint": "只允許指定 AI Agent 使用此 Token 的 MCP 網址。",
+    "clients": {
+      "any": "任何 Agent",
+      "kimi": "Kimi",
+      "deepseek": "DeepSeek",
+      "claude": "Claude",
+      "codex": "Codex"
+    },
     "scopes": {
       "read": "唯讀",
       "operate": "操作",
@@ -2729,7 +2743,7 @@
     "cdn_header_name": "header 名稱",
     "cdn_add": "新增",
     "cdn_note": "防火牆會依序從以上 header 取得訪客真實 IP，以第一個有效值為準。",
-    "cdn_risk": "注意：直接連線伺服器 IP（不經 CDN）的人可自行偽造這些 header，冒充其他 IP 避開 IP 黑名單與 CC 限制；WAF、專屬規則與 UA / URL 黑名單仍然有效。若要完全防止，可在 Linode 雲端防火牆只允許 CDN IP 段連入 80 / 443。",
+    "cdn_risk": "只會信任 Cloudflare／已設定 CDN IP 段，或已啟用的 Tunnel 來源；其他直接連線提供的 Header 會被忽略。",
     "cdn_reset": "還原預設",
     "cdn_bad_header": "header 名稱只能使用英文、數字與 -，且不可重複"
   },

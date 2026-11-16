@@ -138,6 +138,8 @@ func (s *Server) handler() http.Handler {
 	})
 
 	r.HandleFunc("/mcp", s.mcpAuth)
+	r.HandleFunc("/mcp/{uuid}", s.mcpAuth)
+	r.HandleFunc("/mcp/*", s.mcpAuth)
 	r.Get("/manifest.webmanifest", s.handleManifest)
 	r.Get("/s/{token}", s.handlePublicShare)
 	r.Post("/s/{token}", s.handlePublicShare)
@@ -223,7 +225,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	cfg := s.Settings.Get()
 	token, sess, err := s.Auth.Login(r.Context(), auth.LoginInput{
 		Username: in.Username, Password: in.Password, TOTP: in.TOTP,
-		IP: clientIP(r), UserAgent: r.UserAgent(),
+		IP: s.clientIP(r), UserAgent: r.UserAgent(),
 		MaxFails: cfg.LoginMaxFails, LockWindow: time.Duration(cfg.LoginLockMins) * time.Minute,
 		SessionTTL: time.Duration(cfg.SessionTimeout) * time.Second,
 	})
@@ -240,7 +242,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name: sessionCookie, Value: token, Path: "/", Expires: sess.ExpiresAt,
-		HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteStrictMode,
+		HttpOnly: true, Secure: s.externalTLS(r), SameSite: http.SameSiteStrictMode,
 	})
 	writeJSON(w, http.StatusOK, map[string]any{"user": sess.User, "csrf": sess.CSRF})
 }
@@ -332,7 +334,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		s.Sites.Reapply("web.apply")
 	}
 	sess := sessionFrom(r)
-	s.Audit.Record(r.Context(), sess.User.Username, clientIP(r), "panel", "settings.update", diffSettings(old, next))
+	s.Audit.Record(r.Context(), sess.User.Username, s.clientIP(r), "panel", "settings.update", diffSettings(old, next))
 
 	restart := settings.RequiresRestart(old, next)
 	writeJSON(w, http.StatusOK, map[string]any{"settings": settingsView{Settings: next}, "restart": restart})
@@ -391,7 +393,7 @@ func (s *Server) handlePassword(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	s.Audit.Record(r.Context(), sess.User.Username, clientIP(r), "panel", "user.password", "")
+	s.Audit.Record(r.Context(), sess.User.Username, s.clientIP(r), "panel", "user.password", "")
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "relogin": true})
 }
 
@@ -410,7 +412,7 @@ func (s *Server) handleUsername(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	s.Audit.Record(r.Context(), sess.User.Username, clientIP(r), "panel", "user.username", sess.User.Username+" → "+in.Username)
+	s.Audit.Record(r.Context(), sess.User.Username, s.clientIP(r), "panel", "user.username", sess.User.Username+" → "+in.Username)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -440,7 +442,7 @@ func (s *Server) handle2FAEnable(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	s.Audit.Record(r.Context(), sess.User.Username, clientIP(r), "panel", "user.2fa_enable", "")
+	s.Audit.Record(r.Context(), sess.User.Username, s.clientIP(r), "panel", "user.2fa_enable", "")
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -459,7 +461,7 @@ func (s *Server) handle2FADisable(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	s.Audit.Record(r.Context(), sess.User.Username, clientIP(r), "panel", "user.2fa_disable", "")
+	s.Audit.Record(r.Context(), sess.User.Username, s.clientIP(r), "panel", "user.2fa_disable", "")
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -503,7 +505,7 @@ func (s *Server) handlePutSSL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sess := sessionFrom(r)
-	s.Audit.Record(r.Context(), sess.User.Username, clientIP(r), "panel", "ssl.update", string(in.Mode))
+	s.Audit.Record(r.Context(), sess.User.Username, s.clientIP(r), "panel", "ssl.update", string(in.Mode))
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "restart": true})
 	time.AfterFunc(800*time.Millisecond, s.RequestRestart)
 }

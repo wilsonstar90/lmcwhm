@@ -1,6 +1,6 @@
 # lmcwhm 架構與驗證
 
-本文描述 **`v0.22.0` 實際實作**，唔再將早期構想當成現狀。最後一節先係尚未完成嘅方向。
+本文描述 **`v0.22.1` 實際實作**，唔再將早期構想當成現狀。最後一節先係尚未完成嘅方向。
 
 ## 1. 核心決策
 
@@ -29,7 +29,7 @@ Internet / Cloudflare / Linode Cloud Firewall
 
  lmcwhm（systemd、Go binary）
  ├─ 內嵌 Vue SPA
- ├─ /api/v1、WebSocket、/mcp、CLI
+ ├─ /api/v1、WebSocket、/mcp/{uuid}、CLI
  ├─ SQLite + migrations
  ├─ Action / durable tasks / cron / monitor / alerts / stats workers
  └─ Docker、HAProxy、Nginx、nftables、systemd integrations
@@ -103,6 +103,7 @@ deploy/                 install、offline bundle、Linux E2E scripts
 - HAProxy 同 Nginx 都先寫好並驗證，再決定實際需要更新嘅部分，避免一邊驗證失敗而另一邊已提前套用。純配置操作冇變化唔 reload；現有 map／ACL 優先經 Runtime API 更新，其他改動或 runtime 更新失敗先 master-worker hot reload。`ensureStack` 可能已先寫新配置，所以建站、WAF、更新及修復流程保留強制 reload，唔會因 snapshot 相同而漏套用。
 - Nginx 配置有實際變更時改用快速容器重啟並等待 ready，避免 graceful reload 嘅舊 worker 長時間提供舊規則及累積記憶體；冇變更唔重啟，HAProxy 則保留 hot reload。
 - Nginx vhost 同樣先驗證再套用；真實 IP、CDN trusted ranges、黑白名單及 protection exemptions 會生成入 Edge 設定。
+- Client IP 以即時 TCP peer 判斷信任：Cloudflare 公網 ranges、自訂 CDN ranges，或明確啟用 Cloudflare Tunnel 後嘅 loopback cloudflared。每網站 CDN Header 唔再接受任意來源；面板、REST、MCP、登入鎖定及審計共用同一 Cloudflare／Tunnel resolver，並保留 Peer IP 同 Client IP 嘅分別。
 - gRPC 網站需要繞過會阻礙 streaming body 嘅 ModSecurity 處理，唔等於全局關閉 WAF。
 
 ### Runtime 與 App Store
@@ -118,7 +119,7 @@ deploy/                 install、offline bundle、Linux E2E scripts
 
 - Browser：HttpOnly + SameSite session、非 GET CSRF、bcrypt、TOTP、按 IP 登入鎖定。
 - Gates：授權 IP → 綁定域名 → BasicAuth → 安全入口；可自訂未認證回應。
-- API Token：驗證使用 SHA-256 hash；新 Token 另用面板 master key 以 AES-256-GCM 加密保存，管理員可按需翻查。scope 為 read／operate／admin，可設 expiry、IP allowlist、編輯到期日或即時暫停／恢復。舊 hash-only Token 不可翻查，只可撤銷後重建。
+- API Token：驗證使用 SHA-256 hash；新 Token 另用面板 master key 以 AES-256-GCM 加密保存，管理員可按需翻查。scope 為 read／operate／admin，可設 expiry、IP allowlist、編輯到期日或即時暫停／恢復。每個 Token 有獨立 UUIDv4 MCP endpoint，URL 與 Token 必須匹配；可限制只用 Kimi／DeepSeek／Claude／Codex，身份來自 MCP clientInfo 及 User-Agent。舊 hash-only Token 不可翻查，只可撤銷後重建。
 - 子用戶：按模組及可選網站 IDs 授權；未映射嘅新 API route 預設只限管理員。
 - 全局 running tasks、task history 及清除歷史只限管理員。隨機 12 字元 task ID 作為 caller 查詢自己背景工作進度嘅 capability，避免列出或讀取他人任務。
 - Terminal 開啟前需要再次驗證；主機及容器 terminal 都係高權限功能。

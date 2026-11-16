@@ -115,7 +115,7 @@ func (s *Server) tokenUser(r *http.Request) (auth.User, bool) {
 	if !ok || s.Tokens == nil {
 		return auth.User{}, false
 	}
-	t, err := s.Tokens.Verify(r.Context(), strings.TrimSpace(tok), clientIP(r))
+	t, err := s.Tokens.Verify(r.Context(), strings.TrimSpace(tok), s.clientIP(r))
 	if err != nil {
 		return auth.User{}, false
 	}

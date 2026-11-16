@@ -535,6 +535,7 @@ type edgeData struct {
 	VarnishPort int
 	Passthrough []passBackend
 	CDNHeaders  []string // the custom CDN's address headers (none = no custom CDN)
+	Tunnel      bool     // trust loopback cloudflared peers
 	CDNGroups   []cdnGroup
 	Rules       []ruleData
 	Body        bool // a rule reads the request body
@@ -602,6 +603,7 @@ func (e *Env) edgeFiles(sites []Site, pass []Passthrough) (map[string][]byte, er
 	hostMaps("grpc", grpc, files)
 	hostMaps("cache", cache, files)
 	c := e.cdn()
+	data.Tunnel = c.Tunnel
 	files["maps/cdn_cf.lst"], files["maps/cdn_custom.lst"] = cdnLists(c)
 	e.patternFiles(files)
 	data.Rules, data.Body = e.protectFiles(sites, files)

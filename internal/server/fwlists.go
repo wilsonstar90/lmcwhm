@@ -41,7 +41,7 @@ func (s *Server) handleImportFWIPs(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	self, _ := netip.ParseAddr(clientIP(r))
+	self, _ := netip.ParseAddr(s.clientIP(r))
 	added, skipped, err := s.Firewall.ImportIPs(r.Context(), in.List, in.IPs, time.Duration(in.Minutes)*time.Minute, in.Remark, self.Unmap())
 	if err != nil {
 		writeFWErr(w, err)
@@ -91,9 +91,16 @@ func (s *Server) handleKeepFWIP(w http.ResponseWriter, r *http.Request) {
 
 // applyPatterns queues the latest edge configuration and returns its shared task.
 func (s *Server) applyPatterns(w http.ResponseWriter, r *http.Request, out any) {
+	s.applyPatternsWithRollback(w, r, out, nil)
+}
+
+func (s *Server) applyPatternsWithRollback(w http.ResponseWriter, r *http.Request, out any, rollback func()) {
 	if s.Sites.Env.Installed(r.Context()) {
 		id := s.Sites.ApplyAsync("web.patterns")
 		if err := s.Tasks.Wait(r.Context(), id); err != nil {
+			if rollback != nil {
+				rollback()
+			}
 			writeErr(w, http.StatusInternalServerError, err)
 			return
 		}

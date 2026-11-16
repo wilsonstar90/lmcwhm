@@ -73,7 +73,7 @@ func writeCodedErr(w http.ResponseWriter, err error, notFound ...error) {
 }
 
 func (s *Server) auditCat(r *http.Request, category, action, detail string) {
-	s.Audit.Record(r.Context(), sessionFrom(r).User.Username, clientIP(r), category, action, detail)
+	s.Audit.Record(r.Context(), sessionFrom(r).User.Username, s.clientIP(r), category, action, detail)
 }
 
 // ---- App Store ----

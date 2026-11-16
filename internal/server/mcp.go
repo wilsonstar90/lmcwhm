@@ -654,20 +654,21 @@ func sameOrigin(origin, host string) bool {
 	return ok && strings.EqualFold(after, host)
 }
 
-// mcpAuth resolves the bearer token for /mcp; failures look like any unknown path.
+// mcpAuth resolves a bearer token only at its own /mcp/{uuid} endpoint.
 func (s *Server) mcpAuth(w http.ResponseWriter, r *http.Request) {
+	endpoint := chi.URLParam(r, "uuid")
 	tok, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if !ok || s.Tokens == nil {
+	if endpoint == "" || !ok || s.Tokens == nil {
 		notFound(w)
 		return
 	}
-	t, err := s.Tokens.Verify(r.Context(), strings.TrimSpace(tok), clientIP(r))
+	address := s.requestAddress(r)
+	t, err := s.Tokens.VerifyMCP(r.Context(), strings.TrimSpace(tok), address.Client, endpoint)
 	if err != nil {
-		w.Header().Set("WWW-Authenticate", `Bearer realm="lmcwhm"`)
-		http.Error(w, "invalid token", http.StatusUnauthorized)
+		notFound(w)
 		return
 	}
-	c := mcp.Caller{Name: "token:" + t.Name, Scope: t.Scope, IP: clientIP(r)}
+	c := mcp.Caller{Name: "token:" + t.Name, Scope: t.Scope, IP: address.Client, TokenID: t.ID, AllowedClient: t.Client, UserAgent: r.UserAgent()}
 	s.handleMCP(w, r.WithContext(context.WithValue(r.Context(), mcpCallerKey{}, c)))
 }
 
@@ -843,7 +844,7 @@ func (s *Server) handleAIAsk(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, errBadRequest)
 		return
 	}
-	c := mcp.Caller{Name: "ai:" + sessionFrom(r).User.Username, IP: clientIP(r)}
+	c := mcp.Caller{Name: "ai:" + sessionFrom(r).User.Username, IP: s.clientIP(r)}
 	ans, err := s.AI.Ask(r.Context(), in.Turns, s.Settings.Get().Language, c)
 	if err != nil {
 		if errors.Is(err, ai.ErrNoKey) || errors.Is(err, ai.ErrRefused) || errors.Is(err, ai.ErrConfig) {

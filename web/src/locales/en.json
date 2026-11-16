@@ -1365,6 +1365,11 @@
     "cdn": {
       "title": "Real visitor IP behind a CDN",
       "hint": "Behind a CDN (e.g. Cloudflare proxied), the server sees the CDN's address. Only requests from the CDN's ranges have the visitor's address taken from the headers below, in order; logs, the WAF, CrowdSec, rate limits and the IP black list then use the real visitor.",
+      "request": "Current request: Peer IP = {peer}; Client IP = {client}; external connection = {tls}.",
+      "tunnel": "Cloudflare Tunnel",
+      "tunnel_hint": "Enable only when cloudflared connects over loopback; this applies to the website edge, panel, REST and MCP.",
+      "tunnel_warn": "When enabled, a local loopback peer may supply CF-Connecting-IP. Disable this if you do not use Tunnel.",
+      "scope": "Trusted sources apply to websites, the panel, REST API and MCP; panel allowed IPs and token IP allow-lists use the Client IP.",
       "builtin": "Built in",
       "ranges_n": "{n} ranges",
       "other": "Other CDN",
@@ -1756,6 +1761,15 @@
     "tool": "Tool",
     "description": "Description",
     "scope": "Scope",
+    "client": "AI agent",
+    "client_hint": "Allow only the selected AI agent to use this token's MCP endpoint.",
+    "clients": {
+      "any": "Any agent",
+      "kimi": "Kimi",
+      "deepseek": "DeepSeek",
+      "claude": "Claude",
+      "codex": "Codex"
+    },
     "scopes": {
       "read": "Read",
       "operate": "Operate",
@@ -2729,7 +2743,7 @@
     "cdn_header_name": "Header name",
     "cdn_add": "Add",
     "cdn_note": "The visitor address is taken from the first of these headers that holds a valid one.",
-    "cdn_risk": "Note: anyone connecting to the server IP directly (not through the CDN) can forge these headers and pose as another IP to get around the IP block list and CC limits; the WAF, dedicated rules and User-Agent / URL lists still apply. To prevent it completely, allow only the CDN ranges to ports 80 / 443 in the Linode Cloud Firewall.",
+    "cdn_risk": "Only Cloudflare / configured CDN ranges, or an enabled Tunnel source, are trusted. Headers supplied by other direct connections are ignored.",
     "cdn_reset": "Restore defaults",
     "cdn_bad_header": "Header names may only contain letters, digits and -, without duplicates"
   },
