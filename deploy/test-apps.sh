@@ -693,7 +693,12 @@ FIRED="$(api GET '/waf/events?lines=50' | python3 -c "import sys,json; e=[x for 
 task PUT /waf/crs/disabled "{\"ids\":$FIRED}"
 grep -q "SecRuleRemoveById" /opt/lmcwhm/web/nginx/nginx.conf || fail "disabled rules not in nginx.conf"
 code="$(curl -s -o /dev/null -w '%{http_code}' --resolve db.test:80:127.0.0.1 "http://db.test/index.php?id=1%27%20OR%20%271%27=%271")"
-[[ "$code" == 200 ]] || fail "rules switched off for every site still block: $code (ids $FIRED)"
+if [[ "$code" != 200 ]]; then
+  docker restart lmcwhm-nginx >/dev/null
+  sleep 2
+  restarted_code="$(curl -s -o /dev/null -w '%{http_code}' --resolve db.test:80:127.0.0.1 "http://db.test/index.php?id=1%27%20OR%20%271%27=%271")"
+  fail "rules switched off for every site still block: $code; after nginx restart: $restarted_code (ids $FIRED)"
+fi
 task PUT /waf/crs/disabled '{"ids":[]}'
 task PUT /waf '{"enabled":false,"engine":"On","paranoia":1,"anomaly":5,"disabled":[]}'
 [[ "$(docker inspect -f '{{.Config.Image}}' lmcwhm-nginx)" == nginx:stable ]] || fail "nginx not switched back"

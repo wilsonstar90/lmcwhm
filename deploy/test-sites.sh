@@ -309,6 +309,10 @@ print(out.decode(errors='replace'))
 PY
   direct_code="$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: php.test' -H 'X-Lmcwhm-Block: 410:rule-c14' http://127.0.0.1:8080/lvl2)"
   echo "direct nginx block header status: $direct_code"
+  docker restart lmcwhm-haproxy >/dev/null
+  sleep 2
+  restarted_code="$(code --resolve php.test:80:127.0.0.1 http://php.test/lvl2)"
+  echo "after HAProxy restart: $restarted_code"
   docker logs --since 2m lmcwhm-haproxy 2>&1 || true
   api GET /protect/rules
   api GET /waf
