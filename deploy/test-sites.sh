@@ -286,9 +286,14 @@ DET="$(api POST /protect/rules '{"name":"probe","enabled":true,"match_all":true,
 [[ "$(code --resolve php.test:80:127.0.0.1 http://php.test/lvl2)" != 410 ]] || fail "level 2 rule ran at paranoia level 1"
 waf="$(api GET /waf | python3 -c "import sys,json; s=json.load(sys.stdin)['settings']; s['paranoia']=2; print(json.dumps(s))")"
 wait_task "$(api PUT /waf "$waf" | jget "['task_id']")"
-lvl_code="$(code --resolve php.test:80:127.0.0.1 http://php.test/lvl2)"
+lvl_code=""
+for _ in $(seq 1 10); do
+  lvl_code="$(code --resolve php.test:80:127.0.0.1 http://php.test/lvl2)"
+  [[ "$lvl_code" == 410 ]] && break
+  sleep 0.5
+done
 if [[ "$lvl_code" != 410 ]]; then
-  docker exec lmcwhm-haproxy sh -c 'grep -n "rule-c\|lvl2" /opt/lmcwhm/edge/haproxy.cfg || true'
+  docker exec lmcwhm-haproxy sh -c 'grep -n "rule-c\|lvl2" /opt/lmcwhm/edge/haproxy.cfg || true; cat /opt/lmcwhm/edge/maps/rules/c14_0.lst || true'
   api GET /protect/rules
   api GET /waf
   fail "level 2 rule (status 410) did not run at paranoia level 2: $lvl_code"

@@ -87,10 +87,15 @@ func (f *fakeCommands) Len() int {
 	return len(f.items)
 }
 
-func (f *fakeCommands) At(i int) string {
+func (f *fakeCommands) Last() string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.items[i]
+	for i := len(f.items) - 1; i >= 0; i-- {
+		if f.items[i] != "quit" && f.items[i] != "prompt" {
+			return f.items[i]
+		}
+	}
+	return ""
 }
 
 func (f *fakeCommands) Snapshot() []string {
@@ -173,7 +178,7 @@ func TestSetLists(t *testing.T) {
 	if err := e.SetLists(ctx, EdgeIPs{Block: many, Allow: []string{"198.51.100.0/24"}}); err != nil {
 		t.Fatal(err)
 	}
-	if !got.Contains("prepare acl "+block) || !got.Contains("add acl @7 "+block+" 10.0.2.99") || got.At(got.Len()-2) != "commit acl @7 "+block {
+	if !got.Contains("prepare acl "+block) || !got.Contains("add acl @7 "+block+" 10.0.2.99") || got.Last() != "commit acl @7 "+block {
 		t.Errorf("versioned update: %q", got.Snapshot()[max(0, got.Len()-3):])
 	}
 	// HAProxy errors are reported.
