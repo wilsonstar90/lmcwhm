@@ -326,7 +326,14 @@ api GET '/security/events?site=php.test&source=rule' | grep -q '"status":410' ||
 PG="$(api POST /errpages '{"name":"e2e","html":"<p>E2E-PAGE <!--# echo var=\"status\" --> <!--# echo var=\"lmcwhm_block_reason\" --></p>"}' | jget "['id']")"
 api PUT /errpages/mapping "{\"global\":{\"403\":$PG}}" >/dev/null
 page="$(curl -s --resolve php.test:80:127.0.0.1 http://php.test/xmlrpc.php)"
-[[ "$page" == *"E2E-PAGE 403 rule-wp-1002"* ]] || fail "custom 403 page: $page"
+if [[ "$page" != *"E2E-PAGE 403 rule-wp-1002"* ]]; then
+  docker exec lmcwhm-nginx sh -c 'grep -n "error_page\|e2e" /etc/nginx/lmcwhm/nginx.conf /etc/nginx/lmcwhm/conf.d/php.test.conf || true'
+  docker restart lmcwhm-nginx >/dev/null
+  sleep 2
+  restarted_page="$(curl -s --resolve php.test:80:127.0.0.1 http://php.test/xmlrpc.php)"
+  echo "after nginx restart: $restarted_page"
+  fail "custom 403 page: $page"
+fi
 [[ "$(api PUT /errpages/mapping '{"global":{"200":1}}' | jget "['code']")" == errpages.invalid_mapping ]] || fail "status 200 mapped"
 [[ "$(api POST "/errpages/$PG/delete" | jget "['code']")" == errpages.in_use ]] || fail "page in use deleted"
 api PUT /errpages/mapping '{"global":{}}' >/dev/null
