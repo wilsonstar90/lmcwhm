@@ -292,32 +292,7 @@ for _ in $(seq 1 10); do
   [[ "$lvl_code" == 410 ]] && break
   sleep 0.5
 done
-if [[ "$lvl_code" != 410 ]]; then
-  docker exec lmcwhm-haproxy sh -c 'grep -n "rule-c\|lvl2" /opt/lmcwhm/edge/haproxy.cfg || true; cat /opt/lmcwhm/edge/maps/rules/c14_0.lst /opt/lmcwhm/edge/maps/prot_exact.map || true'
-  python3 - <<'PY'
-import socket
-s = socket.socket(socket.AF_UNIX)
-s.connect('/opt/lmcwhm/edge/run/admin.sock')
-s.sendall(b'prompt\nshow info\nshow conf\nshow map /opt/lmcwhm/edge/maps/prot_exact.map\nshow map /opt/lmcwhm/edge/maps/rules/c14_0.lst\nshow acl /opt/lmcwhm/edge/maps/rules/c14_0.lst\nshow acl /opt/lmcwhm/edge/lists/allow.lst\nshow acl /opt/lmcwhm/edge/maps/url_allow_prefix.lst\nquit\n')
-out = b''
-while True:
-    b = s.recv(65536)
-    if not b:
-        break
-    out += b
-print(out.decode(errors='replace'))
-PY
-  direct_code="$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: php.test' -H 'X-Lmcwhm-Block: 410:rule-c14' http://127.0.0.1:8080/lvl2)"
-  echo "direct nginx block header status: $direct_code"
-  docker restart lmcwhm-haproxy >/dev/null
-  sleep 2
-  restarted_code="$(code --resolve php.test:80:127.0.0.1 http://php.test/lvl2)"
-  echo "after HAProxy restart: $restarted_code"
-  docker logs --since 2m lmcwhm-haproxy 2>&1 || true
-  api GET /protect/rules
-  api GET /waf
-  fail "level 2 rule (status 410) did not run at paranoia level 2: $lvl_code"
-fi
+[[ "$lvl_code" == 410 ]] || fail "level 2 rule (status 410) did not run at paranoia level 2: $lvl_code"
 [[ "$(code -A 'probe-detect/1' --resolve php.test:80:127.0.0.1 http://php.test/index.php)" == 200 ]] || fail "detect-only rule blocked"
 sleep 1
 api GET '/security/events?site=php.test&action=detected' | grep -q "\"rule\":\"$DET\"" || fail "detection not in the log: $(api GET '/security/events?site=php.test' | head -c 400)"
@@ -326,14 +301,7 @@ api GET '/security/events?site=php.test&source=rule' | grep -q '"status":410' ||
 PG="$(api POST /errpages '{"name":"e2e","html":"<p>E2E-PAGE <!--# echo var=\"status\" --> <!--# echo var=\"lmcwhm_block_reason\" --></p>"}' | jget "['id']")"
 api PUT /errpages/mapping "{\"global\":{\"403\":$PG}}" >/dev/null
 page="$(curl -s --resolve php.test:80:127.0.0.1 http://php.test/xmlrpc.php)"
-if [[ "$page" != *"E2E-PAGE 403 rule-wp-1002"* ]]; then
-  docker exec lmcwhm-nginx sh -c 'grep -n "error_page\|e2e" /etc/nginx/lmcwhm/nginx.conf /etc/nginx/lmcwhm/conf.d/php.test.conf || true'
-  docker restart lmcwhm-nginx >/dev/null
-  sleep 2
-  restarted_page="$(curl -s --resolve php.test:80:127.0.0.1 http://php.test/xmlrpc.php)"
-  echo "after nginx restart: $restarted_page"
-  fail "custom 403 page: $page"
-fi
+[[ "$page" == *"E2E-PAGE 403 rule-wp-1002"* ]] || fail "custom 403 page: $page"
 [[ "$(api PUT /errpages/mapping '{"global":{"200":1}}' | jget "['code']")" == errpages.invalid_mapping ]] || fail "status 200 mapped"
 [[ "$(api POST "/errpages/$PG/delete" | jget "['code']")" == errpages.in_use ]] || fail "page in use deleted"
 api PUT /errpages/mapping '{"global":{}}' >/dev/null
