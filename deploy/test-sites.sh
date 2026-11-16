@@ -293,7 +293,20 @@ for _ in $(seq 1 10); do
   sleep 0.5
 done
 if [[ "$lvl_code" != 410 ]]; then
-  docker exec lmcwhm-haproxy sh -c 'grep -n "rule-c\|lvl2" /opt/lmcwhm/edge/haproxy.cfg || true; cat /opt/lmcwhm/edge/maps/rules/c14_0.lst || true'
+  docker exec lmcwhm-haproxy sh -c 'grep -n "rule-c\|lvl2" /opt/lmcwhm/edge/haproxy.cfg || true; cat /opt/lmcwhm/edge/maps/rules/c14_0.lst /opt/lmcwhm/edge/maps/prot_exact.map || true'
+  python3 - <<'PY'
+import socket
+s = socket.socket(socket.AF_UNIX)
+s.connect('/opt/lmcwhm/edge/run/admin.sock')
+s.sendall(b'prompt\nshow map /opt/lmcwhm/edge/maps/prot_exact.map\nshow acl /opt/lmcwhm/edge/maps/rules/c14_0.lst\nshow acl /opt/lmcwhm/edge/lists/allow.lst\nshow acl /opt/lmcwhm/edge/maps/url_allow_prefix.lst\nquit\n')
+out = b''
+while True:
+    b = s.recv(65536)
+    if not b:
+        break
+    out += b
+print(out.decode(errors='replace'))
+PY
   api GET /protect/rules
   api GET /waf
   fail "level 2 rule (status 410) did not run at paranoia level 2: $lvl_code"
