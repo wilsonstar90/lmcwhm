@@ -847,8 +847,10 @@ func (e *Env) apply(ctx context.Context, sites []Site, pass []Passthrough, after
 	if !edgeChanged {
 		return nil
 	}
-	if synced, err := e.syncRuntimeMaps(ctx, esnap, eafter); synced && err == nil {
-		return nil
+	if !afterEnsure {
+		if synced, err := e.syncRuntimeMaps(ctx, esnap, eafter); synced && err == nil {
+			return nil
+		}
 	}
 	if _, err := dockerx.Run(ctx, "kill", "-s", "USR2", HAProxyName); err != nil {
 		return err
