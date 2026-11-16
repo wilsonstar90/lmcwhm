@@ -273,6 +273,7 @@ after_ha="$(proxy_pids lmcwhm-haproxy haproxy)"
 after_ng="$(proxy_pids lmcwhm-nginx nginx)"
 [[ "$before_ha" == "$after_ha" ]] || fail "protection updates created HAProxy workers: $before_ha -> $after_ha"
 [[ "$before_ng" == "$after_ng" ]] || fail "protection updates reloaded nginx: $before_ng -> $after_ng"
+api PUT /protect/sites '{"items":{"php.test":{"on":true}}}' >/dev/null
 rm -f /tmp/protect-action-*.json
 pass "concurrent protection changes share one task and do not reload the proxies"
 

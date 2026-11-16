@@ -773,10 +773,20 @@ func (e *Env) VhostConfig(s Site) (string, error) {
 	return string(files[filepath.Join("conf.d", s.Domain+".conf")]), nil
 }
 
-// Apply renders and validates both proxies before changing either one. Files
-// that are already current do not cause a reload; existing HAProxy maps and
-// ACLs are updated through its runtime socket instead of creating workers.
+// Apply renders configuration-only changes and avoids unnecessary reloads.
 func (e *Env) Apply(ctx context.Context, sites []Site, pass []Passthrough) error {
+	return e.apply(ctx, sites, pass, false)
+}
+
+// ApplyAfterEnsure preserves the established behavior for stack operations:
+// Ensure may already have written new files, so the running workers still need reloading.
+func (e *Env) ApplyAfterEnsure(ctx context.Context, sites []Site, pass []Passthrough) error {
+	return e.apply(ctx, sites, pass, true)
+}
+
+// apply validates both proxies before changing either one. Existing HAProxy
+// maps and ACLs can be updated through its runtime socket instead of workers.
+func (e *Env) apply(ctx context.Context, sites []Site, pass []Passthrough, afterEnsure bool) error {
 	if !e.Installed(ctx) {
 		return errors.New("web.not_installed")
 	}
@@ -810,8 +820,8 @@ func (e *Env) Apply(ctx context.Context, sites []Site, pass []Passthrough) error
 		rollback()
 		return err
 	}
-	nginxChanged := !snapshotsEqual(nsnap, nafter)
-	edgeChanged := !snapshotsEqual(esnap, eafter)
+	nginxChanged := afterEnsure || !snapshotsEqual(nsnap, nafter)
+	edgeChanged := afterEnsure || !snapshotsEqual(esnap, eafter)
 
 	if nginxChanged {
 		if out, err := dockerx.Run(ctx, append([]string{"exec", NginxName, "nginx", "-t"}, nginxConf...)...); err != nil {

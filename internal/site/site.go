@@ -442,10 +442,13 @@ func (sv *Service) specOf(s Site, byID map[int64]Site) webenv.Site {
 
 const webApplyResource = "webenv.apply"
 
-func (sv *Service) applyCurrent(ctx context.Context) error {
+func (sv *Service) applyCurrent(ctx context.Context, afterEnsure bool) error {
 	specs, err := sv.specs(ctx)
 	if err != nil {
 		return err
+	}
+	if afterEnsure {
+		return sv.Env.ApplyAfterEnsure(ctx, specs, nil)
 	}
 	return sv.Env.Apply(ctx, specs, nil)
 }
@@ -453,7 +456,7 @@ func (sv *Service) applyCurrent(ctx context.Context) error {
 // Apply synchronously renders the latest database state under the shared web lock.
 func (sv *Service) Apply(ctx context.Context) error {
 	return sv.tasks.RunAction(ctx, tasks.Action{Resource: webApplyResource}, func(ctx context.Context) error {
-		return sv.applyCurrent(ctx)
+		return sv.applyCurrent(ctx, true)
 	})
 }
 
@@ -463,7 +466,7 @@ func (sv *Service) ApplyAsync(title string) string {
 		Name: title, Resource: webApplyResource, IdempotencyKey: webApplyResource,
 		Coalesce: 300 * time.Millisecond,
 	}, func(ctx context.Context, log tasks.Logf) error {
-		return sv.applyCurrent(ctx)
+		return sv.applyCurrent(ctx, false)
 	})
 }
 
@@ -565,7 +568,7 @@ func (sv *Service) Reapply(title string) string {
 			return err
 		}
 		log("applying configuration")
-		return sv.applyCurrent(ctx)
+		return sv.applyCurrent(ctx, true)
 	})
 }
 
