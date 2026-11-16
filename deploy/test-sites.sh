@@ -286,7 +286,13 @@ DET="$(api POST /protect/rules '{"name":"probe","enabled":true,"match_all":true,
 [[ "$(code --resolve php.test:80:127.0.0.1 http://php.test/lvl2)" != 410 ]] || fail "level 2 rule ran at paranoia level 1"
 waf="$(api GET /waf | python3 -c "import sys,json; s=json.load(sys.stdin)['settings']; s['paranoia']=2; print(json.dumps(s))")"
 wait_task "$(api PUT /waf "$waf" | jget "['task_id']")"
-[[ "$(code --resolve php.test:80:127.0.0.1 http://php.test/lvl2)" == 410 ]] || fail "level 2 rule (status 410) did not run at paranoia level 2"
+lvl_code="$(code --resolve php.test:80:127.0.0.1 http://php.test/lvl2)"
+if [[ "$lvl_code" != 410 ]]; then
+  docker exec lmcwhm-haproxy sh -c 'grep -n "rule-c\|lvl2" /opt/lmcwhm/edge/haproxy.cfg || true'
+  api GET /protect/rules
+  api GET /waf
+  fail "level 2 rule (status 410) did not run at paranoia level 2: $lvl_code"
+fi
 [[ "$(code -A 'probe-detect/1' --resolve php.test:80:127.0.0.1 http://php.test/index.php)" == 200 ]] || fail "detect-only rule blocked"
 sleep 1
 api GET '/security/events?site=php.test&action=detected' | grep -q "\"rule\":\"$DET\"" || fail "detection not in the log: $(api GET '/security/events?site=php.test' | head -c 400)"
