@@ -50,6 +50,12 @@ func (s *Server) ValidateTask(ctx context.Context, typ, cmd string) error {
 }
 
 func (s *Server) RunTask(ctx context.Context, typ, cmd string, out io.Writer) error {
+	return s.runAction(ctx, "cron."+typ+"."+cmd, "cron", func(ctx context.Context) error {
+		return s.runTask(ctx, typ, cmd, out)
+	})
+}
+
+func (s *Server) runTask(ctx context.Context, typ, cmd string, out io.Writer) error {
 	if typ == "malware_scan" {
 		return s.malwareTask(ctx, cmd, out)
 	}

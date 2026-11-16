@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/netip"
 	"strconv"
@@ -88,12 +89,25 @@ func (s *Server) handleKeepFWIP(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-// applyPatterns reloads the edge with the changed User-Agent / URL lists.
+// applyPatterns queues the latest edge configuration and returns its shared task.
 func (s *Server) applyPatterns(w http.ResponseWriter, r *http.Request, out any) {
 	if s.Sites.Env.Installed(r.Context()) {
-		if err := s.Sites.Apply(r.Context()); err != nil {
+		id := s.Sites.ApplyAsync("web.patterns")
+		if err := s.Tasks.Wait(r.Context(), id); err != nil {
 			writeErr(w, http.StatusInternalServerError, err)
 			return
+		}
+		raw, err := json.Marshal(out)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+		var body map[string]any
+		if err := json.Unmarshal(raw, &body); err != nil || body == nil {
+			out = map[string]any{"result": out, "task_id": id}
+		} else {
+			body["task_id"] = id
+			out = body
 		}
 	}
 	writeJSON(w, http.StatusOK, out)

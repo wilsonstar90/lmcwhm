@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -57,15 +58,56 @@ func TestRealIPConfig(t *testing.T) {
 	}
 }
 
+type fakeCommands struct {
+	mu    sync.Mutex
+	items []string
+}
+
+func (f *fakeCommands) add(cmd string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.items = append(f.items, cmd)
+}
+
+func (f *fakeCommands) Contains(want string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Contains(f.items, want)
+}
+
+func (f *fakeCommands) Reset() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.items = nil
+}
+
+func (f *fakeCommands) Len() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.items)
+}
+
+func (f *fakeCommands) At(i int) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.items[i]
+}
+
+func (f *fakeCommands) Snapshot() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.items...)
+}
+
 // fakeHAProxy answers the admin socket in prompt mode and records commands.
-func fakeHAProxy(t *testing.T, sock string) *[]string {
+func fakeHAProxy(t *testing.T, sock string) *fakeCommands {
 	t.Helper()
 	ln, err := net.Listen("unix", sock)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { ln.Close() })
-	var got []string
+	got := &fakeCommands{}
 	go func() {
 		for {
 			c, err := ln.Accept()
@@ -88,11 +130,11 @@ func fakeHAProxy(t *testing.T, sock string) *[]string {
 				default:
 					c.Write([]byte("\n> "))
 				}
-				got = append(got, cmd)
+				got.add(cmd)
 			}
 		}
 	}()
-	return &got
+	return got
 }
 
 func TestSetLists(t *testing.T) {
@@ -115,15 +157,15 @@ func TestSetLists(t *testing.T) {
 	}
 	for _, want := range []string{"add acl " + block + " 192.0.2.2", "add acl " + block + " 2001:db8::/48", "del acl " + block + " 192.0.2.1",
 		"add acl " + filepath.Join(e.listsDir(), allowList) + " 198.51.100.0/24"} {
-		if !slices.Contains(*got, want) {
-			t.Errorf("missing %q in %q", want, *got)
+		if !got.Contains(want) {
+			t.Errorf("missing %q in %q", want, got.Snapshot())
 		}
 	}
 	if b, _ := os.ReadFile(block); string(b) != "192.0.2.2\n2001:db8::/48\n" {
 		t.Errorf("block.lst = %q", b)
 	}
 	// A large change is a new version, committed at once.
-	*got = nil
+	got.Reset()
 	many := make([]string, 600)
 	for i := range many {
 		many[i] = "10.0." + itoa(i/250) + "." + itoa(i%250)
@@ -131,8 +173,8 @@ func TestSetLists(t *testing.T) {
 	if err := e.SetLists(ctx, EdgeIPs{Block: many, Allow: []string{"198.51.100.0/24"}}); err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Contains(*got, "prepare acl "+block) || !slices.Contains(*got, "add acl @7 "+block+" 10.0.2.99") || (*got)[len(*got)-2] != "commit acl @7 "+block {
-		t.Errorf("versioned update: %q", (*got)[max(0, len(*got)-3):])
+	if !got.Contains("prepare acl "+block) || !got.Contains("add acl @7 "+block+" 10.0.2.99") || got.At(got.Len()-2) != "commit acl @7 "+block {
+		t.Errorf("versioned update: %q", got.Snapshot()[max(0, got.Len()-3):])
 	}
 	// HAProxy errors are reported.
 	if err := e.SetLists(ctx, EdgeIPs{Block: []string{"bogus"}}); err == nil {

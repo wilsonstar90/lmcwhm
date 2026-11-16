@@ -9,6 +9,7 @@ import {
 } from 'naive-ui'
 import { post, put, ApiError } from '../api/client'
 import CodeEditor from './CodeEditor.vue'
+import TaskModal from './TaskModal.vue'
 
 export interface Cond { field: string; op: string; negate: boolean; values: string[] }
 export interface Rule {
@@ -28,6 +29,7 @@ const code = ref('')
 const codeErr = ref('')
 const preview = ref('')
 const saving = ref(false)
+const task = ref<{ id: string; title: string } | null>(null)
 
 watch(
   () => props.rule,
@@ -94,10 +96,12 @@ async function save() {
   try {
     const base = props.beforeSave ? props.beforeSave(r.value) : r.value
     const body = { ...base, conditions: r.value.conditions.map((c) => ({ ...c, values: c.values.map((x) => x.trim()).filter(Boolean) })) }
-    if (r.value.id) await put(`/protect/rules/${r.value.id}`, body)
-    else await post('/protect/rules', body)
+    const result = r.value.id
+      ? await put<{ task_id?: string }>(`/protect/rules/${r.value.id}`, body)
+      : await post<{ task_id?: string }>('/protect/rules', body)
     msg.success(t('common.saved'))
-    emit('saved')
+    if (result.task_id) task.value = { id: result.task_id, title: r.value.name }
+    else emit('saved')
   } catch (e) {
     msg.error(e instanceof ApiError ? e.text : String(e))
   } finally {
@@ -178,6 +182,7 @@ const placeholderFor = (c: Cond) => t(`rules.examples.${c.field}`)
       </template>
     </n-card>
   </n-modal>
+  <TaskModal :task-id="task?.id ?? null" :title="task?.title ?? ''" @close="task = null; emit('saved')" @done="emit('saved')" />
 </template>
 
 <style scoped>

@@ -1,6 +1,6 @@
 # lmcwhm 架構與驗證
 
-本文描述 **`v0.21.6` 實際實作**，唔再將早期構想當成現狀。最後一節先係尚未完成嘅方向。
+本文描述 **`v0.22.0` 實際實作**，唔再將早期構想當成現狀。最後一節先係尚未完成嘅方向。
 
 ## 1. 核心決策
 
@@ -9,7 +9,7 @@
 - **HAProxy 作 Edge**：統一處理 80/443、SNI、Host、TLS 終止或直通，再交 Nginx、Varnish 或後端。
 - **Docker CLI 管理運行環境**：Web、runtime、資料庫及應用主要以容器執行；面板核心本身由 systemd 管理。
 - **SQLite 作面板元數據**：適合單機，WAL、foreign keys、busy timeout、單一 writer connection。
-- **UI、REST、CLI、MCP 共用 service 層**：高風險操作需要明確權限及審計。
+- **UI、REST、CLI、MCP 共用 service 及 Action 層**：高風險操作需要明確權限及審計；快速寫入維持同步，共享配置及重型工作使用持久任务。
 
 ## 2. 運行架構
 
@@ -31,7 +31,7 @@ Internet / Cloudflare / Linode Cloud Firewall
  ├─ 內嵌 Vue SPA
  ├─ /api/v1、WebSocket、/mcp、CLI
  ├─ SQLite + migrations
- ├─ task / cron / monitor / alerts / stats workers
+ ├─ Action / durable tasks / cron / monitor / alerts / stats workers
  └─ Docker、HAProxy、Nginx、nftables、systemd integrations
 ```
 
@@ -100,7 +100,7 @@ deploy/                 install、offline bundle、Linux E2E scripts
 - 每個 hostname 只有一個 site owner；SNI 頁係 `sites` 資料嘅 read model，冇另一份可漂移路由表。
 - exact match 優先於 wildcard；較深 wildcard 優先於較淺。
 - TLS terminate 由 Edge 使用域名證書；passthrough 將 ClientHello 原封轉交後端。
-- HAProxy 設定由 DB 重新生成，先 `haproxy -c`，再 master-worker reload，失敗還原；**冇使用 Runtime API 逐條改 map**。
+- HAProxy 同 Nginx 都先寫好並驗證，再決定實際需要更新嘅部分，避免一邊驗證失敗而另一邊已提前套用。配置冇變化唔 reload；現有 map／ACL 優先經 Runtime API 更新，其他改動或 runtime 更新失敗先 master-worker hot reload。
 - Nginx vhost 同樣先驗證再套用；真實 IP、CDN trusted ranges、黑白名單及 protection exemptions 會生成入 Edge 設定。
 - gRPC 網站需要繞過會阻礙 streaming body 嘅 ModSecurity 處理，唔等於全局關閉 WAF。
 
@@ -126,8 +126,10 @@ deploy/                 install、offline bundle、Linux E2E scripts
 
 ## 8. 背景服務與一致性
 
-- `tasks.Manager` 序列化重型工作，並為備份等長工作提供較長 timeout。
-- Task logs 短期保存在 memory，完成後寫入 SQLite history，設數量及長度上限。
+- 所有非 GET REST 請求先經 `actionMiddleware`，專用 MCP mutation 及 cron 亦使用同一 `tasks.Action` metadata；快速操作保持同步且不改變回應。現有 `Start`、`StartLong`、`RunSync` 工作統一經 Action 執行，共享 resource 有獨立鎖，重型工作保留全局序列化或較長 timeout。
+- Task 開始時已將 action、resource、idempotency key 及 running 狀態寫入 SQLite，完成後補回結果及 log。面板重啟時，未完成工作標記 interrupted／failed，唔會自動重跑非冪等操作；REST 同 MCP 仍可追查同一 ID。
+- 同一 idempotency key 運行中唔會重複開 task；共享 web apply 另用 coalescing，執行期間收到新修改會喺完成後按最新 DB 狀態再套用一次，而唔係並發製造 proxy workers。
+- 網站防護、CDN 設定、專屬規則及黑白名單維持「回應時已套用」嘅同步 API 合約，底層共用 task 完成後先回應，並只額外加入 `task_id`；對應 Vue 元件共用 TaskModal 並防止重複提交。Vue 仍嵌入單一 binary，呢個版本冇強行改變部署或特權邊界。
 - Cron 支援秒級 schedule、timeout、避免重疊、輸出及告警；SSL renew、security scan、app update check 等係內建 jobs。
 - Monitor、probe、site stats、security events、CrowdSec、GeoIP refresh、mail certificate sync 各自以 goroutine 運行。
 - SQLite 只允許一個 writer；migration 逐個 transaction 執行，新 migration 只應追加，唔應修改已發佈版本。
@@ -179,4 +181,4 @@ E2E scripts 會安裝套件、操作 Docker、nftables 及 systemd，只可以�
 - 更完整嘅前端自動化測試、真實第三方服務驗收及災難還原演練。
 - 任務模型可進一步保存 owner／module，取代單靠隨機 task ID capability 嘅查詢方式。
 
-早期設計中嘅 Runtime API、rclone、Monaco、uPlot、sqlc／goose、官方 MCP SDK、Git/HTTP App Store repository、插件 gRPC 及事件總線，唔係目前實作，不應再當成已完成架構。
+早期設計中嘅完整 Runtime API 路由管理、rclone、Monaco、uPlot、sqlc／goose、官方 MCP SDK、Git/HTTP App Store repository、插件 gRPC 及事件總線，唔係目前實作，不應再當成已完成架構。

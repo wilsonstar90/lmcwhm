@@ -27,15 +27,17 @@ func (s *Server) taskRoutes(r chi.Router) {
 	r.Post("/tasks/history/clear", s.handleTaskHistoryClear)
 }
 
-// recordTask is tasks.Manager.OnDone.
+// recordTask retains compatibility for managers without a store and prunes history.
 func (s *Server) recordTask(t tasks.Task) {
 	log := t.Log
 	if len(log) > keepTaskLog {
 		log = log[len(log)-keepTaskLog:]
 	}
 	ctx := context.Background()
-	if _, err := s.Store.DB.ExecContext(ctx, `INSERT OR REPLACE INTO task_history(id, name, status, error, started, finished, log)
-		VALUES(?, ?, ?, ?, ?, ?, ?)`, t.ID, t.Name, string(t.Status), t.Error, t.Started, t.Finished, strings.Join(log, "\n")); err != nil {
+	if _, err := s.Store.DB.ExecContext(ctx, `INSERT INTO task_history(id, name, action, resource, idempotency_key, status, error, started, finished, log)
+		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET status=excluded.status, error=excluded.error, finished=excluded.finished, log=excluded.log`,
+		t.ID, t.Name, t.Action, t.Resource, t.IdempotencyKey, string(t.Status), t.Error, t.Started, t.Finished, strings.Join(log, "\n")); err != nil {
 		s.Log.Warn("task history", "err", err)
 		return
 	}
@@ -75,13 +77,16 @@ func (s *Server) handleTaskList(w http.ResponseWriter, r *http.Request) {
 }
 
 type taskRow struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Status   string `json:"status"`
-	Error    string `json:"error,omitempty"`
-	Started  int64  `json:"started"`
-	Finished int64  `json:"finished"`
-	Log      string `json:"log,omitempty"`
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	Action         string `json:"action,omitempty"`
+	Resource       string `json:"resource,omitempty"`
+	IdempotencyKey string `json:"idempotency_key,omitempty"`
+	Status         string `json:"status"`
+	Error          string `json:"error,omitempty"`
+	Started        int64  `json:"started"`
+	Finished       int64  `json:"finished"`
+	Log            string `json:"log,omitempty"`
 }
 
 func (s *Server) handleTaskHistory(w http.ResponseWriter, r *http.Request) {
@@ -89,7 +94,7 @@ func (s *Server) handleTaskHistory(w http.ResponseWriter, r *http.Request) {
 	page := intParam(r, "page", 1, 1<<20)
 	var total int
 	s.Store.DB.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM task_history`).Scan(&total)
-	rows, err := s.Store.DB.QueryContext(r.Context(), `SELECT id, name, status, error, started, finished FROM task_history
+	rows, err := s.Store.DB.QueryContext(r.Context(), `SELECT id, name, action, resource, idempotency_key, status, error, started, finished FROM task_history
 		ORDER BY finished DESC LIMIT ? OFFSET ?`, size, (page-1)*size)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
@@ -99,7 +104,7 @@ func (s *Server) handleTaskHistory(w http.ResponseWriter, r *http.Request) {
 	items := []taskRow{}
 	for rows.Next() {
 		var t taskRow
-		if rows.Scan(&t.ID, &t.Name, &t.Status, &t.Error, &t.Started, &t.Finished) == nil {
+		if rows.Scan(&t.ID, &t.Name, &t.Action, &t.Resource, &t.IdempotencyKey, &t.Status, &t.Error, &t.Started, &t.Finished) == nil {
 			items = append(items, t)
 		}
 	}
@@ -108,8 +113,8 @@ func (s *Server) handleTaskHistory(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleTaskHistoryGet(w http.ResponseWriter, r *http.Request) {
 	var t taskRow
-	err := s.Store.DB.QueryRowContext(r.Context(), `SELECT id, name, status, error, started, finished, log FROM task_history WHERE id = ?`,
-		chi.URLParam(r, "id")).Scan(&t.ID, &t.Name, &t.Status, &t.Error, &t.Started, &t.Finished, &t.Log)
+	err := s.Store.DB.QueryRowContext(r.Context(), `SELECT id, name, action, resource, idempotency_key, status, error, started, finished, log FROM task_history WHERE id = ?`,
+		chi.URLParam(r, "id")).Scan(&t.ID, &t.Name, &t.Action, &t.Resource, &t.IdempotencyKey, &t.Status, &t.Error, &t.Started, &t.Finished, &t.Log)
 	if errors.Is(err, sql.ErrNoRows) {
 		writeJSON(w, http.StatusNotFound, apiError{Code: "common.not_found"})
 		return

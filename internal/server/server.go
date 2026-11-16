@@ -121,6 +121,9 @@ func New(d Deps) (*Server, error) {
 	if s.AI != nil {
 		s.AI.MCP = s.MCP
 	}
+	if s.Tasks != nil {
+		s.Tasks.OnError = func(err error) { s.Log.Warn("task persistence", "err", err) }
+	}
 	if s.Tasks != nil && s.Store != nil {
 		s.Tasks.OnDone = s.recordTask
 	}

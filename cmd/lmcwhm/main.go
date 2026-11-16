@@ -161,7 +161,7 @@ func serveCmd() *cobra.Command {
 					log.Error("acme http-01 responder", "err", err)
 				}
 			}()
-			tm := tasks.NewManager()
+			tm := tasks.NewManager(a.st)
 			tm.Loc, _ = time.LoadLocation(a.settings.Get().Timezone)
 			sites := site.NewService(a.st, env, webCfg, &acme.Issuer{Cfg: webCfg, HTTP: responder}, tm)
 			sites.RebuildMarker = server.RebuildMarker(a.paths)

@@ -155,7 +155,9 @@ func (s *Server) buildMCP() *mcp.Server {
 				if err != nil {
 					return nil, err
 				}
-				return "restarted", s.Sites.RestartProject(ctx, id)
+				return mcpAction(s, ctx, "restart_project", "website", func(ctx context.Context) (string, error) {
+					return "restarted", s.Sites.RestartProject(ctx, id)
+				})
 			})
 		add(operate, "issue_certificate", "Issue / renew SSL", "Requests a Let's Encrypt (or configured CA) certificate for a site; runs in the background.",
 			O(map[string]any{"domain": S("site domain"), "challenge": S("validation", "http", "dns"), "wildcard": B("also cover *.domain (needs dns)")}, "domain"), false,
@@ -174,8 +176,10 @@ func (s *Server) buildMCP() *mcp.Server {
 				if err != nil {
 					return nil, err
 				}
-				task, err := s.Sites.IssueCert(ctx, id, a.Challenge, a.Wildcard)
-				return map[string]string{"task_id": task, "note": "check progress with get_task"}, err
+				return mcpAction(s, ctx, "issue_certificate", "website", func(ctx context.Context) (map[string]string, error) {
+					task, err := s.Sites.IssueCert(ctx, id, a.Challenge, a.Wildcard)
+					return map[string]string{"task_id": task, "note": "check progress with get_task"}, err
+				})
 			})
 	}
 	add(read, "get_task", "Background task status", "Status and log of a background task started by another tool.",
@@ -218,7 +222,9 @@ func (s *Server) buildMCP() *mcp.Server {
 				if a.Action != "start" && a.Action != "stop" && a.Action != "restart" {
 					return nil, mcp.ErrArgs
 				}
-				return a.Action + " done", s.Docker.Action(ctx, a.Name, a.Action)
+				return mcpAction(s, ctx, "container."+a.Action, "docker", func(ctx context.Context) (string, error) {
+					return a.Action + " done", s.Docker.Action(ctx, a.Name, a.Action)
+				})
 			})
 	}
 	if s.DBs != nil {
@@ -273,7 +279,9 @@ func (s *Server) buildMCP() *mcp.Server {
 				if err := mcp.Args(raw, &a); err != nil {
 					return nil, err
 				}
-				return s.Firewall.AddIP(ctx, a.IP, "block", time.Duration(a.Minutes)*time.Minute, "mcp", a.Reason)
+				return mcpAction(s, ctx, "firewall.ban", "security", func(ctx context.Context) (any, error) {
+					return s.Firewall.AddIP(ctx, a.IP, "block", time.Duration(a.Minutes)*time.Minute, "mcp", a.Reason)
+				})
 			})
 		add(operate, "unban_ip", "Unblock an IP", "Removes an IP or CIDR from the block list.",
 			O(map[string]any{"ip": S("IP address or CIDR")}, "ip"), false,
@@ -282,7 +290,9 @@ func (s *Server) buildMCP() *mcp.Server {
 				if err := mcp.Args(raw, &a); err != nil {
 					return nil, err
 				}
-				return "removed", s.Firewall.RemoveIP(ctx, a.IP, "block")
+				return mcpAction(s, ctx, "firewall.unban", "security", func(ctx context.Context) (string, error) {
+					return "removed", s.Firewall.RemoveIP(ctx, a.IP, "block")
+				})
 			})
 	}
 	if s.WAF != nil {
@@ -371,7 +381,9 @@ func (s *Server) buildMCP() *mcp.Server {
 				if err := mcp.Args(raw, &a); err != nil {
 					return nil, err
 				}
-				return "started", s.Cron.RunNow(ctx, a.ID)
+				return mcpAction(s, ctx, "cron.run", "cron", func(ctx context.Context) (string, error) {
+					return "started", s.Cron.RunNow(ctx, a.ID)
+				})
 			})
 	}
 	if s.Backup != nil {
@@ -407,10 +419,12 @@ func (s *Server) buildMCP() *mcp.Server {
 				if err != nil {
 					return nil, err
 				}
-				id := s.Tasks.StartLong("backup "+plan.Kind+" "+plan.Target, backupTimeout, func(ctx context.Context, log tasks.Logf) error {
-					return s.Backup.Run(ctx, plan, 0, logWriter(log))
+				return mcpAction(s, ctx, "backup.run", "backup", func(ctx context.Context) (map[string]string, error) {
+					id := s.Tasks.StartLong("backup "+plan.Kind+" "+plan.Target, backupTimeout, func(ctx context.Context, log tasks.Logf) error {
+						return s.Backup.Run(ctx, plan, 0, logWriter(log))
+					})
+					return map[string]string{"task_id": id}, nil
 				})
-				return map[string]string{"task_id": id}, nil
 			})
 	}
 	add(admin, "run_shell", "Run a shell command", "Runs a bash command as root on the host and returns its output (exit code included). Use only when no other tool fits.",
@@ -423,7 +437,9 @@ func (s *Server) buildMCP() *mcp.Server {
 			if err := mcp.Args(raw, &a); err != nil {
 				return nil, err
 			}
-			return runShell(ctx, a.Command, time.Duration(clampInt(a.Timeout, 60, 600))*time.Second), nil
+			return mcpAction(s, ctx, "shell.exec", "panel", func(ctx context.Context) (string, error) {
+				return runShell(ctx, a.Command, time.Duration(clampInt(a.Timeout, 60, 600))*time.Second), nil
+			})
 		})
 
 	if s.Probes != nil {

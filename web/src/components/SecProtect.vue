@@ -27,6 +27,7 @@ const loading = ref(false)
 const q = ref('')
 const checked = ref<string[]>([])
 const batch = ref<string | null>(null)
+const saving = ref(false)
 
 async function load() {
   loading.value = true
@@ -43,13 +44,18 @@ async function load() {
 onMounted(() => { load(); loadWAF() })
 
 async function save(items: Record<string, Prot>) {
+  if (saving.value) return
+  saving.value = true
   try {
-    await put('/protect/sites', { items })
-    await load()
+    const r = await put<{ task_id?: string }>('/protect/sites', { items })
+    if (r.task_id) task.value = { id: r.task_id, title: Object.keys(items).join(', ') }
+    else await load()
     emit('changed')
   } catch (e) {
     fail(e)
     load()
+  } finally {
+    saving.value = false
   }
 }
 const set = (r: Row, patch: Partial<Prot>) => save({ [r.domain]: { ...r.protect, ...patch } })
@@ -121,10 +127,11 @@ async function saveSettings() {
   })
   if (asns.some((a) => !a)) return msg.error(t('prot.bad_asn'))
   try {
-    await put('/protect/settings', { ...cur.value, crawlers: crawlers.value.split('\n'), idc: asns })
+    const r = await put<{ task_id?: string }>('/protect/settings', { ...cur.value, crawlers: crawlers.value.split('\n'), idc: asns })
     msg.success(t('common.saved'))
     settingsOpen.value = false
-    load()
+    if (r.task_id) task.value = { id: r.task_id, title: t('prot.settings') }
+    else load()
   } catch (e) {
     fail(e)
   }
@@ -152,12 +159,12 @@ async function saveCDN() {
 }
 const cdnCell = (r: Row) =>
   h(NSpace, { size: 4, align: 'center', wrap: false }, () => [
-    h(NCheckbox, { checked: r.protect.cdn, disabled: !r.supported, 'onUpdate:checked': (v: boolean) => set(r, { cdn: v }) }),
+    h(NCheckbox, { checked: r.protect.cdn, disabled: !r.supported || saving.value, 'onUpdate:checked': (v: boolean) => set(r, { cdn: v }) }),
     r.protect.cdn ? h(NButton, { size: 'tiny', quaternary: true, title: t('prot.cdn_headers'), onClick: () => openCDN(r) }, () => 'Headers') : null,
   ])
 
 const box = (r: Row, key: 'fake_spider' | 'idc' | 'crawler') =>
-  h(NCheckbox, { checked: r.protect[key], disabled: !r.supported || !r.protect.on, 'onUpdate:checked': (v: boolean) => set(r, { [key]: v }) })
+  h(NCheckbox, { checked: r.protect[key], disabled: !r.supported || !r.protect.on || saving.value, 'onUpdate:checked': (v: boolean) => set(r, { [key]: v }) })
 const head = (key: string) => () => h(NTooltip, null, { trigger: () => h('span', { style: 'border-bottom: 1px dashed; cursor: help' }, t(`prot.cols.${key}`)), default: () => t(`prot.tips.${key}`) })
 const columns = computed<DataTableColumns<Row>>(() => [
   { type: 'selection' },
@@ -190,7 +197,7 @@ const columns = computed<DataTableColumns<Row>>(() => [
     width: 150,
     render: (r) =>
       h(NInputNumber, {
-        size: 'tiny', min: 0, max: 100000, step: 10, value: r.protect.cc, disabled: !r.supported || !r.protect.on, placeholder: t('prot.off'), style: 'width: 110px',
+        size: 'tiny', min: 0, max: 100000, step: 10, value: r.protect.cc, disabled: !r.supported || !r.protect.on || saving.value, placeholder: t('prot.off'), style: 'width: 110px',
         'onUpdate:value': (v: number | null) => (r.protect.cc = v ?? 0),
         onBlur: () => set(r, { cc: r.protect.cc }),
       }),
@@ -208,7 +215,7 @@ const columns = computed<DataTableColumns<Row>>(() => [
       ])
     },
   },
-  { title: () => t('common.status'), key: 'on', width: 80, render: (r) => h(NSwitch, { size: 'small', value: r.protect.on, disabled: !r.supported, 'onUpdate:value': (v: boolean) => set(r, { on: v }) }) },
+  { title: () => t('common.status'), key: 'on', width: 80, render: (r) => h(NSwitch, { size: 'small', value: r.protect.on, disabled: !r.supported || saving.value, 'onUpdate:value': (v: boolean) => set(r, { on: v }) }) },
   { title: '', key: 'log', width: 100, render: (r) => h(NButton, { size: 'tiny', onClick: () => openLog(r.domain) }, () => t('prot.log')) },
 ])
 </script>
@@ -234,7 +241,7 @@ const columns = computed<DataTableColumns<Row>>(() => [
   />
   <n-space align="center" :size="8" style="margin-top: 10px">
     <n-select v-model:value="batch" :options="batchOptions" size="small" :placeholder="t('prot.batch_pick')" style="width: 200px" />
-    <n-button size="small" type="primary" :disabled="!batch || !checked.length" @click="applyBatch">{{ t('prot.batch_apply', { n: checked.length }) }}</n-button>
+    <n-button size="small" type="primary" :disabled="saving || !batch || !checked.length" @click="applyBatch">{{ t('prot.batch_apply', { n: checked.length }) }}</n-button>
   </n-space>
   <ul class="notes">
     <li>{{ t('prot.note_order') }}</li>
@@ -259,7 +266,7 @@ const columns = computed<DataTableColumns<Row>>(() => [
       </template>
     </n-card>
   </n-modal>
-  <TaskModal :task-id="task?.id ?? null" :title="task?.title ?? ''" @close="task = null; loadWAF()" @done="loadWAF" />
+  <TaskModal :task-id="task?.id ?? null" :title="task?.title ?? ''" @close="task = null; load(); loadWAF()" @done="load(); loadWAF()" />
 
   <n-modal :show="settingsOpen" @update:show="(v: boolean) => (settingsOpen = v)">
     <n-card :title="t('prot.settings')" style="width: min(640px, calc(100vw - 32px))" closable @close="settingsOpen = false">

@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 import { NButton, NCard, NCollapse, NCollapseItem, NFormItem, NInput, NSpace, NTag, useMessage } from 'naive-ui'
 import { get, put, ApiError } from '../api/client'
 import CdnHeaderList, { type CdnHeader } from './CdnHeaderList.vue'
+import TaskModal from './TaskModal.vue'
 
 interface CDNConfig { ranges: string[]; headers: CdnHeader[] }
 
@@ -16,6 +17,7 @@ const saved = ref<CDNConfig>({ ranges: [], headers: [] })
 const ranges = ref('')
 const headers = ref<CdnHeader[]>([])
 const saving = ref(false)
+const task = ref<{ id: string; title: string } | null>(null)
 
 function show(c: CDNConfig) {
   saved.value = c
@@ -36,8 +38,9 @@ const dirty = computed(() => JSON.stringify(headers.value) !== JSON.stringify(sa
 async function save() {
   saving.value = true
   try {
-    const r = await put<{ config: CDNConfig }>('/firewall/cdn', { ranges: list.value, headers: headers.value })
+    const r = await put<{ config: CDNConfig; task_id?: string }>('/firewall/cdn', { ranges: list.value, headers: headers.value })
     show(r.config)
+    if (r.task_id) task.value = { id: r.task_id, title: t('fw.cdn.title') }
     msg.success(t('common.saved'))
   } catch (e) {
     msg.error(e instanceof ApiError ? e.text : String(e))
@@ -69,6 +72,7 @@ async function save() {
     </n-form-item>
     <n-button type="primary" size="small" :loading="saving" :disabled="!dirty" @click="save">{{ t('common.save') }}</n-button>
   </n-card>
+  <TaskModal :task-id="task?.id ?? null" :title="task?.title ?? ''" @close="task = null" @done="task = null" />
 </template>
 
 <style scoped>

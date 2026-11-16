@@ -11,6 +11,7 @@ import type { FirewallIP } from '../api/types'
 import { datetime } from '../format'
 import IpGeo from './IpGeo.vue'
 import RemarkCell from './RemarkCell.vue'
+import TaskModal from './TaskModal.vue'
 
 interface Pattern { id: number; kind: 'ua' | 'url'; list: 'allow' | 'block'; match: 'contains' | 'prefix' | 'regex'; value: string; remark: string; enabled: boolean; created_at: number }
 type Row = { id: number; value: string; match?: Pattern['match']; remark: string; enabled: boolean; created_at: number; expires_at?: number; raw: Pattern | FirewallIP }
@@ -30,6 +31,7 @@ const minutes = ref(0)
 const remark = ref('')
 const importing = ref(false)
 const importText = ref('')
+const task = ref<{ id: string; title: string } | null>(null)
 
 const isIP = props.kind === 'ip'
 // The server's own addresses: always allowed, shown on the IP allow list.
@@ -58,32 +60,37 @@ const done = () => {
   load()
   emit('changed')
 }
+const finish = (r?: { task_id?: string }) => {
+  if (r?.task_id) task.value = { id: r.task_id, title: `${props.kind} · ${props.list}` }
+  else done()
+}
 async function add() {
   const v = value.value.trim()
   if (!v) return
   try {
+    let r: { task_id?: string } | undefined
     if (isIP) await post('/firewall/ips', { ip: v, list: props.list, minutes: minutes.value, remark: remark.value })
-    else await post('/firewall/patterns', { kind: props.kind, list: props.list, match: match.value, value: v, remark: remark.value, enabled: true })
+    else r = await post<{ task_id?: string }>('/firewall/patterns', { kind: props.kind, list: props.list, match: match.value, value: v, remark: remark.value, enabled: true })
     value.value = ''
     remark.value = ''
     msg.success(t('common.saved'))
-    done()
+    finish(r)
   } catch (e) {
     fail(e)
   }
 }
 async function remove(r: Row) {
   try {
-    await post(isIP ? `/firewall/ips/${r.id}/delete` : `/firewall/patterns/${r.id}/delete`)
-    done()
+    const result = await post<{ task_id?: string }>(isIP ? `/firewall/ips/${r.id}/delete` : `/firewall/patterns/${r.id}/delete`)
+    finish(result)
   } catch (e) {
     fail(e)
   }
 }
 async function toggle(r: Row, on: boolean) {
   try {
-    await put(`/firewall/patterns/${r.id}`, { ...(r.raw as Pattern), enabled: on })
-    done()
+    const result = await put<{ task_id?: string }>(`/firewall/patterns/${r.id}`, { ...(r.raw as Pattern), enabled: on })
+    finish(result)
   } catch (e) {
     fail(e)
   }
@@ -97,11 +104,12 @@ const editDurations = computed(() => (editing.value?.row.expires_at ? [{ label: 
 async function saveEdit() {
   const e = editing.value!
   try {
+    let r: { task_id?: string } | undefined
     if (isIP) await put(`/firewall/ips/${e.row.id}`, { ip: e.value.trim(), minutes: e.minutes, remark: e.remark })
-    else await put(`/firewall/patterns/${e.row.id}`, { ...(e.row.raw as Pattern), value: e.value.trim(), match: e.match, remark: e.remark })
+    else r = await put<{ task_id?: string }>(`/firewall/patterns/${e.row.id}`, { ...(e.row.raw as Pattern), value: e.value.trim(), match: e.match, remark: e.remark })
     editing.value = null
     msg.success(t('common.saved'))
-    done()
+    finish(r)
   } catch (err) {
     fail(err)
   }
@@ -114,12 +122,12 @@ async function doImport() {
   if (!values.length) return
   try {
     const r = isIP
-      ? await post<{ added: number; skipped: number }>('/firewall/ips/import', { list: props.list, ips: values, minutes: minutes.value, remark: remark.value })
-      : await post<{ added: number; skipped: number }>('/firewall/patterns/import', { kind: props.kind, list: props.list, match: match.value, values, remark: remark.value })
+      ? await post<{ added: number; skipped: number; task_id?: string }>('/firewall/ips/import', { list: props.list, ips: values, minutes: minutes.value, remark: remark.value })
+      : await post<{ added: number; skipped: number; task_id?: string }>('/firewall/patterns/import', { kind: props.kind, list: props.list, match: match.value, values, remark: remark.value })
     msg.success(t('fwl.imported', { added: r.added, skipped: r.skipped }))
     importing.value = false
     importText.value = ''
-    done()
+    finish(r)
   } catch (e) {
     fail(e)
   }
@@ -134,8 +142,8 @@ function doExport() {
 }
 async function clear() {
   try {
-    await post(isIP ? '/firewall/ips/clear' : '/firewall/patterns/clear', isIP ? { list: props.list } : { kind: props.kind, list: props.list })
-    done()
+    const result = await post<{ task_id?: string }>(isIP ? '/firewall/ips/clear' : '/firewall/patterns/clear', isIP ? { list: props.list } : { kind: props.kind, list: props.list })
+    finish(result)
   } catch (e) {
     fail(e)
   }
@@ -227,6 +235,7 @@ const columns = computed<DataTableColumns<Row>>(() => [
       </template>
     </n-card>
   </n-modal>
+  <TaskModal :task-id="task?.id ?? null" :title="task?.title ?? ''" @close="task = null; done()" @done="done" />
 </template>
 
 <style scoped>

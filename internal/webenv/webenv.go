@@ -773,46 +773,73 @@ func (e *Env) VhostConfig(s Site) (string, error) {
 	return string(files[filepath.Join("conf.d", s.Domain+".conf")]), nil
 }
 
-// Apply re-renders every config from sites, validates it and hot-reloads Nginx
-// and HAProxy. On a validation failure the previous files are restored.
+// Apply renders and validates both proxies before changing either one. Files
+// that are already current do not cause a reload; existing HAProxy maps and
+// ACLs are updated through its runtime socket instead of creating workers.
 func (e *Env) Apply(ctx context.Context, sites []Site, pass []Passthrough) error {
 	if !e.Installed(ctx) {
 		return errors.New("web.not_installed")
 	}
-	// ---- nginx ----
-	snap, err := snapshot(e.NginxDir())
+	nsnap, err := snapshot(e.NginxDir())
 	if err != nil {
 		return err
 	}
-	if err := e.writeNginx(sites); err != nil {
-		return err
-	}
-	if out, err := dockerx.Run(ctx, append([]string{"exec", NginxName, "nginx", "-t"}, nginxConf...)...); err != nil {
-		restore(e.NginxDir(), snap)
-		return fmt.Errorf("nginx config test failed: %v %s", err, out)
-	}
-	if _, err := dockerx.Run(ctx, append([]string{"exec", NginxName, "nginx", "-s", "reload"}, nginxConf...)...); err != nil {
-		return err
-	}
-
-	// ---- varnish (before the edge routes to it) ----
-	if err := e.applyVarnish(ctx, sites, func(string, ...any) {}); err != nil {
-		return err
-	}
-
-	// ---- haproxy ----
 	esnap, err := snapshot(e.EdgeDir())
 	if err != nil {
 		return err
 	}
-	if err := e.writeEdge(sites, pass); err != nil {
+	rollback := func() {
+		restore(e.NginxDir(), nsnap)
+		restore(e.EdgeDir(), esnap)
+	}
+	if err := e.writeNginx(sites); err != nil {
+		rollback()
 		return err
 	}
-	if _, err := dockerx.Run(ctx, "exec", HAProxyName, "haproxy", "-c", "-q", "-f", filepath.Join(e.EdgeDir(), "haproxy.cfg")); err != nil {
-		restore(e.EdgeDir(), esnap)
-		return fmt.Errorf("haproxy config test failed: %w", err)
+	if err := e.writeEdge(sites, pass); err != nil {
+		rollback()
+		return err
 	}
-	// Master-worker reload: new workers take over, old ones drain existing connections.
+	nafter, err := snapshot(e.NginxDir())
+	if err != nil {
+		rollback()
+		return err
+	}
+	eafter, err := snapshot(e.EdgeDir())
+	if err != nil {
+		rollback()
+		return err
+	}
+	nginxChanged := !snapshotsEqual(nsnap, nafter)
+	edgeChanged := !snapshotsEqual(esnap, eafter)
+
+	if nginxChanged {
+		if out, err := dockerx.Run(ctx, append([]string{"exec", NginxName, "nginx", "-t"}, nginxConf...)...); err != nil {
+			rollback()
+			return fmt.Errorf("nginx config test failed: %v %s", err, out)
+		}
+	}
+	if edgeChanged {
+		if _, err := dockerx.Run(ctx, "exec", HAProxyName, "haproxy", "-c", "-q", "-f", filepath.Join(e.EdgeDir(), "haproxy.cfg")); err != nil {
+			rollback()
+			return fmt.Errorf("haproxy config test failed: %w", err)
+		}
+	}
+	if err := e.applyVarnish(ctx, sites, func(string, ...any) {}); err != nil {
+		rollback()
+		return err
+	}
+	if nginxChanged {
+		if _, err := dockerx.Run(ctx, append([]string{"exec", NginxName, "nginx", "-s", "reload"}, nginxConf...)...); err != nil {
+			return err
+		}
+	}
+	if !edgeChanged {
+		return nil
+	}
+	if synced, err := e.syncRuntimeMaps(ctx, esnap, eafter); synced && err == nil {
+		return nil
+	}
 	if _, err := dockerx.Run(ctx, "kill", "-s", "USR2", HAProxyName); err != nil {
 		return err
 	}

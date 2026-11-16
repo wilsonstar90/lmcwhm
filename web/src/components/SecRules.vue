@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 import { NAlert, NButton, NDataTable, NPopconfirm, NRadioButton, NRadioGroup, NSpace, NSwitch, NTag, useMessage, type DataTableColumns } from 'naive-ui'
 import { get, post, put, ApiError } from '../api/client'
 import RuleEditor, { type Rule } from './RuleEditor.vue'
+import TaskModal from './TaskModal.vue'
 
 const props = defineProps<{ paranoia: number }>()
 const emit = defineEmits<{ changed: [] }>()
@@ -16,6 +17,7 @@ const rules = ref<Rule[]>([])
 const rulesOn = ref(false)
 const loading = ref(false)
 const editing = ref<Rule | null>(null)
+const task = ref<{ id: string; title: string } | null>(null)
 
 async function load() {
   loading.value = true
@@ -31,21 +33,28 @@ async function load() {
 }
 onMounted(load)
 
+function finish(r?: { task_id?: string }) {
+  if (r?.task_id) task.value = { id: r.task_id, title: t('prot.settings') }
+  else {
+    load()
+    emit('changed')
+  }
+}
+
 async function setRulesOn(on: boolean) {
   try {
     const cur = await get<{ settings: Record<string, unknown> }>('/protect/settings')
-    await put('/protect/settings', { ...cur.settings, rules_on: on })
+    const r = await put<{ task_id?: string }>('/protect/settings', { ...cur.settings, rules_on: on })
     rulesOn.value = on
-    emit('changed')
+    finish(r)
   } catch (e) {
     fail(e)
   }
 }
 const act = async (path: string, body?: unknown) => {
   try {
-    await post(path, body)
-    await load()
-    emit('changed')
+    const r = await post<{ task_id?: string }>(path, body)
+    finish(r)
   } catch (e) {
     fail(e)
   }
@@ -132,6 +141,7 @@ const columns = computed<DataTableColumns<Rule>>(() => [
     <li>{{ t('rules.note_log') }}</li>
   </ul>
   <RuleEditor :rule="editing" :before-save="beforeSave" @close="editing = null" @saved="editing = null; load(); emit('changed')" />
+  <TaskModal :task-id="task?.id ?? null" :title="task?.title ?? ''" @close="task = null; load(); emit('changed')" @done="load(); emit('changed')" />
 </template>
 
 <style scoped>

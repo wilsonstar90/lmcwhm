@@ -440,13 +440,31 @@ func (sv *Service) specOf(s Site, byID map[int64]Site) webenv.Site {
 	return ws
 }
 
-// Apply re-renders and reloads the whole stack from the database.
-func (sv *Service) Apply(ctx context.Context) error {
+const webApplyResource = "webenv.apply"
+
+func (sv *Service) applyCurrent(ctx context.Context) error {
 	specs, err := sv.specs(ctx)
 	if err != nil {
 		return err
 	}
 	return sv.Env.Apply(ctx, specs, nil)
+}
+
+// Apply synchronously renders the latest database state under the shared web lock.
+func (sv *Service) Apply(ctx context.Context) error {
+	return sv.tasks.RunAction(ctx, tasks.Action{Resource: webApplyResource}, func(ctx context.Context) error {
+		return sv.applyCurrent(ctx)
+	})
+}
+
+// ApplyAsync coalesces configuration-only changes into one durable task.
+func (sv *Service) ApplyAsync(title string) string {
+	return sv.tasks.StartAction(tasks.Action{
+		Name: title, Resource: webApplyResource, IdempotencyKey: webApplyResource,
+		Coalesce: 300 * time.Millisecond,
+	}, func(ctx context.Context, log tasks.Logf) error {
+		return sv.applyCurrent(ctx)
+	})
 }
 
 // ensureStack installs the base stack and every PHP version in use.
@@ -533,10 +551,12 @@ func (sv *Service) ensureProject(ctx context.Context, s Site, log tasks.Logf) er
 	return webenv.EnsureContainer(ctx, log, name, args, nil, false)
 }
 
-// Reapply rebuilds the stack containers whose settings changed (e.g. the WAF
-// switches the nginx image) and reloads every config (task).
+// Reapply rebuilds changed containers and applies the latest configuration.
 func (sv *Service) Reapply(title string) string {
-	return sv.tasks.Start(title, func(ctx context.Context, log tasks.Logf) error {
+	return sv.tasks.StartAction(tasks.Action{
+		Name: title, Resource: webApplyResource, IdempotencyKey: "webenv.reapply",
+		Exclusive: true, Coalesce: 300 * time.Millisecond,
+	}, func(ctx context.Context, log tasks.Logf) error {
 		if !sv.Env.Installed(ctx) {
 			log("web stack not installed: settings saved, applied when it is installed")
 			return nil
@@ -545,7 +565,7 @@ func (sv *Service) Reapply(title string) string {
 			return err
 		}
 		log("applying configuration")
-		return sv.Apply(ctx)
+		return sv.applyCurrent(ctx)
 	})
 }
 

@@ -77,7 +77,7 @@ func (s *Server) handler() http.Handler {
 		r.Post("/auth/login", s.handleLogin)
 
 		r.Group(func(r chi.Router) {
-			r.Use(s.requireAuth)
+			r.Use(s.requireAuth, s.actionMiddleware)
 			r.Post("/auth/logout", s.handleLogout)
 			r.Get("/auth/me", s.handleMe)
 			r.Get("/system/overview", s.handleOverview)

@@ -258,6 +258,24 @@ sleep 11 # the CC window
 [[ "$(code --resolve php.test:80:127.0.0.1 http://php.test/xmlrpc.php)" != 403 ]] || fail "dedicated rules still on"
 pass "website protection: dedicated rules, custom rule, scrapers, CC, blocked log"
 
+# ---------- coalesced protection updates do not create proxy workers ----------
+proxy_pids() { docker exec "$1" sh -c 'for p in /proc/[0-9]*; do [ "$(cat "$p/comm" 2>/dev/null)" = "$1" ] && basename "$p"; done | sort -n' sh "$2"; }
+before_ha="$(proxy_pids lmcwhm-haproxy haproxy)"
+before_ng="$(proxy_pids lmcwhm-nginx nginx)"
+for i in $(seq 1 8); do
+  flag=false; (( i % 2 == 0 )) && flag=true
+  api PUT /protect/sites "{\"items\":{\"php.test\":{\"on\":true,\"idc\":$flag}}}" > "/tmp/protect-action-$i.json" &
+done
+wait
+action_id="$(python3 -c 'import glob,json; ids={json.load(open(p)).get("task_id") for p in glob.glob("/tmp/protect-action-*.json")}; assert len(ids)==1 and ids!={None}, ids; print(ids.pop())')"
+[[ "$(api GET "/tasks/$action_id" | jget "['status']")" == success ]] || fail "coalesced protection task failed"
+after_ha="$(proxy_pids lmcwhm-haproxy haproxy)"
+after_ng="$(proxy_pids lmcwhm-nginx nginx)"
+[[ "$before_ha" == "$after_ha" ]] || fail "protection updates created HAProxy workers: $before_ha -> $after_ha"
+[[ "$before_ng" == "$after_ng" ]] || fail "protection updates reloaded nginx: $before_ng -> $after_ng"
+rm -f /tmp/protect-action-*.json
+pass "concurrent protection changes share one task and do not reload the proxies"
+
 # ---------- rule levels, detect-only, custom status and error page; menu ----------
 cur="$(api GET /protect/settings)"
 body="$(python3 -c "import sys,json; s=json.loads(sys.argv[1])['settings']; s['rules_on']=True; print(json.dumps(s))" "$cur")"

@@ -197,13 +197,7 @@ func (s *Server) handlePutFWCDN(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.auditCat(r, "security", "firewall.cdn", c.Header+" "+strconv.Itoa(len(c.Ranges)))
-	if s.Sites.Env.Installed(r.Context()) {
-		if err := s.Sites.Apply(r.Context()); err != nil {
-			writeErr(w, http.StatusInternalServerError, err)
-			return
-		}
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"config": c})
+	s.applyPatterns(w, r, map[string]any{"config": c})
 }
 
 func (s *Server) handleFirewallConfirm(w http.ResponseWriter, r *http.Request) {

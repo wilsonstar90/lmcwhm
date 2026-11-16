@@ -2,7 +2,7 @@
 
 自研單機 Linux 伺服器控制面板，定位接近 aaPanel／寶塔：**Go 單一 Binary + Vue 3 / Naive UI**，以網頁管理網站、資料庫、Docker、安全、備份及系統設定。
 
-目前文件對應 **`v0.21.6`**。實際架構、驗證範圍及後續路線見 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)；開發及 AI agent 工作守則見 [AGENTS.md](AGENTS.md)。
+目前文件對應 **`v0.22.0`**。實際架構、驗證範圍及後續路線見 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)；開發及 AI agent 工作守則見 [AGENTS.md](AGENTS.md)。
 
 ## 功能總覽
 
@@ -68,7 +68,7 @@ curl -fsSL https://raw.githubusercontent.com/wilsonstar90/lmcwhm/main/deploy/ins
 curl -fsSL https://raw.githubusercontent.com/wilsonstar90/lmcwhm/main/deploy/install.sh | sudo bash -s -- --port 8888 --entry /console --username admin
 ```
 
-其他選項包括 `--password`、`--version v0.21.6`、`--skip-docker`、`--binary ./lmcwhm-linux-amd64`、`--channel beta` 及 `--offline <包>`。
+其他選項包括 `--password`、`--version v0.22.0`、`--skip-docker`、`--binary ./lmcwhm-linux-amd64`、`--channel beta` 及 `--offline <包>`。
 
 安裝後請立即：
 
