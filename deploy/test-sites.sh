@@ -298,7 +298,7 @@ if [[ "$lvl_code" != 410 ]]; then
 import socket
 s = socket.socket(socket.AF_UNIX)
 s.connect('/opt/lmcwhm/edge/run/admin.sock')
-s.sendall(b'prompt\nshow map /opt/lmcwhm/edge/maps/prot_exact.map\nshow acl /opt/lmcwhm/edge/maps/rules/c14_0.lst\nshow acl /opt/lmcwhm/edge/lists/allow.lst\nshow acl /opt/lmcwhm/edge/maps/url_allow_prefix.lst\nquit\n')
+s.sendall(b'prompt\nshow info\nshow map /opt/lmcwhm/edge/maps/prot_exact.map\nshow map /opt/lmcwhm/edge/maps/rules/c14_0.lst\nshow acl /opt/lmcwhm/edge/maps/rules/c14_0.lst\nshow acl /opt/lmcwhm/edge/lists/allow.lst\nshow acl /opt/lmcwhm/edge/maps/url_allow_prefix.lst\nquit\n')
 out = b''
 while True:
     b = s.recv(65536)
@@ -307,6 +307,7 @@ while True:
     out += b
 print(out.decode(errors='replace'))
 PY
+  docker logs --since 2m lmcwhm-haproxy 2>&1 || true
   api GET /protect/rules
   api GET /waf
   fail "level 2 rule (status 410) did not run at paranoia level 2: $lvl_code"
