@@ -840,7 +840,10 @@ func (e *Env) apply(ctx context.Context, sites []Site, pass []Passthrough, after
 		return err
 	}
 	if nginxChanged {
-		if _, err := dockerx.Run(ctx, append([]string{"exec", NginxName, "nginx", "-s", "reload"}, nginxConf...)...); err != nil {
+		if _, err := dockerx.Run(ctx, "restart", "-t", "15", NginxName); err != nil {
+			return err
+		}
+		if err := waitRunning(ctx, NginxName); err != nil {
 			return err
 		}
 	}

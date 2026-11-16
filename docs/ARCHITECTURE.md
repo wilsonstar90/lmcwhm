@@ -101,6 +101,7 @@ deploy/                 install、offline bundle、Linux E2E scripts
 - exact match 優先於 wildcard；較深 wildcard 優先於較淺。
 - TLS terminate 由 Edge 使用域名證書；passthrough 將 ClientHello 原封轉交後端。
 - HAProxy 同 Nginx 都先寫好並驗證，再決定實際需要更新嘅部分，避免一邊驗證失敗而另一邊已提前套用。純配置操作冇變化唔 reload；現有 map／ACL 優先經 Runtime API 更新，其他改動或 runtime 更新失敗先 master-worker hot reload。`ensureStack` 可能已先寫新配置，所以建站、WAF、更新及修復流程保留強制 reload，唔會因 snapshot 相同而漏套用。
+- Nginx 配置有實際變更時改用快速容器重啟並等待 ready，避免 graceful reload 嘅舊 worker 長時間提供舊規則及累積記憶體；冇變更唔重啟，HAProxy 則保留 hot reload。
 - Nginx vhost 同樣先驗證再套用；真實 IP、CDN trusted ranges、黑白名單及 protection exemptions 會生成入 Edge 設定。
 - gRPC 網站需要繞過會阻礙 streaming body 嘅 ModSecurity 處理，唔等於全局關閉 WAF。
 
