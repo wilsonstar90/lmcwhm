@@ -804,14 +804,19 @@ rm -rf "$W"
 pass "database page: backups, upload with resume, import of zip / sql / tar.gz with backup first, restore, PostgreSQL"
 
 # ---------- M7: MCP ----------
-TOK="$(api POST /tokens '{"name":"ci","scope":"read","ips":[],"ttl_days":1}' | jget "['secret']")"
-mcp() { curl -sk -X POST "$P/mcp" -H "Authorization: Bearer $1" -H 'Content-Type: application/json' -d "$2"; }
+MCP_TOKEN="$(api POST /tokens '{"name":"ci","scope":"read","ips":[],"ttl_days":1}')"
+TOK="$(jget "['secret']" <<<"$MCP_TOKEN")"
+MCPID="$(jget "['token']['mcp_id']" <<<"$MCP_TOKEN")"
+[[ "$MCPID" =~ ^[0-9a-f-]{36}$ ]] || fail "MCP token has no UUID endpoint"
+mcp() { curl -sk -X POST "$P/mcp/$MCPID" -H "Authorization: Bearer $1" -H 'Content-Type: application/json' -d "$2"; }
 grep -q '"protocolVersion":"2025-06-18"' <<<"$(mcp "$TOK" '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}')" || fail "mcp initialize"
 grep -q '"analyze_access_log"' <<<"$(mcp "$TOK" '{"jsonrpc":"2.0","id":2,"method":"tools/list"}')" || fail "mcp tools/list"
 for _ in 1 2 3; do get80 db.test /index.php >/dev/null; done
 mcp "$TOK" '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"analyze_access_log","arguments":{"domain":"db.test"}}}' | python3 -c "import sys,json; r=json.load(sys.stdin)['result']; assert not r.get('isError') and r['structuredContent']['requests']>0, r" || fail "mcp analyze_access_log"
 grep -q '"isError":true' <<<"$(mcp "$TOK" '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"run_shell","arguments":{"command":"id"}}}')" || fail "read token ran an admin tool"
 [[ "$(curl -sk -o /dev/null -w '%{http_code}' -X POST "$P/mcp" -d '{}')" == 404 ]] || fail "/mcp without a token is not hidden"
+[[ "$(curl -sk -o /dev/null -w '%{http_code}' -X POST "$P/mcp" -H "Authorization: Bearer $TOK" -d '{}')" == 404 ]] || fail "legacy /mcp accepted a valid token"
+[[ "$(curl -sk -o /dev/null -w '%{http_code}' -X POST "$P/mcp/${MCPID:0:12}" -H "Authorization: Bearer $TOK" -d '{}')" == 404 ]] || fail "partial MCP UUID was accepted"
 out="$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run_shell","arguments":{"command":"echo e2e-$((6*7))"}}}' | lmcwhm mcp --stdio)"
 [[ "$out" == *e2e-42* ]] || fail "mcp --stdio: $out"
 grep -q "name: lmcwhm-ops" <<<"$(curl -sk -b "$JAR" "$P/api/v1/mcp/skill")" || fail "skill download"

@@ -90,9 +90,9 @@ func TestCDNHeaders(t *testing.T) {
 	}
 	cfg := string(edge["haproxy.cfg"])
 	for _, want := range []string{
-		"set-var(txn.rip) req.hdr_ip(CF-Connecting-IP,-1) if { var(txn.cdng) -m str 1 } !{ var(txn.rip) -m found } { req.hdr(CF-Connecting-IP) -m found }",
-		"set-var(txn.rip) req.hdr_ip(X-Forwarded-For,-1) if { var(txn.cdng) -m str 1 }",
-		"set-var(txn.rip) req.hdr_ip(X-Real-IP,-1) if { var(txn.cdng) -m str 2 }",
+		"set-var(txn.rip) req.hdr_ip(CF-Connecting-IP,-1) if cdn_peer { var(txn.cdng) -m str 1 } !{ var(txn.rip) -m found } { req.hdr(CF-Connecting-IP) -m found }",
+		"set-var(txn.rip) req.hdr_ip(X-Forwarded-For,-1) if cdn_peer { var(txn.cdng) -m str 1 }",
+		"set-var(txn.rip) req.hdr_ip(X-Real-IP,-1) if cdn_peer { var(txn.cdng) -m str 2 }",
 		"http-request set-src var(txn.rip) if { var(txn.rip) -m found }",
 	} {
 		if !strings.Contains(cfg, want) {

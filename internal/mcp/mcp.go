@@ -13,18 +13,29 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 )
 
 const (
 	ScopeRead    = "read"
 	ScopeOperate = "operate"
 	ScopeAdmin   = "admin"
+
+	ClientAny      = "any"
+	ClientKimi     = "kimi"
+	ClientDeepSeek = "deepseek"
+	ClientClaude   = "claude"
+	ClientCodex    = "codex"
 )
 
 var scopeRank = map[string]int{ScopeRead: 1, ScopeOperate: 2, ScopeAdmin: 3}
+var clients = map[string]bool{ClientAny: true, ClientKimi: true, ClientDeepSeek: true, ClientClaude: true, ClientCodex: true}
 
 // ValidScope reports a known scope.
 func ValidScope(s string) bool { return scopeRank[s] > 0 }
+
+// ValidClient reports a known AI-agent restriction.
+func ValidClient(s string) bool { return clients[s] }
 
 // Allows reports whether a caller with scope have may use a tool needing need.
 func Allows(have, need string) bool { return scopeRank[have] >= scopeRank[need] && scopeRank[need] > 0 }
@@ -61,9 +72,12 @@ type PromptArg struct {
 
 // Caller identifies who calls a tool (for scope checks and auditing).
 type Caller struct {
-	Name  string
-	Scope string
-	IP    string
+	Name          string
+	Scope         string
+	IP            string
+	TokenID       int64
+	AllowedClient string
+	UserAgent     string
 }
 
 type callerKey struct{}
@@ -74,16 +88,24 @@ func CallerFrom(ctx context.Context) (Caller, bool) {
 	return c, ok
 }
 
+type clientIdentity struct {
+	agent     string
+	userAgent string
+	ip        string
+}
+
 type Server struct {
 	Name, Version, Instructions string
 	tools                       map[string]Tool
 	prompts                     map[string]Prompt
+	clientMu                    sync.Mutex
+	initializedClients          map[int64]clientIdentity
 	// OnCall is told about every tool call (audit log).
 	OnCall func(ctx context.Context, c Caller, tool string, args json.RawMessage, err error)
 }
 
 func NewServer(name, version, instructions string) *Server {
-	return &Server{Name: name, Version: version, Instructions: instructions, tools: map[string]Tool{}, prompts: map[string]Prompt{}}
+	return &Server{Name: name, Version: version, Instructions: instructions, tools: map[string]Tool{}, prompts: map[string]Prompt{}, initializedClients: map[int64]clientIdentity{}}
 }
 
 func (s *Server) AddTool(t Tool) {
@@ -254,7 +276,52 @@ func (s *Server) handleOne(ctx context.Context, c Caller, raw []byte) []byte {
 	return mustJSON(resp)
 }
 
+func clientMatches(want, identity string) bool {
+	return strings.Contains(strings.ToLower(identity), want)
+}
+
+func (s *Server) checkClient(c Caller, req request) *rpcError {
+	want := c.AllowedClient
+	if want == "" || want == ClientAny {
+		return nil
+	}
+	key := c.TokenID
+	if req.Method == "initialize" {
+		var p struct {
+			ClientInfo struct {
+				Name string `json:"name"`
+			} `json:"clientInfo"`
+		}
+		json.Unmarshal(req.Params, &p)
+		identity := p.ClientInfo.Name
+		if identity == "" {
+			identity = c.UserAgent
+		}
+		if !clientMatches(want, identity) {
+			return &rpcError{codeInvalid, "AI agent is not allowed for this token"}
+		}
+		s.clientMu.Lock()
+		s.initializedClients[key] = clientIdentity{agent: want, userAgent: c.UserAgent, ip: c.IP}
+		s.clientMu.Unlock()
+		return nil
+	}
+	if clientMatches(want, c.UserAgent) {
+		return nil
+	}
+	s.clientMu.Lock()
+	identity := s.initializedClients[key]
+	ok := identity.agent == want && identity.userAgent == c.UserAgent && identity.ip == c.IP
+	s.clientMu.Unlock()
+	if !ok {
+		return &rpcError{codeInvalid, "AI agent is not allowed for this token"}
+	}
+	return nil
+}
+
 func (s *Server) dispatch(ctx context.Context, c Caller, req request) (any, *rpcError) {
+	if err := s.checkClient(c, req); err != nil {
+		return nil, err
+	}
 	switch req.Method {
 	case "initialize":
 		var p struct {

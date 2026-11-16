@@ -1,6 +1,6 @@
 # lmcwhm 架構與驗證
 
-本文描述 **`v0.21.6` 實際實作**，唔再將早期構想當成現狀。最後一節先係尚未完成嘅方向。
+本文描述 **`v0.22.0` 實際實作**，唔再將早期構想當成現狀。最後一節先係尚未完成嘅方向。
 
 ## 1. 核心決策
 
@@ -29,7 +29,7 @@ Internet / Cloudflare / Linode Cloud Firewall
 
  lmcwhm（systemd、Go binary）
  ├─ 內嵌 Vue SPA
- ├─ /api/v1、WebSocket、/mcp、CLI
+ ├─ /api/v1、WebSocket、/mcp/{uuid}、CLI
  ├─ SQLite + migrations
  ├─ task / cron / monitor / alerts / stats workers
  └─ Docker、HAProxy、Nginx、nftables、systemd integrations
@@ -102,6 +102,7 @@ deploy/                 install、offline bundle、Linux E2E scripts
 - TLS terminate 由 Edge 使用域名證書；passthrough 將 ClientHello 原封轉交後端。
 - HAProxy 設定由 DB 重新生成，先 `haproxy -c`，再 master-worker reload，失敗還原；**冇使用 Runtime API 逐條改 map**。
 - Nginx vhost 同樣先驗證再套用；真實 IP、CDN trusted ranges、黑白名單及 protection exemptions 會生成入 Edge 設定。
+- Client IP 以即時 TCP peer 判斷信任：Cloudflare 公網 ranges、自訂 CDN ranges，或明確啟用 Cloudflare Tunnel 後嘅 loopback cloudflared。每網站 CDN Header 唔再接受任意來源；面板、REST、MCP、登入鎖定及審計共用同一 Cloudflare／Tunnel resolver，並保留 Peer IP 同 Client IP 嘅分別。
 - gRPC 網站需要繞過會阻礙 streaming body 嘅 ModSecurity 處理，唔等於全局關閉 WAF。
 
 ### Runtime 與 App Store
@@ -117,7 +118,7 @@ deploy/                 install、offline bundle、Linux E2E scripts
 
 - Browser：HttpOnly + SameSite session、非 GET CSRF、bcrypt、TOTP、按 IP 登入鎖定。
 - Gates：授權 IP → 綁定域名 → BasicAuth → 安全入口；可自訂未認證回應。
-- API Token：驗證使用 SHA-256 hash；新 Token 另用面板 master key 以 AES-256-GCM 加密保存，管理員可按需翻查。scope 為 read／operate／admin，可設 expiry、IP allowlist、編輯到期日或即時暫停／恢復。舊 hash-only Token 不可翻查，只可撤銷後重建。
+- API Token：驗證使用 SHA-256 hash；新 Token 另用面板 master key 以 AES-256-GCM 加密保存，管理員可按需翻查。scope 為 read／operate／admin，可設 expiry、IP allowlist、編輯到期日或即時暫停／恢復。每個 Token 有獨立 UUIDv4 MCP endpoint，URL 與 Token 必須匹配；可限制只用 Kimi／DeepSeek／Claude／Codex，身份來自 MCP clientInfo 及 User-Agent。舊 hash-only Token 不可翻查，只可撤銷後重建。
 - 子用戶：按模組及可選網站 IDs 授權；未映射嘅新 API route 預設只限管理員。
 - 全局 running tasks、task history 及清除歷史只限管理員。隨機 12 字元 task ID 作為 caller 查詢自己背景工作進度嘅 capability，避免列出或讀取他人任務。
 - Terminal 開啟前需要再次驗證；主機及容器 terminal 都係高權限功能。

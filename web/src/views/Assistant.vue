@@ -14,7 +14,7 @@ import { datetime } from '../format'
 interface Step { tool: string; input: string; error?: string }
 interface Turn { role: 'user' | 'assistant'; text: string; steps?: Step[] }
 interface Answer { text: string; steps: Step[]; model: string; usage: { input: number; output: number } }
-interface Token { id: number; name: string; hint: string; scope: string; ips: string[]; expires_at: number; last_used: number; last_ip: string; created_at: number; disabled: boolean; recoverable: boolean }
+interface Token { id: number; name: string; hint: string; scope: string; mcp_id: string; client: string; ips: string[]; expires_at: number; last_used: number; last_ip: string; created_at: number; disabled: boolean; recoverable: boolean }
 interface Tool { name: string; title: string; description: string; scope: string; destructive: boolean }
 interface Info { tools: Tool[]; prompts: { name: string; title: string; description: string }[]; port: number; tls: boolean }
 
@@ -79,11 +79,11 @@ watch(
 // ---- MCP ----
 const info = ref<Info | null>(null)
 const tokens = ref<Token[]>([])
-const tf = ref<{ name: string; scope: string; ips: string[]; ttl_days: number } | null>(null)
+const tf = ref<{ name: string; scope: string; client: string; ips: string[]; ttl_days: number } | null>(null)
 const selectedToken = ref<Token | null>(null)
 const selectedSecret = ref('')
-const promptClient = ref<'kimi' | 'claude' | 'codex'>('kimi')
-const editingExpiry = ref<{ token: Token; value: number | null } | null>(null)
+const promptClient = ref<'kimi' | 'deepseek' | 'claude' | 'codex'>('kimi')
+const editingToken = ref<{ token: Token; value: number | null } | null>(null)
 async function loadMCP() {
   info.value = await get<Info>('/mcp/info')
   tokens.value = (await get<{ items: Token[] }>('/tokens')).items
@@ -94,7 +94,7 @@ async function createToken() {
     const r = await post<{ token: Token; secret: string }>('/tokens', tf.value)
     selectedToken.value = r.token
     selectedSecret.value = r.secret
-    promptClient.value = 'kimi'
+    promptClient.value = r.token.client === 'any' ? 'kimi' : r.token.client as typeof promptClient.value
     tf.value = null
     await loadMCP()
   } catch (e) {
@@ -104,7 +104,7 @@ async function createToken() {
 async function openToken(tk: Token) {
   selectedToken.value = tk
   selectedSecret.value = ''
-  promptClient.value = 'kimi'
+  promptClient.value = tk.client === 'any' ? 'kimi' : tk.client as typeof promptClient.value
   if (tk.recoverable) {
     try {
       selectedSecret.value = (await get<{ secret: string }>(`/tokens/${tk.id}/secret`)).secret
@@ -126,23 +126,28 @@ async function setDisabled(tk: Token, disabled: boolean) {
     fail(e)
   }
 }
-async function saveExpiry() {
-  if (!editingExpiry.value) return
+async function saveTokenSettings() {
+  if (!editingToken.value) return
   try {
-    await put(`/tokens/${editingExpiry.value.token.id}`, { expires_at: editingExpiry.value.value ? Math.floor(editingExpiry.value.value / 1000) : 0 })
-    editingExpiry.value = null
+    await put(`/tokens/${editingToken.value.token.id}`, {
+      expires_at: editingToken.value.value ? Math.floor(editingToken.value.value / 1000) : 0,
+      client: editingToken.value.token.client,
+    })
+    editingToken.value = null
     await loadMCP()
+    if (selectedToken.value) promptClient.value = selectedToken.value.client === 'any' ? 'kimi' : selectedToken.value.client as typeof promptClient.value
   } catch (e) {
     fail(e)
   }
 }
-const panelURL = computed(() => `${info.value?.tls ? 'https' : 'http'}://${location.hostname}:${info.value?.port ?? location.port}/mcp`)
+const panelURL = computed(() => `${info.value?.tls ? 'https' : 'http'}://${location.hostname}:${info.value?.port ?? location.port}/mcp/${selectedToken.value?.mcp_id || '{uuid}'}`)
 const sshCmd = computed(() => `ssh root@${location.hostname} lmcwhm mcp --stdio`)
 function tokenPrompt() {
   const tk = selectedToken.value
   if (!tk) return ''
   const client = {
     kimi: `Kimi Code: add this to mcp.json, then start a new session and check /mcp:\n${JSON.stringify({ mcpServers: { lmcwhm: { url: panelURL.value, bearerTokenEnvVar: 'LMCWHM_TOKEN' } } }, null, 2)}`,
+    deepseek: `DeepSeek: configure an MCP client that supports Streamable HTTP with the exact MCP URL and API token above, then list tools and call server_overview to verify.`,
     claude: `Claude Code: run this command, then check with claude mcp list:\nclaude mcp add --transport http lmcwhm ${panelURL.value} --header "Authorization: Bearer $LMCWHM_TOKEN"`,
     codex: `Codex: add this to ~/.codex/config.toml, then check with codex mcp list:\n[mcp_servers.lmcwhm]\nurl = "${panelURL.value}"\nbearer_token_env_var = "LMCWHM_TOKEN"`,
   }[promptClient.value]
@@ -151,15 +156,23 @@ function tokenPrompt() {
     operate: 'This token has operate scope: normal website, Docker, database, security and backup operations are allowed, but panel administration and root shell are not. Confirm high-impact actions first.',
     admin: 'This token has admin scope: it can change panel administration and run root shell commands. Before every modification, deletion, update, restart or high-impact action, explain the impact and obtain confirmation.',
   }[tk.scope]
-  return `Configure and connect lmcwhm MCP for the token named ${tk.name}. Set LMCWHM_TOKEN in the environment used to start the AI client (use the full token above), and never commit it to Git.\n\n${client}\n\n${scope}\n\nHTTPS access goes through Cloudflare. Keep the Cloudflare proxy and TLS verification enabled. For 403, check WAF, Bot Fight Mode, Cloudflare Access and source IP restrictions. For 520/522/524, check the origin, Cloudflare's connection to the panel port and proxy timeouts. Use background tasks for long operations and get_task for progress; do not disable security rules. Finally, list tools and call server_overview to verify.`
+  return `Configure and connect lmcwhm MCP for the token named ${tk.name}.\n\nMCP URL: ${panelURL.value}\nAPI token: ${selectedSecret.value || '(this legacy token is not recoverable; create a replacement token)'}\n\nSet LMCWHM_TOKEN to the API token in the environment used to start the AI client, and never commit it to Git.\n\n${client}\n\n${scope}\n\nHTTPS access goes through Cloudflare. Keep the Cloudflare proxy and TLS verification enabled. For 403, check WAF, Bot Fight Mode, Cloudflare Access and source IP restrictions. For 520/522/524, check the origin, Cloudflare's connection to the panel port and proxy timeouts. Use background tasks for long operations and get_task for progress; do not disable security rules. Finally, list tools and call server_overview to verify.`
 }
-const promptClientOptions = [{ label: 'Kimi', value: 'kimi' }, { label: 'Claude', value: 'claude' }, { label: 'Codex', value: 'codex' }]
+const agentOptions = [
+  { label: 'Kimi', value: 'kimi' },
+  { label: 'DeepSeek', value: 'deepseek' },
+  { label: 'Claude', value: 'claude' },
+  { label: 'Codex', value: 'codex' },
+]
+const promptClientOptions = computed(() => selectedToken.value?.client === 'any' ? agentOptions : agentOptions.filter((x) => x.value === selectedToken.value?.client))
+const clientOptions = computed(() => [{ label: t('ai.clients.any'), value: 'any' }, ...agentOptions])
 const copy = (text: string) => navigator.clipboard?.writeText(text).then(() => msg.success(t('common.copied')))
 const scopeType = (s: string) => (s === 'admin' ? 'error' : s === 'operate' ? 'warning' : 'success')
 const expired = (tk: Token) => tk.expires_at > 0 && tk.expires_at <= Date.now() / 1000
 const tokenCols = computed<DataTableColumns<Token>>(() => [
   { title: () => t('alert.name'), key: 'name', render: (x) => h('div', [h('b', x.name), h('div', { style: 'font-size:12px;opacity:.6' }, x.hint + '…')]) },
   { title: () => t('ai.scope'), key: 'scope', width: 100, render: (x) => h(NTag, { size: 'small', type: scopeType(x.scope) }, () => t(`ai.scopes.${x.scope}`)) },
+  { title: () => t('ai.client'), key: 'client', width: 120, render: (x) => t(`ai.clients.${x.client}`) },
   { title: () => t('common.status'), key: 'disabled', width: 100, render: (x) => h(NTag, { size: 'small', type: x.disabled || expired(x) ? 'error' : 'success' }, () => t(`ai.status.${x.disabled ? 'paused' : expired(x) ? 'expired' : 'active'}`)) },
   { title: () => t('ai.ips'), key: 'ips', render: (x) => (x.ips.length ? x.ips.join(', ') : t('ai.any_ip')) },
   { title: () => t('ai.expires'), key: 'expires_at', width: 170, render: (x) => (x.expires_at ? datetime(x.expires_at, locale.value) : t('ai.never')) },
@@ -167,7 +180,7 @@ const tokenCols = computed<DataTableColumns<Token>>(() => [
   {
     title: () => t('common.actions'), key: 'a', width: 360, render: (x) => h(NSpace, { size: 4 }, () => [
       h(NButton, { size: 'tiny', type: 'primary', onClick: () => openToken(x) }, () => t('ai.token_prompt')),
-      h(NButton, { size: 'tiny', onClick: () => editingExpiry.value = { token: x, value: x.expires_at ? x.expires_at * 1000 : null } }, () => t('ai.edit_expiry')),
+      h(NButton, { size: 'tiny', onClick: () => editingToken.value = { token: x, value: x.expires_at ? x.expires_at * 1000 : null } }, () => t('common.edit')),
       h(NButton, { size: 'tiny', type: x.disabled ? 'success' : 'warning', onClick: () => setDisabled(x, !x.disabled) }, () => t(`ai.${x.disabled ? 'resume' : 'pause'}`)),
       h(NPopconfirm, { onPositiveClick: () => delToken(x) }, { trigger: () => h(NButton, { size: 'tiny', type: 'error', quaternary: true }, () => t('ai.revoke')), default: () => t('ai.revoke_confirm') }),
     ]),
@@ -229,7 +242,7 @@ onMounted(() => {
         <p class="hint">{{ t('ai.connect_ssh') }}</p>
         <n-code :code="sshCmd" language="bash" word-wrap />
         <n-space style="margin-top: 12px">
-          <n-button type="primary" @click="tf = { name: 'Kimi / Claude / Codex', scope: 'read', ips: [], ttl_days: 90 }">{{ t('ai.new_token') }}</n-button>
+          <n-button type="primary" @click="tf = { name: 'Kimi / DeepSeek / Claude / Codex', scope: 'read', client: 'any', ips: [], ttl_days: 90 }">{{ t('ai.new_token') }}</n-button>
           <n-button tag="a" href="/api/v1/mcp/skill">{{ t('ai.download_skill') }}</n-button>
         </n-space>
       </n-card>
@@ -251,6 +264,9 @@ onMounted(() => {
         <n-form-item :label="t('ai.scope')" :feedback="t(`ai.scope_hint.${tf.scope}`)">
           <n-select v-model:value="tf.scope" :options="['read', 'operate', 'admin'].map((s) => ({ label: t(`ai.scopes.${s}`), value: s }))" />
         </n-form-item>
+        <n-form-item :label="t('ai.client')" :feedback="t('ai.client_hint')">
+          <n-select v-model:value="tf.client" :options="clientOptions" />
+        </n-form-item>
         <n-form-item :label="t('ai.ips')" :feedback="t('ai.ips_hint')"><n-dynamic-tags v-model:value="tf.ips" /></n-form-item>
         <n-form-item :label="t('ai.ttl')"><n-input-number v-model:value="tf.ttl_days" :min="0" :max="3650" style="width: 140px" /></n-form-item>
       </n-form>
@@ -261,6 +277,7 @@ onMounted(() => {
     <n-card v-if="selectedToken" :title="`${selectedToken.name} · ${t('ai.token_prompt')}`" style="width: min(780px, calc(100vw - 32px))" closable @close="selectedToken = null">
       <n-space align="center">
         <n-tag :type="scopeType(selectedToken.scope)">{{ t(`ai.scopes.${selectedToken.scope}`) }}</n-tag>
+        <n-tag>{{ t(`ai.clients.${selectedToken.client}`) }}</n-tag>
         <span class="hint">{{ t(`ai.scope_hint.${selectedToken.scope}`) }}</span>
       </n-space>
       <n-alert v-if="!selectedToken.recoverable" type="warning" :show-icon="false" style="margin-top: 16px">{{ t('ai.not_recoverable') }}</n-alert>
@@ -276,14 +293,17 @@ onMounted(() => {
       <n-button type="primary" style="margin-top: 12px" @click="copy(tokenPrompt())">{{ t('ai.copy_prompt') }}</n-button>
     </n-card>
   </n-modal>
-  <n-modal :show="!!editingExpiry" @update:show="(v: boolean) => !v && (editingExpiry = null)">
-    <n-card v-if="editingExpiry" :title="t('ai.edit_expiry')" style="width: min(480px, calc(100vw - 32px))" closable @close="editingExpiry = null">
-      <n-form label-placement="top" @submit.prevent="saveExpiry">
+  <n-modal :show="!!editingToken" @update:show="(v: boolean) => !v && (editingToken = null)">
+    <n-card v-if="editingToken" :title="t('common.edit')" style="width: min(480px, calc(100vw - 32px))" closable @close="editingToken = null">
+      <n-form label-placement="top" @submit.prevent="saveTokenSettings">
+        <n-form-item :label="t('ai.client')" :feedback="t('ai.client_hint')">
+          <n-select v-model:value="editingToken.token.client" :options="clientOptions" />
+        </n-form-item>
         <n-form-item :label="t('ai.expiry_date')" :feedback="t('ai.expiry_never')">
-          <n-date-picker v-model:value="editingExpiry.value" type="datetime" clearable style="width: 100%" />
+          <n-date-picker v-model:value="editingToken.value" type="datetime" clearable style="width: 100%" />
         </n-form-item>
       </n-form>
-      <template #footer><n-space justify="end"><n-button type="primary" @click="saveExpiry">{{ t('common.save') }}</n-button></n-space></template>
+      <template #footer><n-space justify="end"><n-button type="primary" @click="saveTokenSettings">{{ t('common.save') }}</n-button></n-space></template>
     </n-card>
   </n-modal>
 </template>

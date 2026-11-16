@@ -1,42 +1,48 @@
 <script setup lang="ts">
-// Visitor addresses behind a CDN: Cloudflare is built in; another CDN can be
-// added with its ranges and the header it puts the visitor's address in.
+// Trusted visitor addresses for websites and the panel: Cloudflare is built
+// in; Tunnel and other CDN peers are explicit, source-validated settings.
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { NButton, NCard, NCollapse, NCollapseItem, NFormItem, NInput, NSpace, NTag, useMessage } from 'naive-ui'
+import { NAlert, NButton, NCard, NCollapse, NCollapseItem, NFormItem, NInput, NSpace, NSwitch, NTag, useMessage } from 'naive-ui'
 import { get, put, ApiError } from '../api/client'
 import CdnHeaderList, { type CdnHeader } from './CdnHeaderList.vue'
 
-interface CDNConfig { ranges: string[]; headers: CdnHeader[] }
+interface CDNConfig { ranges: string[]; headers: CdnHeader[]; cloudflare_tunnel: boolean }
+interface RequestAddress { peer_ip: string; client_ip: string; trusted_proxy: boolean; external_tls: boolean }
 
 const { t } = useI18n()
 const msg = useMessage()
 const cf = ref<string[]>([])
-const saved = ref<CDNConfig>({ ranges: [], headers: [] })
+const saved = ref<CDNConfig>({ ranges: [], headers: [], cloudflare_tunnel: false })
 const ranges = ref('')
 const headers = ref<CdnHeader[]>([])
+const tunnel = ref(false)
+const request = ref<RequestAddress | null>(null)
 const saving = ref(false)
 
 function show(c: CDNConfig) {
   saved.value = c
   ranges.value = c.ranges.join('\n')
   headers.value = c.headers.map((x) => ({ ...x }))
+  tunnel.value = c.cloudflare_tunnel
 }
 onMounted(async () => {
   try {
-    const r = await get<{ config: CDNConfig; cloudflare: string[] }>('/firewall/cdn')
+    const r = await get<{ config: CDNConfig; cloudflare: string[]; request: RequestAddress }>('/firewall/cdn')
     cf.value = r.cloudflare
+    request.value = r.request
     show(r.config)
   } catch (e) {
     msg.error(e instanceof ApiError ? e.text : String(e))
   }
 })
 const list = computed(() => ranges.value.split(/[\s,]+/).map((x) => x.trim()).filter(Boolean))
-const dirty = computed(() => JSON.stringify(headers.value) !== JSON.stringify(saved.value.headers) || list.value.join('\n') !== saved.value.ranges.join('\n'))
+const dirty = computed(() => tunnel.value !== saved.value.cloudflare_tunnel || JSON.stringify(headers.value) !== JSON.stringify(saved.value.headers) || list.value.join('\n') !== saved.value.ranges.join('\n'))
 async function save() {
   saving.value = true
   try {
-    const r = await put<{ config: CDNConfig }>('/firewall/cdn', { ranges: list.value, headers: headers.value })
+    const r = await put<{ config: CDNConfig; request: RequestAddress }>('/firewall/cdn', { ranges: list.value, headers: headers.value, cloudflare_tunnel: tunnel.value })
+    request.value = r.request
     show(r.config)
     msg.success(t('common.saved'))
   } catch (e) {
@@ -50,6 +56,14 @@ async function save() {
 <template>
   <n-card size="small" :title="t('fw.cdn.title')" style="margin-top: 16px">
     <p class="hint">{{ t('fw.cdn.hint') }}</p>
+    <n-alert v-if="request" type="info" :show-icon="false" style="margin: 10px 0">
+      {{ t('fw.cdn.request', { peer: request.peer_ip, client: request.client_ip, tls: request.external_tls ? 'HTTPS' : 'HTTP' }) }}
+    </n-alert>
+    <n-form-item :label="t('fw.cdn.tunnel')" :feedback="t('fw.cdn.tunnel_hint')">
+      <n-switch v-model:value="tunnel" />
+    </n-form-item>
+    <n-alert v-if="tunnel" type="warning" :show-icon="false" style="margin-bottom: 12px">{{ t('fw.cdn.tunnel_warn') }}</n-alert>
+    <n-alert type="info" :show-icon="false" style="margin-bottom: 12px">{{ t('fw.cdn.scope') }}</n-alert>
     <n-collapse style="margin: 8px 0 12px">
       <n-collapse-item name="cf">
         <template #header>

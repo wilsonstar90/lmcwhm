@@ -132,10 +132,11 @@ api PUT /firewall/cdn '{"ranges":[],"headers":[]}' >/dev/null
 pass "visitor address from a trusted CDN header only"
 
 # ---------- a website behind a CDN (網站防護 → CDN, like aaPanel) ----------
-# The site's headers are believed from any connection, in order; X-Forwarded-For
-# gives its last address. Sites without the switch ignore them.
+# The site's headers are believed only from a configured CDN peer, in order;
+# X-Forwarded-For gives its last address. Sites without the switch ignore them.
 [[ "$(curl -s -H 'X-Real-IP: 203.0.113.7' --resolve php.test:80:127.0.0.1 http://php.test/index.php)" == *"ip=127.0.0.1"* ]] || fail "X-Real-IP believed before CDN is on"
 api PUT /protect/sites '{"items":{"php.test":{"on":true,"cdn":true}}}' | grep -q '"ok":true' || fail "turn CDN on"
+api PUT /firewall/cdn '{"ranges":["127.0.0.1"],"headers":[{"name":"X-Real-IP"}]}' >/dev/null
 docker exec lmcwhm-haproxy haproxy -c -f /opt/lmcwhm/edge/haproxy.cfg 2>&1 | grep -i "warning\|alert" && fail "haproxy config has warnings (site CDN)"
 out="$(curl -s -H 'X-Real-IP: 203.0.113.7' --resolve php.test:80:127.0.0.1 http://php.test/index.php)"
 [[ "$out" == *"ip=203.0.113.7"* ]] || fail "site CDN header not used: $out"
@@ -163,8 +164,12 @@ if command -v nft >/dev/null; then
   api POST "/firewall/ips/$id/delete" >/dev/null
   api PUT /firewall '{"enabled":false,"policy":"accept","ping":true}' >/dev/null
 fi
+api PUT /firewall/cdn '{"ranges":[],"headers":[]}' >/dev/null
+api PUT /protect/sites '{"items":{"php.test":{"on":false,"cdn":true}}}' >/dev/null
+out="$(curl -s -H 'X-Real-IP: 203.0.113.7' --resolve php.test:80:127.0.0.1 http://php.test/index.php)"
+[[ "$out" == *"ip=127.0.0.1"* ]] || fail "CDN header believed from an untrusted source: $out"
 api PUT /protect/sites '{"items":{"php.test":{"on":true}}}' >/dev/null
-pass "website behind a CDN: visitor address from its header list"
+pass "website behind a CDN: visitor address only from trusted sources"
 
 # ---------- unauthenticated response (未認證響應狀態) ----------
 cur="$(api GET /settings)"

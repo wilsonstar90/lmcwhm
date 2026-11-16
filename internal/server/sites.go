@@ -68,7 +68,7 @@ func idParam(r *http.Request) int64 {
 }
 
 func (s *Server) audit(r *http.Request, action, detail string) {
-	s.Audit.Record(r.Context(), sessionFrom(r).User.Username, clientIP(r), "site", action, detail)
+	s.Audit.Record(r.Context(), sessionFrom(r).User.Username, s.clientIP(r), "site", action, detail)
 }
 
 func (s *Server) handleTask(w http.ResponseWriter, r *http.Request) {
@@ -157,7 +157,7 @@ func (s *Server) handlePutWebConfig(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	s.Audit.Record(r.Context(), sessionFrom(r).User.Username, clientIP(r), "web", "web.config", "ca="+c.ACMECA)
+	s.Audit.Record(r.Context(), sessionFrom(r).User.Username, s.clientIP(r), "web", "web.config", "ca="+c.ACMECA)
 	writeJSON(w, http.StatusOK, viewOf(c))
 }
 
@@ -187,7 +187,7 @@ func (s *Server) handleWebIPs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleWebInstall(w http.ResponseWriter, r *http.Request) {
-	s.Audit.Record(r.Context(), sessionFrom(r).User.Username, clientIP(r), "web", "web.install", "")
+	s.Audit.Record(r.Context(), sessionFrom(r).User.Username, s.clientIP(r), "web", "web.install", "")
 	writeJSON(w, http.StatusOK, map[string]string{"task_id": s.Sites.InstallEnv()})
 }
 

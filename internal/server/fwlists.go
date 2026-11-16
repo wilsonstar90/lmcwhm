@@ -40,7 +40,7 @@ func (s *Server) handleImportFWIPs(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	self, _ := netip.ParseAddr(clientIP(r))
+	self, _ := netip.ParseAddr(s.clientIP(r))
 	added, skipped, err := s.Firewall.ImportIPs(r.Context(), in.List, in.IPs, time.Duration(in.Minutes)*time.Minute, in.Remark, self.Unmap())
 	if err != nil {
 		writeFWErr(w, err)

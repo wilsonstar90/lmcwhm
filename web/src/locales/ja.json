@@ -1365,6 +1365,11 @@
     "cdn": {
       "title": "CDN 経由の実 IP",
       "hint": "CDN（Cloudflare のプロキシなど）経由では、サーバーには CDN の IP が見えます。CDN の IP 範囲からのリクエストのみ、下のヘッダーから順に訪問者の IP を取得します。ログ・WAF・CrowdSec・レート制限・IP ブラックリストは実際の訪問者 IP を使います。",
+      "request": "現在のリクエスト：Peer IP = {peer}、Client IP = {client}、外部接続 = {tls}。",
+      "tunnel": "Cloudflare Tunnel",
+      "tunnel_hint": "cloudflared が loopback で接続する場合のみ有効化してください。サイト Edge・パネル・REST・MCP に適用されます。",
+      "tunnel_warn": "有効時はローカル loopback が CF-Connecting-IP を提供できます。Tunnel を使わない場合は無効にしてください。",
+      "scope": "信頼済みソースはサイト・パネル・REST API・MCP に適用され、パネルの許可 IP と Token IP 許可リストは Client IP を使用します。",
       "builtin": "組み込み",
       "ranges_n": "{n} 範囲",
       "other": "その他の CDN",
@@ -1756,6 +1761,15 @@
     "tool": "ツール",
     "description": "説明",
     "scope": "権限",
+    "client": "AI エージェント",
+    "client_hint": "選択した AI エージェントのみがこの Token の MCP URL を使用できます。",
+    "clients": {
+      "any": "すべての Agent",
+      "kimi": "Kimi",
+      "deepseek": "DeepSeek",
+      "claude": "Claude",
+      "codex": "Codex"
+    },
     "scopes": {
       "read": "読み取り",
       "operate": "操作",
@@ -2729,7 +2743,7 @@
     "cdn_header_name": "ヘッダー名",
     "cdn_add": "追加",
     "cdn_note": "上のヘッダーを順に調べ、最初の有効な値を訪問者の IP とします。",
-    "cdn_risk": "注意：CDN を通さずサーバーの IP に直接接続する者はこれらのヘッダーを偽造し、別の IP を装って IP ブラックリストや CC 制限を回避できます。WAF・専用ルール・UA / URL リストは引き続き有効です。完全に防ぐには、Linode Cloud Firewall で 80 / 443 を CDN の IP 範囲だけに許可してください。",
+    "cdn_risk": "Cloudflare／設定済み CDN IP 範囲、または有効な Tunnel ソースのみを信頼します。それ以外の直接接続からの Header は無視されます。",
     "cdn_reset": "既定に戻す",
     "cdn_bad_header": "ヘッダー名には英数字と - だけを使い、重複させないでください"
   },
