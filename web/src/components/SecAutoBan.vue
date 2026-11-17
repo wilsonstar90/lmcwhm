@@ -52,11 +52,11 @@ async function save() {
     </div>
     <div class="ab-rule">
       <span>{{ t('ab.within') }}</span>
-      <n-input-number v-model:value="a.window" size="small" :min="1" :max="1440" style="width: 100px"><template #suffix>{{ t('ab.min') }}</template></n-input-number>
+      <n-input-number v-model:value="a.window" class="ab-num" size="small" :min="1" :max="1440"><template #suffix>{{ t('ab.min') }}</template></n-input-number>
       <span>{{ t('ab.refused') }}</span>
-      <n-input-number v-model:value="a.threshold" size="small" :min="2" :max="100000" style="width: 100px"><template #suffix>{{ t('ab.times') }}</template></n-input-number>
+      <n-input-number v-model:value="a.threshold" class="ab-num" size="small" :min="2" :max="100000"><template #suffix>{{ t('ab.times') }}</template></n-input-number>
       <span>{{ t('ab.ban_for') }}</span>
-      <n-input-number v-model:value="a.ban_minutes" size="small" :min="1" :max="525600" style="width: 120px"><template #suffix>{{ t('ab.min') }}</template></n-input-number>
+      <n-input-number v-model:value="a.ban_minutes" class="ab-num" size="small" :min="1" :max="525600"><template #suffix>{{ t('ab.min') }}</template></n-input-number>
     </div>
     <div class="ab-rule">
       <span>{{ t('ab.counts') }}</span>
@@ -100,6 +100,10 @@ async function save() {
   gap: 6px 8px;
   margin-top: 10px;
   font-size: 13px;
+}
+.ab-num {
+  width: 136px;
+  flex: 0 0 136px;
 }
 .ab-foot {
   display: flex;
