@@ -210,6 +210,15 @@ func (m *Manager) RunAction(ctx context.Context, a Action, fn func(ctx context.C
 	return fn(WithAction(ctx, a))
 }
 
+// ExclusiveIdle reports whether a configuration-changing task is active.
+func (m *Manager) ExclusiveIdle() bool {
+	if !m.run.TryLock() {
+		return false
+	}
+	m.run.Unlock()
+	return true
+}
+
 // RunSync retains the original global synchronous lock.
 func (m *Manager) RunSync(ctx context.Context, fn func(ctx context.Context) error) error {
 	return m.RunAction(ctx, Action{Exclusive: true}, fn)

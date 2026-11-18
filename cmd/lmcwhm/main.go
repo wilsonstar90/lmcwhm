@@ -42,6 +42,7 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/netinfo"
 	"github.com/wilsonstar90/lmcwhm/internal/probe"
 	"github.com/wilsonstar90/lmcwhm/internal/protect"
+	"github.com/wilsonstar90/lmcwhm/internal/recovery"
 	"github.com/wilsonstar90/lmcwhm/internal/secrets"
 	"github.com/wilsonstar90/lmcwhm/internal/secscan"
 	"github.com/wilsonstar90/lmcwhm/internal/security"
@@ -252,6 +253,14 @@ func serveCmd() *cobra.Command {
 			}
 			jobs.Feeds = fw.RunFeeds
 			alerts := alert.New(a.st, box)
+			rec := recovery.New(recovery.Docker{})
+			rec.Allow = tm.ExclusiveIdle
+			rec.Log = log.Warn
+			rec.Notify = func(e recovery.Event) {
+				log.Warn("container recovery", "container", e.Name, "event", e.Title, "detail", e.Body)
+				alerts.Emit(context.Background(), alert.KindServiceDown, "recovery:"+e.Name, e.Severity, e.Title, e.Body, e.Resolved)
+			}
+			go rec.Run(ctx)
 			jobs.OnResult = func(j cron.Job, r cron.Run) {
 				if r.Status == "failed" || r.Status == "timeout" {
 					alerts.Emit(context.Background(), alert.KindCronFailed, fmt.Sprint(j.ID), "warning",

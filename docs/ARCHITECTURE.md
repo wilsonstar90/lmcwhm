@@ -1,6 +1,6 @@
 # lmcwhm 架構與驗證
 
-本文描述 **`v0.22.2` 實際實作**，唔再將早期構想當成現狀。最後一節先係尚未完成嘅方向。
+本文描述 **`v0.23.0` 實際實作**，唔再將早期構想當成現狀。最後一節先係尚未完成嘅方向。
 
 ## 1. 核心決策
 
@@ -134,6 +134,7 @@ deploy/                 install、offline bundle、Linux E2E scripts
 - 網站防護、CDN 設定、專屬規則及黑白名單維持「回應時已套用」嘅同步 API 合約，底層共用 task 完成後先回應，並只額外加入 `task_id`；對應 Vue 元件共用 TaskModal 並防止重複提交。Vue 仍嵌入單一 binary，呢個版本冇強行改變部署或特權邊界。
 - Cron 支援秒級 schedule、timeout、避免重疊、輸出及告警；SSL renew、security scan、app update check 等係內建 jobs。
 - Monitor、probe、site stats、security events、CrowdSec、GeoIP refresh、mail certificate sync 各自以 goroutine 運行。
+- 容器 OOM 先由 Docker `restart=always` 處理；面板 watchdog 為 MariaDB、PHP 及 Varnish 提供額外自癒。啟動 5 分鐘後每 30 秒檢查，連續 3 次 unhealthy／readiness 失敗先 restart，10 分鐘冷卻、每小時最多 3 次，恢復後確認 MariaDB ping、PHP-FPM status 或 Varnish status。獨家設定工作進行時唔會介入，達到上限會暫停並經 `service_down` 告警；唔會因單次 OOM 自動 reboot 全機。
 - SQLite 只允許一個 writer；migration 逐個 transaction 執行，新 migration 只應追加，唔應修改已發佈版本。
 
 ## 9. 備份、快照與更新
