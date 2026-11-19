@@ -91,7 +91,7 @@ pass "release downloads (pinned + latest)"
 
 
 # ---------- 7. unhealthy Docker requires explicit repair ----------
-systemctl stop docker
+systemctl stop docker.socket docker
 if bash "$INSTALL" --binary "$NEW_BIN"; then fail "unhealthy Docker did not stop the installer"; fi
 if systemctl is-active --quiet docker; then fail "installer restarted Docker without permission"; fi
 bash "$INSTALL" --binary "$NEW_BIN" --repair-docker
