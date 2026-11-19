@@ -162,7 +162,7 @@ for f in deploy/*.sh; do bash -n "$f"; done
 
 - 每次 push／PR：Go、前端、Linux build。
 - Ubuntu 22.04／24.04：fresh install、upgrade、reset-panel、rollback。
-- Ubuntu 24.04：真 Docker websites、SNI、PHP、ACME/Pebble、apps、DB、files、firewall、WAF、CrowdSec 等 E2E。
+- Ubuntu 24.04：真 Docker websites、SNI、PHP、ACME/Pebble、apps、DB、files、firewall、WAF、CrowdSec 等 E2E。Apps runner 使用公開 `mirror.gcr.io` registry mirror，減少 Docker Hub unauthenticated rate limit；image tags 及測試範圍不變。
 - Source-check：按相關修改及每週跑官方 images／source configure matrix。
 - Tag release：測試、跨平台 build、checksums、GitHub Release。
 

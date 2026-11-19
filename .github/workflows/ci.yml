@@ -73,6 +73,17 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
+      - name: Configure public Docker Hub mirror
+        run: |
+          sudo python3 - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('/etc/docker/daemon.json')
+          config = json.loads(path.read_text()) if path.exists() else {}
+          config['registry-mirrors'] = ['https://mirror.gcr.io']
+          path.write_text(json.dumps(config, indent=2) + '\n')
+          PY
+          sudo systemctl restart docker
       - run: make web linux
       - name: Install panel
         run: sudo bash deploy/install.sh --binary bin/lmcwhm-linux-amd64 --skip-docker --port 18888 --entry /console --username admin --password Passw0rd1
