@@ -2,7 +2,7 @@
 
 自研單機 Linux 伺服器控制面板，定位接近 aaPanel／寶塔：**Go 單一 Binary + Vue 3 / Naive UI**，以網頁管理網站、資料庫、Docker、安全、備份及系統設定。
 
-目前文件對應 **`v0.23.0`**。實際架構、驗證範圍及後續路線見 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)；開發及 AI agent 工作守則見 [AGENTS.md](AGENTS.md)。
+目前文件對應 **`v0.23.2`**。實際架構、驗證範圍及後續路線見 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)；開發及 AI agent 工作守則見 [AGENTS.md](AGENTS.md)。
 
 ## 功能總覽
 
@@ -68,7 +68,9 @@ curl -fsSL https://raw.githubusercontent.com/wilsonstar90/lmcwhm/main/deploy/ins
 curl -fsSL https://raw.githubusercontent.com/wilsonstar90/lmcwhm/main/deploy/install.sh | sudo bash -s -- --port 8888 --entry /console --username admin
 ```
 
-其他選項包括 `--password`、`--version v0.23.0`、`--skip-docker`、`--binary ./lmcwhm-linux-amd64`、`--channel beta` 及 `--offline <包>`。
+其他選項包括 `--password`、`--version v0.23.2`、`--skip-docker`、`--binary ./lmcwhm-linux-amd64`、`--channel beta` 及 `--offline <包>`。`--repair-docker` 只應喺明確接受 Docker 及所有容器中斷時使用。
+
+新建立嘅備份會附 SHA256 及 `.manifest.json`；本地／雲端還原前會先驗證 archive，舊備份冇 checksum 時仍保持兼容。
 
 安裝後請立即：
 
@@ -80,7 +82,9 @@ curl -fsSL https://raw.githubusercontent.com/wilsonstar90/lmcwhm/main/deploy/ins
 
 ## 更新、修復及救援
 
-重跑安裝命令會進入修復／更新模式。流程包括備份 `data/`、更換 binary、migration、重啟及健康檢查；啟動失敗會還原舊 binary 同資料。官方 Release 下載必須通過 SHA256 校驗。
+重跑安裝命令會進入修復／更新模式。流程包括 `flock` 互斥、備份 `data/`、更換 binary、migration、重啟及 `/healthz` 健康檢查；啟動失敗會還原舊 binary 同資料，並再次驗證 rollback 健康狀態。官方 Release 下載必須通過 SHA256 校驗。
+
+Docker 已安裝但不健康時，預設會停止安裝而唔會 restart 或 reinstall；只有明確使用 `--repair-docker` 才會進入可能中斷所有容器嘅修復流程。
 
 | 命令 | 作用 |
 |---|---|

@@ -1,7 +1,6 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -42,12 +41,7 @@ type mcpCallerKey struct{}
 func (s *Server) buildMCP() *mcp.Server {
 	m := mcp.NewServer("lmcwhm", config.Version, mcpInstructions)
 	m.OnCall = func(ctx context.Context, c mcp.Caller, tool string, args json.RawMessage, err error) {
-		detail := tool + " " + string(args)
-		if tool == "call_api" {
-			var a struct{ Method, Path string }
-			json.Unmarshal(args, &a)
-			detail = tool + " " + a.Method + " " + a.Path
-		}
+		detail := mcpAuditDetail(tool, args)
 		if len(detail) > 500 {
 			detail = detail[:500]
 		}
@@ -508,8 +502,8 @@ func runShell(ctx context.Context, command string, timeout time.Duration) string
 	defer cancel()
 	cmd := exec.Command("/bin/bash", "-c", command)
 	cmd.Dir = "/"
-	var out bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &out
+	out := newTailBuffer(100 << 10)
+	cmd.Stdout, cmd.Stderr = out, out
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
 		return "error: " + err.Error()
@@ -525,9 +519,6 @@ func runShell(ctx context.Context, command string, timeout time.Duration) string
 		err = fmt.Errorf("timed out after %s", timeout)
 	}
 	text := out.String()
-	if len(text) > 100<<10 {
-		text = "[… truncated]\n" + text[len(text)-100<<10:]
-	}
 	code := 0
 	if ee, ok := err.(*exec.ExitError); ok {
 		code = ee.ExitCode()

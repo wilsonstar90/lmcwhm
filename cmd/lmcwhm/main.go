@@ -164,6 +164,10 @@ func serveCmd() *cobra.Command {
 			}()
 			tm := tasks.NewManager(a.st)
 			tm.Loc, _ = time.LoadLocation(a.settings.Get().Timezone)
+			readiness := server.NewReadiness()
+			readiness.Set("apps", false)
+			readiness.Set("web", false)
+			readiness.Set("cron", false)
 			sites := site.NewService(a.st, env, webCfg, &acme.Issuer{Cfg: webCfg, HTTP: responder}, tm)
 			sites.RebuildMarker = server.RebuildMarker(a.paths)
 			env.SiteDir = func() string { return a.settings.Get().SiteRoot }
@@ -226,10 +230,16 @@ func serveCmd() *cobra.Command {
 			go func() {
 				if err := apps.Boot(ctx); err != nil {
 					log.Error("app store boot", "err", err)
+					readiness.Set("apps", false)
+				} else {
+					readiness.Set("apps", true)
 				}
 				fw.OnListsChanged() // the lists the edge starts with
 				if err := sites.Boot(ctx); err != nil {
 					log.Error("web stack boot", "err", err)
+					readiness.Set("web", false)
+				} else {
+					readiness.Set("web", true)
 				}
 				crowdsec.Boot(ctx)
 			}()
@@ -333,6 +343,9 @@ func serveCmd() *cobra.Command {
 			go procs.Boot(ctx)
 			if err := jobs.Start(ctx); err != nil {
 				log.Error("cron", "err", err)
+				readiness.Set("cron", false)
+			} else {
+				readiness.Set("cron", true)
 			}
 			go geo.RefreshLoop(ctx, log.Error)
 			tb := toolbox.New()
@@ -376,7 +389,7 @@ func serveCmd() *cobra.Command {
 				WebFS: web.FS(), Log: log, Sites: sites, Web: webCfg, Tasks: tm,
 				Apps: apps, DBs: dbs, Docker: dockermgr.New(tm, a.paths.Home),
 				Files: filesFS(a.paths.Home), Term: terminal.New(),
-				Store: a.st, Monitor: mon, Cron: jobs, GeoIP: geo, Firewall: fw, Protect: prot, ErrPages: errp, WAF: waf, CrowdSec: crowdsec, Backup: bk,
+				Store: a.st, Readiness: readiness, Monitor: mon, Cron: jobs, GeoIP: geo, Firewall: fw, Protect: prot, ErrPages: errp, WAF: waf, CrowdSec: crowdsec, Backup: bk,
 				Tokens: tokens, AI: ai.New(a.st, box, nil),
 				Alerts: alerts, Probes: probes, Stats: stats, Events: events, Procs: procs, WP: wordpress.New(sites, dbs, env, tm, apps), FTP: ftpSvc,
 				Toolbox: tb, SecScan: secscan.New(a.st), Malware: malware.New(a.st, env.WWWRoot, a.paths.Home), Tamper: tp,

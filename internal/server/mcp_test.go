@@ -138,8 +138,12 @@ func TestMCPTokensAndScopes(t *testing.T) {
 	}
 	// Tool calls are audited.
 	entries, _, _ := e.srv.Audit.List(ctx, 50, 0)
-	if len(entries) == 0 || !strings.Contains(mustMarshal(entries), "run_shell") {
+	audit := mustMarshal(entries)
+	if len(entries) == 0 || !strings.Contains(audit, "run_shell") {
 		t.Fatal("tool call not audited")
+	}
+	if strings.Contains(audit, "echo hi-") || strings.Contains(audit, "1+2") {
+		t.Fatalf("shell command leaked into audit: %s", audit)
 	}
 }
 

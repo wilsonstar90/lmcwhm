@@ -151,7 +151,13 @@ func (s *Server) handler() http.Handler {
 	}
 	r.NotFound(s.spa)
 	s.apiRoot = r
-	return r
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Path == "/healthz" {
+			s.handleHealthz(w, req)
+			return
+		}
+		r.ServeHTTP(w, req)
+	})
 }
 
 // spa serves the embedded Vue build, falling back to index.html for client routes.

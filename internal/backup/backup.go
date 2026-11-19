@@ -6,7 +6,9 @@ package backup
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -65,17 +67,19 @@ type Plan struct {
 
 // Record is one stored copy of an archive.
 type Record struct {
-	ID        int64  `json:"id"`
-	Kind      string `json:"kind"`
-	Target    string `json:"target"`    // what was backed up (domain, database name, ...)
-	TargetID  int64  `json:"target_id"` // database id
-	Name      string `json:"name"`      // file name
-	Size      int64  `json:"size"`
-	Dest      string `json:"dest"`
-	Location  string `json:"-"` // local path or remote file id
-	JobID     int64  `json:"job_id"`
-	CreatedAt int64  `json:"created_at"`
-	DestName  string `json:"dest_name"`
+	ID               int64  `json:"id"`
+	Kind             string `json:"kind"`
+	Target           string `json:"target"`    // what was backed up (domain, database name, ...)
+	TargetID         int64  `json:"target_id"` // database id
+	Name             string `json:"name"`      // file name
+	Size             int64  `json:"size"`
+	SHA256           string `json:"sha256"`
+	Dest             string `json:"dest"`
+	Location         string `json:"-"` // local path or remote file id
+	ManifestLocation string `json:"-"` // local manifest path or remote object id
+	JobID            int64  `json:"job_id"`
+	CreatedAt        int64  `json:"created_at"`
+	DestName         string `json:"dest_name"`
 }
 
 type Service struct {
@@ -301,7 +305,8 @@ func (sv *Service) runUnit(ctx context.Context, p Plan, u unit, jobID int64, out
 	tmp := f.Name()
 	defer os.Remove(tmp)
 	fmt.Fprintf(out, "%s %s: archiving\n", u.kind, u.target)
-	err = u.write(ctx, f)
+	hasher := sha256.New()
+	err = u.write(ctx, io.MultiWriter(f, hasher))
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
@@ -312,16 +317,24 @@ func (sv *Service) runUnit(ctx context.Context, p Plan, u unit, jobID int64, out
 	if err != nil {
 		return err
 	}
+	sum := hex.EncodeToString(hasher.Sum(nil))
+	manifest, err := manifestJSON(manifestFor(u, name, fi.Size(), start.Unix(), sum))
+	if err != nil {
+		return err
+	}
 	fmt.Fprintf(out, "%s %s: %s (%s) in %s\n", u.kind, u.target, name, human(fi.Size()), time.Since(start).Round(time.Second))
 	var errs []string
 	for _, dest := range p.Dests {
-		loc, err := sv.store(ctx, dest, u, name, tmp, fi.Size())
+		loc, manifestLoc, err := sv.store(ctx, dest, u, name, tmp, fi.Size(), sum, manifest)
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("%s: %v", sv.destName(ctx, dest), err))
 			continue
 		}
-		sv.st.DB.ExecContext(ctx, `INSERT INTO backups(kind, target, target_id, name, size, dest, location, job_id, created_at) VALUES(?,?,?,?,?,?,?,?,?)`,
-			u.kind, u.target, u.targetID, name, fi.Size(), dest, loc, jobID, start.Unix())
+		if _, err := sv.st.DB.ExecContext(ctx, `INSERT INTO backups(kind, target, target_id, name, size, sha256, dest, location, manifest_location, job_id, created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+			u.kind, u.target, u.targetID, name, fi.Size(), sum, dest, loc, manifestLoc, jobID, start.Unix()); err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v", sv.destName(ctx, dest), err))
+			continue
+		}
 		fmt.Fprintf(out, "  → %s ok\n", sv.destName(ctx, dest))
 		if p.Keep > 0 {
 			for _, pruned := range sv.prune(ctx, u.kind, u.target, dest, p.Keep) {
@@ -335,26 +348,51 @@ func (sv *Service) runUnit(ctx context.Context, p Plan, u unit, jobID int64, out
 	return nil
 }
 
-func (sv *Service) store(ctx context.Context, dest string, u unit, name, tmp string, size int64) (string, error) {
+func (sv *Service) store(ctx context.Context, dest string, u unit, name, tmp string, size int64, sum string, manifest []byte) (string, string, error) {
 	if dest == DestLocal {
 		dir := filepath.Join(sv.LocalDir(), u.kind, safeName(u.target))
 		if err := os.MkdirAll(dir, 0o700); err != nil {
-			return "", err
+			return "", "", err
 		}
 		dst := filepath.Join(dir, name)
-		return dst, copyFile(tmp, dst)
+		if err := copyFile(tmp, dst); err != nil {
+			return "", "", err
+		}
+		if err := verifyLocalCopy(dst, sum); err != nil {
+			os.Remove(dst)
+			return "", "", err
+		}
+		manifestPath := dst + ".manifest.json"
+		if err := writeLocalManifest(manifestPath, manifest); err != nil {
+			os.Remove(dst)
+			return "", "", err
+		}
+		return dst, manifestPath, nil
 	}
 	id, _ := remoteID(dest)
 	rm, err := sv.remote(ctx, id)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	f, err := os.Open(tmp)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer f.Close()
-	return rm.Upload(ctx, name, f, size)
+	location, err := rm.Upload(ctx, name, f, size)
+	if err != nil {
+		return "", "", err
+	}
+	if err := verifyRemoteCopy(ctx, rm, location, sum); err != nil {
+		_ = rm.Delete(ctx, location)
+		return "", "", err
+	}
+	manifestLocation, err := rm.Upload(ctx, name+".manifest.json", strings.NewReader(string(manifest)), int64(len(manifest)))
+	if err != nil {
+		_ = rm.Delete(ctx, location)
+		return "", "", err
+	}
+	return location, manifestLocation, nil
 }
 
 // prune deletes all but the newest keep copies of kind/target at dest.
@@ -376,7 +414,7 @@ func (sv *Service) prune(ctx context.Context, kind, target, dest string, keep in
 
 // ---- records ----
 
-const recCols = `id, kind, target, target_id, name, size, dest, location, job_id, created_at`
+const recCols = `id, kind, target, target_id, name, size, sha256, dest, location, manifest_location, job_id, created_at`
 
 // LocalPath is where a local backup is stored (ok=false for remote copies).
 func (sv *Service) LocalPath(r Record) (string, bool) {
@@ -391,7 +429,7 @@ func scanRecords(rows *sql.Rows) ([]Record, error) {
 	out := []Record{}
 	for rows.Next() {
 		var r Record
-		if err := rows.Scan(&r.ID, &r.Kind, &r.Target, &r.TargetID, &r.Name, &r.Size, &r.Dest, &r.Location, &r.JobID, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.Kind, &r.Target, &r.TargetID, &r.Name, &r.Size, &r.SHA256, &r.Dest, &r.Location, &r.ManifestLocation, &r.JobID, &r.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -451,11 +489,19 @@ func (sv *Service) deleteRecord(ctx context.Context, r Record) error {
 		if err := os.Remove(r.Location); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
+		if r.ManifestLocation != "" {
+			if err := os.Remove(r.ManifestLocation); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
+		}
 		os.Remove(filepath.Dir(r.Location)) // only if empty
 	} else if id, ok := remoteID(r.Dest); ok {
 		rm, err := sv.remote(ctx, id)
 		if err == nil {
 			err = rm.Delete(ctx, r.Location)
+			if err == nil && r.ManifestLocation != "" {
+				err = rm.Delete(ctx, r.ManifestLocation)
+			}
 		}
 		// A remote that is gone (or a file deleted there) must not block cleanup.
 		if err != nil && !errors.Is(err, ErrRemoteMissing) && !errors.Is(err, ErrNotFound) {
@@ -506,7 +552,8 @@ func (sv *Service) Import(ctx context.Context, kind, target string, targetID int
 	if err != nil {
 		return Record{}, ErrBadName
 	}
-	n, err := io.Copy(f, r)
+	hasher := sha256.New()
+	n, err := io.Copy(io.MultiWriter(f, hasher), r)
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
@@ -514,8 +561,20 @@ func (sv *Service) Import(ctx context.Context, kind, target string, targetID int
 		os.Remove(dst)
 		return Record{}, err
 	}
-	res, err := sv.st.DB.ExecContext(ctx, `INSERT INTO backups(kind, target, target_id, name, size, dest, location, job_id, created_at) VALUES(?,?,?,?,?,?,?,0,?)`,
-		kind, target, targetID, name, n, DestLocal, dst, sv.now().Unix())
+	createdAt := sv.now().Unix()
+	sum := hex.EncodeToString(hasher.Sum(nil))
+	manifest, err := manifestJSON(manifestFor(unit{kind: kind, target: target, targetID: targetID}, name, n, createdAt, sum))
+	if err != nil {
+		os.Remove(dst)
+		return Record{}, err
+	}
+	manifestPath := dst + ".manifest.json"
+	if err := writeLocalManifest(manifestPath, manifest); err != nil {
+		os.Remove(dst)
+		return Record{}, err
+	}
+	res, err := sv.st.DB.ExecContext(ctx, `INSERT INTO backups(kind, target, target_id, name, size, sha256, dest, location, manifest_location, job_id, created_at) VALUES(?,?,?,?,?,?,?,?,?,0,?)`,
+		kind, target, targetID, name, n, sum, DestLocal, dst, manifestPath, createdAt)
 	if err != nil {
 		return Record{}, err
 	}

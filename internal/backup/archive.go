@@ -491,7 +491,7 @@ func (sv *Service) Restore(ctx context.Context, id, into int64, log func(string,
 	if err != nil {
 		return err
 	}
-	rc, err := sv.Open(ctx, rec)
+	rc, err := sv.openVerified(ctx, rec)
 	if err != nil {
 		return err
 	}

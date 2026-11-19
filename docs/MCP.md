@@ -120,12 +120,12 @@ default_tools_approval_mode = "writes"
 {"method": "POST", "path": "/cron/12/run", "body": {}}
 ```
 
-回應包含 HTTP `status`、`ok` 及 JSON `body`。API 錯誤會保留原狀態碼及穩定錯誤碼。每次工具調用都寫入操作日誌；`call_api` 只記錄 method 和 path，不記錄可能含密碼的 body。
+回應包含 HTTP `status`、`ok` 及 JSON `body`。API 錯誤會保留原狀態碼及穩定錯誤碼。每次工具調用都寫入操作日誌；`call_api` 只記錄 method 和移除 query 後的 path，不記錄可能含密碼的 body。其他工具會按欄位 redact secrets；`run_shell` 只記錄 command SHA-256，不記錄原文。
 
 ## 7. 安全及限制
 
 - 先以 `read` Token 驗證連線，只給自動化流程所需的最小 scope。
-- `operate`、`admin`、`call_api` 的非 GET 調用及 `run_shell` 可改變真實 Server；保持客戶端的人工審批。
+- `operate`、`admin`、`call_api` 的非 GET 調用及 `run_shell` 可改變真實 Server；保持客戶端的人工審批。Shell stdout／stderr 只保留最後 100 KiB，避免大量輸出耗盡面板記憶體。
 - MCP 每次調用使用現有 handler 的輸入驗證、業務邏輯及模組權限，不是繞過 API 的 shell 模擬。
 - `call_api` 適合 JSON API。大型下載會截斷；binary 下載及互動 Web Terminal／WebSocket 應使用面板、CLI 或 SSH。
 - 撤銷外洩 Token 可在面板刪除並重新建立；stdio 的安全性取決於 SSH 帳號及 sudo/root 權限。

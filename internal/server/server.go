@@ -57,45 +57,46 @@ import (
 )
 
 type Deps struct {
-	Paths    config.Paths
-	Settings *settings.Manager
-	Store    *store.Store // panel database (built-in task bookkeeping)
-	Auth     *auth.Service
-	Audit    *audit.Logger
-	WebFS    fs.FS // built Vue SPA (may be empty in dev)
-	Log      *slog.Logger
-	Sites    *site.Service
-	Web      *webcfg.Store
-	Tasks    *tasks.Manager
-	Apps     *appstore.Service
-	DBs      *database.Service
-	Docker   *dockermgr.Manager
-	Files    *files.FS
-	Term     *terminal.Service
-	Monitor  *monitor.Monitor
-	Cron     *cron.Service
-	GeoIP    *geoip.DB
-	Firewall *firewall.Service
-	Protect  *protect.Service
-	ErrPages *errpages.Service
-	WAF      *security.WAF
-	CrowdSec *security.CrowdSec
-	Backup   *backup.Service
-	Tokens   *apitoken.Service
-	AI       *ai.Service
-	Alerts   *alert.Service
-	Probes   *probe.Service
-	Stats    *sitestats.Service
-	Events   *secevents.Service
-	Procs    *supervisor.Service
-	WP       *wordpress.Service
-	FTP      *ftp.Service
-	Toolbox  *toolbox.Service
-	SecScan  *secscan.Service
-	Malware  *malware.Service
-	Tamper   *tamper.Service
-	Shares   *fileshare.Service
-	Mail     *mail.Service
+	Paths     config.Paths
+	Settings  *settings.Manager
+	Store     *store.Store // panel database (built-in task bookkeeping)
+	Readiness *Readiness
+	Auth      *auth.Service
+	Audit     *audit.Logger
+	WebFS     fs.FS // built Vue SPA (may be empty in dev)
+	Log       *slog.Logger
+	Sites     *site.Service
+	Web       *webcfg.Store
+	Tasks     *tasks.Manager
+	Apps      *appstore.Service
+	DBs       *database.Service
+	Docker    *dockermgr.Manager
+	Files     *files.FS
+	Term      *terminal.Service
+	Monitor   *monitor.Monitor
+	Cron      *cron.Service
+	GeoIP     *geoip.DB
+	Firewall  *firewall.Service
+	Protect   *protect.Service
+	ErrPages  *errpages.Service
+	WAF       *security.WAF
+	CrowdSec  *security.CrowdSec
+	Backup    *backup.Service
+	Tokens    *apitoken.Service
+	AI        *ai.Service
+	Alerts    *alert.Service
+	Probes    *probe.Service
+	Stats     *sitestats.Service
+	Events    *secevents.Service
+	Procs     *supervisor.Service
+	WP        *wordpress.Service
+	FTP       *ftp.Service
+	Toolbox   *toolbox.Service
+	SecScan   *secscan.Service
+	Malware   *malware.Service
+	Tamper    *tamper.Service
+	Shares    *fileshare.Service
+	Mail      *mail.Service
 }
 
 type Server struct {

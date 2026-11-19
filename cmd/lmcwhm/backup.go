@@ -69,6 +69,9 @@ func backupCommand() *cobra.Command {
 			if panelRunning(p) && !force {
 				return errors.New("the panel is running: systemctl stop lmcwhm, then run this again")
 			}
+			if err := backup.VerifyArchive(args[0]); err != nil {
+				return err
+			}
 			f, err := os.Open(args[0])
 			if err != nil {
 				return err

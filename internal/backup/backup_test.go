@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -184,6 +185,26 @@ func TestPathPlanRunPruneRestore(t *testing.T) {
 	if len(files) != 2 {
 		t.Fatalf("files on disk: %v", files)
 	}
+	manifests, _ := filepath.Glob(filepath.Join(sv.Dir, "path", "*", "*.manifest.json"))
+	if len(manifests) != 2 {
+		t.Fatalf("manifests on disk: %v", manifests)
+	}
+	for _, rec := range recs {
+		if len(rec.SHA256) != 64 || rec.ManifestLocation == "" {
+			t.Fatalf("missing checksum metadata: %+v", rec)
+		}
+		body, err := os.ReadFile(rec.ManifestLocation)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var manifest Manifest
+		if err := json.Unmarshal(body, &manifest); err != nil || manifest.SHA256 != rec.SHA256 || manifest.Name != rec.Name {
+			t.Fatalf("invalid manifest: %+v %v", manifest, err)
+		}
+	}
+	if err := VerifyArchive(recs[0].Location); err != nil {
+		t.Fatalf("sidecar verification: %v", err)
+	}
 	write(t, filepath.Join(dir, "a.txt"), "v2")
 	if err := sv.Restore(ctx, recs[0].ID, 0, t.Logf); err != nil {
 		t.Fatal(err)
@@ -191,11 +212,24 @@ func TestPathPlanRunPruneRestore(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(dir, "a.txt")); string(b) != "v1" {
 		t.Fatalf("restored %q", b)
 	}
+	write(t, recs[0].Location, "tampered")
+	if err := VerifyArchive(recs[0].Location); !errors.Is(err, ErrChecksum) {
+		t.Fatalf("sidecar accepted a tampered archive: %v", err)
+	}
+	if err := sv.Restore(ctx, recs[0].ID, 0, t.Logf); !errors.Is(err, ErrChecksum) {
+		t.Fatalf("tampered archive was restored: %v", err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "a.txt")); string(b) != "v1" {
+		t.Fatalf("checksum failure changed the target: %q", b)
+	}
 	if err := sv.Delete(ctx, recs[1].ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(recs[1].Location); err == nil {
 		t.Fatal("file not deleted")
+	}
+	if _, err := os.Stat(recs[1].ManifestLocation); err == nil {
+		t.Fatal("manifest not deleted")
 	}
 }
 
@@ -345,6 +379,9 @@ func TestRemotes(t *testing.T) {
 			if int64(len(fc.files[recs[0].Location])) != recs[0].Size {
 				t.Fatalf("uploaded %d of %d bytes", len(fc.files[recs[0].Location]), recs[0].Size)
 			}
+			if len(recs[0].SHA256) != 64 || fc.files[recs[0].ManifestLocation] == nil {
+				t.Fatalf("missing remote manifest: %+v", recs[0])
+			}
 			os.RemoveAll(dir)
 			if err := sv.Restore(ctx, recs[0].ID, 0, t.Logf); err != nil {
 				t.Fatal(err)
@@ -356,8 +393,8 @@ func TestRemotes(t *testing.T) {
 			if err := sv.RunPlan(ctx, plan, 0, io.Discard); err != nil {
 				t.Fatal(err)
 			}
-			if len(fc.files) != 1 {
-				t.Fatalf("remote holds %d files, want 1", len(fc.files))
+			if len(fc.files) != 2 {
+				t.Fatalf("remote holds %d files, want an archive and its manifest", len(fc.files))
 			}
 		})
 	}

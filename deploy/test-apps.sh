@@ -721,6 +721,8 @@ pass "lmcwhm firewall-off"
 bk_id() { api GET "/backups?kind=$1" | python3 -c "import sys,json; print([b['id'] for b in json.load(sys.stdin)['items'] if b['target']==sys.argv[1]][0])" "$2"; }
 task POST /backups/run '{"kind":"site","target":"db.test","dests":["local"],"keep":2}'
 SITEBK="$(bk_id site db.test)"
+api GET '/backups?kind=site' | python3 -c "import sys,json; b=[b for b in json.load(sys.stdin)['items'] if b['target']=='db.test'][0]; assert len(b['sha256']) == 64, b" || fail "backup checksum metadata"
+ls /opt/lmcwhm/backup/site/db.test/*.manifest.json >/dev/null || fail "backup manifest sidecar"
 echo broken > /www/wwwroot/db.test/index.php
 task POST "/backups/$SITEBK/restore" '{}'
 [[ "$(get80 db.test /index.php)" == "db-ok-42" ]] || fail "site restore: $(get80 db.test /index.php)"

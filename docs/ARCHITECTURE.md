@@ -1,6 +1,6 @@
 # lmcwhm 架構與驗證
 
-本文描述 **`v0.23.0` 實際實作**，唔再將早期構想當成現狀。最後一節先係尚未完成嘅方向。
+本文描述 **`v0.23.2` 實際實作**，唔再將早期構想當成現狀。最後一節先係尚未完成嘅方向。
 
 ## 1. 核心決策
 
@@ -123,8 +123,8 @@ deploy/                 install、offline bundle、Linux E2E scripts
 - 子用戶：按模組及可選網站 IDs 授權；未映射嘅新 API route 預設只限管理員。
 - 全局 running tasks、task history 及清除歷史只限管理員。隨機 12 字元 task ID 作為 caller 查詢自己背景工作進度嘅 capability，避免列出或讀取他人任務。
 - Terminal 開啟前需要再次驗證；主機及容器 terminal 都係高權限功能。
-- MCP AI 助手只提供 read-only tools；operate／admin MCP tools 具有真實系統修改能力，全部需要審計。
-- `list_api_endpoints` / `call_api` 經主 router 覆蓋所有已註冊 JSON REST 路由，按 method、模組及 Token scope 授權。通用調用以乾淨 routing context 執行真實 handler，只略過已驗證 MCP caller 嘅瀏覽器 gate；審計只記錄 method 及 path，唔記錄 body。
+- MCP AI 助手只提供 read-only tools；operate／admin MCP tools 具有真實系統修改能力，全部需要審計。Tool arguments 會按欄位 redact secrets；`run_shell` 只記錄 command SHA-256，唔記錄原文，shell output 喺串流寫入時已限制為最後 100 KiB。
+- `list_api_endpoints` / `call_api` 經主 router 覆蓋所有已註冊 JSON REST 路由，按 method、模組及 Token scope 授權。通用調用以乾淨 routing context 執行真實 handler，只略過已驗證 MCP caller 嘅瀏覽器 gate；審計只記錄 method 及移除 query 後嘅 path，唔記錄 body。
 
 ## 8. 背景服務與一致性
 
@@ -133,7 +133,7 @@ deploy/                 install、offline bundle、Linux E2E scripts
 - 同一 idempotency key 運行中唔會重複開 task；共享 web apply 另用 coalescing，執行期間收到新修改會喺完成後按最新 DB 狀態再套用一次，而唔係並發製造 proxy workers。
 - 網站防護、CDN 設定、專屬規則及黑白名單維持「回應時已套用」嘅同步 API 合約，底層共用 task 完成後先回應，並只額外加入 `task_id`；對應 Vue 元件共用 TaskModal 並防止重複提交。Vue 仍嵌入單一 binary，呢個版本冇強行改變部署或特權邊界。
 - Cron 支援秒級 schedule、timeout、避免重疊、輸出及告警；SSL renew、security scan、app update check 等係內建 jobs。
-- Monitor、probe、site stats、security events、CrowdSec、GeoIP refresh、mail certificate sync 各自以 goroutine 運行。
+- Monitor、probe、site stats、security events、CrowdSec、GeoIP refresh、mail certificate sync 各自以 goroutine 運行。`/healthz` 唔經瀏覽器 gates，只回報 DB 與 apps／web／cron 嘅 ready／not_ready；啟動未完成或失敗回 503，唔暴露內部錯誤內容。
 - 容器 OOM 先由 Docker `restart=always` 處理；面板 watchdog 為 MariaDB、PHP 及 Varnish 提供額外自癒。啟動 5 分鐘後每 30 秒檢查，連續 3 次 unhealthy／readiness 失敗先 restart，10 分鐘冷卻、每小時最多 3 次，恢復後確認 MariaDB ping、PHP-FPM status 或 Varnish status。獨家設定工作進行時唔會介入，達到上限會暫停並經 `service_down` 告警；唔會因單次 OOM 自動 reboot 全機。
 - SQLite 只允許一個 writer；migration 逐個 transaction 執行，新 migration 只應追加，唔應修改已發佈版本。
 
@@ -141,10 +141,11 @@ deploy/                 install、offline bundle、Linux E2E scripts
 
 - 網站及目錄使用 safe archive 處理；資料庫使用引擎工具 dump／restore。
 - Panel backup 以 SQLite `VACUUM INTO` 建立一致快照。
+- 新 archive 喺寫入時同步計算 SHA256，並附獨立 `.manifest.json` 記錄格式、panel 版本、目標、大小、建立時間及 checksum。本地 copy 會再驗 hash；雲端 archive 會 download readback 驗證後先上傳 manifest。還原前會先讀到臨時檔並驗證，失敗唔會開始改動目標；舊備份冇 checksum 時保持兼容。
 - Drive／OneDrive 採用 device OAuth、分塊及續傳；token 加密保存。
 - Snapshot 包含面板 home、App 數據及網站；複製 App 數據時短暫 pause 容器，還原後重建 web stack。
-- Installer 先下載新 binary，官方 Release 必須取得並通過 SHA256SUMS，再備份資料、停止服務、替換、migration 及健康檢查。
-- Rollback 預設還原 binary；`--with-data` 會同時還原舊資料，屬高風險操作。
+- Installer 以 `flock` 防止並發更新，先下載新 binary，官方 Release 必須取得並通過 SHA256SUMS，再備份資料、停止服務、替換、migration 及 `/healthz` 健康檢查。Docker 不健康時預設 fail-closed，只有 `--repair-docker` 才允許 restart／reinstall。
+- Rollback 預設還原 binary；`--with-data` 會同時還原舊資料，屬高風險操作。Installer 自動 rollback 後會再驗證舊版本健康狀態。
 
 ## 10. 測試與交付
 

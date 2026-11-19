@@ -21,6 +21,7 @@
 #   --port N --entry /path --username U --password P
 #                      fresh install: initial values; upgrade: applied as changes
 #   --skip-docker      do not install Docker
+#   --repair-docker    explicitly restart/reinstall an unhealthy Docker engine
 #   --force            continue on an unsupported OS
 set -euo pipefail
 
@@ -39,6 +40,7 @@ OFFLINE=""
 REPAIR=0
 RESET_PANEL=0
 SKIP_DOCKER=0
+REPAIR_DOCKER=0
 FORCE=0
 OPT_PORT="" OPT_ENTRY="" OPT_USER="" OPT_PASS=""
 
@@ -61,12 +63,16 @@ while [[ $# -gt 0 ]]; do
     --username)    OPT_USER="$2"; shift 2 ;;
     --password)    OPT_PASS="$2"; shift 2 ;;
     --skip-docker) SKIP_DOCKER=1; shift ;;
+    --repair-docker) REPAIR_DOCKER=1; shift ;;
     --force)       FORCE=1; shift ;;
     *) die "unknown option $1" ;;
   esac
 done
 
 [[ $EUID -eq 0 ]] || die "please run as root"
+command -v flock >/dev/null 2>&1 || die "flock is required (install util-linux)"
+exec 9>/run/lmcwhm-installer.lock
+flock -n 9 || die "another lmcwhm installer is already running"
 export LMCWHM_HOME=$HOME_DIR
 
 # ---- OS / arch ----
@@ -200,7 +206,10 @@ elif [[ $SKIP_DOCKER -eq 0 ]]; then
     step "Installing Docker Engine"
     install_docker
   elif ! docker info >/dev/null 2>&1; then
-    step "Docker is not healthy, restarting"
+    if [[ $REPAIR_DOCKER -ne 1 ]]; then
+      die "Docker is installed but unhealthy; no Docker action was taken. Repair it manually or rerun with --repair-docker (may interrupt every container)"
+    fi
+    step "Docker is not healthy, restarting (--repair-docker)"
     systemctl restart docker || true
     if ! docker info >/dev/null 2>&1; then
       step "Reinstalling Docker packages (containers, images and volumes are kept)"
@@ -287,6 +296,37 @@ install -m 0755 "$NEW_BIN" "$BIN"
 ln -sf "$BIN" /usr/bin/lmcwhm
 write_unit
 
+supports_healthz() {
+  local version=$1
+  [[ -n "$version" ]] || return 1
+  [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]] || return 0
+  [[ "$(printf 'v0.23.2\n%s\n' "$version" | sort -V | head -n 1)" == "v0.23.2" ]]
+}
+
+panel_healthy() {
+  local version=$1 path=/ code
+  if supports_healthz "$version"; then path=/healthz; fi
+  code="$(curl -sk -o /dev/null -w '%{http_code}' "https://127.0.0.1:${PANEL_PORT}${path}" 2>/dev/null || true)"
+  if [[ -z "$code" || "$code" == 000 ]]; then
+    code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PANEL_PORT}${path}" 2>/dev/null || true)"
+  fi
+  if supports_healthz "$version"; then
+    [[ "$code" == 200 ]]
+  else
+    [[ -n "$code" && "$code" != 000 ]]
+  fi
+}
+
+wait_for_panel() {
+  local version=$1
+  for _ in $(seq 1 120); do
+    sleep 1
+    systemctl is-active --quiet lmcwhm || continue
+    if panel_healthy "$version"; then return 0; fi
+  done
+  return 1
+}
+
 rollback() {
   red "New version failed; rolling back"
   systemctl stop lmcwhm 2>/dev/null || true
@@ -296,9 +336,14 @@ rollback() {
     mv "$DATA_DIR" "$DATA_DIR.failed"
     tar -xzf "$BACKUP_FILE" -C "$HOME_DIR"
   fi
+  restored_port="$("$BIN" port 2>/dev/null || true)"
+  if [[ -n "$restored_port" ]]; then PANEL_PORT="$restored_port"; fi
   systemctl start lmcwhm || true
-  journalctl -u lmcwhm -n 30 --no-pager || true
-  die "rolled back to ${OLD_VERSION:-previous version}; failed data kept in $DATA_DIR.failed"
+  if ! wait_for_panel "$OLD_VERSION"; then
+    journalctl -u lmcwhm -n 30 --no-pager || true
+    die "rollback to ${OLD_VERSION:-previous version} also failed its health check; failed data kept in $DATA_DIR.failed"
+  fi
+  die "rolled back to ${OLD_VERSION:-previous version} and verified its health; failed data kept in $DATA_DIR.failed"
 }
 
 # ---- initialise or migrate ----
@@ -342,19 +387,9 @@ fi
 step "Starting lmcwhm"
 systemctl enable lmcwhm >/dev/null 2>&1
 systemctl restart lmcwhm
-healthy=0
-for _ in $(seq 1 15); do
-  sleep 1
-  systemctl is-active --quiet lmcwhm || continue
-  code="$(curl -sk -o /dev/null -w '%{http_code}' "https://127.0.0.1:${PANEL_PORT}/" 2>/dev/null || true)"
-  if [[ -z "$code" || "$code" == 000 ]]; then
-    code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PANEL_PORT}/" 2>/dev/null || true)"
-  fi
-  if [[ -n "$code" && "$code" != 000 ]]; then healthy=1; break; fi
-done
-if [[ $healthy -ne 1 ]]; then
+if ! wait_for_panel "$NEW_VERSION"; then
   if [[ $MODE == upgrade ]]; then rollback; fi
-  red "lmcwhm failed to start:"
+  red "lmcwhm failed its health check:"
   journalctl -u lmcwhm -n 30 --no-pager || true
   exit 1
 fi

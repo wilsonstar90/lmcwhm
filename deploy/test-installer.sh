@@ -22,6 +22,7 @@ login() {
 ufw allow 22/tcp >/dev/null && ufw --force enable >/dev/null
 bash "$INSTALL" --binary "$NEW_BIN" --skip-docker --port 18888 --entry /console --username admin --password Passw0rd1
 systemctl is-active --quiet lmcwhm || fail "service not active after fresh install"
+[[ "$(code /healthz)" == 200 ]] || fail "panel health check is not ready"
 [[ "$(rm -f "$JAR"; code /)" == 404 ]] || fail "panel reachable without security entry"
 login /console admin Passw0rd1 || fail "fresh login"
 ufw status | grep -q 18888 || fail "panel port not allowed in ufw"
@@ -42,6 +43,13 @@ ls /opt/lmcwhm/backup/reinstall-*.tar.gz >/dev/null || fail "no data backup"
 [[ "$(port)" == 18888 ]] || fail "port changed"
 pass "upgrade keeps settings, sites, firewall"
 
+flock /run/lmcwhm-installer.lock -c 'sleep 2' &
+lock_pid=$!
+sleep 0.2
+if bash "$INSTALL" --binary "$NEW_BIN" --skip-docker; then fail "concurrent installer acquired the lock"; fi
+wait "$lock_pid"
+pass "concurrent installer is rejected"
+
 # ---------- 3. reset-panel ----------
 bash "$INSTALL" --binary "$NEW_BIN" --skip-docker --reset-panel --entry /rescue1 --password NewPass123
 login /rescue1 admin NewPass123 || fail "reset-panel login"
@@ -60,6 +68,7 @@ EOF
 chmod +x "$BROKEN"
 if bash "$INSTALL" --binary "$BROKEN" --skip-docker; then fail "broken install reported success"; fi
 systemctl is-active --quiet lmcwhm || fail "service not restored after rollback"
+[[ "$(code /healthz)" == 200 ]] || fail "rolled-back panel is not healthy"
 lmcwhm version | grep -qv broken || fail "broken binary left installed"
 login /rescue1 admin NewPass123 || fail "data not restored after rollback"
 pass "rollback"
@@ -79,3 +88,13 @@ bash "$INSTALL" --skip-docker
 lmcwhm version | grep -q ' v' || fail "latest release not installed"
 login /rescue1 admin NewPass123 || fail "settings lost on latest download"
 pass "release downloads (pinned + latest)"
+
+
+# ---------- 7. unhealthy Docker requires explicit repair ----------
+systemctl stop docker
+if bash "$INSTALL" --binary "$NEW_BIN"; then fail "unhealthy Docker did not stop the installer"; fi
+if systemctl is-active --quiet docker; then fail "installer restarted Docker without permission"; fi
+bash "$INSTALL" --binary "$NEW_BIN" --repair-docker
+systemctl is-active --quiet docker || fail "explicit Docker repair did not restart Docker"
+[[ "$(code /healthz)" == 200 ]] || fail "panel unhealthy after explicit Docker repair"
+pass "Docker is untouched by default and repaired only with --repair-docker"
