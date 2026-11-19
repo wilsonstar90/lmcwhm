@@ -118,6 +118,21 @@ func TestSecurityEntryGate(t *testing.T) {
 	if r.StatusCode != 302 || r.Header.Get("Location") != "/login" {
 		t.Fatalf("entry: got %d %q", r.StatusCode, r.Header.Get("Location"))
 	}
+	var entry *http.Cookie
+	for _, c := range r.Cookies() {
+		if c.Name == entryCookie {
+			entry = c
+		}
+	}
+	if entry == nil {
+		t.Fatal("entry response did not set an entry cookie")
+	}
+	if entry.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("entry cookie SameSite = %v, want Lax for identity provider redirects", entry.SameSite)
+	}
+	if !entry.HttpOnly {
+		t.Fatal("entry cookie is not HttpOnly")
+	}
 	if r, _ := e.do("GET", "/api/v1/public/meta", nil, nil); r.StatusCode != 200 {
 		t.Fatalf("after entry: got %d", r.StatusCode)
 	}

@@ -105,7 +105,7 @@ func (s *Server) gate(next http.Handler) http.Handler {
 			if r.URL.Path == cfg.SecurityEntry || r.URL.Path == cfg.SecurityEntry+"/" {
 				http.SetCookie(w, &http.Cookie{
 					Name: entryCookie, Value: s.entryToken(cfg.SecurityEntry), Path: "/",
-					HttpOnly: true, Secure: s.externalTLS(r), SameSite: http.SameSiteStrictMode,
+					HttpOnly: true, Secure: s.externalTLS(r), SameSite: http.SameSiteLaxMode,
 				})
 				http.Redirect(w, r, "/login", http.StatusFound)
 				return

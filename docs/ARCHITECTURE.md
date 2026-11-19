@@ -117,8 +117,8 @@ deploy/                 install、offline bundle、Linux E2E scripts
 
 ## 7. 認證、授權與高風險操作
 
-- Browser：HttpOnly + SameSite session、非 GET CSRF、bcrypt、TOTP、按 IP 登入鎖定。
-- Gates：授權 IP → 綁定域名 → BasicAuth → 安全入口；可自訂未認證回應。
+- Browser：HttpOnly + SameSite=Strict session、非 GET CSRF、bcrypt、TOTP、按 IP 登入鎖定。
+- Gates：授權 IP → 綁定域名 → BasicAuth → 安全入口；可自訂未認證回應。安全入口 cookie 使用 HttpOnly + SameSite=Lax，讓 Cloudflare Access 等外部身份提供者完成頂層 GET 跳轉後仍能進入登入頁；呢個 cookie 只證明已通過入口，唔係登入 session。
 - API Token：驗證使用 SHA-256 hash；新 Token 另用面板 master key 以 AES-256-GCM 加密保存，管理員可按需翻查。scope 為 read／operate／admin，可設 expiry、IP allowlist、編輯到期日或即時暫停／恢復。每個 Token 有獨立 UUIDv4 MCP endpoint，URL 與 Token 必須匹配；可限制只用 Kimi／DeepSeek／Claude／Codex，身份來自 MCP clientInfo 及 User-Agent。舊 hash-only Token 不可翻查，只可撤銷後重建。
 - 子用戶：按模組及可選網站 IDs 授權；未映射嘅新 API route 預設只限管理員。
 - 全局 running tasks、task history 及清除歷史只限管理員。隨機 12 字元 task ID 作為 caller 查詢自己背景工作進度嘅 capability，避免列出或讀取他人任務。
