@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -32,6 +33,7 @@ func snapshotCommand() *cobra.Command {
 				return errors.New("please run as root (sudo lmcwhm ...)")
 			}
 			p := config.Resolve()
+			keyPath := filepath.Join(filepath.Dir(p.Home), "lmcwhm-backup-recovery.key")
 			var src io.ReadCloser
 			if strings.HasPrefix(args[0], "http://") || strings.HasPrefix(args[0], "https://") {
 				// A share link answers GET with a page and POST with the file.
@@ -43,13 +45,29 @@ func snapshotCommand() *cobra.Command {
 					resp.Body.Close()
 					return fmt.Errorf("download: HTTP %d (a password-protected link cannot be used here)", resp.StatusCode)
 				}
-				src = resp.Body
-			} else {
-				f, err := os.Open(args[0])
+				tmp, err := os.CreateTemp("", "lmcwhm-snapshot-*")
+				if err != nil {
+					resp.Body.Close()
+					return err
+				}
+				_, err = io.Copy(tmp, resp.Body)
+				resp.Body.Close()
+				if closeErr := tmp.Close(); err == nil {
+					err = closeErr
+				}
 				if err != nil {
 					return err
 				}
-				src = f
+				src, err = backup.OpenArchive(tmp.Name(), keyPath)
+				if err != nil {
+					return err
+				}
+			} else {
+				var err error
+				src, err = backup.OpenArchive(args[0], keyPath)
+				if err != nil {
+					return err
+				}
 			}
 			defer src.Close()
 			if panelRunning(p) {

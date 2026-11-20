@@ -215,7 +215,27 @@ func OpenArchive(path, keyPath string) (io.ReadCloser, error) {
 	manifestPath := path + ".manifest.json"
 	body, err := os.ReadFile(manifestPath)
 	if errors.Is(err, os.ErrNotExist) {
-		return os.Open(path)
+		encrypted, err := IsEncryptedArchive(path)
+		if err != nil || !encrypted {
+			return os.Open(path)
+		}
+		plain, err := os.CreateTemp("", "lmcwhm-archive-*")
+		if err != nil {
+			return nil, err
+		}
+		plainPath := plain.Name()
+		plain.Close()
+		os.Remove(plainPath)
+		if err := DecryptFileTo(path, plainPath, keyPath); err != nil {
+			os.Remove(plainPath)
+			return nil, err
+		}
+		opened, err := os.Open(plainPath)
+		if err != nil {
+			os.Remove(plainPath)
+			return nil, err
+		}
+		return &verifiedReadCloser{File: opened, path: plainPath}, nil
 	}
 	if err != nil {
 		return nil, err

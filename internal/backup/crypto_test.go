@@ -89,6 +89,18 @@ func TestEncryptedBackupRestoreAndDisable(t *testing.T) {
 	if body, err := io.ReadAll(opened); err != nil || !bytes.HasPrefix(body, []byte{0x1f, 0x8b}) {
 		t.Fatalf("open encrypted archive: %v", err)
 	}
+	plainCopy := filepath.Join(t.TempDir(), "copy-without-manifest.enc")
+	if err := os.WriteFile(plainCopy, archive, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	openedCopy, err := OpenArchive(plainCopy, sv.EncryptionKeyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body, err := io.ReadAll(openedCopy); err != nil || !bytes.HasPrefix(body, []byte{0x1f, 0x8b}) {
+		t.Fatalf("open archive without manifest: %v", err)
+	}
+	openedCopy.Close()
 	if err := sv.Run(ctx, Plan{Kind: KindPath, Target: dir, Dests: []string{DestLocal}}, 0, io.Discard); err != nil {
 		t.Fatal(err)
 	}

@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -237,4 +238,41 @@ func decryptReader(src io.ReadCloser, key []byte, closeParent func()) (io.ReadCl
 		pw.CloseWithError(err)
 	}()
 	return reader, nil
+}
+
+func DecryptFileTo(source, destination, keyPath string) (err error) {
+	key, err := readRecoveryKey(keyPath)
+	if err != nil || len(key) != 32 {
+		return errEncryption
+	}
+	in, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(destination, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			os.Remove(destination)
+		}
+	}()
+	if err = decryptStream(out, in, key); err != nil {
+		out.Close()
+		return err
+	}
+	return out.Close()
+}
+
+func IsEncryptedArchive(path string) (bool, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+	header := make([]byte, len(encryptionMagic))
+	_, err = io.ReadFull(f, header)
+	return err == nil && bytes.Equal(header, encryptionMagic), nil
 }

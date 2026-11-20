@@ -774,7 +774,7 @@ n1="$(api GET "/databases/$SHOPID/backups" | python3 -c "import sys,json; print(
 [[ "$n1" == $((n0 + 1)) ]] || fail "database backup from its page: $n0 -> $n1"
 api GET /databases | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['backups'][str($SHOPID)] == $n1, d['backups']" || fail "backup count in the list"
 B1="$(api GET "/databases/$SHOPID/backups" | jget "['items'][0]['id']")"
-[[ "$(curl -sk -b "$JAR" "$P/api/v1/databases/$SHOPID/backups/$B1/download" | head -c 2 | od -An -tx1 | tr -d ' ')" == 1f8b ]] || fail "database backup download"
+[[ "$(curl -sk -b "$JAR" "$P/api/v1/databases/$SHOPID/backups/$B1/download" | head -c 10 | od -An -tx1 | tr -d ' ')" == 4c4d4357484d454e4331 ]] || fail "encrypted database backup download"
 [[ "$(curl -sk -b "$JAR" -o /dev/null -w '%{http_code}' "$P/api/v1/databases/$(db_id pmtest)/backups/$B1/download")" != 200 ]] || fail "another database's backup downloaded through this one"
 # Upload a zip holding an SQL file in two chunks, then import it (backing up first).
 W="$(mktemp -d)"
@@ -1016,7 +1016,8 @@ task POST /backups/run '{"kind":"snapshot","dests":["local"],"keep":1}'
 SNAP="$(api GET '/backups?kind=snapshot' | jget "['items'][0]['id']")"
 SS="$(api POST "/backups/$SNAP/share" | jget "['token']")"
 curl -sk -X POST "$P/s/$SS" -o /tmp/snap.tar.gz
-LIST="$(tar -tzf /tmp/snap.tar.gz)" || fail "snapshot is not a tar.gz: $(head -c 200 /tmp/snap.tar.gz)"
+lmcwhm worker --decrypt-archive /tmp/snap.tar.gz --output /tmp/snap-decrypted.tar.gz || fail "snapshot decryption"
+LIST="$(tar -tzf /tmp/snap-decrypted.tar.gz)" || fail "decrypted snapshot is not a tar.gz: $(head -c 200 /tmp/snap-decrypted.tar.gz)"
 grep -qx 'home/data/panel.db' <<<"$LIST" || fail "snapshot lacks the panel database"
 grep -qx 'www/db.test/index.php' <<<"$LIST" || fail "snapshot lacks website files"
 grep -qx 'snapshot.json' <<<"$(head -1 <<<"$LIST")" || fail "snapshot manifest not first"
