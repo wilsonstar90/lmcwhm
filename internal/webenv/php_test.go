@@ -54,7 +54,7 @@ func TestRenderPHP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"[low]", "listen = 127.0.0.1:9083", "pm = ondemand", "[busy]", "listen = 127.0.0.1:10083", "pm = static", "pm.max_children = 8", "request_slowlog_timeout = 5s", "slowlog = /var/log/lmcwhm-php/slow.log"} {
+	for _, want := range []string{"[low]", "listen = 127.0.0.1:9083", "pm = ondemand", "[busy]", "listen = 127.0.0.1:10083", "user = www-data", "group = www-data", "pm = static", "pm.max_children = 8", "request_slowlog_timeout = 5s", "slowlog = /var/log/lmcwhm-php/slow.log"} {
 		if !strings.Contains(string(fpm), want) {
 			t.Errorf("fpm missing %q:\n%s", want, fpm)
 		}

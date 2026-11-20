@@ -5,6 +5,8 @@ daemonize = no
 {{- range .Pools}}
 [{{.Name}}]
 listen = 127.0.0.1:{{.Port}}
+user = www-data
+group = www-data
 pm = {{.P.PM}}
 pm.max_children = {{.P.MaxChildren}}
 {{- if eq .P.PM "dynamic"}}
