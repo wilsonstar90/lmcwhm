@@ -930,7 +930,7 @@ pass "SFTP chroot and Pure-FTPd accounts"
 task PUT /php/8.3 '{"extensions":["redis"],"ini":{"memory_limit":"384M"},"disable_functions":["exec"],"custom_ini":"","fpm":{"pm":"dynamic","max_children":8,"start_servers":2,"min_spare":1,"max_spare":4,"max_requests":500,"request_timeout":0,"slowlog_timeout":5}}'
 docker exec lmcwhm-php83 php -m | grep -qx redis || fail "redis extension not loaded"
 [[ "$(docker exec lmcwhm-php83 php -r 'echo ini_get("memory_limit");')" == 384M ]] || fail "php.ini not applied"
-api GET /php/8.3 | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['status']['pool']=='www' and 'redis' in d['modules'], d" || fail "php status"
+api GET /php/8.3 | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['status']['pool']=='busy' and d['low_status']['pool']=='www' and 'redis' in d['modules'], d" || fail "php status"
 [[ "$(get80 db.test /index.php)" == "db-ok-42" ]] || fail "site broken by PHP settings"
 api GET /php | python3 -c "import sys,json; v=[v for v in json.load(sys.stdin)['items'] if v['version']=='8.3'][0]; assert v['full_version']=='8.3.0', v" \
   || fail "php full version"
