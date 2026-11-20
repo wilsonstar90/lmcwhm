@@ -44,7 +44,7 @@ func phpTemplatePools(version string, config PHPConfig) []phpTemplatePool {
 	low := config.FPM
 	low.PM = "ondemand"
 	return []phpTemplatePool{
-		{Name: PHPPoolLow, Port: PHPPoolPort(version, PHPPoolLow), P: low, SlowLog: low.SlowlogTimeout > 0},
+		{Name: "www", Port: PHPPoolPort(version, PHPPoolLow), P: low, SlowLog: low.SlowlogTimeout > 0},
 		{Name: PHPPoolBusy, Port: PHPPoolPort(version, PHPPoolBusy), P: config.FPM, SlowLog: config.FPM.SlowlogTimeout > 0},
 	}
 }
