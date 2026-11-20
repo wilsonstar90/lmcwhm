@@ -73,7 +73,7 @@ async function delChannel(c: Channel) {
   load()
 }
 const channelCols = computed<DataTableColumns<Channel>>(() => [
-  { title: () => t('alert.name'), key: 'name', render: (c) => h('b', c.name) },
+  { title: () => t('alert.name'), key: 'name', minWidth: 170, render: (c) => h('b', c.name) },
   { title: () => t('alert.kind'), key: 'kind', width: 140, render: (c) => t(`alert.channel_kinds.${c.kind}`) },
   { title: () => t('alert.enabled'), key: 'enabled', width: 90, render: (c) => h(NTag, { size: 'small', type: c.enabled ? 'success' : 'default' }, () => (c.enabled ? t('fw.on') : t('fw.off'))) },
   {
@@ -165,7 +165,7 @@ const evCols = computed<DataTableColumns<Ev>>(() => [
       <n-space style="margin-bottom: 12px">
         <n-button v-for="k in channelKinds" :key="k" @click="newChannel(k)">+ {{ t(`alert.channel_kinds.${k}`) }}</n-button>
       </n-space>
-      <n-data-table size="small" :columns="channelCols" :data="channels" :row-key="(c: Channel) => c.id" />
+      <n-data-table size="small" :columns="channelCols" :data="channels" :row-key="(c: Channel) => c.id" :scroll-x="700" />
     </n-tab-pane>
     <n-tab-pane name="history" :tab="t('alert.tab_history')">
       <n-data-table

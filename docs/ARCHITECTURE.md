@@ -119,7 +119,7 @@ deploy/                 install、offline bundle、Linux E2E scripts
 ## 7. 認證、授權與高風險操作
 
 - Browser：HttpOnly + SameSite=Strict session、非 GET CSRF、bcrypt、TOTP、按 IP 登入鎖定。
-- PWA：iOS/iPadOS 16.4+ 加入主畫面後可用 Web Push。App Push 係 alert channel，裝置訂閱獨立於 login session，logout 唔會撤銷。VAPID private key、endpoint 同裝置 keys 加密保存，可逐部裝置撤銷及測試。
+- PWA：iOS/iPadOS 16.4+ 加入主畫面後可用 Web Push。App Push 係 alert channel，裝置訂閱獨立於 login session，logout 唔會撤銷。VAPID private key、endpoint 同裝置 keys 加密保存，可逐部裝置撤銷及測試。VAPID subject 使用 ACME email 或 HTTPS 面板網域，避免 `.local` contact 被 push service 拒絕。
 - Gates：授權 IP → 綁定域名 → BasicAuth → 安全入口；可自訂未認證回應。安全入口 cookie 使用 HttpOnly + SameSite=Lax，讓 Cloudflare Access 等外部身份提供者完成頂層 GET 跳轉後仍能進入登入頁；呢個 cookie 只證明已通過入口，唔係登入 session。
 - API Token：驗證使用 SHA-256 hash；新 Token 另用面板 master key 以 AES-256-GCM 加密保存，管理員可按需翻查。scope 為 read／operate／admin，可設 expiry、IP allowlist、編輯到期日或即時暫停／恢復。每個 Token 有獨立 UUIDv4 MCP endpoint，URL 與 Token 必須匹配；可限制只用 Kimi／DeepSeek／Claude／Codex，身份來自 MCP clientInfo 及 User-Agent。舊 hash-only Token 不可翻查，只可撤銷後重建。
 - 子用戶：按模組及可選網站 IDs 授權；未映射嘅新 API route 預設只限管理員。

@@ -50,9 +50,10 @@ type storedSubscription struct {
 }
 
 type Service struct {
-	st  *store.Store
-	box *secrets.Box
-	now func() time.Time
+	st      *store.Store
+	box     *secrets.Box
+	now     func() time.Time
+	Contact func() string
 }
 
 func New(st *store.Store, box *secrets.Box) *Service {
@@ -177,6 +178,10 @@ func (sv *Service) Send(ctx context.Context, deviceIDs []int64, message alert.Me
 	}
 	payload, _ := json.Marshal(map[string]any{"title": message.Title, "body": message.Body, "severity": message.Severity,
 		"kind": message.Kind, "host": message.Host, "time": message.Time, "url": "/alerts"})
+	subscriber := "https://lmcwhm.lmc.ltd"
+	if sv.Contact != nil && strings.TrimSpace(sv.Contact()) != "" {
+		subscriber = strings.TrimSpace(sv.Contact())
+	}
 	errs := []string{}
 	for _, c := range candidates {
 		plain, err := sv.box.Open(c.sealed)
@@ -194,7 +199,7 @@ func (sv *Service) Send(ctx context.Context, deviceIDs []int64, message alert.Me
 			urgency = webpush.Urgency("high")
 		}
 		res, err := webpush.SendNotificationWithContext(ctx, payload, subscription, &webpush.Options{
-			Subscriber: "admin@lmcwhm.local", VAPIDPublicKey: public, VAPIDPrivateKey: private, TTL: 3600, Urgency: urgency, HTTPClient: httpc,
+			Subscriber: subscriber, VAPIDPublicKey: public, VAPIDPrivateKey: private, TTL: 3600, Urgency: urgency, HTTPClient: httpc,
 		})
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("device %d: push delivery failed", c.id))

@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { NAlert, NBadge, NButton, NCard, NCheckbox, NCode, NDropdown, NInput, NModal, NRadio, NRadioGroup, NSelect, NSpace, NSpin, NTag, NText, useMessage } from 'naive-ui'
 import { get, post, ApiError } from '../api/client'
 
-// compact: the header's version, 更新, 修復 and 重啟 (a menu on phones);
+// compact: the header's version, 更新, 修復 and 重啟 (a menu on narrow screens);
 // otherwise the full bar in 面板設定 with the channel and rollback.
 const props = defineProps<{ compact?: boolean }>()
 
@@ -115,7 +115,7 @@ async function doRestart() {
   }
   setTimeout(wait, 1500)
 }
-const mq = window.matchMedia('(max-width: 767px)')
+const mq = window.matchMedia('(max-width: 899px)')
 const narrow = ref(mq.matches)
 mq.addEventListener?.('change', (e) => (narrow.value = e.matches))
 const menu = computed(() => [

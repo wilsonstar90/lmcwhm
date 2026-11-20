@@ -6,6 +6,7 @@ import (
 	"crypto/ecdh"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -65,11 +66,26 @@ func TestDeviceSubscriptionPersistsWithoutSession(t *testing.T) {
 	}
 }
 
+func hasValidVAPIDSubject(r *http.Request) bool {
+	header := strings.TrimPrefix(r.Header.Get("Authorization"), "vapid t=")
+	token, _, _ := strings.Cut(header, ", k=")
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return false
+	}
+	body, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return false
+	}
+	var claims map[string]any
+	return json.Unmarshal(body, &claims) == nil && claims["sub"] == "https://lmcwhm.lmc.ltd"
+}
+
 func TestWebPushDelivery(t *testing.T) {
 	received := make(chan bool, 1)
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
-		received <- len(body) > 0 && r.Header.Get("Content-Encoding") == "aes128gcm" && strings.HasPrefix(r.Header.Get("Authorization"), "vapid ")
+		received <- len(body) > 0 && r.Header.Get("Content-Encoding") == "aes128gcm" && strings.HasPrefix(r.Header.Get("Authorization"), "vapid ") && hasValidVAPIDSubject(r)
 		w.WriteHeader(http.StatusCreated)
 	}))
 	defer server.Close()

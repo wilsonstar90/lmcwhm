@@ -99,9 +99,9 @@ async function logout() {
           </template>
         </div>
         <n-space :size="8" align="center" :wrap="false">
-          <MaintenanceBar v-if="session.user?.is_admin" compact />
-          <ThemeSwitch />
-          <LangSwitch />
+          <MaintenanceBar v-if="!isMobile && session.user?.is_admin" compact />
+          <ThemeSwitch v-if="!isMobile" />
+          <LangSwitch v-if="!isMobile" />
           <n-button size="small" quaternary @click="logout">{{ t('menu.logout') }}</n-button>
         </n-space>
       </n-layout-header>
@@ -114,6 +114,11 @@ async function logout() {
     <n-drawer-content body-content-style="padding: 0;" class="mobile-menu">
       <div class="brand"><BrandLogo /><TaskBox v-if="session.user?.is_admin" /></div>
       <n-menu :value="(route.name as string)" :options="menu" />
+      <div class="mobile-tools">
+        <MaintenanceBar v-if="session.user?.is_admin" compact />
+        <ThemeSwitch />
+        <LangSwitch />
+      </div>
     </n-drawer-content>
   </n-drawer>
 </template>
@@ -172,7 +177,6 @@ async function logout() {
     display: none;
   }
 }
-</style>
 
 .menu-button {
   font-size: 22px;
@@ -203,3 +207,21 @@ async function logout() {
     white-space: nowrap;
   }
 }
+
+.mobile-tools {
+  display: none;
+}
+@media (max-width: 899px) {
+  .mobile-tools {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+  .content :deep(.n-layout-scroll-container) {
+    padding: 12px !important;
+  }
+}
+</style>

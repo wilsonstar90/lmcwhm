@@ -269,6 +269,15 @@ func serveCmd() *cobra.Command {
 			go sites.RunPHPPoolAdvisor(ctx, log.Warn)
 			alerts := alert.New(a.st, box)
 			appPush := push.New(a.st, box)
+			appPush.Contact = func() string {
+				if config, err := webCfg.Get(ctx); err == nil && strings.TrimSpace(config.ACMEEmail) != "" {
+					return strings.TrimSpace(config.ACMEEmail)
+				}
+				if domain := a.settings.Get().BindDomain; domain != "" {
+					return "https://" + domain
+				}
+				return "https://lmcwhm.lmc.ltd"
+			}
 			alerts.Push = appPush
 			rec := recovery.New(recovery.Docker{})
 			rec.Allow = tm.ExclusiveIdle
