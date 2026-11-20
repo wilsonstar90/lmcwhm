@@ -89,7 +89,13 @@ EOF
 [[ "$(api POST "/sites/$NID/project/restart" | jget "['ok']")" == True ]] || fail "project restart"
 get80_retry node.test / "node-v2 v22" || fail "project restart did not pick up new code"
 api GET "/sites/$NID/project" | grep -q '"state":"running"' || fail "project state"
-pass "Node.js and Python projects behind nginx; restart deploys new code"
+[[ -L /www/wwwroot/node.test/.lmcwhm/current ]] || fail "project has no immutable current release"
+api POST "/sites/$NID/project/rollback" | grep -q '"ok":true' || fail "project rollback"
+get80_retry node.test / "Node.js project created by lmcwhm" || fail "rollback did not restore the previous release"
+api POST "/sites/$NID/project/restart" | grep -q '"ok":true' || fail "redeploy after rollback"
+get80_retry node.test / "node-v2 v22" || fail "redeploy after rollback"
+pass "Node.js and Python projects behind nginx; immutable deploy, restart and rollback"
+grep -q 'proxy_buffering on;' /opt/lmcwhm/web/nginx/conf.d/node.test.conf || fail "ordinary proxy did not enable buffering"
 
 # ---------- databases ----------
 MID="$(app_id mariadb 11.4)"
@@ -209,6 +215,10 @@ cat > /www/wwwroot/db.test/index.php <<'EOF'
 <?php $m = new mysqli('127.0.0.1', 'shop', 'Shop-pass-123', 'shop', 3306); echo 'db-ok-' . $m->query('SELECT x FROM t')->fetch_row()[0];
 EOF
 [[ "$(get80 db.test /index.php)" == "db-ok-42" ]] || fail "php -> mariadb: $(get80 db.test /index.php)"
+grep -q 'fastcgi_pass php83_low;' /opt/lmcwhm/web/nginx/conf.d/db.test.conf || fail "new PHP site did not use the low pool"
+grep -q 'fastcgi_keep_conn on;' /opt/lmcwhm/web/nginx/conf.d/db.test.conf || fail "FastCGI keepalive missing"
+grep -q 'keepalive 16;' /opt/lmcwhm/web/nginx/nginx.conf || fail "FastCGI upstream keepalive missing"
+api GET '/sites' | python3 -c "import sys,json; s=[s for s in json.load(sys.stdin)['items'] if s['domain']=='db.test'][0]; assert s['advanced']['php_pool']=='low' and s['advanced']['php_pool_auto'], s['advanced']" || fail "PHP auto pool defaults"
 # DB_HOST 'localhost' (the socket, as most wp-config.php files have) works too, with mysqli and PDO.
 cat > /www/wwwroot/db.test/sock.php <<'EOF'
 <?php $m = new mysqli('localhost', 'shop', 'Shop-pass-123', 'shop');
@@ -721,6 +731,12 @@ pass "lmcwhm firewall-off"
 bk_id() { api GET "/backups?kind=$1" | python3 -c "import sys,json; print([b['id'] for b in json.load(sys.stdin)['items'] if b['target']==sys.argv[1]][0])" "$2"; }
 task POST /backups/run '{"kind":"site","target":"db.test","dests":["local"],"keep":2}'
 SITEBK="$(bk_id site db.test)"
+api PUT /backups/encryption '{"enabled":true}' | python3 -c "import sys,json; r=json.load(sys.stdin); assert r['enabled'] and r['recovery_key'], r" || fail "enable backup encryption"
+task POST /backups/run '{"kind":"site","target":"db.test","dests":["local"],"keep":2}'
+SITEBK="$(bk_id site db.test)"
+api GET '/backups?kind=site' | python3 -c "import sys,json; b=[b for b in json.load(sys.stdin)['items'] if b['target']=='db.test'][0]; assert b['encrypted'], b" || fail "backup not encrypted"
+task POST "/backups/$SITEBK/drill" '{}'
+api GET "/backups/$SITEBK/drill" | python3 -c "import sys,json; assert json.load(sys.stdin)['status']=='success'" || fail "restore drill failed"
 api GET '/backups?kind=site' | python3 -c "import sys,json; b=[b for b in json.load(sys.stdin)['items'] if b['target']=='db.test'][0]; assert len(b['sha256']) == 64, b" || fail "backup checksum metadata"
 ls /opt/lmcwhm/backup/site/db.test/*.manifest.json >/dev/null || fail "backup manifest sidecar"
 echo broken > /www/wwwroot/db.test/index.php

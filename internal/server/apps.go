@@ -52,6 +52,7 @@ func (s *Server) appRoutes(r chi.Router) {
 
 	r.Get("/sites/{id}/project", s.handleProject)
 	r.Post("/sites/{id}/project/restart", s.handleRestartProject)
+	r.Post("/sites/{id}/project/rollback", s.handleRollbackProject)
 }
 
 // writeCodedErr maps service errors (optionally wrapped with ": detail") to API codes.
@@ -362,6 +363,15 @@ func (s *Server) handleRestartProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, "site.project_restart", strconv.FormatInt(idParam(r), 10))
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (s *Server) handleRollbackProject(w http.ResponseWriter, r *http.Request) {
+	if err := s.Sites.RollbackProject(r.Context(), idParam(r)); err != nil {
+		writeSiteErr(w, err)
+		return
+	}
+	s.audit(r, "site.project_rollback", strconv.FormatInt(idParam(r), 10))
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 

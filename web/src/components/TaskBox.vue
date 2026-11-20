@@ -10,7 +10,7 @@ import { get, post } from '../api/client'
 import { datetime } from '../format'
 
 interface Running { id: string; name: string; kind: 'task' | 'cron'; started: number; job_id?: number }
-interface Row { id: string; name: string; status: 'success' | 'failed' | 'running'; error?: string; started: number; finished: number; log?: string }
+interface Row { id: string; name: string; status: 'success' | 'failed' | 'running' | 'queued' | 'cancelled'; error?: string; started: number; finished: number; log?: string }
 
 const { t, te, locale } = useI18n()
 const router = useRouter()
@@ -58,7 +58,7 @@ async function loadLog() {
     if (sel.value.live) {
       const r = await get<{ status: string; log: string[] }>(`/tasks/${sel.value.id}`)
       log.value = r.log.join('\n')
-      if (r.status !== 'running') sel.value.live = false
+      if (r.status !== 'running' && r.status !== 'queued') sel.value.live = false
     } else {
       log.value = (await get<Row>(`/tasks/history/${sel.value.id}`)).log ?? ''
     }
@@ -88,6 +88,10 @@ async function clearHistory() {
   page.value = 1
   loadHistory()
 }
+async function cancelTask(r: Running) {
+  await post(`/tasks/${r.id}/cancel`)
+  loadRunning()
+}
 
 function tick() {
   if (document.hidden) return
@@ -111,7 +115,7 @@ const cols = computed<DataTableColumns<Row>>(() => [
   { title: t('tbx.name'), key: 'name', minWidth: 180, ellipsis: { tooltip: true }, render: (r) => label(r.name) },
   { title: t('tbx.created'), key: 'started', width: 160, render: (r) => datetime(r.started, locale.value) },
   { title: t('tbx.took'), key: 'took', width: 90, render: (r) => took(r.started, r.finished) },
-  { title: t('tbx.result'), key: 'status', width: 90, render: (r) => (r.status === 'success' ? t('task.success') : t('task.failed')) },
+  { title: t('tbx.result'), key: 'status', width: 90, render: (r) => (r.status === 'success' ? t('task.success') : r.status === 'cancelled' ? t('common.cancel') : t('task.failed')) },
 ])
 const rowProps = (r: Row) => ({ style: 'cursor: pointer', onClick: () => openLog(r.id, false) })
 </script>
@@ -136,6 +140,7 @@ const rowProps = (r: Row) => ({ style: 'cursor: pointer', onClick: () => openLog
               <n-tag size="small" :type="r.kind === 'cron' ? 'info' : 'success'">{{ r.kind === 'cron' ? t('tbx.cron') : t('task.running') }}</n-tag>
               <span class="name">{{ label(r.name) }}</span>
               <span class="when">{{ r.started ? took(r.started, now) : '' }}</span>
+              <n-button v-if="r.kind === 'task'" size="tiny" quaternary @click.stop="cancelTask(r)">{{ t('common.cancel') }}</n-button>
             </div>
           </template>
           <template v-else-if="tab === 'history'">

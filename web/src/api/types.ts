@@ -161,6 +161,9 @@ export interface SiteAdvanced {
   hotlink_ext?: string[]
   hotlink_deny_empty?: boolean
   proxies?: PathProxy[]
+  php_pool?: 'low' | 'busy'
+  php_pool_auto?: boolean
+  disable_proxy_buffering?: boolean
 }
 
 // A user for HTTP password protection; the password is only sent, never returned.

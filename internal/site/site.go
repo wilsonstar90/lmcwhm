@@ -134,8 +134,8 @@ var (
 
 // DefaultCommands start a project; PORT and HOST are set in its environment.
 var DefaultCommands = map[string]string{
-	"node":   "[ -f package.json ] && npm install --omit=dev --no-audit --no-fund; exec npm start",
-	"python": "[ -d .venv ] || python -m venv .venv; . .venv/bin/activate; [ -f requirements.txt ] && pip install -q -r requirements.txt; exec python app.py",
+	"node":   "exec npm start",
+	"python": ". .venv/bin/activate; exec python app.py",
 	"java":   "exec java -jar app.jar --server.port=$PORT",
 	// Tomcat serves the site root as ROOT, or the first *.war in it. The
 	// shutdown port is disabled so several Tomcats can share the host network.
@@ -200,7 +200,7 @@ func scan(row interface{ Scan(...any) error }) (Site, error) {
 }
 
 func (sv *Service) List(ctx context.Context) ([]Site, error) {
-	rows, err := sv.st.DB.QueryContext(ctx, `SELECT `+cols+` FROM sites ORDER BY id DESC`)
+	rows, err := sv.st.Read().QueryContext(ctx, `SELECT `+cols+` FROM sites ORDER BY id DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -310,7 +310,7 @@ func (sv *Service) checkHosts(ctx context.Context, selfID int64, hosts []string)
 
 // reservedPort covers the stack's own loopback listeners.
 func reservedPort(p int) bool {
-	return p == webenv.NginxPort || p == webenv.ACMEPort || (p >= 9000 && p < 9100)
+	return p == webenv.NginxPort || p == webenv.ACMEPort || (p >= 9000 && p < 9100) || (p >= 10000 && p < 10100)
 }
 
 // checkPort validates a project port; isNew additionally requires it unbound.
@@ -542,12 +542,22 @@ func (sv *Service) ensureProject(ctx context.Context, s Site, log tasks.Logf) er
 	if sv.Runtimes == nil {
 		return ErrNoRuntime
 	}
+	workdir, err := currentProjectRelease(s.Root)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		if err := sv.deployProject(ctx, s, log); err != nil {
+			return err
+		}
+		workdir = projectCurrent(s.Root)
+	}
 	image, err := sv.Runtimes.RuntimeImage(ctx, s.Type, s.RuntimeVersion)
 	if err != nil {
 		return ErrNoRuntime
 	}
 	args := []string{
-		"--network", "host", "-w", s.Root, "-v", s.Root + ":" + s.Root,
+		"--network", "host", "-w", workdir, "-v", s.Root + ":" + s.Root,
 		"-e", fmt.Sprintf("PORT=%d", s.AppPort), "-e", "HOST=127.0.0.1",
 		image, "sh", "-c", s.Command,
 	}
@@ -669,6 +679,8 @@ func (sv *Service) Create(ctx context.Context, in CreateInput) (string, error) {
 		if !webenv.ValidPHP(s.PHPVersion) {
 			return "", ErrBadPHP
 		}
+		s.Advanced.PHPPool = webenv.PHPPoolLow
+		s.Advanced.PHPPoolAuto = true
 	case "static":
 		s.PHPVersion = ""
 	case "node", "python", "java", "tomcat":
@@ -1394,11 +1406,25 @@ func (sv *Service) RestartProject(ctx context.Context, id int64) error {
 	if s.Stopped {
 		return nil
 	}
-	if dockerx.State(ctx, ProjectContainer(s.Domain)) == "" {
-		return sv.tasks.RunSync(ctx, func(ctx context.Context) error { return sv.ensureProject(ctx, s, func(string, ...any) {}) })
+	return sv.tasks.RunSync(ctx, func(ctx context.Context) error {
+		log := func(string, ...any) {}
+		if err := sv.deployProject(ctx, s, log); err != nil {
+			return err
+		}
+		if dockerx.State(ctx, ProjectContainer(s.Domain)) == "" {
+			return sv.ensureProject(ctx, s, log)
+		}
+		_, err := dockerx.Run(ctx, "restart", ProjectContainer(s.Domain))
+		return err
+	})
+}
+
+func (sv *Service) RollbackProject(ctx context.Context, id int64) error {
+	s, err := sv.project(ctx, id)
+	if err != nil {
+		return err
 	}
-	_, err = dockerx.Run(ctx, "restart", ProjectContainer(s.Domain))
-	return err
+	return sv.tasks.RunSync(ctx, func(ctx context.Context) error { return sv.rollbackProject(ctx, s) })
 }
 
 // UsesRuntime reports whether a website runs on an App Store runtime version.

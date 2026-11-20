@@ -45,6 +45,11 @@ type Advanced struct {
 	HotlinkDenyEmpty bool     `json:"hotlink_deny_empty"`
 	// Reverse proxies for path prefixes of the site.
 	Proxies []PathProxy `json:"proxies"`
+	// PHP sites share an ondemand low-traffic or dynamic busy pool.
+	PHPPool     string `json:"php_pool"`
+	PHPPoolAuto bool   `json:"php_pool_auto"`
+	// Keep backend buffering enabled unless the site serves streaming responses.
+	DisableProxyBuffering bool `json:"disable_proxy_buffering"`
 }
 
 type Redirect struct {
@@ -116,6 +121,9 @@ func normIPs(in []string) ([]string, error) {
 // Normalize validates every field so it can be rendered into nginx safely.
 func (a *Advanced) Normalize() error {
 	var err error
+	if a.PHPPool, err = NormalizePHPPool(a.PHPPool); err != nil {
+		return err
+	}
 	if a.AllowIPs, err = normIPs(a.AllowIPs); err != nil {
 		return err
 	}

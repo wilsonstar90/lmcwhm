@@ -7,8 +7,9 @@ import {
 } from 'naive-ui'
 import { get, post, put, ApiError } from '../api/client'
 import { datetime } from '../format'
+import PushDevices from '../components/PushDevices.vue'
 
-interface ChannelConfig { host?: string; port?: number; security?: string; username?: string; password?: string; from?: string; to?: string[]; bot_token?: string; chat_id?: string; url?: string; secret?: string }
+interface ChannelConfig { host?: string; port?: number; security?: string; username?: string; password?: string; from?: string; to?: string[]; bot_token?: string; chat_id?: string; url?: string; secret?: string; device_ids?: number[] }
 interface Channel { id: number; name: string; kind: string; config: ChannelConfig; enabled: boolean }
 interface Params { threshold?: number; minutes?: number; days?: number; count?: number }
 interface Rule { id: number; name: string; kind: string; params: Params; channels: number[]; enabled: boolean; cooldown: number; active: number }
@@ -24,7 +25,7 @@ const events = ref<Ev[]>([])
 const total = ref(0)
 const page = ref(1)
 
-const channelKinds = ['email', 'telegram', 'webhook', 'wecom', 'dingtalk', 'slack', 'discord']
+const channelKinds = ['email', 'app_push', 'telegram', 'webhook', 'wecom', 'dingtalk', 'slack', 'discord']
 const ruleKinds = ['cpu', 'mem', 'load', 'disk', 'service_down', 'ssl_expiry', 'probe_down', 'cron_failed', 'login_failed', 'panel_login', 'ssh_login', 'tamper', 'malware', 'security_scan', 'app_update']
 // Which parameters a rule kind takes.
 const ruleParams: Record<string, (keyof Params)[]> = { cpu: ['threshold', 'minutes'], mem: ['threshold', 'minutes'], load: ['threshold', 'minutes'], disk: ['threshold'], ssl_expiry: ['days'], login_failed: ['count', 'minutes'] }
@@ -49,7 +50,7 @@ onMounted(load)
 // ---- channels ----
 const cf = ref<Channel | null>(null)
 function newChannel(kind = 'telegram') {
-  cf.value = { id: 0, name: t(`alert.channel_kinds.${kind}`), kind, enabled: true, config: kind === 'email' ? { port: 587, security: 'starttls', to: [] } : {} }
+  cf.value = { id: 0, name: t(`alert.channel_kinds.${kind}`), kind, enabled: true, config: kind === 'email' ? { port: 587, security: 'starttls', to: [] } : kind === 'app_push' ? { device_ids: [] } : {} }
 }
 async function saveChannel() {
   const c = cf.value!
@@ -194,6 +195,9 @@ const evCols = computed<DataTableColumns<Ev>>(() => [
         <template v-else-if="cf.kind === 'telegram'">
           <n-form-item label="Bot token" :feedback="t('alert.tg_hint')"><n-input v-model:value="cf.config.bot_token" type="password" show-password-on="click" placeholder="123456:ABC..." /></n-form-item>
           <n-form-item label="Chat ID"><n-input v-model:value="cf.config.chat_id" /></n-form-item>
+        </template>
+        <template v-else-if="cf.kind === 'app_push'">
+          <PushDevices v-model="cf.config.device_ids" />
         </template>
         <template v-else>
           <n-form-item :label="t('alert.webhook_url')" :feedback="cf.kind === 'webhook' ? t('alert.webhook_hint') : ''"><n-input v-model:value="cf.config.url" placeholder="https://" /></n-form-item>

@@ -37,3 +37,37 @@ const overrides: GlobalThemeOverrides = {
     </n-message-provider>
   </n-config-provider>
 </template>
+
+
+<style>
+html,
+body,
+#app {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  overflow-x: hidden;
+}
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+@media (max-width: 900px) {
+  .n-tabs {
+    max-width: 100%;
+  }
+  .n-tabs:not(.n-tabs--left) .n-tabs-nav {
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .n-tabs:not(.n-tabs--left) .n-tab {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .n-modal .n-card {
+    max-width: calc(100vw - 16px);
+  }
+}
+</style>

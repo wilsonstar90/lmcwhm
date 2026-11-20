@@ -1460,6 +1460,14 @@
   },
   "bk": {
     "tab_list": "备份文件",
+    "encryption_on": "新备份会使用独立 recovery key 加密",
+    "encryption_off": "备份加密未启用",
+    "encryption_enable": "启用加密",
+    "encryption_disable": "停用新备份加密",
+    "encryption_disable_hint": "只影响新备份；旧 key 会保留供还原。",
+    "recovery_key_title": "保存 Backup Recovery Key",
+    "recovery_key_hint": "请立即复制并离线保存。面板备份不会包含此 key；遗失后加密备份无法还原。",
+    "drill": "还原演练",
     "tab_plans": "备份计划",
     "tab_remotes": "云存储",
     "run_now": "立即备份",
@@ -1540,6 +1548,18 @@
     "migrate_2_file": "下载快照并复制到新服务器，然后执行：",
     "migrate_3": "面板会以原来的设置、地址和密码重新启动，并重建网站和软件。最后把域名 DNS 指向新服务器 IP。"
   },
+  "push": {
+    "devices": "接收设备",
+    "device_name": "设备名称",
+    "device_placeholder": "例如 iPhone、iPad mini",
+    "subscribe": "订阅此设备",
+    "subscribed": "设备已订阅 App Push",
+    "ios_install": "iPhone／iPad 需要 iOS/iPadOS 16.4+，请先用 Safari 打开面板并“添加到主屏幕”，再从 PWA 订阅。",
+    "unsupported": "此浏览器不支持 Web Push。",
+    "permission_denied": "未允许通知权限",
+    "active": "已订阅",
+    "revoked": "已停用"
+  },
   "alert": {
     "tab_rules": "告警规则",
     "tab_channels": "通知渠道",
@@ -1573,6 +1593,7 @@
     "cooldown_hint": "问题未解决期间，每隔这么久再通知一次；恢复正常时也会通知。",
     "channel_kinds": {
       "email": "邮件",
+      "app_push": "App Push",
       "telegram": "Telegram",
       "webhook": "Webhook",
       "wecom": "企业微信",
@@ -1867,7 +1888,12 @@
     "varnish_ttl_hint": "用于没有自己 Cache-Control 的页面。已登录用户、POST、后台页面和设置 Cookie 的响应永不缓存。",
     "varnish_exclude": "不缓存路径",
     "varnish_exclude_hint": "路径前缀，例如 /api",
-    "varnish_purge": "清除此网站缓存"
+    "varnish_purge": "清除此网站缓存",
+    "php_pool": "PHP-FPM 资源模式",
+    "php_auto": "Auto 智能切换",
+    "php_pool_hint": "Auto 按持续流量和 FPM 状态以 graceful reload 切换；Low 闲置回收，Busy 保留 workers。",
+    "proxy_buffering": "Proxy Buffering",
+    "proxy_buffering_hint": "停用 Buffering（仅串流／SSE 网站需要）"
   },
   "stats": {
     "title": "访问报表",

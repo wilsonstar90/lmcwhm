@@ -236,11 +236,10 @@ func (c *PHPConfig) Normalize(v string) error {
 	return nil
 }
 
-// SuggestFPM sizes the pool for memMB of RAM at ~40 MB per worker, using
-// about half the memory (the rest is for databases and the OS).
+// SuggestFPM sizes one version's busy pool. Shared suggestions divide the
+// same host budget across every installed version's low and busy pools.
 func SuggestFPM(memMB int) FPMPool {
-	n := min(max(memMB/2/40, 5), 300)
-	return FPMPool{PM: "dynamic", MaxChildren: n, StartServers: max(n/10, 2), MinSpare: max(n/10, 1), MaxSpare: max(n/4, 4), MaxRequests: 500}
+	return suggestFPM(memMB, 1)
 }
 
 func (e *Env) phpConfigPath(v string) string { return filepath.Join(e.PHPDir(v), "settings.json") }
@@ -266,7 +265,7 @@ func (e *Env) PHPConfig(v string) PHPConfig {
 }
 
 func (e *Env) renderPHP(v string, c PHPConfig) (fpm, ini []byte, err error) {
-	fpm, err = render("php-fpm.conf.tmpl", map[string]any{"Port": PHPPort(v), "P": c.FPM, "SlowLog": c.FPM.SlowlogTimeout > 0})
+	fpm, err = render("php-fpm.conf.tmpl", map[string]any{"Pools": phpTemplatePools(v, c)})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -442,7 +441,7 @@ func (e *Env) EnsurePHP(ctx context.Context, v string, log func(string, ...any))
 		"-v", filepath.Join(dir, "zz-lmcwhm.ini")+":/usr/local/etc/php/conf.d/zz-lmcwhm.ini:ro",
 		img,
 	)
-	if err := EnsureContainer(ctx, log, PHPName(v), args, []int{PHPPort(v)}, true); err != nil {
+	if err := EnsureContainer(ctx, log, PHPName(v), args, []int{PHPPoolPort(v, PHPPoolLow), PHPPoolPort(v, PHPPoolBusy)}, true); err != nil {
 		return err
 	}
 	if changed && running && dockerx.State(ctx, PHPName(v)) == "running" {
@@ -478,6 +477,7 @@ type PHPVersionInfo struct {
 	EOL        bool     `json:"eol"`
 	State      string   `json:"state"`
 	Port       int      `json:"port"`
+	BusyPort   int      `json:"busy_port"`
 	Extensions []string `json:"extensions"`
 	Sites      int      `json:"sites"`
 	// FullVersion is the exact version of the running build ("8.3.14").

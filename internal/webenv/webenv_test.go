@@ -50,7 +50,7 @@ func TestRender(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := string(ng["conf.d/a.com.conf"])
-	if !strings.Contains(a, "server_name a.com www.a.com;") || !strings.Contains(a, "fastcgi_pass 127.0.0.1:9083;") ||
+	if !strings.Contains(a, "server_name a.com www.a.com;") || !strings.Contains(a, "fastcgi_pass php83_busy;") ||
 		!strings.Contains(a, "include /etc/nginx/fastcgi_params;") { // nginx runs with -c: relative includes would miss
 		t.Errorf("a.com vhost:\n%s", a)
 	}

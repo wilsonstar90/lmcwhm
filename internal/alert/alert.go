@@ -105,10 +105,15 @@ type firing struct {
 	since, last time.Time
 }
 
+type AppPushSender interface {
+	Send(ctx context.Context, deviceIDs []int64, message Message) error
+}
+
 type Service struct {
 	st   *store.Store
 	box  *secrets.Box
 	Src  Sources
+	Push AppPushSender
 	Host string
 	now  func() time.Time
 	mu   sync.Mutex
@@ -219,7 +224,7 @@ func (sv *Service) TestChannel(ctx context.Context, id int64) error {
 	if err != nil {
 		return err
 	}
-	return send(ctx, c.Kind, c.Config, Message{Title: "lmcwhm test notification", Body: "If you can read this, the channel works.",
+	return sv.send(ctx, c.Kind, c.Config, Message{Title: "lmcwhm test notification", Body: "If you can read this, the channel works.",
 		Severity: "info", Kind: "test", Host: sv.Host, Time: sv.now().Unix()})
 }
 
@@ -371,7 +376,7 @@ func (sv *Service) deliver(ctx context.Context, r Rule, key, severity, title, bo
 		if err != nil || !c.Enabled {
 			continue
 		}
-		if err := send(ctx, c.Kind, c.Config, m); err != nil {
+		if err := sv.send(ctx, c.Kind, c.Config, m); err != nil {
 			results = append(results, c.Name+": "+err.Error())
 		} else {
 			results = append(results, c.Name+": ok")
@@ -380,6 +385,16 @@ func (sv *Service) deliver(ctx context.Context, r Rule, key, severity, title, bo
 	sv.st.DB.ExecContext(ctx, `INSERT INTO alert_events(rule_id, rule_name, kind, key, severity, title, body, result, created_at) VALUES(?,?,?,?,?,?,?,?,?)`,
 		r.ID, r.Name, r.Kind, key, severity, title, body, strings.Join(results, "; "), m.Time)
 	sv.st.DB.ExecContext(ctx, `DELETE FROM alert_events WHERE id <= (SELECT id FROM alert_events ORDER BY id DESC LIMIT 1 OFFSET ?)`, keepEvents)
+}
+
+func (sv *Service) send(ctx context.Context, kind string, config ChannelConfig, message Message) error {
+	if kind == AppPush {
+		if sv.Push == nil {
+			return ErrChannel
+		}
+		return sv.Push.Send(ctx, config.DeviceIDs, message)
+	}
+	return send(ctx, kind, config, message)
 }
 
 // raise reports a condition that is (still) true; it notifies on first sight

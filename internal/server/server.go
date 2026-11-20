@@ -40,6 +40,7 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/monitor"
 	"github.com/wilsonstar90/lmcwhm/internal/probe"
 	"github.com/wilsonstar90/lmcwhm/internal/protect"
+	"github.com/wilsonstar90/lmcwhm/internal/push"
 	"github.com/wilsonstar90/lmcwhm/internal/secscan"
 	"github.com/wilsonstar90/lmcwhm/internal/security"
 	"github.com/wilsonstar90/lmcwhm/internal/settings"
@@ -85,6 +86,7 @@ type Deps struct {
 	Tokens    *apitoken.Service
 	AI        *ai.Service
 	Alerts    *alert.Service
+	Push      *push.Service
 	Probes    *probe.Service
 	Stats     *sitestats.Service
 	Events    *secevents.Service

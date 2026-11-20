@@ -15,7 +15,7 @@ import UpdateBadge from './UpdateBadge.vue'
 import BuildModeDialog, { type BuildChoice } from './BuildModeDialog.vue'
 import { useUpdates } from '../stores/updates'
 
-interface Ver { version: string; eol: boolean; state: string; port: number; extensions: string[]; sites: number; full_version?: string; build?: BuildChoice; source_minutes?: number }
+interface Ver { version: string; eol: boolean; state: string; port: number; busy_port: number; extensions: string[]; sites: number; full_version?: string; build?: BuildChoice; source_minutes?: number }
 interface Ext { name: string; desc: string; min?: string; max?: string; slow?: boolean }
 interface Pool { pm: string; max_children: number; start_servers: number; min_spare: number; max_spare: number; max_requests: number; request_timeout: number; slowlog_timeout: number }
 interface Conf { extensions: string[]; ini: Record<string, string>; disable_functions: string[]; custom_ini: string; fpm: Pool }
@@ -121,7 +121,7 @@ async function runBuild(c: BuildChoice) {
 }
 
 // ---- settings modal ----
-const cur = ref<{ v: Ver; conf: Conf; modules: string[]; status?: Record<string, number | string>; statusError?: string } | null>(null)
+const cur = ref<{ v: Ver; conf: Conf; modules: string[]; status?: Record<string, number | string>; lowStatus?: Record<string, number | string>; statusError?: string } | null>(null)
 const tab = ref('ext')
 
 // openVersion opens a version's settings (from the App Store installed list).
@@ -133,8 +133,8 @@ async function openVersion(version: string) {
 defineExpose({ openVersion })
 async function openSettings(v: Ver) {
   try {
-    const r = await get<{ config: Conf; modules?: string[]; status?: Record<string, number | string>; status_error?: string }>(`/php/${v.version}`)
-    cur.value = { v, conf: r.config, modules: r.modules ?? [], status: r.status, statusError: r.status_error }
+    const r = await get<{ config: Conf; modules?: string[]; status?: Record<string, number | string>; low_status?: Record<string, number | string>; status_error?: string }>(`/php/${v.version}`)
+    cur.value = { v, conf: r.config, modules: r.modules ?? [], status: r.status, lowStatus: r.low_status, statusError: r.status_error }
     fpmPreset.value = 'custom'
     tab.value = 'ext'
   } catch (e) {
@@ -246,9 +246,18 @@ const statusKeys = ['pool', 'process manager', 'accepted conn', 'listen queue', 
         </n-tab-pane>
         <n-tab-pane name="status" :tab="t('php.status')">
           <n-alert v-if="!cur.status" type="warning" :show-icon="false">{{ cur.statusError || t('php.not_running') }}</n-alert>
-          <n-descriptions v-else :column="2" label-placement="left" bordered size="small">
-            <n-descriptions-item v-for="k in statusKeys" :key="k" :label="k">{{ cur.status[k] }}</n-descriptions-item>
-          </n-descriptions>
+          <template v-else>
+            <h4>Busy pool</h4>
+            <n-descriptions :column="2" label-placement="left" bordered size="small">
+              <n-descriptions-item v-for="k in statusKeys" :key="k" :label="k">{{ cur.status[k] }}</n-descriptions-item>
+            </n-descriptions>
+            <template v-if="cur.lowStatus">
+              <h4>Low pool</h4>
+              <n-descriptions :column="2" label-placement="left" bordered size="small">
+                <n-descriptions-item v-for="k in statusKeys" :key="k" :label="k">{{ cur.lowStatus[k] }}</n-descriptions-item>
+              </n-descriptions>
+            </template>
+          </template>
         </n-tab-pane>
       </n-tabs>
       <template #footer>

@@ -1,6 +1,6 @@
 # lmcwhm 架構與驗證
 
-本文描述 **`v0.23.2` 實際實作**，唔再將早期構想當成現狀。最後一節先係尚未完成嘅方向。
+本文描述 **`v0.24.0` 實際實作**，唔再將早期構想當成現狀。最後一節先係尚未完成嘅方向。
 
 ## 1. 核心決策
 
@@ -88,6 +88,7 @@ deploy/                 install、offline bundle、Linux E2E scripts
 - `data/master.key`：AES-256-GCM 加密本機保存嘅第三方 credentials；權限 `0600`。
 - `data/ssl/`：面板證書。
 - `apps/`、`web/`、`backup/`、`logs/`、`geoip/`：各類運行資料。
+- `recovery/state.json`：watchdog 狀態。Backup recovery key 預設喺 panel home 嘅上一級目錄，唔會打入 panel backup；用戶仍需離線保存。
 - 網站預設 `/www/wwwroot/<domain>`，日誌 `/www/wwwlogs/`；新版可由面板設定調整部分根目錄。
 - 檔案管理預設 root `/`，可用 `LMCWHM_FILES_ROOT` 收窄。
 
@@ -108,9 +109,9 @@ deploy/                 install、offline bundle、Linux E2E scripts
 
 ### Runtime 與 App Store
 
-- PHP 每版本獨立容器、設定、extensions、FPM pool（1–64GB 記憶體方案預設及自訂）、狀態及 slow log。
+- PHP 每版本一個容器，內含共享 Low（ondemand）及 Busy（dynamic）pools。現有網站維持 Busy；新網站預設 Low＋Auto。Auto 每 10 分鐘按 24 小時流量、FPM queue 同 max-children 指標，以持續門檻及 6 小時冷卻判斷，唔會逐請求切換。兩個 pools 已 ready，切換只改 upstream，經 `nginx -t` 同 HUP graceful drain，失敗會還原設定。容量建議按全部已安裝版本共用同一 RAM budget。
 - WP-CLI 可作 App Store 工具安裝，掛載網站目錄並以常駐容器提供命令；WordPress Toolkit 優先使用，未安裝時先用內置 phar。WP-CLI 下載或個別插件／主題列表失敗只顯示警告，唔再令整個網站設定頁 500。
-- Node、Python、Java 項目以獨立容器及 restart policy 運行；一般自訂長駐命令則可經 systemd process guardian。
+- Node、Python、Java 項目以獨立容器及 restart policy 運行。Deploy 先複製到新 release、安裝 dependencies，再原子切換 `.lmcwhm/current`；保留三份 releases，可回滾上一版，restart 本身唔再重裝 packages。一般自訂長駐命令則可經 systemd process guardian。
 - 資料庫預設只發佈到 loopback；遠端存取要同步防火牆來源限制。
 - App Store catalog 內置於 binary，支援容器 image 或 source compile；source recipes 有獨立 GitHub workflow。
 - App／DB 設定改動先驗證；更新及還原操作經背景任務記錄。
@@ -118,30 +119,34 @@ deploy/                 install、offline bundle、Linux E2E scripts
 ## 7. 認證、授權與高風險操作
 
 - Browser：HttpOnly + SameSite=Strict session、非 GET CSRF、bcrypt、TOTP、按 IP 登入鎖定。
+- PWA：iOS/iPadOS 16.4+ 加入主畫面後可用 Web Push。App Push 係 alert channel，裝置訂閱獨立於 login session，logout 唔會撤銷。VAPID private key、endpoint 同裝置 keys 加密保存，可逐部裝置撤銷及測試。
 - Gates：授權 IP → 綁定域名 → BasicAuth → 安全入口；可自訂未認證回應。安全入口 cookie 使用 HttpOnly + SameSite=Lax，讓 Cloudflare Access 等外部身份提供者完成頂層 GET 跳轉後仍能進入登入頁；呢個 cookie 只證明已通過入口，唔係登入 session。
 - API Token：驗證使用 SHA-256 hash；新 Token 另用面板 master key 以 AES-256-GCM 加密保存，管理員可按需翻查。scope 為 read／operate／admin，可設 expiry、IP allowlist、編輯到期日或即時暫停／恢復。每個 Token 有獨立 UUIDv4 MCP endpoint，URL 與 Token 必須匹配；可限制只用 Kimi／DeepSeek／Claude／Codex，身份來自 MCP clientInfo 及 User-Agent。舊 hash-only Token 不可翻查，只可撤銷後重建。
 - 子用戶：按模組及可選網站 IDs 授權；未映射嘅新 API route 預設只限管理員。
 - 全局 running tasks、task history 及清除歷史只限管理員。隨機 12 字元 task ID 作為 caller 查詢自己背景工作進度嘅 capability，避免列出或讀取他人任務。
 - Terminal 開啟前需要再次驗證；主機及容器 terminal 都係高權限功能。
+- 可選 `LMCWHM_PRIVILEGED_HELPER=1` 會啟動獨立 root helper subprocess，以 `0600` Unix socket 接受固定 Docker／proxy actions；呢個係 process boundary，唔代表面板已非 root 化，亦唔接受任意 shell。
 - MCP AI 助手只提供 read-only tools；operate／admin MCP tools 具有真實系統修改能力，全部需要審計。Tool arguments 會按欄位 redact secrets；`run_shell` 只記錄 command SHA-256，唔記錄原文，shell output 喺串流寫入時已限制為最後 100 KiB。
 - `list_api_endpoints` / `call_api` 經主 router 覆蓋所有已註冊 JSON REST 路由，按 method、模組及 Token scope 授權。通用調用以乾淨 routing context 執行真實 handler，只略過已驗證 MCP caller 嘅瀏覽器 gate；審計只記錄 method 及移除 query 後嘅 path，唔記錄 body。
 
 ## 8. 背景服務與一致性
 
 - 所有非 GET REST 請求先經 `actionMiddleware`，專用 MCP mutation 及 cron 亦使用同一 `tasks.Action` metadata；快速操作保持同步且不改變回應。現有 `Start`、`StartLong`、`RunSync` 工作統一經 Action 執行，共享 resource 有獨立鎖，重型工作保留全局序列化或較長 timeout。
-- Task 開始時已將 action、resource、idempotency key 及 running 狀態寫入 SQLite，完成後補回結果及 log。面板重啟時，未完成工作標記 interrupted／failed，唔會自動重跑非冪等操作；REST 同 MCP 仍可追查同一 ID。
-- 同一 idempotency key 運行中唔會重複開 task；共享 web apply 另用 coalescing，執行期間收到新修改會喺完成後按最新 DB 狀態再套用一次，而唔係並發製造 proxy workers。
+- Task 支援 queued／running／success／failed／cancelled，排隊時間亦計入 timeout；可取消，log 定期 checkpoint，owner/module 一併保存。面板重啟時，queued／running 工作標記 interrupted／failed，唔會自動重跑非冪等操作。`PersistResult` 操作可用 idempotency key 讀回已完成結果；共享 web apply 繼續使用 coalescing。
+- 同一 idempotency key 喺 queued／running 時唔會重複開 task；resource 同 exclusive locks 支援 context cancellation。
 - 網站防護、CDN 設定、專屬規則及黑白名單維持「回應時已套用」嘅同步 API 合約，底層共用 task 完成後先回應，並只額外加入 `task_id`；對應 Vue 元件共用 TaskModal 並防止重複提交。Vue 仍嵌入單一 binary，呢個版本冇強行改變部署或特權邊界。
 - Cron 支援秒級 schedule、timeout、避免重疊、輸出及告警；SSL renew、security scan、app update check 等係內建 jobs。
 - Monitor、probe、site stats、security events、CrowdSec、GeoIP refresh、mail certificate sync 各自以 goroutine 運行。`/healthz` 唔經瀏覽器 gates，只回報 DB 與 apps／web／cron 嘅 ready／not_ready；啟動未完成或失敗回 503，唔暴露內部錯誤內容。
-- 容器 OOM 先由 Docker `restart=always` 處理；面板 watchdog 為 MariaDB、PHP 及 Varnish 提供額外自癒。啟動 5 分鐘後每 30 秒檢查，連續 3 次 unhealthy／readiness 失敗先 restart，10 分鐘冷卻、每小時最多 3 次，恢復後確認 MariaDB ping、PHP-FPM status 或 Varnish status。獨家設定工作進行時唔會介入，達到上限會暫停並經 `service_down` 告警；唔會因單次 OOM 自動 reboot 全機。
-- SQLite 只允許一個 writer；migration 逐個 transaction 執行，新 migration 只應追加，唔應修改已發佈版本。
+- Watchdog 覆蓋 MariaDB、PHP、Varnish、Redis、PostgreSQL、MongoDB、HAProxy 同 Nginx；readiness 包括引擎指令或 published-port 連線。Failure、cooldown、attempts 同 recovering 狀態持久化，重啟唔會重設限制；獨家工作及 Docker resource lock 進行時唔介入，達上限只告警，唔 reboot 全機。
+- SQLite 保持單 writer；另有最多 4 個 connections 嘅 WAL query-only read pool，先用於高讀取查詢。Migration 逐個 transaction 執行，新 migration 只應追加，唔應修改已發佈版本。
 
 ## 9. 備份、快照與更新
 
 - 網站及目錄使用 safe archive 處理；資料庫使用引擎工具 dump／restore。
 - Panel backup 以 SQLite `VACUUM INTO` 建立一致快照。
 - 新 archive 喺寫入時同步計算 SHA256，並附獨立 `.manifest.json` 記錄格式、panel 版本、目標、大小、建立時間及 checksum。本地 copy 會再驗 hash；雲端 archive 會 download readback 驗證後先上傳 manifest。還原前會先讀到臨時檔並驗證，失敗唔會開始改動目標；舊備份冇 checksum 時保持兼容。
+- 可選備份加密使用分段 AES-256-GCM、每份隨機 nonce prefix 同獨立 recovery key；key 檔位於 panel home 以外，唔會打入 panel backup。Manifest 同時保存明文及密文 checksum。停用只影響新備份，舊 key 保留作還原。
+- 還原演練會喺臨時目錄解包網站／path／volume，檢查 panel／snapshot SQLite integrity，或喺臨時資料庫真正 import 後刪除。每次演練保存結果；`LMCWHM_BACKUP_WORKER=1` 可先用同一 binary 嘅固定 worker subprocess 驗證本地 archive。
 - Drive／OneDrive 採用 device OAuth、分塊及續傳；token 加密保存。
 - Snapshot 包含面板 home、App 數據及網站；複製 App 數據時短暫 pause 容器，還原後重建 web stack。
 - Installer 以 `flock` 防止並發更新，先下載新 binary，官方 Release 必須取得並通過 SHA256SUMS，再備份資料、停止服務、替換、migration 及 `/healthz` 健康檢查。Docker 不健康時預設 fail-closed，只有 `--repair-docker` 才允許 restart／reinstall。
@@ -164,7 +169,7 @@ for f in deploy/*.sh; do bash -n "$f"; done
 - Ubuntu 22.04／24.04：fresh install、upgrade、reset-panel、rollback。
 - Ubuntu 24.04：真 Docker websites、SNI、PHP、ACME/Pebble、apps、DB、files、firewall、WAF、CrowdSec 等 E2E。Apps runner 使用公開 `mirror.gcr.io` registry mirror，減少 Docker Hub unauthenticated rate limit；image tags 及測試範圍不變。
 - Source-check：按相關修改及每週跑官方 images／source configure matrix。
-- Tag release：測試、跨平台 build、checksums、GitHub Release。
+- Tag release：測試、跨平台 build、checksums、GitHub OIDC cosign keyless 簽署 `SHA256SUMS`，發佈 binary、checksums、簽名、證書及 installer。
 
 E2E scripts 會安裝套件、操作 Docker、nftables 及 systemd，只可以在拋棄式 Ubuntu runner／VM 執行，**唔可以在使用中的 Server 執行**。
 
@@ -174,7 +179,7 @@ E2E scripts 會安裝套件、操作 Docker、nftables 及 systemd，只可以�
 
 - Google Drive／OneDrive、真實 Cloudflare／Linode 生產帳戶。
 - Claude／OpenRouter API、Email／Telegram／Slack 等實際送達。
-- docker-mailserver 實際收發、ClamAV、離線安裝包、PWA 安裝及 beta channel。
+- docker-mailserver 實際收發、ClamAV、離線安裝包及 beta channel。PWA 已做 iPhone／iPad viewport 同 mock Web Push 測試，但真實 iOS 裝置安裝及 Apple Push 送達仍需實機驗收。
 - 前端目前主要依靠 TypeScript build 及 E2E，冇獨立 Vitest／Playwright suite。
 
 ## 11. 尚未完成／後續方向

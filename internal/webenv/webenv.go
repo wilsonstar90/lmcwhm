@@ -653,11 +653,21 @@ func (e *Env) nginxFiles(sites []Site) (map[string][]byte, error) {
 	}
 	grpcOn := e.grpcOn()
 	anyGRPC := false
+	upstreams := []map[string]any{}
+	upstreamSeen := map[string]bool{}
 	for _, s := range sites {
 		anyGRPC = anyGRPC || s.grpc(grpcOn)
+		if s.Type == "php" {
+			pool, _ := NormalizePHPPool(s.Advanced.PHPPool)
+			name := PHPPoolName(s.PHPVersion, pool)
+			if !upstreamSeen[name] {
+				upstreamSeen[name] = true
+				upstreams = append(upstreams, map[string]any{"Name": name, "Port": PHPPoolPort(s.PHPVersion, pool)})
+			}
+		}
 	}
 	main, err := render("nginx.conf.tmpl", map[string]any{"NginxPort": NginxPort, "GRPCPort": GRPCPort, "GRPC": anyGRPC, "WAF": w.Enabled, "ConfDir": nginxConfDir,
-		"ErrorPages": errorLines(ep, "", false), "ErrDir": errDir, "WAFDisabled": wafExclusions(w.Enabled, w.Disabled)})
+		"PHPUpstreams": upstreams, "ErrorPages": errorLines(ep, "", false), "ErrDir": errDir, "WAFDisabled": wafExclusions(w.Enabled, w.Disabled)})
 	if err != nil {
 		return nil, err
 	}
@@ -666,9 +676,10 @@ func (e *Env) nginxFiles(sites []Site) (map[string][]byte, error) {
 		if s.Passthrough {
 			continue
 		}
-		port := 0
+		phpUpstream := ""
 		if s.Type == "php" {
-			port = PHPPort(s.PHPVersion)
+			pool, _ := NormalizePHPPool(s.Advanced.PHPPool)
+			phpUpstream = PHPPoolName(s.PHPVersion, pool)
 		}
 		index := s.Index
 		if len(index) == 0 {
@@ -701,7 +712,7 @@ func (e *Env) nginxFiles(sites []Site) (map[string][]byte, error) {
 			"StopPage": stopPage, "AuthDir": authDir, "SrvZone": zone("srv", s.Domain), "HotlinkExt": s.Advanced.hotlinkExt(),
 			"Domain": s.Domain, "ServerNames": strings.Join(s.Hosts(), " "), "Root": s.Root,
 			// A gRPC site while gRPC is off cannot be proxied (proxy_pass has no grpc://).
-			"LogDir": e.WWWLogs, "NginxPort": NginxPort, "PHPPort": port, "Stopped": s.Stopped || (IsGRPC(s.Upstream) && !g),
+			"LogDir": e.WWWLogs, "NginxPort": NginxPort, "PHPUpstream": phpUpstream, "Stopped": s.Stopped || (IsGRPC(s.Upstream) && !g),
 			"Upstream": s.Upstream, "WAFOff": w.Enabled && s.WAFOff, "WAFExclude": wafExclusions(w.Enabled, s.WAFExclude),
 			"Adv": s.Advanced, "ReqZone": zone("req", s.Domain), "ConnZone": zone("conn", s.Domain), "IPZone": zone("ip", s.Domain), "DenyUA": uaRegex(s.Advanced.DenyUA),
 			"Redirect": s.Redirect, "RedirectCode": redirectCode(s.RedirectCode), "RedirectPath": s.RedirectPath,
@@ -919,4 +930,41 @@ func restore(dir string, snap map[string][]byte) {
 	for p, b := range snap {
 		os.WriteFile(p, b, 0o644)
 	}
+}
+
+// ApplyNginxGraceful changes only Nginx upstream routing and drains old workers.
+func (e *Env) ApplyNginxGraceful(ctx context.Context, sites []Site) error {
+	if !e.Installed(ctx) {
+		return errors.New("web.not_installed")
+	}
+	before, err := snapshot(e.NginxDir())
+	if err != nil {
+		return err
+	}
+	if err := e.writeNginx(sites); err != nil {
+		restore(e.NginxDir(), before)
+		return err
+	}
+	after, err := snapshot(e.NginxDir())
+	if err != nil {
+		restore(e.NginxDir(), before)
+		return err
+	}
+	if snapshotsEqual(before, after) {
+		return nil
+	}
+	if out, err := dockerx.Run(ctx, append([]string{"exec", NginxName, "nginx", "-t"}, nginxConf...)...); err != nil {
+		restore(e.NginxDir(), before)
+		return fmt.Errorf("nginx config test failed: %v %s", err, out)
+	}
+	if _, err := dockerx.Run(ctx, "kill", "-s", "HUP", NginxName); err != nil {
+		restore(e.NginxDir(), before)
+		return err
+	}
+	if err := waitRunning(ctx, NginxName); err != nil {
+		restore(e.NginxDir(), before)
+		_, _ = dockerx.Run(ctx, "kill", "-s", "HUP", NginxName)
+		return err
+	}
+	return nil
 }

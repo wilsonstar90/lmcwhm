@@ -62,13 +62,15 @@ func (s *Server) handlePHPList(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	items := []webenv.PHPVersionInfo{}
+	installed := 0
 	for _, v := range webenv.PHPVersions {
 		info := webenv.PHPVersionInfo{
-			Version: v, EOL: webenv.EOLPHP(v), State: dockerx.State(r.Context(), webenv.PHPName(v)), Port: webenv.PHPPort(v),
+			Version: v, EOL: webenv.EOLPHP(v), State: dockerx.State(r.Context(), webenv.PHPName(v)), Port: webenv.PHPPort(v), BusyPort: webenv.PHPPoolPort(v, webenv.PHPPoolBusy),
 			Extensions: s.Sites.Env.PHPConfig(v).Extensions, Sites: count[v],
 			Build: s.Sites.Env.PHPBuildOf(v), SourceMinutes: webenv.PHPSourceMinutes,
 		}
 		if info.State != "" {
+			installed++
 			if img, err := dockerx.Run(r.Context(), "inspect", "-f", "{{.Config.Image}}", webenv.PHPName(v)); err == nil {
 				info.FullVersion = appstore.CurrentVersion(r.Context(), img)
 			}
@@ -77,7 +79,7 @@ func (s *Server) handlePHPList(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"items": items, "extensions": webenv.PHPExtensions, "ini_keys": webenv.PHPINIKeys,
-		"dangerous": webenv.DangerousFunctions, "suggest": webenv.SuggestFPM(memMB()), "mem_mb": memMB(),
+		"dangerous": webenv.DangerousFunctions, "suggest": webenv.SuggestFPMShared(memMB(), installed), "mem_mb": memMB(),
 	})
 }
 
@@ -97,6 +99,9 @@ func (s *Server) handlePHPGet(w http.ResponseWriter, r *http.Request) {
 			out["status"] = st
 		} else {
 			out["status_error"] = err.Error()
+		}
+		if st, err := webenv.PHPStatusFor(ctx, v, webenv.PHPPoolLow); err == nil {
+			out["low_status"] = st
 		}
 	}
 	writeJSON(w, http.StatusOK, out)

@@ -1460,6 +1460,14 @@
   },
   "bk": {
     "tab_list": "バックアップ",
+    "encryption_on": "新しいバックアップは独立した recovery key で暗号化されます",
+    "encryption_off": "バックアップ暗号化は無効です",
+    "encryption_enable": "暗号化を有効化",
+    "encryption_disable": "新しいバックアップの暗号化を無効化",
+    "encryption_disable_hint": "新しいバックアップのみに影響します。旧 key は復元用に保持されます。",
+    "recovery_key_title": "Backup Recovery Key を保存",
+    "recovery_key_hint": "今すぐコピーしてオフラインで保存してください。パネルのバックアップには key が含まれず、紛失すると暗号化バックアップを復元できません。",
+    "drill": "復元リハーサル",
     "tab_plans": "スケジュール",
     "tab_remotes": "クラウド",
     "run_now": "今すぐバックアップ",
@@ -1540,6 +1548,18 @@
     "migrate_2_file": "スナップショットをダウンロードして新サーバーへコピーし、次を実行：",
     "migrate_3": "パネルは元の設定・アドレス・パスワードで再起動し、サイトとアプリを再作成します。最後にドメインの DNS を新サーバーの IP に向けてください。"
   },
+  "push": {
+    "devices": "受信デバイス",
+    "device_name": "デバイス名",
+    "device_placeholder": "例：iPhone、iPad mini",
+    "subscribe": "このデバイスを購読",
+    "subscribed": "App Push を購読しました",
+    "ios_install": "iPhone／iPad は iOS/iPadOS 16.4+ が必要です。Safari でパネルを開き「ホーム画面に追加」してから PWA で購読してください。",
+    "unsupported": "このブラウザは Web Push に対応していません。",
+    "permission_denied": "通知が許可されていません",
+    "active": "購読中",
+    "revoked": "無効"
+  },
   "alert": {
     "tab_rules": "ルール",
     "tab_channels": "通知先",
@@ -1573,6 +1593,7 @@
     "cooldown_hint": "問題が続く間はこの間隔で再通知し、解消時にも通知します。",
     "channel_kinds": {
       "email": "メール",
+      "app_push": "App Push",
       "telegram": "Telegram",
       "webhook": "Webhook",
       "wecom": "WeCom",
@@ -1867,7 +1888,12 @@
     "varnish_ttl_hint": "独自の Cache-Control がないページに適用。ログイン中のユーザー、POST、管理画面、Cookie を設定する応答はキャッシュしません。",
     "varnish_exclude": "キャッシュしないパス",
     "varnish_exclude_hint": "パスの接頭辞（例 /api）",
-    "varnish_purge": "このサイトのキャッシュを削除"
+    "varnish_purge": "このサイトのキャッシュを削除",
+    "php_pool": "PHP-FPM リソースモード",
+    "php_auto": "Auto スマート切替",
+    "php_pool_hint": "Auto は継続的なトラフィックと FPM 状態に基づき graceful reload で切り替えます。Low はアイドル時に回収し、Busy はワーカーを保持します。",
+    "proxy_buffering": "Proxy Buffering",
+    "proxy_buffering_hint": "Buffering を無効化（ストリーミング／SSE のみ）"
   },
   "stats": {
     "title": "アクセス解析",

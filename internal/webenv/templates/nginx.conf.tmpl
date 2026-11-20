@@ -66,6 +66,12 @@ http {
     }
     log_format main '$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent" "$host" "$lmcwhm_block_reason" "$http_x_lmcwhm_detect"';
     access_log /var/log/nginx/access.log main;
+{{- range .PHPUpstreams}}
+    upstream {{.Name}} {
+        server 127.0.0.1:{{.Port}};
+        keepalive 16;
+    }
+{{- end}}
 {{- if .GRPC}}
     # gRPC sites log the call's result (grpc-status trailer) as well.
     log_format grpc '$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent" "$host" "$lmcwhm_block_reason" "$http_x_lmcwhm_detect" "grpc-status=$upstream_trailer_grpc_status"';

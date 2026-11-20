@@ -1460,6 +1460,14 @@
   },
   "bk": {
     "tab_list": "Backups",
+    "encryption_on": "New backups are encrypted with an independent recovery key",
+    "encryption_off": "Backup encryption is off",
+    "encryption_enable": "Enable encryption",
+    "encryption_disable": "Disable encryption for new backups",
+    "encryption_disable_hint": "Only affects new backups; the existing key is retained for restores.",
+    "recovery_key_title": "Save the Backup Recovery Key",
+    "recovery_key_hint": "Copy and store it offline now. Panel backups do not contain this key; encrypted backups cannot be restored if you lose it.",
+    "drill": "Restore drill",
     "tab_plans": "Schedules",
     "tab_remotes": "Cloud storage",
     "run_now": "Back up now",
@@ -1540,6 +1548,18 @@
     "migrate_2_file": "Download the snapshot, copy it to the new server, then run:",
     "migrate_3": "The panel restarts with the old settings, address and password, and recreates the websites and apps. Finally point the domains' DNS at the new server's IP."
   },
+  "push": {
+    "devices": "Recipient devices",
+    "device_name": "Device name",
+    "device_placeholder": "For example iPhone or iPad mini",
+    "subscribe": "Subscribe this device",
+    "subscribed": "Device subscribed to App Push",
+    "ios_install": "iPhone/iPad requires iOS/iPadOS 16.4+. Open the panel in Safari, choose Add to Home Screen, then subscribe from the installed PWA.",
+    "unsupported": "This browser does not support Web Push.",
+    "permission_denied": "Notification permission was not granted",
+    "active": "Subscribed",
+    "revoked": "Disabled"
+  },
   "alert": {
     "tab_rules": "Rules",
     "tab_channels": "Channels",
@@ -1573,6 +1593,7 @@
     "cooldown_hint": "While the problem lasts, notify again after this long. A notice is also sent when it is resolved.",
     "channel_kinds": {
       "email": "Email",
+      "app_push": "App Push",
       "telegram": "Telegram",
       "webhook": "Webhook",
       "wecom": "WeCom",
@@ -1867,7 +1888,12 @@
     "varnish_ttl_hint": "For pages without their own Cache-Control. Logged-in users, POSTs, admin pages and responses that set cookies are never cached.",
     "varnish_exclude": "Never cache",
     "varnish_exclude_hint": "Path prefixes, e.g. /api",
-    "varnish_purge": "Purge this site's cache"
+    "varnish_purge": "Purge this site's cache",
+    "php_pool": "PHP-FPM resource mode",
+    "php_auto": "Auto smart switching",
+    "php_pool_hint": "Auto switches with a graceful reload using sustained traffic and FPM state; Low reclaims idle workers, Busy keeps workers ready.",
+    "proxy_buffering": "Proxy Buffering",
+    "proxy_buffering_hint": "Disable buffering (only for streaming / SSE sites)"
   },
   "stats": {
     "title": "Traffic",

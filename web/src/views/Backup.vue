@@ -31,6 +31,21 @@ const localBytes = ref(0)
 const targets = ref<Targets>({ site: [], database: [], volume: [], dest: [] })
 const remotes = ref<Remote[]>([])
 const jobs = ref<Job[]>([])
+const encryption = ref({ enabled: false, key_available: false, key_fingerprint: '' })
+const recoveryKey = ref('')
+async function loadEncryption() {
+  encryption.value = await get('/backups/encryption')
+}
+async function setEncryption(enabled: boolean) {
+  try {
+    const r = await put<{ enabled: boolean; key_available: boolean; key_fingerprint: string; recovery_key?: string }>('/backups/encryption', { enabled })
+    encryption.value = { enabled: r.enabled, key_available: r.key_available, key_fingerprint: r.key_fingerprint }
+    if (r.recovery_key) recoveryKey.value = r.recovery_key
+    msg.success(t('common.saved'))
+  } catch (e) {
+    fail(e)
+  }
+}
 const task = ref<{ id: string; title: string } | null>(null)
 const kinds = ['site', 'database', 'panel', 'snapshot', 'volume', 'path']
 const kindOptions = computed(() => kinds.map((k) => ({ label: t(`bk.kinds.${k}`), value: k })))
@@ -59,6 +74,7 @@ function loadAll() {
   loadTargets().catch(fail)
   loadRemotes().catch(fail)
   loadJobs().catch(fail)
+  loadEncryption().catch(fail)
 }
 onMounted(loadAll)
 
@@ -167,6 +183,15 @@ async function doImport() {
   }
 }
 
+async function drill(r: Rec) {
+  try {
+    const res = await post<{ task_id: string }>(`/backups/${r.id}/drill`)
+    task.value = { id: res.task_id, title: `${t('bk.drill')} · ${r.name}` }
+  } catch (e) {
+    fail(e)
+  }
+}
+
 const recCols = computed<DataTableColumns<Rec>>(() => [
   { title: () => t('common.time'), key: 'created_at', width: 170, render: (r) => datetime(r.created_at, locale.value) },
   { title: () => t('bk.kind'), key: 'kind', width: 110, render: (r) => h(NTag, { size: 'small' }, () => t(`bk.kinds.${r.kind}`)) },
@@ -177,10 +202,11 @@ const recCols = computed<DataTableColumns<Rec>>(() => [
   {
     title: () => t('common.actions'),
     key: 'a',
-    width: 230,
+    width: 310,
     render: (r) =>
       h(NSpace, { size: 4 }, () => [
         h(NButton, { size: 'tiny', tag: 'a', href: `/api/v1/backups/${r.id}/download` }, () => t('bk.download')),
+        h(NButton, { size: 'tiny', onClick: () => drill(r) }, () => t('bk.drill')),
         r.kind === 'snapshot'
           ? h(NButton, { size: 'tiny', type: 'primary', onClick: () => openMigrate(r) }, () => t('bk.migrate'))
           : r.kind !== 'panel'
@@ -279,6 +305,16 @@ const remoteCols = computed<DataTableColumns<Remote>>(() => [
 <template>
   <n-tabs v-model:value="tab" type="line" animated>
     <n-tab-pane name="list" :tab="t('bk.tab_list')">
+      <n-alert :type="encryption.enabled ? 'success' : 'info'" :show-icon="false" style="margin-bottom: 12px">
+        <n-space justify="space-between" align="center">
+          <span>{{ encryption.enabled ? t('bk.encryption_on') : t('bk.encryption_off') }}<template v-if="encryption.key_fingerprint"> · {{ encryption.key_fingerprint }}</template></span>
+          <n-button v-if="!encryption.enabled" size="small" type="primary" @click="setEncryption(true)">{{ t('bk.encryption_enable') }}</n-button>
+          <n-popconfirm v-else @positive-click="setEncryption(false)">
+            <template #trigger><n-button size="small">{{ t('bk.encryption_disable') }}</n-button></template>
+            {{ t('bk.encryption_disable_hint') }}
+          </n-popconfirm>
+        </n-space>
+      </n-alert>
       <n-space justify="space-between" align="center" style="margin-bottom: 12px">
         <n-space>
           <n-button type="primary" @click="openForm('now')">{{ t('bk.run_now') }}</n-button>
@@ -411,6 +447,13 @@ const remoteCols = computed<DataTableColumns<Remote>>(() => [
       <p>{{ t('bk.authorize_step2') }}</p>
       <p class="code">{{ authorizing.device.user_code }}</p>
       <p class="hint">{{ t('bk.authorize_wait') }}</p>
+    </n-card>
+  </n-modal>
+  <n-modal :show="!!recoveryKey" :mask-closable="false">
+    <n-card v-if="recoveryKey" :title="t('bk.recovery_key_title')" style="width: min(620px, calc(100vw - 32px))" closable @close="recoveryKey = ''">
+      <n-alert type="warning" :show-icon="false" style="margin-bottom: 12px">{{ t('bk.recovery_key_hint') }}</n-alert>
+      <n-input :value="recoveryKey" type="textarea" :rows="3" readonly />
+      <n-button style="margin-top: 12px" type="primary" @click="copy(recoveryKey)">{{ t('common.copy') }}</n-button>
     </n-card>
   </n-modal>
   <TaskModal :task-id="task?.id ?? null" :title="task?.title ?? ''" @close="task = null; loadRecs()" @done="loadRecs" />

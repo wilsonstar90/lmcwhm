@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/wilsonstar90/lmcwhm/internal/auth"
 	"github.com/wilsonstar90/lmcwhm/internal/tasks"
 )
 
@@ -20,7 +21,11 @@ func (s *Server) actionMiddleware(next http.Handler) http.Handler {
 		if route := chi.RouteContext(r.Context()); route != nil && route.RoutePattern() != "" {
 			pattern = route.RoutePattern()
 		}
-		a := tasks.Action{Name: r.Method + " " + pattern, Resource: module(r.URL.Path), NoLock: true}
+		owner := ""
+		if session, ok := r.Context().Value(sessionKey).(auth.Session); ok {
+			owner = session.User.Username
+		}
+		a := tasks.Action{Name: r.Method + " " + pattern, Resource: module(r.URL.Path), Owner: owner, Module: module(r.URL.Path), NoLock: true}
 		if s.Tasks == nil {
 			next.ServeHTTP(w, r.WithContext(tasks.WithAction(r.Context(), a)))
 			return

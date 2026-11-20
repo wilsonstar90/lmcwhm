@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, h, onMounted, ref } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu, NButton, NSpace, useMessage, type MenuOption } from 'naive-ui'
+import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu, NButton, NSpace, NDrawer, NDrawerContent, useMessage, type MenuOption } from 'naive-ui'
 import { useSession } from '../stores/session'
 import LangSwitch from '../components/LangSwitch.vue'
 import ThemeSwitch from '../components/ThemeSwitch.vue'
@@ -17,8 +17,15 @@ const route = useRoute()
 const router = useRouter()
 const session = useSession()
 const msg = useMessage()
-// The menu folds away on phones and iPads in portrait.
-const collapsed = ref(window.innerWidth < 900)
+const viewportWidth = ref(window.innerWidth)
+const isMobile = computed(() => viewportWidth.value < 900)
+const collapsed = ref(isMobile.value)
+const mobileOpen = ref(false)
+const resize = () => { viewportWidth.value = window.innerWidth }
+watch(isMobile, (mobile) => {
+  collapsed.value = mobile
+  if (!mobile) mobileOpen.value = false
+})
 
 const items = ['home', 'website', 'domains', 'database', 'docker', 'appstore', 'files', 'ftp', 'terminal', 'cron', 'processes', 'backup', 'security', 'monitor', 'uptime', 'alerts', 'logs', 'mail', 'toolbox', 'ai', 'settings']
 // Sub-users see the modules they were granted (the API enforces it too).
@@ -31,14 +38,16 @@ const can = (key: string) => {
 const ips = ref({ ipv4: '', ipv6: '' })
 onMounted(() => {
   loadMenu()
+  window.addEventListener('resize', resize, { passive: true })
   if (session.user?.is_admin) {
     get<{ ipv4: string; ipv6: string }>('/web/ips').then((r) => { ips.value = r }).catch(() => {})
   }
 })
+onBeforeUnmount(() => window.removeEventListener('resize', resize))
 const menu = computed<MenuOption[]>(() =>
   arrange(items, menuConfig.value).filter((k) => can(k) && !menuConfig.value.hidden.includes(k)).map((key) => ({
     key,
-    label: () => h(RouterLink, { to: { name: key } }, { default: () => t(`menu.${key}`) }),
+    label: () => h(RouterLink, { to: { name: key }, onClick: () => { mobileOpen.value = false } }, { default: () => t(`menu.${key}`) }),
   })),
 )
 
@@ -59,6 +68,7 @@ async function logout() {
 <template>
   <n-layout has-sider class="shell">
     <n-layout-sider
+      class="desktop-sider"
       bordered
       collapse-mode="width"
       :collapsed-width="0"
@@ -74,7 +84,8 @@ async function logout() {
     <n-layout>
       <n-layout-header bordered class="header">
         <div class="left">
-          <!-- The menu is folded away on phones: the logo and messages move here. -->
+          <n-button v-if="isMobile" quaternary class="menu-button" aria-label="Menu" @click="mobileOpen = true">☰</n-button>
+          <!-- Mobile navigation uses the drawer below. -->
           <template v-if="collapsed">
             <BrandLogo />
             <TaskBox v-if="session.user?.is_admin" />
@@ -99,6 +110,12 @@ async function logout() {
       </n-layout-content>
     </n-layout>
   </n-layout>
+  <n-drawer :show="mobileOpen" placement="left" :width="280" @update:show="(v: boolean) => { mobileOpen = v }">
+    <n-drawer-content body-content-style="padding: 0;" class="mobile-menu">
+      <div class="brand"><BrandLogo /><TaskBox v-if="session.user?.is_admin" /></div>
+      <n-menu :value="(route.name as string)" :options="menu" />
+    </n-drawer-content>
+  </n-drawer>
 </template>
 
 <style scoped>
@@ -156,3 +173,33 @@ async function logout() {
   }
 }
 </style>
+
+.menu-button {
+  font-size: 22px;
+  min-width: 44px;
+  min-height: 44px;
+}
+.mobile-menu :deep(.n-menu-item-content) {
+  min-height: 44px;
+}
+@media (max-width: 899px) {
+  .desktop-sider {
+    display: none;
+  }
+  .header {
+    height: 56px;
+    padding-left: max(10px, env(safe-area-inset-left));
+    padding-right: max(10px, env(safe-area-inset-right));
+  }
+  .content {
+    height: calc(100vh - 56px);
+    height: calc(100dvh - 56px);
+  }
+  .left,
+  .header > .n-space {
+    min-width: 0;
+  }
+  .header :deep(.n-button) {
+    white-space: nowrap;
+  }
+}

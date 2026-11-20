@@ -122,10 +122,17 @@ type FPMStatus struct {
 	SlowRequests       int64  `json:"slow requests"`
 }
 
-// PHPStatus reads the FPM status of a running version.
+// PHPStatus reads the busy pool of a running version.
 func PHPStatus(ctx context.Context, v string) (FPMStatus, error) {
+	return PHPStatusFor(ctx, v, PHPPoolBusy)
+}
+
+func PHPStatusFor(ctx context.Context, v, pool string) (FPMStatus, error) {
 	var st FPMStatus
-	body, err := FastCGIGet(ctx, fmt.Sprintf("127.0.0.1:%d", PHPPort(v)), "/fpm-status", "json")
+	if _, err := NormalizePHPPool(pool); err != nil {
+		return st, err
+	}
+	body, err := FastCGIGet(ctx, fmt.Sprintf("127.0.0.1:%d", PHPPoolPort(v, pool)), "/fpm-status", "json")
 	if err != nil {
 		return st, err
 	}

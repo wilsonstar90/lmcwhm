@@ -524,7 +524,7 @@ func (sv *Service) Restore(ctx context.Context, id, into int64, log func(string,
 		if err != nil {
 			return err
 		}
-		if !strings.HasSuffix(rec.Name, dumpExt(d.Engine)) {
+		if !strings.HasSuffix(strings.TrimSuffix(rec.Name, ".enc"), dumpExt(d.Engine)) {
 			return fmt.Errorf("%w: %s is not a %s dump", ErrBadArchive, rec.Name, d.Engine)
 		}
 		log("loading into %s database %s", d.Engine, d.Name)

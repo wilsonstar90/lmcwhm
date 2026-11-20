@@ -128,6 +128,7 @@ func (s *Server) handler() http.Handler {
 			s.phpRoutes(r)
 			s.m9Routes(r)
 			s.m10Routes(r)
+			s.pushRoutes(r)
 			r.Get("/openapi.json", s.handleOpenAPI)
 			r.Get("/logs/login", s.handleLoginLogs)
 			r.Get("/logs/operation", s.handleOperationLogs)

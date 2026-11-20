@@ -206,7 +206,7 @@ func (m *Monitor) Series(ctx context.Context, d time.Duration) ([]Point, error) 
 		bucket = 60
 	}
 	bucket = bucket / 60 * 60
-	rows, err := m.st.DB.QueryContext(ctx, `SELECT ts/?1*?1 AS b, avg(cpu), avg(mem), avg(swap), avg(load1), avg(disk), avg(disk_r), avg(disk_w), avg(net_rx), avg(net_tx)
+	rows, err := m.st.Read().QueryContext(ctx, `SELECT ts/?1*?1 AS b, avg(cpu), avg(mem), avg(swap), avg(load1), avg(disk), avg(disk_r), avg(disk_w), avg(net_rx), avg(net_tx)
 		FROM metrics WHERE ts >= ?2 GROUP BY b ORDER BY b`, bucket, since)
 	if err != nil {
 		return nil, err

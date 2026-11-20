@@ -74,6 +74,7 @@ type Record struct {
 	Name             string `json:"name"`      // file name
 	Size             int64  `json:"size"`
 	SHA256           string `json:"sha256"`
+	Encrypted        bool   `json:"encrypted"`
 	Dest             string `json:"dest"`
 	Location         string `json:"-"` // local path or remote file id
 	ManifestLocation string `json:"-"` // local manifest path or remote object id
@@ -89,12 +90,14 @@ type Service struct {
 	Dir  string // local storage (default; see LocalDir)
 	// DirFn, when it returns a path, overrides Dir (面板設定 → 默認備份目錄).
 	// Backups keep their full path, so older ones stay where they are.
-	DirFn   func() string
-	WWWRoot string
-	Sites   *site.Service
-	DBs     *database.Service
-	Apps    *appstore.Service
-	now     func() time.Time
+	DirFn             func() string
+	WWWRoot           string
+	Sites             *site.Service
+	DBs               *database.Service
+	Apps              *appstore.Service
+	EncryptionKeyPath string
+	Worker            bool
+	now               func() time.Time
 }
 
 // LocalDir is where new local backups are written.
@@ -108,7 +111,8 @@ func (sv *Service) LocalDir() string {
 }
 
 func New(st *store.Store, box *secrets.Box, home string) *Service {
-	return &Service{st: st, box: box, Home: home, Dir: filepath.Join(home, "backup"), WWWRoot: "/www/wwwroot", now: time.Now}
+	return &Service{st: st, box: box, Home: home, Dir: filepath.Join(home, "backup"), WWWRoot: "/www/wwwroot",
+		EncryptionKeyPath: filepath.Join(filepath.Dir(home), "lmcwhm-backup-recovery.key"), now: time.Now}
 }
 
 // ---- plans ----
@@ -303,7 +307,7 @@ func (sv *Service) runUnit(ctx context.Context, p Plan, u unit, jobID int64, out
 		return err
 	}
 	tmp := f.Name()
-	defer os.Remove(tmp)
+	defer func() { os.Remove(tmp) }()
 	fmt.Fprintf(out, "%s %s: archiving\n", u.kind, u.target)
 	hasher := sha256.New()
 	err = u.write(ctx, io.MultiWriter(f, hasher))
@@ -317,8 +321,55 @@ func (sv *Service) runUnit(ctx context.Context, p Plan, u unit, jobID int64, out
 	if err != nil {
 		return err
 	}
-	sum := hex.EncodeToString(hasher.Sum(nil))
-	manifest, err := manifestJSON(manifestFor(u, name, fi.Size(), start.Unix(), sum))
+	plainSize := fi.Size()
+	plainSum := hex.EncodeToString(hasher.Sum(nil))
+	sum := plainSum
+	meta := manifestFor(u, name, plainSize, start.Unix(), plainSum)
+	encrypted := false
+	key, err := sv.encryptionKey()
+	if err != nil {
+		return err
+	}
+	if len(key) != 0 {
+		src, err := os.Open(tmp)
+		if err != nil {
+			return err
+		}
+		encryptedFile, err := os.CreateTemp(tmpDir, "encrypted-*")
+		if err != nil {
+			src.Close()
+			return err
+		}
+		encryptedPath := encryptedFile.Name()
+		encryptedHasher := sha256.New()
+		err = encryptStream(io.MultiWriter(encryptedFile, encryptedHasher), src, key)
+		if closeErr := encryptedFile.Close(); err == nil {
+			err = closeErr
+		}
+		if closeErr := src.Close(); err == nil {
+			err = closeErr
+		}
+		if err != nil {
+			os.Remove(encryptedPath)
+			return err
+		}
+		os.Remove(tmp)
+		tmp = encryptedPath
+		name += ".enc"
+		sum = hex.EncodeToString(encryptedHasher.Sum(nil))
+		fi, err = os.Stat(tmp)
+		if err != nil {
+			return err
+		}
+		encrypted = true
+		meta.Encryption = encryptionFormat
+		meta.PlainSHA256 = plainSum
+		meta.PlainSize = plainSize
+	}
+	meta.Name = name
+	meta.Size = fi.Size()
+	meta.SHA256 = sum
+	manifest, err := manifestJSON(meta)
 	if err != nil {
 		return err
 	}
@@ -330,8 +381,8 @@ func (sv *Service) runUnit(ctx context.Context, p Plan, u unit, jobID int64, out
 			errs = append(errs, fmt.Sprintf("%s: %v", sv.destName(ctx, dest), err))
 			continue
 		}
-		if _, err := sv.st.DB.ExecContext(ctx, `INSERT INTO backups(kind, target, target_id, name, size, sha256, dest, location, manifest_location, job_id, created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
-			u.kind, u.target, u.targetID, name, fi.Size(), sum, dest, loc, manifestLoc, jobID, start.Unix()); err != nil {
+		if _, err := sv.st.DB.ExecContext(ctx, `INSERT INTO backups(kind, target, target_id, name, size, sha256, encrypted, dest, location, manifest_location, job_id, created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+			u.kind, u.target, u.targetID, name, fi.Size(), sum, encrypted, dest, loc, manifestLoc, jobID, start.Unix()); err != nil {
 			errs = append(errs, fmt.Sprintf("%s: %v", sv.destName(ctx, dest), err))
 			continue
 		}
@@ -414,7 +465,7 @@ func (sv *Service) prune(ctx context.Context, kind, target, dest string, keep in
 
 // ---- records ----
 
-const recCols = `id, kind, target, target_id, name, size, sha256, dest, location, manifest_location, job_id, created_at`
+const recCols = `id, kind, target, target_id, name, size, sha256, encrypted, dest, location, manifest_location, job_id, created_at`
 
 // LocalPath is where a local backup is stored (ok=false for remote copies).
 func (sv *Service) LocalPath(r Record) (string, bool) {
@@ -429,7 +480,7 @@ func scanRecords(rows *sql.Rows) ([]Record, error) {
 	out := []Record{}
 	for rows.Next() {
 		var r Record
-		if err := rows.Scan(&r.ID, &r.Kind, &r.Target, &r.TargetID, &r.Name, &r.Size, &r.SHA256, &r.Dest, &r.Location, &r.ManifestLocation, &r.JobID, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.Kind, &r.Target, &r.TargetID, &r.Name, &r.Size, &r.SHA256, &r.Encrypted, &r.Dest, &r.Location, &r.ManifestLocation, &r.JobID, &r.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -444,7 +495,7 @@ func (sv *Service) List(ctx context.Context, kind string) ([]Record, error) {
 		q += ` WHERE kind = ?`
 		args = append(args, kind)
 	}
-	rows, err := sv.st.DB.QueryContext(ctx, q+` ORDER BY created_at DESC, id DESC LIMIT 2000`, args...)
+	rows, err := sv.st.Read().QueryContext(ctx, q+` ORDER BY created_at DESC, id DESC LIMIT 2000`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -461,7 +512,7 @@ func (sv *Service) List(ctx context.Context, kind string) ([]Record, error) {
 }
 
 func (sv *Service) Get(ctx context.Context, id int64) (Record, error) {
-	rows, err := sv.st.DB.QueryContext(ctx, `SELECT `+recCols+` FROM backups WHERE id = ?`, id)
+	rows, err := sv.st.Read().QueryContext(ctx, `SELECT `+recCols+` FROM backups WHERE id = ?`, id)
 	if err != nil {
 		return Record{}, err
 	}
@@ -535,7 +586,7 @@ func (sv *Service) Open(ctx context.Context, r Record) (io.ReadCloser, error) {
 // another server, so it can be restored.
 func (sv *Service) Import(ctx context.Context, kind, target string, targetID int64, name string, r io.Reader) (Record, error) {
 	name = filepath.Base(name)
-	if !strings.HasSuffix(name, ".gz") || strings.HasPrefix(name, ".") || len(name) > 200 {
+	if !strings.HasSuffix(name, ".gz") && !strings.HasSuffix(name, ".enc") || strings.HasPrefix(name, ".") || len(name) > 200 {
 		return Record{}, ErrBadName
 	}
 	switch kind {
@@ -563,7 +614,12 @@ func (sv *Service) Import(ctx context.Context, kind, target string, targetID int
 	}
 	createdAt := sv.now().Unix()
 	sum := hex.EncodeToString(hasher.Sum(nil))
-	manifest, err := manifestJSON(manifestFor(unit{kind: kind, target: target, targetID: targetID}, name, n, createdAt, sum))
+	encrypted := strings.HasSuffix(name, ".enc")
+	meta := manifestFor(unit{kind: kind, target: target, targetID: targetID}, name, n, createdAt, sum)
+	if encrypted {
+		meta.Encryption = encryptionFormat
+	}
+	manifest, err := manifestJSON(meta)
 	if err != nil {
 		os.Remove(dst)
 		return Record{}, err
@@ -573,8 +629,8 @@ func (sv *Service) Import(ctx context.Context, kind, target string, targetID int
 		os.Remove(dst)
 		return Record{}, err
 	}
-	res, err := sv.st.DB.ExecContext(ctx, `INSERT INTO backups(kind, target, target_id, name, size, sha256, dest, location, manifest_location, job_id, created_at) VALUES(?,?,?,?,?,?,?,?,?,0,?)`,
-		kind, target, targetID, name, n, sum, DestLocal, dst, manifestPath, createdAt)
+	res, err := sv.st.DB.ExecContext(ctx, `INSERT INTO backups(kind, target, target_id, name, size, sha256, encrypted, dest, location, manifest_location, job_id, created_at) VALUES(?,?,?,?,?,?,?,?,?,?,0,?)`,
+		kind, target, targetID, name, n, sum, encrypted, DestLocal, dst, manifestPath, createdAt)
 	if err != nil {
 		return Record{}, err
 	}

@@ -55,7 +55,7 @@ func TestSiteSettings(t *testing.T) {
 			t.Errorf("a.com has %q", not)
 		}
 	}
-	if strings.Count(a, "fastcgi_pass 127.0.0.1:9083;") != 2 { // the site and the password-protected directory
+	if strings.Count(a, "fastcgi_pass php83_busy;") != 2 { // the site and the password-protected directory
 		t.Errorf("php locations:\n%s", a)
 	}
 	if h := string(files["auth/a.com.htpasswd"]); !strings.HasPrefix(h, "boss:{SSHA}") {

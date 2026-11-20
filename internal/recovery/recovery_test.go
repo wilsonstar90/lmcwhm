@@ -152,3 +152,40 @@ func TestAllowSkipsRecovery(t *testing.T) {
 		t.Fatal("recovery ran while a configuration task was active")
 	}
 }
+
+func TestStateSurvivesPanelRestart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "recovery.json")
+	f := &fakeRunner{state: State{Running: true, Status: "running"}, readyErr: errors.New("not ready")}
+	now := time.Unix(1000, 0)
+	s := New(f)
+	s.now = func() time.Time { return now }
+	s.StatePath = path
+	for range 3 {
+		s.Check(context.Background())
+	}
+	if f.restarts != 1 {
+		t.Fatal("initial recovery did not restart")
+	}
+	reopened := New(f)
+	reopened.now = func() time.Time { return now }
+	reopened.StatePath = path
+	if err := reopened.LoadState(); err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		reopened.Check(context.Background())
+	}
+	if f.restarts != 1 {
+		t.Fatal("restart reset the recovery cooldown")
+	}
+}
+
+func TestResourceLockSkipsRecovery(t *testing.T) {
+	f := &fakeRunner{state: State{Running: true, Status: "running"}, readyErr: errors.New("not ready")}
+	s := New(f)
+	s.AllowResource = func(string) bool { return false }
+	s.Check(context.Background())
+	if f.inspects != 0 || f.restarts != 0 {
+		t.Fatal("recovery ran while the container resource was busy")
+	}
+}

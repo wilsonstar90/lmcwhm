@@ -25,6 +25,7 @@ func (s *Server) taskRoutes(r chi.Router) {
 	r.Get("/tasks/history", s.handleTaskHistory)
 	r.Get("/tasks/history/{id}", s.handleTaskHistoryGet)
 	r.Post("/tasks/history/clear", s.handleTaskHistoryClear)
+	r.Post("/tasks/{id}/cancel", s.handleTaskCancel)
 }
 
 // recordTask retains compatibility for managers without a store and prunes history.
@@ -56,7 +57,7 @@ type runningTask struct {
 func (s *Server) handleTaskList(w http.ResponseWriter, r *http.Request) {
 	run := []runningTask{}
 	for _, t := range s.Tasks.List() {
-		if t.Status == tasks.Running {
+		if t.Status == tasks.Queued || t.Status == tasks.Running {
 			run = append(run, runningTask{ID: t.ID, Name: t.Name, Kind: "task", Started: t.Started})
 		}
 	}
@@ -133,4 +134,14 @@ func (s *Server) handleTaskHistoryClear(w http.ResponseWriter, r *http.Request) 
 	}
 	s.auditCat(r, "system", "tasks.clear_history", "")
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleTaskCancel(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if !s.Tasks.Cancel(id) {
+		writeJSON(w, http.StatusBadRequest, apiError{Code: "task.not_running"})
+		return
+	}
+	s.auditCat(r, "system", "task.cancel", id)
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

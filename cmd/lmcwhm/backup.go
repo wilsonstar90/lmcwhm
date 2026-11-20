@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -69,10 +70,8 @@ func backupCommand() *cobra.Command {
 			if panelRunning(p) && !force {
 				return errors.New("the panel is running: systemctl stop lmcwhm, then run this again")
 			}
-			if err := backup.VerifyArchive(args[0]); err != nil {
-				return err
-			}
-			f, err := os.Open(args[0])
+			keyPath := filepath.Join(filepath.Dir(p.Home), "lmcwhm-backup-recovery.key")
+			f, err := backup.OpenArchive(args[0], keyPath)
 			if err != nil {
 				return err
 			}

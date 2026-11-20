@@ -2,7 +2,8 @@
 [global]
 daemonize = no
 
-[www]
+{{- range .Pools}}
+[{{.Name}}]
 listen = 127.0.0.1:{{.Port}}
 pm = {{.P.PM}}
 pm.max_children = {{.P.MaxChildren}}
@@ -12,7 +13,7 @@ pm.min_spare_servers = {{.P.MinSpare}}
 pm.max_spare_servers = {{.P.MaxSpare}}
 {{- end}}
 {{- if eq .P.PM "ondemand"}}
-pm.process_idle_timeout = 10s
+pm.process_idle_timeout = 30s
 {{- end}}
 pm.max_requests = {{.P.MaxRequests}}
 {{- if .P.RequestTimeout}}
@@ -25,3 +26,4 @@ slowlog = /var/log/lmcwhm-php/slow.log
 pm.status_path = /fpm-status
 catch_workers_output = yes
 decorate_workers_output = no
+{{- end}}

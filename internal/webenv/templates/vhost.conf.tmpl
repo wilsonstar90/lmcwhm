@@ -174,7 +174,7 @@ server {
     location ^~ {{$d.Path}} {
         auth_basic "{{$d.Path}}";
         auth_basic_user_file {{$.AuthDir}}/{{$.Domain}}.{{$i}}.htpasswd;
-{{- if $.PHPPort}}
+{{- if $.PHPUpstream}}
         location ~ \.php$ {
 {{- template "php" $}}
         }
@@ -204,9 +204,9 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
         proxy_read_timeout 300;
-        proxy_buffering off;
+        proxy_buffering {{if .Adv.DisableProxyBuffering}}off{{else}}on{{end}};
     }
-{{else if .PHPPort}}
+{{else if .PHPUpstream}}
 {{- if .Rewrite}}
     # Rewrite rules (偽靜態)
 {{.Rewrite}}
@@ -252,7 +252,8 @@ server {
 {{- define "php"}}
             try_files $uri =404;
             fastcgi_split_path_info ^(.+\.php)(/.+)$;
-            fastcgi_pass 127.0.0.1:{{.PHPPort}};
+            fastcgi_pass {{.PHPUpstream}};
+            fastcgi_keep_conn on;
             fastcgi_index index.php;
             include /etc/nginx/fastcgi_params;
             fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;

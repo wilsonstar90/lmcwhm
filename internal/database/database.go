@@ -200,28 +200,43 @@ func (sv *Service) Delete(ctx context.Context, id int64) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	eng, err := sv.engine(ctx, d.AppID)
-	if err != nil {
+	if _, err := sv.engine(ctx, d.AppID); err != nil {
 		return "", err
 	}
 	return sv.tasks.Start("db.delete:"+d.Name, func(ctx context.Context, log tasks.Logf) error {
-		if sv.BeforeDrop != nil {
-			if err := sv.BeforeDrop(ctx, d, log); err != nil {
-				return err
-			}
-		}
-		log("dropping database %s and user %s", d.Name, d.Username)
-		script := dropScript(eng.App, d.Name, d.Username)
-		if accessEngine(eng.App) {
-			script = sv.mysqlForHosts(ctx, eng, d.Username, script, "DROP USER IF EXISTS '%[1]s'@'%[2]s';\n")
-		}
-		if err := sv.exec(ctx, eng, script); err != nil {
+		return sv.deleteNow(ctx, id, false, log)
+	}), nil
+}
+
+func (sv *Service) DeleteTemporary(ctx context.Context, id int64, log tasks.Logf) error {
+	return sv.deleteNow(ctx, id, true, log)
+}
+
+func (sv *Service) deleteNow(ctx context.Context, id int64, temporary bool, log tasks.Logf) error {
+	d, err := sv.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	eng, err := sv.engine(ctx, d.AppID)
+	if err != nil {
+		return err
+	}
+	if sv.BeforeDrop != nil && !temporary {
+		if err := sv.BeforeDrop(ctx, d, log); err != nil {
 			return err
 		}
-		sv.dropAccess(ctx, d, log)
-		_, err := sv.st.DB.ExecContext(ctx, `DELETE FROM databases WHERE id = ?`, id)
+	}
+	log("dropping database %s and user %s", d.Name, d.Username)
+	script := dropScript(eng.App, d.Name, d.Username)
+	if accessEngine(eng.App) {
+		script = sv.mysqlForHosts(ctx, eng, d.Username, script, "DROP USER IF EXISTS '%[1]s'@'%[2]s';\n")
+	}
+	if err := sv.exec(ctx, eng, script); err != nil {
 		return err
-	}), nil
+	}
+	sv.dropAccess(ctx, d, log)
+	_, err = sv.st.DB.ExecContext(ctx, `DELETE FROM databases WHERE id = ?`, id)
+	return err
 }
 
 // SetPassword changes the user's password ("" = generate one).

@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -40,8 +41,10 @@ import (
 	"github.com/wilsonstar90/lmcwhm/internal/malware"
 	"github.com/wilsonstar90/lmcwhm/internal/monitor"
 	"github.com/wilsonstar90/lmcwhm/internal/netinfo"
+	"github.com/wilsonstar90/lmcwhm/internal/privileged"
 	"github.com/wilsonstar90/lmcwhm/internal/probe"
 	"github.com/wilsonstar90/lmcwhm/internal/protect"
+	"github.com/wilsonstar90/lmcwhm/internal/push"
 	"github.com/wilsonstar90/lmcwhm/internal/recovery"
 	"github.com/wilsonstar90/lmcwhm/internal/secrets"
 	"github.com/wilsonstar90/lmcwhm/internal/secscan"
@@ -106,7 +109,7 @@ func main() {
 	root.AddCommand(serveCmd(), versionCmd())
 	root.AddCommand(cliCommands()...)
 	root.AddCommand(maintenanceCommands()...)
-	root.AddCommand(backupCommand(), mcpCommand(), snapshotCommand())
+	root.AddCommand(backupCommand(), mcpCommand(), snapshotCommand(), workerCmd(), helperCmd())
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
@@ -256,19 +259,47 @@ func serveCmd() *cobra.Command {
 			bk := backup.New(a.st, box, a.paths.Home)
 			bk.WWWRoot, bk.Sites, bk.DBs, bk.Apps = env.WWWRoot, sites, dbs, apps
 			bk.DirFn = func() string { return a.settings.Get().BackupDir }
+			bk.Worker = os.Getenv("LMCWHM_BACKUP_WORKER") == "1"
 			jobs.Backups = bk
 			apps.RuntimeUpdated = sites.RecreateProjects
 			apps.Backup = func(ctx context.Context, i appstore.Installed, log tasks.Logf) error {
 				return bk.BackupEngine(ctx, i.ID, logWriter(log))
 			}
 			jobs.Feeds = fw.RunFeeds
+			go sites.RunPHPPoolAdvisor(ctx, log.Warn)
 			alerts := alert.New(a.st, box)
+			appPush := push.New(a.st, box)
+			alerts.Push = appPush
 			rec := recovery.New(recovery.Docker{})
 			rec.Allow = tm.ExclusiveIdle
+			rec.AllowResource = func(string) bool { return tm.ResourceIdle("docker") }
+			rec.StatePath = filepath.Join(a.paths.Home, "recovery", "state.json")
+			if err := rec.LoadState(); err != nil {
+				log.Warn("container recovery state", "err", err)
+			}
 			rec.Log = log.Warn
 			rec.Notify = func(e recovery.Event) {
 				log.Warn("container recovery", "container", e.Name, "event", e.Title, "detail", e.Body)
 				alerts.Emit(context.Background(), alert.KindServiceDown, "recovery:"+e.Name, e.Severity, e.Title, e.Body, e.Resolved)
+			}
+			if os.Getenv("LMCWHM_PRIVILEGED_HELPER") == "1" {
+				socket := filepath.Join(a.paths.DataDir, "privileged.sock")
+				executable, err := os.Executable()
+				if err != nil {
+					log.Warn("privileged helper", "err", err)
+					return err
+				}
+				command := exec.CommandContext(ctx, executable, "helper", "--socket", socket)
+				if err := command.Start(); err != nil {
+					log.Warn("privileged helper", "err", err)
+				} else {
+					go func() {
+						if err := command.Wait(); err != nil && ctx.Err() == nil {
+							log.Warn("privileged helper stopped", "err", err)
+						}
+					}()
+					rec.Runner = recovery.HelperRunner{Runner: rec.Runner, Client: privileged.Client{Socket: socket}}
+				}
 			}
 			go rec.Run(ctx)
 			jobs.OnResult = func(j cron.Job, r cron.Run) {
@@ -391,7 +422,7 @@ func serveCmd() *cobra.Command {
 				Files: filesFS(a.paths.Home), Term: terminal.New(),
 				Store: a.st, Readiness: readiness, Monitor: mon, Cron: jobs, GeoIP: geo, Firewall: fw, Protect: prot, ErrPages: errp, WAF: waf, CrowdSec: crowdsec, Backup: bk,
 				Tokens: tokens, AI: ai.New(a.st, box, nil),
-				Alerts: alerts, Probes: probes, Stats: stats, Events: events, Procs: procs, WP: wordpress.New(sites, dbs, env, tm, apps), FTP: ftpSvc,
+				Alerts: alerts, Push: appPush, Probes: probes, Stats: stats, Events: events, Procs: procs, WP: wordpress.New(sites, dbs, env, tm, apps), FTP: ftpSvc,
 				Toolbox: tb, SecScan: secscan.New(a.st), Malware: malware.New(a.st, env.WWWRoot, a.paths.Home), Tamper: tp,
 				Shares: fileshare.New(a.st), Mail: mailSvc,
 			})

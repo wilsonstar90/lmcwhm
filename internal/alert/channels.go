@@ -30,6 +30,7 @@ const (
 	DingTalk = "dingtalk"
 	Slack    = "slack"
 	Discord  = "discord"
+	AppPush  = "app_push"
 )
 
 var ErrChannel = errors.New("alert.invalid_channel")
@@ -50,6 +51,8 @@ type ChannelConfig struct {
 	// webhook / wecom / dingtalk / slack / discord
 	URL    string `json:"url,omitempty"`
 	Secret string `json:"secret,omitempty"` // dingtalk signing secret
+	// app push: device IDs, independent of browser login sessions
+	DeviceIDs []int64 `json:"device_ids,omitempty"`
 }
 
 // secretFields are blanked when a channel is shown and kept when left empty on save.
@@ -102,6 +105,10 @@ func validate(kind string, c *ChannelConfig) error {
 		}
 	case Webhook, WeCom, DingTalk, Slack, Discord:
 		if !httpsURL(c.URL) {
+			return ErrChannel
+		}
+	case AppPush:
+		if len(c.DeviceIDs) == 0 {
 			return ErrChannel
 		}
 	default:

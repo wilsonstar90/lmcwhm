@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"strings"
 	"sync"
 	"time"
@@ -38,15 +39,17 @@ type Event struct {
 }
 
 type Service struct {
-	Runner       Runner
-	Interval     time.Duration
-	StartDelay   time.Duration
-	FailureLimit int
-	Cooldown     time.Duration
-	MaxRestarts  int
-	Allow        func() bool
-	Notify       func(Event)
-	Log          func(string, ...any)
+	Runner        Runner
+	Interval      time.Duration
+	StartDelay    time.Duration
+	FailureLimit  int
+	Cooldown      time.Duration
+	MaxRestarts   int
+	Allow         func() bool
+	AllowResource func(string) bool
+	StatePath     string
+	Notify        func(Event)
+	Log           func(string, ...any)
 
 	now   func() time.Time
 	mu    sync.Mutex
@@ -107,6 +110,9 @@ func (s *Service) Check(ctx context.Context) {
 }
 
 func (s *Service) check(ctx context.Context, name string) {
+	if s.AllowResource != nil && !s.AllowResource(name) {
+		return
+	}
 	st, err := s.Runner.Inspect(ctx, name)
 	if err != nil {
 		s.log("recovery inspect %s: %v", name, err)
@@ -127,6 +133,7 @@ func (s *Service) check(ctx context.Context, name string) {
 	c.failures++
 	limit := max(s.FailureLimit, 1)
 	if c.failures < limit {
+		s.persistLocked()
 		s.mu.Unlock()
 		return
 	}
@@ -136,10 +143,12 @@ func (s *Service) check(ctx context.Context, name string) {
 	if !can {
 		if !c.limited {
 			c.limited = true
+			s.persistLocked()
 			s.mu.Unlock()
 			s.notify(Event{Name: name, Severity: "critical", Title: "Container recovery paused: " + name,
 				Body: fmt.Sprintf("%v; restart cooldown or hourly limit reached", readyErr)})
 		} else {
+			s.persistLocked()
 			s.mu.Unlock()
 		}
 		return
@@ -147,6 +156,7 @@ func (s *Service) check(ctx context.Context, name string) {
 	c.last = now
 	c.failures = 0
 	c.limited = false
+	s.persistLocked()
 	s.mu.Unlock()
 
 	reason := fmt.Sprintf("status=%s health=%s oom=%v: %v", st.Status, st.Health, st.OOMKilled, readyErr)
@@ -157,6 +167,7 @@ func (s *Service) check(ctx context.Context, name string) {
 	s.mu.Lock()
 	c.attempts = append(c.attempts, now)
 	c.recovering = true
+	s.persistLocked()
 	s.mu.Unlock()
 	s.notify(Event{Name: name, Severity: "warning", Title: "Container restarted: " + name, Body: reason})
 }
@@ -170,6 +181,7 @@ func (s *Service) healthy(name string) {
 		c.limited = false
 		c.recovering = false
 	}
+	s.persistLocked()
 	s.mu.Unlock()
 	if recovered {
 		s.notify(Event{Name: name, Severity: "resolved", Title: "Container recovered: " + name, Resolved: true})
@@ -222,6 +234,8 @@ func (Docker) Targets(ctx context.Context) ([]string, error) {
 	for _, name := range strings.Split(out, "\n") {
 		name = strings.TrimSpace(name)
 		if strings.HasPrefix(name, "lmcwhm-mariadb") || strings.HasPrefix(name, "lmcwhm-varnish") ||
+			strings.HasPrefix(name, "lmcwhm-redis") || strings.HasPrefix(name, "lmcwhm-postgres") || strings.HasPrefix(name, "lmcwhm-mongo") ||
+			name == "lmcwhm-nginx" || name == "lmcwhm-haproxy" ||
 			(strings.HasPrefix(name, "lmcwhm-php") && !strings.HasPrefix(name, "lmcwhm-phpmyadmin")) {
 			names = append(names, name)
 		}
@@ -265,8 +279,46 @@ func (Docker) Ready(ctx context.Context, name string) error {
 		v = v[:1] + "." + v[1:]
 		_, err := webenv.PHPStatus(ctx, v)
 		return err
+	case strings.HasPrefix(name, "lmcwhm-redis"):
+		out, err := dockerx.Run(ctx, "exec", name, "redis-cli", "--no-auth-warning", "ping")
+		if err != nil {
+			return err
+		}
+		if strings.Contains(out, "PONG") || strings.Contains(out, "NOAUTH") {
+			return nil
+		}
+		return errors.New("redis did not answer")
+	case strings.HasPrefix(name, "lmcwhm-postgres"):
+		_, err := dockerx.Run(ctx, "exec", name, "pg_isready", "-q", "-h", "127.0.0.1")
+		return err
+	case strings.HasPrefix(name, "lmcwhm-mongo"):
+		return dialPublished(ctx, name)
+	case name == "lmcwhm-nginx":
+		_, err := dockerx.Run(ctx, "exec", name, "nginx", "-t", "-c", "/etc/nginx/lmcwhm/nginx.conf")
+		return err
+	case name == "lmcwhm-haproxy":
+		_, err := dockerx.Run(ctx, "exec", name, "haproxy", "-c", "-q", "-f", "/opt/lmcwhm/edge/haproxy.cfg")
+		return err
 	}
 	return nil
+}
+
+func dialPublished(ctx context.Context, name string) error {
+	out, err := dockerx.Run(ctx, "port", name)
+	if err != nil {
+		return err
+	}
+	line := strings.TrimSpace(strings.Split(out, "\n")[0])
+	_, target, ok := strings.Cut(line, " -> ")
+	if !ok || target == "" {
+		return errors.New("container has no published port")
+	}
+	dialer := net.Dialer{Timeout: 3 * time.Second}
+	conn, err := dialer.DialContext(ctx, "tcp", target)
+	if err == nil {
+		conn.Close()
+	}
+	return err
 }
 
 func (Docker) Restart(ctx context.Context, name string) error {

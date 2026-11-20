@@ -44,3 +44,38 @@ self.addEventListener('fetch', (e) => {
     )
   }
 })
+
+
+self.addEventListener('push', (event) => {
+  let data = {}
+  try {
+    data = event.data ? event.data.json() : {}
+  } catch {
+    data = { body: event.data ? event.data.text() : '' }
+  }
+  const title = data.title || 'lmcwhm'
+  event.waitUntil(self.registration.showNotification(title, {
+    body: data.body || '',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    tag: `lmcwhm-${data.kind || 'alert'}-${data.time || Date.now()}`,
+    data: { url: data.url || '/alerts' },
+  }))
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const target = event.notification.data?.url || '/alerts'
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (windows) => {
+      for (const client of windows) {
+        if (client.url.startsWith(self.location.origin)) {
+          await client.focus()
+          if ('navigate' in client) await client.navigate(target)
+          return
+        }
+      }
+      return self.clients.openWindow(target)
+    }),
+  )
+})

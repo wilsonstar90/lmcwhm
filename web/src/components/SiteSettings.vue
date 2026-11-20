@@ -47,6 +47,7 @@ const blankAdv = (): SiteAdvanced => ({
   autoindex: false, allow_ips: [], deny_ips: [], deny_ua: [], rate_limit: 0, rate_burst: 0, conn_limit: 0, error_pages: false,
   block_xmlrpc: false, open_basedir: false, hotlink: [], max_body_mb: 0, redirects: [], varnish: false, varnish_ttl: 120, varnish_exclude: [],
   no_access_log: false, basic_auth: null, auth_dirs: [], server_conn: 0, limit_rate_kb: 0, hotlink_ext: [], hotlink_deny_empty: false, proxies: [],
+  php_pool: 'busy', php_pool_auto: false, disable_proxy_buffering: false,
 })
 const a = ref<SiteAdvanced>(blankAdv())
 const rewrite = ref('')
@@ -340,6 +341,14 @@ watch(() => props.site, (x) => {
   proj.value = { runtime: x.runtime_version, command: x.command, port: x.app_port }
   if (isProject.value) get<{ items: InstalledApp[] }>('/apps').then((r) => (runtimes.value = r.items.filter((i) => i.kind === 'runtime' && i.app === x.type))).catch(() => {})
 }, { immediate: true })
+async function rollbackProject() {
+  try {
+    await post(`/sites/${s.value.id}/project/rollback`)
+    msg.success(t('common.done'))
+  } catch (e) {
+    fail(e)
+  }
+}
 async function composer(action: string) {
   try {
     const r = await post<{ task_id: string }>(`/sites/${s.value.id}/composer`, { action })
@@ -530,6 +539,13 @@ const title = computed(() => (props.site ? `${t('ss.title', { domain: s.value.do
                 <n-select v-model:value="php" :options="phpOptions" style="width: 200px" />
                 <n-button type="primary" style="margin-left: 8px" :disabled="php === site.php_version" @click="save({ php_version: php }, 'PHP ' + php)">{{ t('ss.switch') }}</n-button>
               </n-form-item>
+              <n-form-item :label="t('adv.php_pool')" :feedback="t('adv.php_pool_hint')">
+                <n-space vertical>
+                  <n-checkbox v-model:checked="a.php_pool_auto">{{ t('adv.php_auto') }}</n-checkbox>
+                  <n-select v-model:value="a.php_pool" :options="[{ label: 'Low', value: 'low' }, { label: 'Busy', value: 'busy' }]" style="width: 180px" />
+                  <n-button type="primary" size="small" @click="saveAdv(t('adv.php_pool'))">{{ t('common.save') }}</n-button>
+                </n-space>
+              </n-form-item>
             </n-form>
             <h4>Composer</h4>
             <p class="hint">{{ t('site.composer_hint') }}</p>
@@ -548,7 +564,13 @@ const title = computed(() => (props.site ? `${t('ss.title', { domain: s.value.do
                 <n-form-item :label="t('site.app_port')"><n-input-number v-model:value="proj.port" :min="1024" :max="65535" :show-button="false" style="width: 140px" /></n-form-item>
               </n-space>
               <n-form-item :label="t('site.command')" :feedback="t('site.command_hint')"><n-input v-model:value="proj.command" type="textarea" :rows="2" /></n-form-item>
-              <n-button type="primary" @click="save({ runtime_version: proj.runtime, command: proj.command, app_port: proj.port }, t('site.tab_project'))">{{ t('common.save') }}</n-button>
+              <n-space>
+                <n-button type="primary" @click="save({ runtime_version: proj.runtime, command: proj.command, app_port: proj.port }, t('site.tab_project'))">{{ t('common.save') }}</n-button>
+                <n-popconfirm @positive-click="rollbackProject">
+                  <template #trigger><n-button>Rollback</n-button></template>
+                  {{ t('common.confirm') }}
+                </n-popconfirm>
+              </n-space>
             </n-form>
           </template>
 
@@ -669,6 +691,9 @@ const title = computed(() => (props.site ? `${t('ss.title', { domain: s.value.do
                   </n-space>
                 </n-form-item>
               </template>
+              <n-form-item v-if="isProject || s.type === 'proxy'" :label="t('adv.proxy_buffering')">
+                <n-checkbox v-model:checked="a.disable_proxy_buffering">{{ t('adv.proxy_buffering_hint') }}</n-checkbox>
+              </n-form-item>
               <n-form-item label=" "><n-button type="primary" @click="saveAdv(t('ss.other'))">{{ t('common.save') }}</n-button></n-form-item>
             </n-form>
             <template v-if="isPHP">
