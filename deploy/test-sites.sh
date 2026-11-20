@@ -26,7 +26,7 @@ wait_task() { # task_id
   for _ in $(seq 1 600); do
     t="$(api GET "/tasks/$1")"
     st="$(jget "['status']" <<<"$t")"
-    if [[ "$st" != running ]]; then
+    if [[ "$st" != running && "$st" != queued ]]; then
       python3 -c "import sys,json; print('\n'.join(json.load(sys.stdin)['log']))" <<<"$t" | sed 's/^/    /'
       [[ "$st" == success ]] || fail "task $1 failed"
       return

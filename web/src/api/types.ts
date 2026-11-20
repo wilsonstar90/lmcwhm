@@ -206,7 +206,7 @@ export interface WebConfig {
 export interface Task {
   id: string
   name: string
-  status: 'running' | 'success' | 'failed'
+  status: 'queued' | 'running' | 'success' | 'failed' | 'cancelled'
   log: string[]
   error?: string
 }

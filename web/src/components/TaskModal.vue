@@ -21,7 +21,7 @@ async function poll() {
     task.value = await get<Task>(`/tasks/${props.taskId}`)
     await nextTick()
     follow(logEl.value, stick)
-    if (task.value.status !== 'running') {
+    if (task.value.status !== 'running' && task.value.status !== 'queued') {
       clearInterval(timer)
       emit('done', task.value.status === 'success')
     }
@@ -44,7 +44,7 @@ watch(
 )
 onBeforeUnmount(() => clearInterval(timer))
 
-const tag = { running: 'info', success: 'success', failed: 'error' } as const
+const tag = { queued: 'info', running: 'info', success: 'success', failed: 'error', cancelled: 'default' } as const
 </script>
 
 <template>
@@ -52,7 +52,7 @@ const tag = { running: 'info', success: 'success', failed: 'error' } as const
     <n-card :title="title" style="width: min(720px, calc(100vw - 32px))" closable @close="emit('close')">
       <template #header-extra>
         <n-tag v-if="task" :type="tag[task.status]" size="small">
-          <n-spin v-if="task.status === 'running'" :size="12" style="margin-right: 6px" />
+          <n-spin v-if="task.status === 'running' || task.status === 'queued'" :size="12" style="margin-right: 6px" />
           {{ t(`task.${task.status}`) }}
         </n-tag>
       </template>

@@ -529,6 +529,8 @@
   },
   "task": {
     "running": "執行中",
+    "queued": "排隊中",
+    "cancelled": "已取消",
     "success": "完成",
     "failed": "失敗"
   },

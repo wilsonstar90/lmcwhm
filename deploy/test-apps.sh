@@ -28,7 +28,7 @@ wait_task() { # task_id [seconds]
   for _ in $(seq 1 "${2:-900}"); do
     t="$(api GET "/tasks/$1")"
     st="$(jget "['status']" <<<"$t")"
-    if [[ "$st" != running ]]; then
+    if [[ "$st" != running && "$st" != queued ]]; then
       python3 -c "import sys,json; print('\n'.join(json.load(sys.stdin)['log']))" <<<"$t" | sed 's/^/    /'
       [[ "$st" == success ]] || fail "task $1 failed"
       return
@@ -749,7 +749,7 @@ DBBK="$(bk_id database shop)"
 docker exec -e MYSQL_PWD=Shop-pass-123 lmcwhm-mariadb114 mariadb -ushop -h127.0.0.1 shop -e "DELETE FROM t"
 task POST "/backups/$DBBK/restore" '{}'
 [[ "$(get80 db.test /index.php)" == "db-ok-42" ]] || fail "database restore: $(get80 db.test /index.php)"
-[[ "$(curl -sk -b "$JAR" "$P/api/v1/backups/$DBBK/download" | head -c 2 | od -An -tx1 | tr -d ' ')" == 1f8b ]] || fail "download is not gzip"
+[[ "$(curl -sk -b "$JAR" "$P/api/v1/backups/$DBBK/download" | head -c 10 | od -An -tx1 | tr -d ' ')" == 4c4d4357484d454e4331 ]] || fail "download is not the encrypted archive"
 docker volume create lmcwhm-e2e-vol >/dev/null
 docker run --rm -v lmcwhm-e2e-vol:/v busybox sh -c 'echo vol-data > /v/f.txt'
 task POST /backups/run '{"kind":"volume","target":"lmcwhm-e2e-vol","dests":["local"]}'

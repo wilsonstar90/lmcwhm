@@ -208,7 +208,11 @@ func (s *Server) handleBackupDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer rc.Close()
-	w.Header().Set("Content-Type", "application/gzip")
+	contentType := "application/gzip"
+	if rec.Encrypted {
+		contentType = "application/octet-stream"
+	}
+	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": rec.Name}))
 	w.Header().Set("Content-Length", strconv.FormatInt(rec.Size, 10))
 	io.Copy(w, rc)
