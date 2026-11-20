@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/wilsonstar90/lmcwhm/internal/webenv"
 )
 
 type fakeRunner struct {
@@ -165,6 +167,30 @@ printf 'lmcwhm-mongodb70\nlmcwhm-mariadb114\nlmcwhm-nginx\nlmcwhm-php82\nlmcwhm-
 	d.Installed = func(context.Context) (map[string]bool, error) { return nil, errors.New("app store unavailable") }
 	if _, err := d.Targets(context.Background()); err == nil {
 		t.Fatal("recovery continued without installed app records")
+	}
+}
+
+func TestPHPReadyAcceptsLegacyLowPool(t *testing.T) {
+	busyErr := errors.New("busy pool unavailable")
+	calls := []string{}
+	status := func(_ context.Context, _, pool string) (webenv.FPMStatus, error) {
+		calls = append(calls, pool)
+		if pool == webenv.PHPPoolLow {
+			return webenv.FPMStatus{}, nil
+		}
+		return webenv.FPMStatus{}, busyErr
+	}
+	if err := phpReady(context.Background(), "7.4", status); err != nil {
+		t.Fatalf("legacy low pool was not accepted: %v", err)
+	}
+	if strings.Join(calls, ",") != "busy,low" {
+		t.Fatalf("status calls = %v", calls)
+	}
+	status = func(_ context.Context, _, _ string) (webenv.FPMStatus, error) {
+		return webenv.FPMStatus{}, busyErr
+	}
+	if err := phpReady(context.Background(), "7.4", status); !errors.Is(err, busyErr) {
+		t.Fatalf("two unavailable pools were accepted: %v", err)
 	}
 }
 

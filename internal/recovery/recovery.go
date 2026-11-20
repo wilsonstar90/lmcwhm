@@ -276,6 +276,17 @@ func (Docker) Inspect(ctx context.Context, name string) (State, error) {
 	return st, nil
 }
 
+func phpReady(ctx context.Context, version string, status func(context.Context, string, string) (webenv.FPMStatus, error)) error {
+	_, busyErr := status(ctx, version, webenv.PHPPoolBusy)
+	if busyErr == nil {
+		return nil
+	}
+	if _, err := status(ctx, version, webenv.PHPPoolLow); err == nil {
+		return nil
+	}
+	return busyErr
+}
+
 func (Docker) Ready(ctx context.Context, name string) error {
 	switch {
 	case strings.HasPrefix(name, "lmcwhm-mariadb"):
@@ -290,8 +301,7 @@ func (Docker) Ready(ctx context.Context, name string) error {
 			return errors.New("unknown PHP container")
 		}
 		v = v[:1] + "." + v[1:]
-		_, err := webenv.PHPStatus(ctx, v)
-		return err
+		return phpReady(ctx, v, webenv.PHPStatusFor)
 	case strings.HasPrefix(name, "lmcwhm-redis"):
 		out, err := dockerx.Run(ctx, "exec", name, "redis-cli", "--no-auth-warning", "ping")
 		if err != nil {
