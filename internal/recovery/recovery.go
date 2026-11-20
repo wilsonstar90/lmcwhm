@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/wilsonstar90/lmcwhm/internal/appstore"
 	"github.com/wilsonstar90/lmcwhm/internal/dockerx"
 	"github.com/wilsonstar90/lmcwhm/internal/webenv"
 )
@@ -223,16 +224,28 @@ func (s *Service) log(f string, a ...any) {
 	}
 }
 
-type Docker struct{}
+type Docker struct {
+	Installed func(context.Context) (map[string]bool, error)
+}
 
-func (Docker) Targets(ctx context.Context) ([]string, error) {
+func (d Docker) Targets(ctx context.Context) ([]string, error) {
 	out, err := dockerx.Run(ctx, "ps", "-a", "--format", "{{.Names}}")
 	if err != nil {
 		return nil, err
 	}
+	var installed map[string]bool
+	if d.Installed != nil {
+		installed, err = d.Installed(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
 	var names []string
 	for _, name := range strings.Split(out, "\n") {
 		name = strings.TrimSpace(name)
+		if d.Installed != nil && appstore.IsAppContainer(name) && !installed[name] {
+			continue
+		}
 		if strings.HasPrefix(name, "lmcwhm-mariadb") || strings.HasPrefix(name, "lmcwhm-varnish") ||
 			strings.HasPrefix(name, "lmcwhm-redis") || strings.HasPrefix(name, "lmcwhm-postgres") || strings.HasPrefix(name, "lmcwhm-mongo") ||
 			name == "lmcwhm-nginx" || name == "lmcwhm-haproxy" ||

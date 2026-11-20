@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/wilsonstar90/lmcwhm/internal/alert"
+	"github.com/wilsonstar90/lmcwhm/internal/appstore"
 	"github.com/wilsonstar90/lmcwhm/internal/dockerx"
 	"github.com/wilsonstar90/lmcwhm/internal/firewall"
 	"github.com/wilsonstar90/lmcwhm/internal/ftp"
@@ -180,8 +181,12 @@ func (s *Server) AlertSources() alert.Sources {
 			if err != nil {
 				return out
 			}
+			var installed map[string]bool
+			if s.Apps != nil {
+				installed, _ = s.Apps.InstalledContainers(ctx)
+			}
 			for _, c := range cs {
-				if c.Managed {
+				if c.Managed && (installed == nil || !appstore.IsAppContainer(c.Name) || installed[c.Name]) {
 					out[c.Name] = c.State
 				}
 			}

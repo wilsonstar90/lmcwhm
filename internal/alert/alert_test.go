@@ -87,3 +87,36 @@ func TestRulesRaiseRepeatResolve(t *testing.T) {
 		t.Fatal("bad threshold accepted")
 	}
 }
+
+func TestRecoveryEventIsNotClearedAsRemoved(t *testing.T) {
+	var got []map[string]any
+	hook := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var m map[string]any
+		json.NewDecoder(r.Body).Decode(&m)
+		got = append(got, m)
+	}))
+	defer hook.Close()
+	dir := t.TempDir()
+	st, _ := store.Open(filepath.Join(dir, "p.db"))
+	defer st.Close()
+	box, _ := secrets.Open(dir)
+	sv := New(st, box)
+	ctx := context.Background()
+	ch, err := sv.SaveChannel(ctx, Channel{Name: "hook", Kind: Webhook, Enabled: true, Config: ChannelConfig{URL: hook.URL}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sv.SaveRule(ctx, Rule{Name: "services", Kind: KindServiceDown, Channels: []int64{ch.ID}, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	sv.Src.Services = func(context.Context) map[string]string { return map[string]string{} }
+	sv.Emit(ctx, KindServiceDown, "recovery:lmcwhm-mongodb70", "critical", "Container recovery paused", "not ready", false)
+	sv.Check(ctx)
+	if len(got) != 1 || got[0]["title"] != "Container recovery paused" {
+		t.Fatalf("recovery event was cleared by service polling: %v", got)
+	}
+	sv.Emit(ctx, KindServiceDown, "recovery:lmcwhm-mongodb70", "resolved", "Container recovered", "ready", true)
+	if len(got) != 2 || got[1]["severity"] != "resolved" {
+		t.Fatalf("explicit recovery resolution missing: %v", got)
+	}
+}

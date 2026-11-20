@@ -101,3 +101,18 @@ func Lookup(key, version string) (App, Version, bool) {
 func ContainerName(key, version string) string {
 	return "lmcwhm-" + key + strings.ReplaceAll(version, ".", "")
 }
+
+// IsAppContainer reports whether the name belongs to an installable service.
+func IsAppContainer(name string) bool {
+	for _, a := range Catalog {
+		if a.Kind == KindRuntime {
+			continue
+		}
+		for _, v := range a.Versions {
+			if ContainerName(a.Key, v.Version) == name {
+				return true
+			}
+		}
+	}
+	return false
+}

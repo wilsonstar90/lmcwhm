@@ -137,6 +137,7 @@ deploy/                 install、offline bundle、Linux E2E scripts
 - 網站防護、CDN 設定、專屬規則及黑白名單維持「回應時已套用」嘅同步 API 合約，底層共用 task 完成後先回應，並只額外加入 `task_id`；對應 Vue 元件共用 TaskModal 並防止重複提交。Vue 仍嵌入單一 binary，呢個版本冇強行改變部署或特權邊界。
 - Cron 支援秒級 schedule、timeout、避免重疊、輸出及告警；SSL renew、security scan、app update check 等係內建 jobs。
 - Monitor、probe、site stats、security events、CrowdSec、GeoIP refresh、mail certificate sync 各自以 goroutine 運行。`/healthz` 唔經瀏覽器 gates，只回報 DB 與 apps／web／cron 嘅 ready／not_ready；啟動未完成或失敗回 503，唔暴露內部錯誤內容。
+- Container recovery 同 `service_down` 只處理 App Store 仍有安裝記錄嘅服務容器；已 uninstall 嘅殘留容器唔會觸發 restart 或通知。Recovery 事件只由 recovery 自己 resolve，定期服務掃描唔會將佢哋誤報為「Service removed」。
 - Watchdog 覆蓋 MariaDB、PHP、Varnish、Redis、PostgreSQL、MongoDB、HAProxy 同 Nginx；readiness 包括引擎指令或 published-port 連線。Failure、cooldown、attempts 同 recovering 狀態持久化，重啟唔會重設限制；獨家工作及 Docker resource lock 進行時唔介入，達上限只告警，唔 reboot 全機。
 - SQLite 保持單 writer；另有最多 4 個 connections 嘅 WAL query-only read pool，先用於高讀取查詢。Migration 逐個 transaction 執行，新 migration 只應追加，唔應修改已發佈版本。
 

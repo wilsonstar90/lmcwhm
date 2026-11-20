@@ -279,7 +279,7 @@ func serveCmd() *cobra.Command {
 				return "https://lmcwhm.lmc.ltd"
 			}
 			alerts.Push = appPush
-			rec := recovery.New(recovery.Docker{})
+			rec := recovery.New(recovery.Docker{Installed: apps.InstalledContainers})
 			rec.Allow = tm.ExclusiveIdle
 			rec.AllowResource = func(string) bool { return tm.ResourceIdle("docker") }
 			rec.StatePath = filepath.Join(a.paths.Home, "recovery", "state.json")

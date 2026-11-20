@@ -526,6 +526,9 @@ func (sv *Service) check(ctx context.Context, r Rule) {
 		sv.mu.Lock()
 		var gone []string
 		for key := range sv.active[r.ID] {
+			if strings.HasPrefix(key, "recovery:") {
+				continue
+			}
 			if _, ok := states[key]; !ok {
 				gone = append(gone, key)
 			}

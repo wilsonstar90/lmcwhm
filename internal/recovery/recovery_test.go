@@ -143,6 +143,31 @@ esac
 	}
 }
 
+func TestDockerTargetsSkipUninstalledApps(t *testing.T) {
+	dir := t.TempDir()
+	script := `#!/bin/sh
+printf 'lmcwhm-mongodb70\nlmcwhm-mariadb114\nlmcwhm-nginx\nlmcwhm-php82\nlmcwhm-phpmyadmin52\n'
+`
+	if err := os.WriteFile(filepath.Join(dir, "docker"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	d := Docker{Installed: func(context.Context) (map[string]bool, error) {
+		return map[string]bool{"lmcwhm-mariadb114": true}, nil
+	}}
+	targets, err := d.Targets(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(targets, ","); got != "lmcwhm-mariadb114,lmcwhm-nginx,lmcwhm-php82" {
+		t.Fatalf("targets = %q", got)
+	}
+	d.Installed = func(context.Context) (map[string]bool, error) { return nil, errors.New("app store unavailable") }
+	if _, err := d.Targets(context.Background()); err == nil {
+		t.Fatal("recovery continued without installed app records")
+	}
+}
+
 func TestAllowSkipsRecovery(t *testing.T) {
 	f := &fakeRunner{state: State{Running: true, Status: "running"}, readyErr: errors.New("not ready")}
 	s := New(f)

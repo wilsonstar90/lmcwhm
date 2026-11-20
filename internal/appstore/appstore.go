@@ -161,6 +161,21 @@ func (sv *Service) List(ctx context.Context) ([]Installed, error) {
 	return all, nil
 }
 
+// InstalledContainers returns the service containers registered in the app store.
+func (sv *Service) InstalledContainers(ctx context.Context) (map[string]bool, error) {
+	all, err := sv.list(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]bool{}
+	for _, i := range all {
+		if i.Container != "" {
+			out[i.Container] = true
+		}
+	}
+	return out, nil
+}
+
 func (sv *Service) Get(ctx context.Context, id int64) (Installed, error) {
 	all, err := sv.list(ctx, "WHERE id = ?", id)
 	if err != nil {
