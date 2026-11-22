@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
@@ -77,7 +79,7 @@ var Recipes = map[string]Recipe{
 		Build: `RUN wget -qO- "https://download.redis.io/releases/redis-${VERSION}.tar.gz" | tar xz \
  && cd "redis-${VERSION}" \
  && if [ "$CHECK_ONLY" = 1 ]; then mkdir -p /out; exit 0; fi \
- && make -j"$(nproc)" BUILD_TLS=yes REDIS_CFLAGS="${EXTRA_CFLAGS}" ${CONFIGURE_ARGS} \
+ && make -j"${BUILD_JOBS:-$(nproc)}" BUILD_TLS=yes REDIS_CFLAGS="${EXTRA_CFLAGS}" ${CONFIGURE_ARGS} \
  && make PREFIX=/out/usr/local install`,
 	},
 	"memcached": {
@@ -86,7 +88,7 @@ var Recipes = map[string]Recipe{
 		Build: `RUN wget -qO- "https://memcached.org/files/memcached-${VERSION}.tar.gz" | tar xz \
  && cd "memcached-${VERSION}" && ./configure --prefix=/usr/local --enable-tls CFLAGS="-O2 ${EXTRA_CFLAGS}" ${CONFIGURE_ARGS} \
  && if [ "$CHECK_ONLY" = 1 ]; then mkdir -p /out; exit 0; fi \
- && make -j"$(nproc)" && make DESTDIR=/out install`,
+ && make -j"${BUILD_JOBS:-$(nproc)}" && make DESTDIR=/out install`,
 	},
 	"postgres": {
 		Minutes: 12, MinMemMB: 1024, Defaults: "--with-openssl --with-icu --with-lz4 --with-zstd --with-libxml --with-uuid=e2fs",
@@ -96,7 +98,7 @@ var Recipes = map[string]Recipe{
  && ./configure --prefix="/usr/lib/postgresql/$M" --datadir="/usr/share/postgresql/$M" --sysconfdir=/etc/postgresql-common \
       --with-openssl --with-icu --with-lz4 --with-zstd --with-libxml --with-uuid=e2fs CFLAGS="-O2 ${EXTRA_CFLAGS}" ${CONFIGURE_ARGS} \
  && if [ "$CHECK_ONLY" = 1 ]; then mkdir -p /out; exit 0; fi \
- && make -j"$(nproc)" && make -C contrib -j"$(nproc)" \
+ && make -j"${BUILD_JOBS:-$(nproc)}" && make -C contrib -j"${BUILD_JOBS:-$(nproc)}" \
  && make DESTDIR=/out install && make -C contrib DESTDIR=/out install`,
 	},
 	"mariadb": {
@@ -108,7 +110,7 @@ var Recipes = map[string]Recipe{
       -DPLUGIN_ROCKSDB=NO -DPLUGIN_MROONGA=NO -DPLUGIN_SPIDER=NO -DPLUGIN_CONNECT=NO -DPLUGIN_S3=NO -DPLUGIN_COLUMNSTORE=NO -DPLUGIN_DUCKDB=NO \
       -DWITH_UNIT_TESTS=OFF -DCMAKE_C_FLAGS="${EXTRA_CFLAGS}" -DCMAKE_CXX_FLAGS="${EXTRA_CFLAGS}" ${CONFIGURE_ARGS} \
  && if [ "$CHECK_ONLY" = 1 ]; then mkdir -p /out; exit 0; fi \
- && cmake --build b -j"$(nproc)" && DESTDIR=/out cmake --install b \
+ && cmake --build b -j"${BUILD_JOBS:-$(nproc)}" && DESTDIR=/out cmake --install b \
  && rm -rf /out/etc /out/usr/share/mysql-test /out/usr/share/mariadb-test`,
 	},
 	"mysql": {
@@ -125,7 +127,7 @@ var Recipes = map[string]Recipe{
  && cmake -S . -B b -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DINSTALL_LAYOUT=RPM -DWITH_SSL=system -DWITH_ROUTER=OFF \
       -DWITH_UNIT_TESTS=OFF ${B:+-DWITH_BOOST=$PWD/boost} -DCMAKE_C_COMPILER="$T/gcc" -DCMAKE_CXX_COMPILER="$T/g++" -DCMAKE_C_FLAGS="${EXTRA_CFLAGS}" -DCMAKE_CXX_FLAGS="${EXTRA_CFLAGS}" ${CONFIGURE_ARGS} \
  && if [ "$CHECK_ONLY" = 1 ]; then mkdir -p /out; exit 0; fi \
- && cmake --build b -j"$(nproc)" && DESTDIR=/out cmake --install b \
+ && cmake --build b -j"${BUILD_JOBS:-$(nproc)}" && DESTDIR=/out cmake --install b \
  && rm -rf /out/etc /out/usr/mysql-test /out/usr/share/mysql-test`,
 	},
 	"node": {
@@ -134,7 +136,7 @@ var Recipes = map[string]Recipe{
 		Build: `RUN wget -qO- "https://nodejs.org/dist/v${VERSION}/node-v${VERSION}.tar.xz" | tar xJ \
  && cd "node-v${VERSION}" && CFLAGS="${EXTRA_CFLAGS}" CXXFLAGS="${EXTRA_CFLAGS}" ./configure --prefix=/usr/local ${CONFIGURE_ARGS} \
  && if [ "$CHECK_ONLY" = 1 ]; then mkdir -p /out; exit 0; fi \
- && make -j"$(nproc)" && make DESTDIR=/out install`,
+ && make -j"${BUILD_JOBS:-$(nproc)}" && make DESTDIR=/out install`,
 	},
 	"python": {
 		Minutes: 10, MinMemMB: 1024, Defaults: "--prefix=/usr/local --enable-shared --enable-loadable-sqlite-extensions --with-ensurepip=install",
@@ -144,7 +146,7 @@ var Recipes = map[string]Recipe{
  && ./configure --prefix=/usr/local --enable-shared --enable-loadable-sqlite-extensions --with-ensurepip=install \
       LDFLAGS="-Wl,-rpath=/usr/local/lib" CFLAGS="${EXTRA_CFLAGS}" ${CONFIGURE_ARGS} \
  && if [ "$CHECK_ONLY" = 1 ]; then mkdir -p /out; exit 0; fi \
- && make -j"$(nproc)" && make DESTDIR=/out install`,
+ && make -j"${BUILD_JOBS:-$(nproc)}" && make DESTDIR=/out install`,
 	},
 }
 
@@ -174,6 +176,7 @@ ARG VERSION
 ARG CONFIGURE_ARGS=""
 ARG EXTRA_CFLAGS=""
 ARG CHECK_ONLY=""
+ARG BUILD_JOBS=""
 {{.Deps}}
 WORKDIR /usr/src/lmcwhm
 {{.Build}}
@@ -194,6 +197,22 @@ func SourceDockerfile(app, base string) (string, error) {
 	return b.String(), err
 }
 
+func limitBuildJobs(cpus int, available uint64) int {
+	jobs := max(cpus, 1)
+	if available > 0 {
+		jobs = min(jobs, max(int(available/(1<<30)), 1))
+	}
+	return jobs
+}
+
+func sourceBuildJobs(ctx context.Context) int {
+	var available uint64
+	if vm, err := mem.VirtualMemoryWithContext(ctx); err == nil {
+		available = vm.Available
+	}
+	return limitBuildJobs(runtime.NumCPU(), available)
+}
+
 // buildSource compiles i's version (the official image must be present).
 func (sv *Service) buildSource(ctx context.Context, i Installed, log tasks.Logf) error {
 	df, err := SourceDockerfile(i.App, i.Image)
@@ -205,7 +224,8 @@ func (sv *Service) buildSource(ctx context.Context, i Installed, log tasks.Logf)
 		return fmt.Errorf("the version of %s is unknown", i.Image)
 	}
 	r, _ := SourceSupport(i.App, i.Version)
-	log("compiling %s %s from source (about %d minutes on 2 cores)", i.Name, full, r.Minutes)
+	jobs := sourceBuildJobs(ctx)
+	log("compiling %s %s from source (about %d minutes on 2 cores, using %d jobs)", i.Name, full, r.Minutes, jobs)
 	dir := filepath.Join(sv.Home, "logs", "build")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
@@ -219,7 +239,7 @@ func (sv *Service) buildSource(ctx context.Context, i Installed, log tasks.Logf)
 	log("full build log: %s", path)
 	w := webenv.NewProgressWriter(f, log)
 	err = dockerx.BuildStream(ctx, SourceImage(i.App, i.Version), df,
-		map[string]string{"VERSION": full, "CONFIGURE_ARGS": i.BuildArgs, "EXTRA_CFLAGS": i.BuildCFlags}, w)
+		map[string]string{"VERSION": full, "CONFIGURE_ARGS": i.BuildArgs, "EXTRA_CFLAGS": i.BuildCFlags, "BUILD_JOBS": strconv.Itoa(jobs)}, w)
 	if err != nil {
 		w.DumpTail()
 		return fmt.Errorf("the source build failed (see %s): %w", path, err)

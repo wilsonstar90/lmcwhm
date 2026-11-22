@@ -199,6 +199,13 @@ func imageID(ctx context.Context, ref string) string {
 
 func rollbackTag(app, version string) string { return "lmcwhm/rollback:" + app + "-" + version }
 
+func updateTimeout(i Installed) time.Duration {
+	if i.BuildMode == ModeSource {
+		return buildTimeout
+	}
+	return 30 * time.Minute
+}
+
 // Update pulls the newest image of the same tag and restarts the app on it,
 // keeping its data. Databases are backed up first; a service that does not
 // come back is restored on the previous image (task).
@@ -207,7 +214,7 @@ func (sv *Service) Update(ctx context.Context, id int64) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return sv.tasks.Start("app.update:"+i.App+"-"+i.Version, func(ctx context.Context, log tasks.Logf) error {
+	return sv.tasks.StartAction(tasks.Action{Name: "app.update:" + i.App + "-" + i.Version, Exclusive: true, Timeout: updateTimeout(i)}, func(ctx context.Context, log tasks.Logf) error {
 		if err := sv.update(ctx, i, log); err != nil {
 			return err
 		}
