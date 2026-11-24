@@ -135,7 +135,7 @@ deploy/                 install、offline bundle、Linux E2E scripts
 - Task 支援 queued／running／success／failed／cancelled，排隊時間亦計入 timeout；可取消，log 定期 checkpoint，owner/module 一併保存。面板重啟時，queued／running 工作標記 interrupted／failed，唔會自動重跑非冪等操作。`PersistResult` 操作可用 idempotency key 讀回已完成結果；共享 web apply 繼續使用 coalescing。
 - 同一 idempotency key 喺 queued／running 時唔會重複開 task；resource 同 exclusive locks 支援 context cancellation。
 - 網站防護、CDN 設定、專屬規則及黑白名單維持「回應時已套用」嘅同步 API 合約，底層共用 task 完成後先回應，並只額外加入 `task_id`；對應 Vue 元件共用 TaskModal 並防止重複提交。Vue 仍嵌入單一 binary，呢個版本冇強行改變部署或特權邊界。
-- Cron 支援秒級 schedule、timeout、避免重疊、輸出及告警；SSL renew、security scan、app update check 等係內建 jobs。
+- Cron 支援秒級 schedule、timeout、避免重疊、輸出及告警；SSL renew、security scan、app update check 等係內建 jobs。公共 IP 名單部分來源失敗時保留各來源舊 entries、更新其餘名單並記錄警告，只有全部已選來源失敗先將 cron 標記為 failed 及觸發通知。
 - Monitor、probe、site stats、security events、CrowdSec、GeoIP refresh、mail certificate sync 各自以 goroutine 運行。`/healthz` 唔經瀏覽器 gates，只回報 DB 與 apps／web／cron 嘅 ready／not_ready；啟動未完成或失敗回 503，唔暴露內部錯誤內容。
 - Container recovery 同 `service_down` 只處理 App Store 仍有安裝記錄嘅 App 容器，核心 Web／PHP 容器則按實際部署狀態處理；已 uninstall 嘅殘留 App 容器唔會觸發 restart 或通知。Recovery 事件只由 recovery 自己 resolve，定期服務掃描唔會將佢哋誤報為「Service removed」。PHP readiness 會先檢查 Busy pool，失敗時再檢查 Low pool，兼容未升級雙 pool 設定嘅舊 PHP 容器；兩個 pools 都唔可用先會進入 recovery。
 - Watchdog 覆蓋 MariaDB、PHP、Varnish、Redis、PostgreSQL、MongoDB、HAProxy 同 Nginx；readiness 包括引擎指令或 published-port 連線。Failure、cooldown、attempts 同 recovering 狀態持久化，重啟唔會重設限制；獨家工作及 Docker resource lock 進行時唔介入，達上限只告警，唔 reboot 全機。

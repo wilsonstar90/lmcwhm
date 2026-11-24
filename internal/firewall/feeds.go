@@ -362,7 +362,15 @@ func fetchFeed(ctx context.Context, u string, guard []netip.Prefix) ([]string, i
 	if res.StatusCode != http.StatusOK {
 		return nil, 0, fmt.Errorf("HTTP %s", res.Status)
 	}
-	return ParseFeed(io.LimitReader(res.Body, feedMaxBody), guard)
+	entries, skipped, err := ParseFeed(io.LimitReader(res.Body, feedMaxBody), guard)
+	if err == nil && len(entries) == 0 {
+		contentType := res.Header.Get("Content-Type")
+		if contentType == "" {
+			contentType = "unknown"
+		}
+		err = fmt.Errorf("no addresses in the list (Content-Type %s)", contentType)
+	}
+	return entries, skipped, err
 }
 
 // fetch is replaceable in tests.
@@ -393,7 +401,8 @@ func (sv *Service) RefreshFeeds(ctx context.Context) error {
 
 // RunFeeds downloads the selected lists of one kind and replaces their
 // entries (the "ip_feeds" scheduled task); a list that fails keeps its
-// previous entries until they expire. A line per list goes to out.
+// previous entries until they expire. Partial failures are logged without
+// failing the cron; only a run where every selected list fails is an error.
 func (sv *Service) RunFeeds(ctx context.Context, kind string, ttl time.Duration, out io.Writer) error {
 	feedMu.Lock()
 	defer feedMu.Unlock()
@@ -463,7 +472,10 @@ func (sv *Service) RunFeeds(ctx context.Context, kind string, ttl time.Duration,
 		}
 	}
 	if failed > 0 {
-		return fmt.Errorf("%d of %d lists failed", failed, n)
+		if failed == n {
+			return fmt.Errorf("all %d lists failed", n)
+		}
+		fmt.Fprintf(out, "warning: %d of %d lists failed; successful lists updated and previous entries kept for failed lists\n", failed, n)
 	}
 	return nil
 }
