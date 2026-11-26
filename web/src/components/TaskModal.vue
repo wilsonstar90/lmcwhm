@@ -58,6 +58,7 @@ const tag = { queued: 'info', running: 'info', success: 'success', failed: 'erro
       </template>
       <pre ref="logEl" class="log">{{ task?.log.join('\n') || '…' }}</pre>
       <template #footer>
+        <n-button v-if="!task || task.status === 'running' || task.status === 'queued'" @click="emit('close')">{{ t('task.minimise') }}</n-button>
         <n-button :disabled="task?.status === 'running'" @click="emit('close')">{{ t('common.close') }}</n-button>
       </template>
     </n-card>

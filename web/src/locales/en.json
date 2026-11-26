@@ -533,7 +533,8 @@
     "queued": "Queued",
     "cancelled": "Cancelled",
     "success": "Done",
-    "failed": "Failed"
+    "failed": "Failed",
+    "minimise": "Minimize to Messages"
   },
   "web": {
     "tab": "Web stack",

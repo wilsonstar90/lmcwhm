@@ -38,6 +38,7 @@ const can = (key: string) => {
 const ips = ref({ ipv4: '', ipv6: '' })
 onMounted(() => {
   loadMenu()
+  session.loadMeta().catch(() => {})
   window.addEventListener('resize', resize, { passive: true })
   if (session.user?.is_admin) {
     get<{ ipv4: string; ipv6: string }>('/web/ips').then((r) => { ips.value = r }).catch(() => {})
@@ -89,6 +90,7 @@ async function logout() {
           <template v-if="collapsed">
             <BrandLogo />
             <TaskBox v-if="session.user?.is_admin" />
+            <span v-if="isMobile && session.version" class="mobile-version">{{ session.version }}</span>
           </template>
           <template v-else>
             <span class="user">{{ session.user?.username }}</span>
@@ -152,6 +154,12 @@ async function logout() {
   align-items: center;
   gap: 10px;
   min-width: 0;
+}
+.mobile-version {
+  font-size: 12px;
+  opacity: 0.65;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .header {
   height: 53px;

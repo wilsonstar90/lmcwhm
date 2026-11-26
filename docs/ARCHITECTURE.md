@@ -113,7 +113,7 @@ deploy/                 install、offline bundle、Linux E2E scripts
 - WP-CLI 可作 App Store 工具安裝，掛載網站目錄並以常駐容器提供命令；WordPress Toolkit 優先使用，未安裝時先用內置 phar。WP-CLI 下載或個別插件／主題列表失敗只顯示警告，唔再令整個網站設定頁 500。
 - Node、Python、Java 項目以獨立容器及 restart policy 運行。Deploy 先複製到新 release、安裝 dependencies，再原子切換 `.lmcwhm/current`；保留三份 releases，可回滾上一版，restart 本身唔再重裝 packages。一般自訂長駐命令則可經 systemd process guardian。
 - 資料庫預設只發佈到 loopback；遠端存取要同步防火牆來源限制。
-- App Store catalog 內置於 binary，支援容器 image 或 source compile；source recipes 有獨立 GitHub workflow。Source install、重編譯及 patch update 共用 6 小時上限；編譯 jobs 按 CPU 及當時可用 RAM 自動限制，每個 job 預留約 1 GiB，避免細機平行編譯拖垮服務。
+- App Store catalog 內置於 binary，支援容器 image 或 source compile；source recipes 有獨立 GitHub workflow。Source install、重編譯及 patch update 共用 6 小時上限；編譯 jobs 按 CPU 及當時可用 RAM 自動限制，每個 job 預留約 1 GiB，避免細機平行編譯拖垮服務。可選 PHP extensions 包括 GeoIP（只限 7.4）、MaxMind DB、AMQP、geospatial、Solr 及 FFI；`bcmath`、`exif` 等常見模組已內建，唔會重複列出。
 - App／DB 設定改動先驗證；更新及還原操作經背景任務記錄。
 
 ## 7. 認證、授權與高風險操作
@@ -123,7 +123,7 @@ deploy/                 install、offline bundle、Linux E2E scripts
 - 告警記錄同時顯示喺告警中心及消息盒子，每筆可開詳情。面板 process 啟動／重啟及 listener rebuild 以 `panel_restart` 寫入歷史，唔會強制發送通知。
 - PWA 啟動畫面以 inline HTML/CSS 提供 lmcwhm 標誌、背景、loading 動畫及離線狀態，唔依賴外部圖片或字體；Vue mount 後自動淡出。手機介面採用 15–16px 正文、44px 觸控目標及可換行 Dashboard，維護三點選單同 IP 複製放喺頂欄。
 - 面板設定集中系統、SSH、告警規則及通知渠道。`SettingsSystem`／`SettingsSSH` 共用原有 Toolbox API；告警中心與面板設定共用 `Alerts.vue`，設定分頁只隱藏歷史。工具箱保留進程、連線、磁碟及清理，舊 system／SSH 連結會轉到面板設定。
-- 時區警告按目前 UTC offset 比較，唔會將相同 offset 誤報為不一致；`Etc/GMT` 會額外提示 POSIX 符號係反向，例如 `Etc/GMT+8` 實際係 UTC−8。手機主題及語言由頂欄 `Aa` 彈窗提供，消息 badge 只喺有運行中工作時顯示。
+- 時區警告按目前 UTC offset 比較，唔會將相同 offset 誤報為不一致；`Etc/GMT` 會額外提示 POSIX 符號係反向，例如 `Etc/GMT+8` 實際係 UTC−8。手機主題及語言由頂欄 `Aa` 彈窗提供，消息 badge 只喺有運行中工作時顯示。TaskModal 可縮小到消息盒子，背景工作唔會取消，並可由運行中列表重新開啟即時日誌；手機頂欄亦會顯示目前面板版本。
 - Gates：授權 IP → 綁定域名 → BasicAuth → 安全入口；可自訂未認證回應。安全入口 cookie 使用 HttpOnly + SameSite=Lax，讓 Cloudflare Access 等外部身份提供者完成頂層 GET 跳轉後仍能進入登入頁；呢個 cookie 只證明已通過入口，唔係登入 session。
 - API Token：驗證使用 SHA-256 hash；新 Token 另用面板 master key 以 AES-256-GCM 加密保存，管理員可按需翻查。scope 為 read／operate／admin，可設 expiry、IP allowlist、編輯到期日或即時暫停／恢復。每個 Token 有獨立 UUIDv4 MCP endpoint，URL 與 Token 必須匹配；可限制只用 Kimi／DeepSeek／Claude／Codex，身份來自 MCP clientInfo 及 User-Agent。舊 hash-only Token 不可翻查，只可撤銷後重建。
 - 子用戶：按模組及可選網站 IDs 授權；未映射嘅新 API route 預設只限管理員。

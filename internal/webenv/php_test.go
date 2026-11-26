@@ -165,3 +165,24 @@ func TestPHPSourceDockerfile(t *testing.T) {
 		t.Fatalf("stored %+v", b)
 	}
 }
+
+func TestPHPExtensionVersionCoverage(t *testing.T) {
+	for _, c := range []struct {
+		name, version string
+		want          bool
+	}{
+		{"geoip", "7.4", true},
+		{"geoip", "8.0", false},
+		{"maxminddb", "7.4", true},
+		{"maxminddb", "8.4", true},
+		{"amqp", "8.2", true},
+		{"geospatial", "8.3", true},
+		{"solr", "8.1", true},
+		{"ffi", "7.4", true},
+	} {
+		x, ok := lookupExt(c.name)
+		if !ok || x.Supports(c.version) != c.want {
+			t.Errorf("%s on PHP %s: got %v, want %v", c.name, c.version, ok && x.Supports(c.version), c.want)
+		}
+	}
+}

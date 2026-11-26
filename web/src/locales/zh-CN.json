@@ -533,7 +533,8 @@
     "queued": "排队中",
     "cancelled": "已取消",
     "success": "完成",
-    "failed": "失败"
+    "failed": "失败",
+    "minimise": "最小化到消息盒子"
   },
   "web": {
     "tab": "Web 环境",

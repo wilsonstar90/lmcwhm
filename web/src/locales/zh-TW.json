@@ -533,7 +533,8 @@
     "queued": "排隊中",
     "cancelled": "已取消",
     "success": "完成",
-    "failed": "失敗"
+    "failed": "失敗",
+    "minimise": "縮小到訊息盒"
   },
   "web": {
     "tab": "Web 環境",

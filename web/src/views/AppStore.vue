@@ -230,11 +230,11 @@ const columns: DataTableColumns<Row> = [
   {
     title: '',
     key: 'actions',
-    width: 380,
+    width: 600,
     render: (r) => {
       if (r.php) {
         const v = r.php
-        return h(NSpace, { size: 6 }, () => [
+        return h(NSpace, { size: 6, wrap: false }, () => [
           h(NButton, { size: 'tiny', type: 'primary', onClick: () => phpSettings(v) }, () => t('app.settings')),
           h(NButton, { size: 'tiny', onClick: () => (logs.value = { url: `/php/${v.version}/logs`, title: `PHP ${v.version}` }) }, () => t('app.logs')),
           v.sites > 0
@@ -243,7 +243,7 @@ const columns: DataTableColumns<Row> = [
         ])
       }
       const i = r.app!
-      return h(NSpace, { size: 6 }, () => [
+      return h(NSpace, { size: 6, wrap: false }, () => [
         h(NButton, { size: 'tiny', type: 'primary', onClick: () => (settings.value = i) }, () => t('app.settings')),
         ...(i.container
           ? [
@@ -287,7 +287,7 @@ const versionOptions = (a: CatalogApp) =>
           <n-button size="small" @click="load">{{ t('common.refresh') }}</n-button>
         </n-space>
       </n-space>
-      <n-data-table size="small" :columns="columns" :data="rows" :loading="loading" :row-key="(r: Row) => r.key" :scroll-x="1130" />
+      <n-data-table size="small" :columns="columns" :data="rows" :loading="loading" :row-key="(r: Row) => r.key" :scroll-x="1350" />
       <p class="hint">{{ t('app.updates_hint') }}</p>
     </n-tab-pane>
     <n-tab-pane name="php" tab="PHP" display-directive="show:lazy"><PhpVersions ref="phpRef" @changed="load" /></n-tab-pane>
