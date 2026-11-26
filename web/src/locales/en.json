@@ -14,6 +14,8 @@
     "failed": "Failed",
     "detail": "Detail",
     "refresh": "Refresh",
+    "refresh_app": "Clear PWA cache and reload",
+    "refreshing_app": "Clearing PWA cache…",
     "language": "Language",
     "coming": "This module ships in {m}",
     "close": "Close",

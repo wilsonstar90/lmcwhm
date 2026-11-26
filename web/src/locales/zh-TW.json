@@ -14,6 +14,8 @@
     "failed": "失敗",
     "detail": "詳情",
     "refresh": "重新整理",
+    "refresh_app": "清除 PWA 快取並重新載入",
+    "refreshing_app": "正在清除 PWA 快取…",
     "language": "語言",
     "coming": "此模組將於 {m} 推出",
     "close": "關閉",

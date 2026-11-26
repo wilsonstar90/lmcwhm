@@ -121,7 +121,7 @@ deploy/                 install、offline bundle、Linux E2E scripts
 - Browser：HttpOnly + SameSite=Strict session、非 GET CSRF、bcrypt、TOTP、按 IP 登入鎖定。
 - PWA：iOS/iPadOS 16.4+ 加入主畫面後可用 Web Push。App Push 係 alert channel，裝置訂閱獨立於 login session，logout 唔會撤銷。VAPID private key、endpoint 同裝置 keys 加密保存，可逐部裝置撤銷及測試。VAPID subject 使用 ACME email 或 HTTPS 面板網域，避免 `.local` contact 被 push service 拒絕。通知包含已記錄 event ID，點擊後以 `/alerts?event=<ID>` 開啟詳情；需要登入時會保留 redirect，登入後返回原記錄。
 - 告警記錄同時顯示喺告警中心及消息盒子，每筆可開詳情。面板 process 啟動／重啟及 listener rebuild 以 `panel_restart` 寫入歷史，唔會強制發送通知。
-- PWA 啟動畫面以 inline HTML/CSS 提供 lmcwhm 標誌、背景、loading 動畫及離線狀態，唔依賴外部圖片或字體；Vue mount 後自動淡出。手機介面採用 15–16px 正文、44px 觸控目標及可換行 Dashboard，維護三點選單同 IP 複製放喺頂欄。
+- PWA 啟動畫面以 inline HTML/CSS 提供 lmcwhm 標誌、背景、loading 動畫及離線狀態，唔依賴外部圖片或字體；Vue mount 後自動淡出。手機介面採用 15–16px 正文、44px 觸控目標及可換行 Dashboard，維護三點選單同 IP 複製放喺頂欄。`⟳` 只清除 lmcwhm Cache Storage 再 reload，重新取得 CSS、JS 及 offline shell，唔會清除 session 或使用者設定。
 - 面板設定集中系統、SSH、告警規則及通知渠道。`SettingsSystem`／`SettingsSSH` 共用原有 Toolbox API；告警中心與面板設定共用 `Alerts.vue`，設定分頁只隱藏歷史。工具箱保留進程、連線、磁碟及清理，舊 system／SSH 連結會轉到面板設定。
 - 時區警告按目前 UTC offset 比較，唔會將相同 offset 誤報為不一致；`Etc/GMT` 會額外提示 POSIX 符號係反向，例如 `Etc/GMT+8` 實際係 UTC−8。手機主題及語言由頂欄 `Aa` 彈窗提供，消息 badge 只喺有運行中工作時顯示。TaskModal 可縮小到消息盒子，背景工作唔會取消，並可由運行中列表重新開啟即時日誌；手機頂欄亦會顯示目前面板版本。
 - Gates：授權 IP → 綁定域名 → BasicAuth → 安全入口；可自訂未認證回應。安全入口 cookie 使用 HttpOnly + SameSite=Lax，讓 Cloudflare Access 等外部身份提供者完成頂層 GET 跳轉後仍能進入登入頁；呢個 cookie 只證明已通過入口，唔係登入 session。

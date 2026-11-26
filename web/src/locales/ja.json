@@ -14,6 +14,8 @@
     "failed": "失敗",
     "detail": "詳細",
     "refresh": "更新",
+    "refresh_app": "PWA キャッシュを消去して再読み込み",
+    "refreshing_app": "PWA キャッシュを消去中…",
     "language": "言語",
     "coming": "このモジュールは {m} で提供予定",
     "close": "閉じる",

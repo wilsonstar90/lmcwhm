@@ -60,6 +60,18 @@ async function copyIP(ip: string) {
     msg.error(String(e))
   }
 }
+async function refreshPWA() {
+  msg.loading(t('common.refreshing_app'), { duration: 1200 })
+  try {
+    if ('caches' in window) {
+      const keys = await caches.keys()
+      await Promise.all(keys.filter((key) => key.startsWith('lmcwhm-')).map((key) => caches.delete(key)))
+    }
+  } catch {
+    /* Reload even if this browser blocks Cache Storage. */
+  }
+  window.setTimeout(() => window.location.reload(), 200)
+}
 async function logout() {
   await session.logout()
   router.push({ name: 'login' })
@@ -101,6 +113,7 @@ async function logout() {
           </template>
         </div>
         <n-space :size="8" align="center" :wrap="false">
+          <n-button v-if="isMobile" size="small" quaternary :title="t('common.refresh_app')" :aria-label="t('common.refresh_app')" @click="refreshPWA">⟳</n-button>
           <n-popover v-if="isMobile && session.user?.is_admin" trigger="click" placement="bottom-end" style="max-width: calc(100vw - 24px)">
             <template #trigger><n-button size="small" quaternary aria-label="Server IP">IP</n-button></template>
             <div class="mobile-ips">
