@@ -144,7 +144,7 @@ const alertRowProps = (e: AlertEvent) => ({ style: 'cursor: pointer', onClick: (
 </script>
 
 <template>
-  <n-badge :value="running.length" :color="running.length ? '#20a53a' : '#a0a0a0'" show-zero :max="99">
+  <n-badge class="box-badge" :value="running.length" :color="running.length ? '#20a53a' : '#a0a0a0'" :max="99">
     <n-button size="tiny" quaternary class="box-btn" :aria-label="t('tbx.title')" @click="show = true">✉</n-button>
   </n-badge>
 
@@ -196,6 +196,15 @@ const alertRowProps = (e: AlertEvent) => ({ style: 'cursor: pointer', onClick: (
 <style scoped>
 .box-btn {
   font-size: 14px;
+}
+@media (max-width: 900px) {
+  .box-badge :deep(.n-badge-sup) {
+    top: 8px;
+    left: 2px;
+    right: auto;
+    transform: scale(0.8);
+    transform-origin: top left;
+  }
 }
 .box {
   width: min(760px, calc(100vw - 24px));

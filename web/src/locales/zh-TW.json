@@ -138,7 +138,8 @@
     },
     "timezone_hint": "排程任務、統計、任務日誌都使用此時區。變更後面板會自動重新啟動。",
     "timezone_host": "伺服器系統時區為 {zone}，與面板不同。",
-    "timezone_fix": "前往工具箱修改"
+    "timezone_fix": "前往系統設定修改",
+    "timezone_posix": "Etc/GMT 使用反向 POSIX 符號：Etc/GMT+8 實際為 UTC-08:00。如需香港時間，請選擇 Asia/Hong_Kong。"
   },
   "logs": {
     "tab_login": "面板登入",

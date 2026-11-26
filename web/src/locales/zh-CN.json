@@ -138,7 +138,8 @@
     },
     "timezone_hint": "计划任务、统计、任务日志都使用此时区。修改后面板会自动重启。",
     "timezone_host": "服务器系统时区为 {zone}，与面板不同。",
-    "timezone_fix": "前往工具箱修改"
+    "timezone_fix": "前往系统设置修改",
+    "timezone_posix": "Etc/GMT 使用反向 POSIX 符号：Etc/GMT+8 实际是 UTC-08:00。如需香港时间，请选择 Asia/Hong_Kong。"
   },
   "logs": {
     "tab_login": "面板登录",

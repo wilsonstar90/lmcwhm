@@ -138,7 +138,8 @@
     },
     "timezone_hint": "スケジュール、統計、タスクログはこのタイムゾーンを使います。変更後にパネルは再起動します。",
     "timezone_host": "サーバーのシステムタイムゾーンは {zone} で、パネルと異なります。",
-    "timezone_fix": "ツールボックスで変更"
+    "timezone_fix": "システム設定で変更",
+    "timezone_posix": "Etc/GMT は POSIX の逆符号を使用します。Etc/GMT+8 は UTC-08:00 です。香港時間には Asia/Hong_Kong を選択してください。"
   },
   "logs": {
     "tab_login": "ログイン履歴",

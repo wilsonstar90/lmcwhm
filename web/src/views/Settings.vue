@@ -18,7 +18,7 @@ import SettingsSystem from '../components/SettingsSystem.vue'
 import AlertsView from './Alerts.vue'
 import MaintenanceBar from '../components/MaintenanceBar.vue'
 import PathInput from '../components/PathInput.vue'
-import { knownZones, zoneLabel, zoneOptions } from '../tz'
+import { knownZones, tzOffset, zoneLabel, zoneOptions } from '../tz'
 import { useRoute } from 'vue-router'
 
 const { t } = useI18n()
@@ -40,7 +40,7 @@ async function load() {
 onMounted(load)
 
 // Time zone: the panel's (schedules, statistics, task logs) and, for a
-// warning when they differ, the server's own (工具箱 → 系統).
+// warning when they differ, the server's own (面板設定 → 系統).
 const hostZone = ref('')
 const hostZones = ref<string[]>([])
 async function loadHostZone() {
@@ -54,7 +54,13 @@ async function loadHostZone() {
 }
 onMounted(loadHostZone)
 const tzOptions = computed(() => zoneOptions(knownZones(hostZones.value), [form.value?.timezone ?? '', hostZone.value]))
-const tzMismatch = computed(() => !!form.value && !!hostZone.value && hostZone.value !== form.value.timezone)
+const tzMismatch = computed(() => {
+  const panel = form.value?.timezone ?? ''
+  if (!panel || !hostZone.value || panel === hostZone.value) return false
+  const a = tzOffset(panel), b = tzOffset(hostZone.value)
+  return Number.isNaN(a) || Number.isNaN(b) || a !== b
+})
+const posixHost = computed(() => hostZone.value.startsWith('Etc/GMT'))
 
 /** After a port / SSL change the listener restarts: send the browser to the new origin. */
 function followRestart(s: Pick<PanelSettings, 'panel_port' | 'ssl_mode' | 'security_entry'>) {
@@ -196,6 +202,7 @@ const unauthOptions = [404, 403, 401, 400, 408, 416, 444].map((c) => ({ label: t
               <span v-if="tzMismatch" class="tz-warn">
                 {{ t('settings.timezone_host', { zone: zoneLabel(hostZone) }) }}
                 <router-link to="/settings?tab=system">{{ t('settings.timezone_fix') }}</router-link>
+                <span v-if="posixHost" class="tz-posix">{{ t('settings.timezone_posix') }}</span>
               </span>
             </div>
           </n-form-item>
@@ -370,6 +377,11 @@ const unauthOptions = [404, 403, 401, 400, 408, 416, 444].map((c) => ({ label: t
   color: #20a53a;
   margin-left: 4px;
   text-decoration: underline;
+}
+.tz-posix {
+  display: block;
+  margin-top: 6px;
+  color: #e8b080;
 }
 .grpc-impact {
   font-size: 12.5px;

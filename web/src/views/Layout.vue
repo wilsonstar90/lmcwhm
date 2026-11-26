@@ -107,6 +107,10 @@ async function logout() {
               <span v-if="!ips.ipv4 && !ips.ipv6">—</span>
             </div>
           </n-popover>
+          <n-popover v-if="isMobile" trigger="click" placement="bottom-end" style="max-width: calc(100vw - 24px)">
+            <template #trigger><n-button size="small" quaternary :aria-label="`${t('theme.title')} / ${t('common.language')}`">Aa</n-button></template>
+            <div class="mobile-display"><ThemeSwitch /><LangSwitch /></div>
+          </n-popover>
           <MaintenanceBar v-if="session.user?.is_admin" compact />
           <ThemeSwitch v-if="!isMobile" />
           <LangSwitch v-if="!isMobile" />
@@ -122,10 +126,6 @@ async function logout() {
     <n-drawer-content body-content-style="padding: 0;" class="mobile-menu">
       <div class="brand"><BrandLogo /><TaskBox v-if="session.user?.is_admin" /></div>
       <n-menu :value="(route.name as string)" :options="menu" />
-      <div class="mobile-tools">
-        <ThemeSwitch />
-        <LangSwitch />
-      </div>
     </n-drawer-content>
   </n-drawer>
 </template>
@@ -226,18 +226,14 @@ async function logout() {
   white-space: normal;
   overflow-wrap: anywhere;
 }
-.mobile-tools {
-  display: none;
+.mobile-display {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  min-width: 220px;
 }
 @media (max-width: 899px) {
-  .mobile-tools {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 12px;
-    padding-bottom: max(12px, env(safe-area-inset-bottom));
-  }
   .content :deep(.n-layout-scroll-container) {
     padding: 12px !important;
   }

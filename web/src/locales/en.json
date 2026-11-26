@@ -138,7 +138,8 @@
     },
     "timezone_hint": "Schedules, statistics and task logs use this time zone. The panel restarts after a change.",
     "timezone_host": "The server's system time zone is {zone}, which differs from the panel's.",
-    "timezone_fix": "Change it in Toolbox"
+    "timezone_fix": "Change it in System settings",
+    "timezone_posix": "Etc/GMT uses reversed POSIX signs: Etc/GMT+8 is UTC-08:00. For Hong Kong time, select Asia/Hong_Kong."
   },
   "logs": {
     "tab_login": "Panel logins",

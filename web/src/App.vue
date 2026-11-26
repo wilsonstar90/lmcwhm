@@ -56,35 +56,35 @@ body,
 @media (max-width: 900px) {
   html,
   body {
-    font-size: 16px;
+    font-size: 16px !important;
   }
   .n-card,
   .n-alert,
   .n-descriptions,
   .n-form-item,
   .n-modal .n-card {
-    font-size: 15px;
+    font-size: 16px !important;
   }
   .n-button {
-    min-height: 44px;
-    font-size: 15px;
+    min-height: 44px !important;
+    font-size: 16px !important;
   }
   .n-data-table,
   .n-pagination {
-    font-size: 15px;
+    font-size: 15px !important;
   }
   .n-form-item-label,
   .n-tabs .n-tab,
   .n-menu .n-menu-item-content {
-    font-size: 16px;
+    font-size: 16px !important;
   }
   .n-tag {
-    font-size: 13px;
+    font-size: 14px !important;
   }
   .n-input,
   .n-input-number,
   .n-base-selection {
-    min-height: 44px;
+    min-height: 44px !important;
   }
   input,
   textarea,
