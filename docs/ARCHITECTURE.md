@@ -113,7 +113,7 @@ deploy/                 install、offline bundle、Linux E2E scripts
 - WP-CLI 可作 App Store 工具安裝，掛載網站目錄並以常駐容器提供命令；WordPress Toolkit 優先使用，未安裝時先用內置 phar。WP-CLI 下載或個別插件／主題列表失敗只顯示警告，唔再令整個網站設定頁 500。
 - Node、Python、Java 項目以獨立容器及 restart policy 運行。Deploy 先複製到新 release、安裝 dependencies，再原子切換 `.lmcwhm/current`；保留三份 releases，可回滾上一版，restart 本身唔再重裝 packages。一般自訂長駐命令則可經 systemd process guardian。
 - 資料庫預設只發佈到 loopback；遠端存取要同步防火牆來源限制。
-- App Store catalog 內置於 binary，支援容器 image 或 source compile；source recipes 有獨立 GitHub workflow。Source install、重編譯及 patch update 共用 6 小時上限；編譯 jobs 按 CPU 及當時可用 RAM 自動限制，每個 job 預留約 1 GiB，避免細機平行編譯拖垮服務。可選 PHP extensions 包括 GeoIP（只限 7.4）、MaxMind DB、AMQP、geospatial、Solr 及 FFI；`bcmath`、`exif` 等常見模組已內建，唔會重複列出。
+- App Store catalog 內置於 binary，支援容器 image 或 source compile；source recipes 有獨立 GitHub workflow。Source install、重編譯及 patch update 共用 6 小時上限，PHP source install／update 及 extension 設定亦使用同一時限；編譯 jobs 按 CPU 及當時可用 RAM 自動限制，每個 job 預留約 1 GiB，避免細機平行編譯拖垮服務。可選 PHP extensions 包括 GeoIP（只限 7.4）、MaxMind DB、AMQP、geospatial、Solr 及 FFI；`bcmath`、`exif` 等常見模組已內建，唔會重複列出。
 - App／DB 設定改動先驗證；更新及還原操作經背景任務記錄。
 
 ## 7. 認證、授權與高風險操作

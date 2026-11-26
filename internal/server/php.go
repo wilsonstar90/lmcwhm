@@ -123,11 +123,13 @@ func (s *Server) handlePHPSave(w http.ResponseWriter, r *http.Request) {
 	}
 	s.auditCat(r, "app", "php.save", v+" ext="+strings.Join(c.Extensions, ","))
 	// Building extensions (swoole, grpc) compiles for many minutes.
-	id := s.Tasks.StartLong("PHP "+v, 45*time.Minute, func(ctx context.Context, log tasks.Logf) error {
+	id := s.Tasks.StartLong("PHP "+v, phpUpdateBuildTimeout, func(ctx context.Context, log tasks.Logf) error {
 		return s.Sites.Env.SavePHPConfig(ctx, v, c, log)
 	})
 	writeJSON(w, http.StatusAccepted, map[string]any{"task_id": id})
 }
+
+const phpUpdateBuildTimeout = 6 * time.Hour
 
 // writeCodeErr reports "code: detail" errors as the code plus a field param.
 func writeCodeErr(w http.ResponseWriter, err error, codes ...error) {
@@ -160,7 +162,7 @@ func (s *Server) handlePHPAction(w http.ResponseWriter, r *http.Request) {
 		}
 		timeout := 30 * time.Minute
 		if b.Mode == appstore.ModeSource {
-			timeout = 3 * time.Hour
+			timeout = phpUpdateBuildTimeout
 		}
 		id := s.Tasks.StartLong("PHP "+v, timeout, func(ctx context.Context, log tasks.Logf) error {
 			if dockerx.State(ctx, webenv.PHPName(v)) == "" {
@@ -196,7 +198,7 @@ func (s *Server) handlePHPAction(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, errors.New("php.not_installed"))
 			return
 		}
-		id := s.Tasks.StartLong("PHP "+v, 45*time.Minute, func(ctx context.Context, log tasks.Logf) error {
+		id := s.Tasks.StartLong("PHP "+v, phpUpdateBuildTimeout, func(ctx context.Context, log tasks.Logf) error {
 			if err := s.Sites.Env.UpdatePHP(ctx, v, log); err != nil {
 				return err
 			}
