@@ -54,6 +54,43 @@ body,
   box-sizing: border-box;
 }
 @media (max-width: 900px) {
+  html,
+  body {
+    font-size: 16px;
+  }
+  .n-card,
+  .n-alert,
+  .n-descriptions,
+  .n-form-item,
+  .n-modal .n-card {
+    font-size: 15px;
+  }
+  .n-button {
+    min-height: 44px;
+    font-size: 15px;
+  }
+  .n-data-table,
+  .n-pagination {
+    font-size: 15px;
+  }
+  .n-form-item-label,
+  .n-tabs .n-tab,
+  .n-menu .n-menu-item-content {
+    font-size: 16px;
+  }
+  .n-tag {
+    font-size: 13px;
+  }
+  .n-input,
+  .n-input-number,
+  .n-base-selection {
+    min-height: 44px;
+  }
+  input,
+  textarea,
+  .n-base-selection-label {
+    font-size: 16px !important;
+  }
   .n-tabs {
     max-width: 100%;
   }

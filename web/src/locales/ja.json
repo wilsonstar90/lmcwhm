@@ -1566,6 +1566,10 @@
     "tab_rules": "ルール",
     "tab_channels": "通知先",
     "tab_history": "履歴",
+    "detail": "アラート詳細",
+    "event_id": "イベント ID",
+    "rule": "ルール",
+    "target": "対象",
     "need_channel": "まず通知先を追加してください。",
     "new_rule": "ルール追加",
     "name": "名前",
@@ -1618,7 +1622,8 @@
       "tamper": "保護ファイルの変更",
       "malware": "Webシェル検査で検出",
       "security_scan": "セキュリティ診断：重大リスク",
-      "app_update": "ソフトウェア更新あり"
+      "app_update": "ソフトウェア更新あり",
+      "panel_restart": "パネル起動・再起動"
     },
     "rule_desc": {
       "cpu": "CPU の {minutes} 分平均が {threshold}% 以上",
@@ -3503,6 +3508,7 @@
     "title": "メッセージ",
     "running": "実行中",
     "history": "メッセージ",
+    "alerts": "アラート履歴",
     "log": "実行ログ",
     "none": "実行中のタスクはありません",
     "no_log": "タスクを選ぶとログを表示します",

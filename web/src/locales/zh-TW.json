@@ -1566,6 +1566,10 @@
     "tab_rules": "告警規則",
     "tab_channels": "通知管道",
     "tab_history": "告警記錄",
+    "detail": "告警詳情",
+    "event_id": "記錄 ID",
+    "rule": "規則",
+    "target": "對象",
     "need_channel": "請先新增通知管道。",
     "new_rule": "新增規則",
     "name": "名稱",
@@ -1618,7 +1622,8 @@
       "tamper": "受保護檔案遭變更",
       "malware": "木馬掃描發現可疑檔案",
       "security_scan": "安全掃描：嚴重風險",
-      "app_update": "有軟體更新"
+      "app_update": "有軟體更新",
+      "panel_restart": "面板啟動／重啟"
     },
     "rule_desc": {
       "cpu": "CPU {minutes} 分鐘平均 ≥ {threshold}%",
@@ -3503,6 +3508,7 @@
     "title": "訊息盒",
     "running": "任務列表",
     "history": "訊息列表",
+    "alerts": "告警記錄",
     "log": "執行日誌",
     "none": "目前沒有任務執行",
     "no_log": "選擇一個任務查看日誌",

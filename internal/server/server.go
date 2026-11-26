@@ -166,6 +166,9 @@ func (s *Server) Run(ctx context.Context) error {
 			stop = true
 		case <-s.restart:
 			s.Log.Info("restarting panel listener")
+			if s.Alerts != nil {
+				_, _ = s.Alerts.Record(context.Background(), alert.KindPanelRestart, "listener", "info", "Panel listener restarted", "The panel applied listener settings and rebuilt its HTTP listener.")
+			}
 		case err := <-errc:
 			if !errors.Is(err, http.ErrServerClosed) {
 				return err

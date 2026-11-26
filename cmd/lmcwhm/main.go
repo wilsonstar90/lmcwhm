@@ -268,6 +268,7 @@ func serveCmd() *cobra.Command {
 			jobs.Feeds = fw.RunFeeds
 			go sites.RunPHPPoolAdvisor(ctx, log.Warn)
 			alerts := alert.New(a.st, box)
+			_, _ = alerts.Record(ctx, alert.KindPanelRestart, "process", "info", "Panel started / restarted", "Version "+config.Version+"; the panel process is running.")
 			appPush := push.New(a.st, box)
 			appPush.Contact = func() string {
 				if config, err := webCfg.Get(ctx); err == nil && strings.TrimSpace(config.ACMEEmail) != "" {

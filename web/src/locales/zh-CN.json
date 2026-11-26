@@ -1566,6 +1566,10 @@
     "tab_rules": "告警规则",
     "tab_channels": "通知渠道",
     "tab_history": "告警记录",
+    "detail": "告警详情",
+    "event_id": "记录 ID",
+    "rule": "规则",
+    "target": "对象",
     "need_channel": "请先添加通知渠道。",
     "new_rule": "新建规则",
     "name": "名称",
@@ -1618,7 +1622,8 @@
       "tamper": "受保护文件被改动",
       "malware": "木马扫描发现可疑文件",
       "security_scan": "安全扫描：严重风险",
-      "app_update": "有软件更新"
+      "app_update": "有软件更新",
+      "panel_restart": "面板启动/重启"
     },
     "rule_desc": {
       "cpu": "CPU {minutes} 分钟平均 ≥ {threshold}%",
@@ -3503,6 +3508,7 @@
     "title": "消息盒子",
     "running": "任务列表",
     "history": "消息列表",
+    "alerts": "告警记录",
     "log": "执行日志",
     "none": "当前没有任务执行",
     "no_log": "选择一个任务查看日志",

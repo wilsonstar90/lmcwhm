@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { NCard, NForm, NFormItem, NInput, NButton, NAlert } from 'naive-ui'
 import { useSession } from '../stores/session'
@@ -12,6 +12,7 @@ import BrandLogo from '../components/BrandLogo.vue'
 const { t } = useI18n()
 const session = useSession()
 const router = useRouter()
+const route = useRoute()
 session.loadMeta().catch(() => {})
 
 const username = ref('')
@@ -30,7 +31,8 @@ async function submit() {
       needTotp.value = true
       return
     }
-    router.push({ name: 'home' })
+    const redirect = route.query.redirect
+    router.push(typeof redirect === 'string' && redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : { name: 'home' })
   } catch (e) {
     error.value = e instanceof ApiError ? e.text : String(e)
     if (needTotp.value) totp.value = ''

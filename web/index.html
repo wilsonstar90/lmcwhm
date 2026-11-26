@@ -13,9 +13,80 @@
     <!-- Behind the security entry, the manifest needs the session cookie. -->
     <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
     <title>lmcwhm</title>
+    <style>
+      :root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      body { margin: 0; background: #0b1510; }
+      .boot {
+        position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center;
+        min-height: 100vh; min-height: 100dvh; overflow: hidden; color: #e7f3e9;
+        background: radial-gradient(circle at 18% 12%, #183c27 0, transparent 42%),
+          radial-gradient(circle at 82% 88%, #153422 0, transparent 45%), #0b1510;
+        transition: opacity .24s ease, visibility .24s ease;
+      }
+      .boot.is-ready { opacity: 0; visibility: hidden; pointer-events: none; }
+      .boot::before {
+        content: ""; position: absolute; width: 420px; height: 420px; border: 1px solid #2f6b4033;
+        border-radius: 50%; box-shadow: 0 0 0 70px #2f6b4012, 0 0 0 140px #2f6b400a;
+      }
+      .boot-card {
+        position: relative; display: flex; flex-direction: column; align-items: center;
+        width: min(340px, calc(100vw - 40px)); padding: 40px 28px 30px;
+        padding-top: max(40px, env(safe-area-inset-top)); padding-bottom: max(30px, env(safe-area-inset-bottom));
+        border: 1px solid #83bb9226; border-radius: 28px; background: #17231bcc;
+        box-shadow: 0 24px 80px #0006; backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+      }
+      .boot-mark {
+        display: grid; place-items: center; width: 76px; height: 76px; margin-bottom: 16px;
+        border: 1px solid #65b87955; border-radius: 23px; color: #55c975;
+        background: linear-gradient(145deg, #2c5238, #172a1e); box-shadow: 0 12px 30px #0004;
+      }
+      .boot-mark svg { width: 44px; height: 44px; }
+      .boot-name { color: #45bf66; font-size: 32px; font-weight: 650; letter-spacing: -.8px; }
+      .boot-loader {
+        width: 44px; height: 44px; margin: 32px 0 18px; border: 3px solid #67c78126;
+        border-top-color: #45bf66; border-right-color: #45bf66aa; border-radius: 50%; animation: boot-spin .9s linear infinite;
+      }
+      .boot-status { margin: 0; font-size: 14px; text-align: center; }
+      .boot-hint { margin: 8px 0 0; color: #a5b7aa; font-size: 12px; letter-spacing: .5px; }
+      @keyframes boot-spin { to { transform: rotate(360deg); } }
+      @media (prefers-color-scheme: light) {
+        :root { color-scheme: light; }
+        body { background: #edf5ef; }
+        .boot { color: #17351f; background: radial-gradient(circle at 18% 12%, #cdebd5 0, transparent 42%), radial-gradient(circle at 82% 88%, #d8eee0 0, transparent 45%), #edf5ef; }
+        .boot-card { background: #ffffffd9; border-color: #75ac852e; box-shadow: 0 24px 80px #23452a1a; }
+        .boot-hint { color: #587361; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-loader { animation-duration: 2.5s; }
+        .boot { transition: none; }
+      }
+    </style>
   </head>
   <body>
+    <div id="boot" class="boot" role="status" aria-live="polite">
+      <section class="boot-card" aria-label="lmcwhm">
+        <div class="boot-mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="7" y="7" width="34" height="10" rx="3" /><rect x="7" y="21" width="34" height="10" rx="3" /><rect x="7" y="35" width="34" height="6" rx="3" />
+            <path d="M13 12h.1M13 26h.1M13 38h.1M20 12h13M20 26h13" />
+          </svg>
+        </div>
+        <div class="boot-name">lmcwhm</div>
+        <div class="boot-loader" aria-hidden="true"></div>
+        <p id="boot-status" class="boot-status">Loading panel…</p>
+        <p class="boot-hint">WEB HOSTING MANAGER</p>
+      </section>
+    </div>
     <div id="app"></div>
+    <script>
+      (() => {
+        const status = document.getElementById('boot-status')
+        const update = () => { status.textContent = navigator.onLine ? 'Loading panel…' : 'Offline mode · loading the saved interface…' }
+        window.addEventListener('online', update)
+        window.addEventListener('offline', update)
+        update()
+      })()
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

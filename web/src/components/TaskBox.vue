@@ -8,6 +8,8 @@ import { useRouter } from 'vue-router'
 import { NBadge, NButton, NCard, NDataTable, NEmpty, NModal, NPagination, NPopconfirm, NTag, type DataTableColumns } from 'naive-ui'
 import { get, post } from '../api/client'
 import { datetime } from '../format'
+import type { AlertEvent } from '../api/types'
+import AlertDetail from './AlertDetail.vue'
 
 interface Running { id: string; name: string; kind: 'task' | 'cron'; started: number; job_id?: number }
 interface Row { id: string; name: string; status: 'success' | 'failed' | 'running' | 'queued' | 'cancelled'; error?: string; started: number; finished: number; log?: string }
@@ -15,11 +17,15 @@ interface Row { id: string; name: string; status: 'success' | 'failed' | 'runnin
 const { t, te, locale } = useI18n()
 const router = useRouter()
 const show = ref(false)
-const tab = ref<'running' | 'history' | 'log'>('running')
+const tab = ref<'running' | 'alerts' | 'history' | 'log'>('running')
 const running = ref<Running[]>([])
 const history = ref<Row[]>([])
 const total = ref(0)
 const page = ref(1)
+const alerts = ref<AlertEvent[]>([])
+const alertsTotal = ref(0)
+const alertsPage = ref(1)
+const alertDetail = ref<AlertEvent | null>(null)
 const size = 10
 const sel = ref<{ id: string; live: boolean } | null>(null)
 const log = ref('')
@@ -51,6 +57,15 @@ async function loadHistory() {
   history.value = r.items
   total.value = r.total
 }
+async function loadAlerts() {
+  try {
+    const r = await get<{ items: AlertEvent[]; total: number }>(`/alerts/events?limit=${size}&offset=${(alertsPage.value - 1) * size}`)
+    alerts.value = r.items
+    alertsTotal.value = r.total
+  } catch {
+    alerts.value = []
+  }
+}
 async function loadLog() {
   if (!sel.value) return
   const stick = atBottom(logEl.value)
@@ -77,6 +92,7 @@ function openLog(id: string, live: boolean) {
 function openTab(v: typeof tab.value) {
   tab.value = v
   if (v === 'history') loadHistory()
+  if (v === 'alerts') loadAlerts()
   if (v === 'log' && !sel.value) {
     const r = running.value.find((x) => x.kind === 'task')
     if (r) openLog(r.id, true)
@@ -108,6 +124,7 @@ watch(show, (v) => {
   if (v) {
     loadRunning()
     loadHistory()
+    loadAlerts()
   }
 })
 
@@ -118,6 +135,12 @@ const cols = computed<DataTableColumns<Row>>(() => [
   { title: t('tbx.result'), key: 'status', width: 90, render: (r) => (r.status === 'success' ? t('task.success') : r.status === 'cancelled' ? t('common.cancel') : t('task.failed')) },
 ])
 const rowProps = (r: Row) => ({ style: 'cursor: pointer', onClick: () => openLog(r.id, false) })
+const alertCols = computed<DataTableColumns<AlertEvent>>(() => [
+  { title: t('tbx.created'), key: 'created_at', width: 160, render: (e) => datetime(e.created_at, locale.value) },
+  { title: t('alert.severity'), key: 'severity', width: 90, render: (e) => t(`alert.sev.${e.severity}`) },
+  { title: t('alert.message'), key: 'title', minWidth: 220, ellipsis: { tooltip: true } },
+])
+const alertRowProps = (e: AlertEvent) => ({ style: 'cursor: pointer', onClick: () => { alertDetail.value = e } })
 </script>
 
 <template>
@@ -130,6 +153,7 @@ const rowProps = (r: Row) => ({ style: 'cursor: pointer', onClick: () => openLog
       <div class="layout">
         <nav class="side">
           <button :class="{ on: tab === 'running' }" @click="openTab('running')">{{ t('tbx.running') }} ({{ running.length }})</button>
+          <button :class="{ on: tab === 'alerts' }" @click="openTab('alerts')">{{ t('tbx.alerts') }} ({{ alertsTotal }})</button>
           <button :class="{ on: tab === 'history' }" @click="openTab('history')">{{ t('tbx.history') }} ({{ total }})</button>
           <button :class="{ on: tab === 'log' }" @click="openTab('log')">{{ t('tbx.log') }}</button>
         </nav>
@@ -142,6 +166,10 @@ const rowProps = (r: Row) => ({ style: 'cursor: pointer', onClick: () => openLog
               <span class="when">{{ r.started ? took(r.started, now) : '' }}</span>
               <n-button v-if="r.kind === 'task'" size="tiny" quaternary @click.stop="cancelTask(r)">{{ t('common.cancel') }}</n-button>
             </div>
+          </template>
+          <template v-else-if="tab === 'alerts'">
+            <n-data-table :columns="alertCols" :data="alerts" :row-props="alertRowProps" size="small" :scroll-x="520" />
+            <n-pagination v-if="alertsTotal > size" v-model:page="alertsPage" :page-size="size" :item-count="alertsTotal" style="margin-top: 10px; justify-content: flex-end" @update:page="loadAlerts" />
           </template>
           <template v-else-if="tab === 'history'">
             <div class="hist-head">
@@ -162,6 +190,7 @@ const rowProps = (r: Row) => ({ style: 'cursor: pointer', onClick: () => openLog
       </div>
     </n-card>
   </n-modal>
+  <AlertDetail :show="!!alertDetail" :event="alertDetail" @update:show="(v: boolean) => { if (!v) alertDetail = null }" />
 </template>
 
 <style scoped>

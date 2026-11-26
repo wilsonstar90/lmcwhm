@@ -121,6 +121,14 @@ const rate = (v: number) => bytes(v) + '/s'
 .slow {
   color: #d03050;
 }
+@media (max-width: 900px) {
+  .stats span {
+    font-size: 14px;
+  }
+  .stats b {
+    font-size: 16px;
+  }
+}
 @media (max-width: 560px) {
   .stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));

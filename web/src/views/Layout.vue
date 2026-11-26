@@ -2,7 +2,7 @@
 import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu, NButton, NSpace, NDrawer, NDrawerContent, useMessage, type MenuOption } from 'naive-ui'
+import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu, NButton, NSpace, NDrawer, NDrawerContent, NPopover, useMessage, type MenuOption } from 'naive-ui'
 import { useSession } from '../stores/session'
 import LangSwitch from '../components/LangSwitch.vue'
 import ThemeSwitch from '../components/ThemeSwitch.vue'
@@ -99,7 +99,15 @@ async function logout() {
           </template>
         </div>
         <n-space :size="8" align="center" :wrap="false">
-          <MaintenanceBar v-if="!isMobile && session.user?.is_admin" compact />
+          <n-popover v-if="isMobile && session.user?.is_admin" trigger="click" placement="bottom-end" style="max-width: calc(100vw - 24px)">
+            <template #trigger><n-button size="small" quaternary aria-label="Server IP">IP</n-button></template>
+            <div class="mobile-ips">
+              <n-button v-if="ips.ipv4" size="small" quaternary :title="`${t('common.copy')}: ${ips.ipv4}`" @click="copyIP(ips.ipv4)">IPv4 {{ ips.ipv4 }}</n-button>
+              <n-button v-if="ips.ipv6" size="small" quaternary :title="`${t('common.copy')}: ${ips.ipv6}`" @click="copyIP(ips.ipv6)">IPv6 {{ ips.ipv6 }}</n-button>
+              <span v-if="!ips.ipv4 && !ips.ipv6">—</span>
+            </div>
+          </n-popover>
+          <MaintenanceBar v-if="session.user?.is_admin" compact />
           <ThemeSwitch v-if="!isMobile" />
           <LangSwitch v-if="!isMobile" />
           <n-button size="small" quaternary @click="logout">{{ t('menu.logout') }}</n-button>
@@ -115,7 +123,6 @@ async function logout() {
       <div class="brand"><BrandLogo /><TaskBox v-if="session.user?.is_admin" /></div>
       <n-menu :value="(route.name as string)" :options="menu" />
       <div class="mobile-tools">
-        <MaintenanceBar v-if="session.user?.is_admin" compact />
         <ThemeSwitch />
         <LangSwitch />
       </div>
@@ -208,6 +215,17 @@ async function logout() {
   }
 }
 
+.mobile-ips {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  max-width: calc(100vw - 64px);
+}
+.mobile-ips :deep(.n-button__content) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .mobile-tools {
   display: none;
 }

@@ -120,3 +120,47 @@ func TestRecoveryEventIsNotClearedAsRemoved(t *testing.T) {
 		t.Fatalf("explicit recovery resolution missing: %v", got)
 	}
 }
+
+type capturePush struct{ messages []Message }
+
+func (p *capturePush) Send(_ context.Context, _ []int64, m Message) error {
+	p.messages = append(p.messages, m)
+	return nil
+}
+
+func TestEventDeepLinkAndLifecycleRecord(t *testing.T) {
+	dir := t.TempDir()
+	st, _ := store.Open(filepath.Join(dir, "p.db"))
+	defer st.Close()
+	box, _ := secrets.Open(dir)
+	sv := New(st, box)
+	push := &capturePush{}
+	sv.Push = push
+	ctx := context.Background()
+	ch, err := sv.SaveChannel(ctx, Channel{Name: "push", Kind: AppPush, Enabled: true, Config: ChannelConfig{DeviceIDs: []int64{1}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sv.SaveRule(ctx, Rule{Name: "logins", Kind: KindPanelLogin, Channels: []int64{ch.ID}, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	sv.Emit(ctx, KindPanelLogin, "1", "info", "Panel login", "admin", false)
+	if len(push.messages) != 1 || push.messages[0].EventID == 0 {
+		t.Fatalf("push has no recorded event ID: %+v", push.messages)
+	}
+	e, err := sv.Event(ctx, push.messages[0].EventID)
+	if err != nil || e.Title != "Panel login" || e.RuleName != "logins" || e.Result != "push: ok" {
+		t.Fatalf("recorded event: %+v, %v", e, err)
+	}
+	id, err := sv.Record(ctx, KindPanelRestart, "process", "info", "Panel started / restarted", "Version test")
+	if err != nil || id == 0 || len(push.messages) != 1 {
+		t.Fatalf("lifecycle record sent a push: id=%d messages=%d err=%v", id, len(push.messages), err)
+	}
+	e, err = sv.Event(ctx, id)
+	if err != nil || e.Kind != KindPanelRestart || e.RuleName != "System" || e.Result != "" {
+		t.Fatalf("lifecycle event: %+v, %v", e, err)
+	}
+	if _, err := sv.Event(ctx, 999999); err != ErrNotFound {
+		t.Fatalf("missing event: %v", err)
+	}
+}

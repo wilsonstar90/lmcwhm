@@ -19,7 +19,7 @@
 | 運維 | Dashboard、資源監控、日誌中心、Cron、systemd 進程守護、撥測、網站報表、告警、可取消 durable tasks、FTP/SFTP、WordPress、Composer、Varnish、工具箱 |
 | 備份 / 遷移 | 網站、資料庫、Docker volumes、任意目錄及面板備份；SHA256 manifest、獨立 key 加密、隔離還原演練、本地、Google Drive、OneDrive；整機快照、升級、回滾、離線安裝 |
 | 整合 | Cloudflare DNS Zone Editor、郵件伺服器、REST API + OpenAPI、可加密翻查／編輯到期／暫停嘅 API Token、獨立 UUID MCP URL、指定 AI Agent、完整 MCP 工具及連線 Prompt、Claude／OpenRouter AI 助手 |
-| UX | 五種語言、iPhone／iPad 響應式導航、PWA App Push（logout 後仍接收）、深色主題、可自訂選單及品牌 Logo、任務訊息盒 |
+| UX | 五種語言、iPhone／iPad 響應式導航、PWA App Push（logout 後仍接收，可直達告警詳情）、深色主題、可自訂選單及品牌 Logo、包含任務及告警詳情嘅消息盒子 |
 
 呢個係**單機管理面板**：子用戶只係操作員，唔係 cPanel tenant；目前冇 Reseller、套餐或多機 Agent。
 

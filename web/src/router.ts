@@ -44,6 +44,6 @@ router.beforeEach(async (to) => {
     restored = true
     await s.restore()
   }
-  if (!to.meta.public && !s.user) return { name: 'login' }
+  if (!to.meta.public && !s.user) return { name: 'login', query: { redirect: to.fullPath } }
   if (to.name === 'login' && s.user) return { name: 'home' }
 })

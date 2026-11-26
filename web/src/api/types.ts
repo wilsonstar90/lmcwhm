@@ -493,3 +493,16 @@ export interface FirewallView {
   has_cf_token: boolean
   rules: FirewallRule[]
 }
+
+export interface AlertEvent {
+  id: number
+  rule_id: number
+  rule_name: string
+  kind: string
+  key: string
+  severity: string
+  title: string
+  body: string
+  result: string
+  created_at: number
+}

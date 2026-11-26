@@ -6,6 +6,7 @@ package alert
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -38,6 +39,7 @@ const (
 	KindSecurityScan = "security_scan" // event: the scheduled security scan found critical risks
 	KindAppUpdate    = "app_update"    // event: an installed app or PHP version has a patch update
 	KindSiteExpiry   = "site_expiry"   // event: a website reached its expiry date and was stopped
+	KindPanelRestart = "panel_restart" // panel process / listener lifecycle, recorded without forced delivery
 	defaultCooldown  = 60              // minutes between repeats of an active alert
 	keepEvents       = 2000
 )
@@ -365,11 +367,37 @@ func (sv *Service) Events(ctx context.Context, limit, offset int) ([]Event, int,
 	return out, total, rows.Err()
 }
 
+func (sv *Service) Event(ctx context.Context, id int64) (Event, error) {
+	var e Event
+	err := sv.st.DB.QueryRowContext(ctx, `SELECT id, rule_id, rule_name, kind, key, severity, title, body, result, created_at
+		FROM alert_events WHERE id = ?`, id).Scan(&e.ID, &e.RuleID, &e.RuleName, &e.Kind, &e.Key, &e.Severity, &e.Title, &e.Body, &e.Result, &e.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Event{}, ErrNotFound
+	}
+	return e, err
+}
+
+// Record stores a lifecycle event without sending it to notification channels.
+func (sv *Service) Record(ctx context.Context, kind, key, severity, title, body string) (int64, error) {
+	res, err := sv.st.DB.ExecContext(ctx, `INSERT INTO alert_events(rule_id, rule_name, kind, key, severity, title, body, result, created_at) VALUES(?,?,?,?,?,?,?,?,?)`,
+		0, "System", kind, key, severity, title, body, "", sv.now().Unix())
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	sv.st.DB.ExecContext(ctx, `DELETE FROM alert_events WHERE id <= (SELECT id FROM alert_events ORDER BY id DESC LIMIT 1 OFFSET ?)`, keepEvents)
+	return id, nil
+}
+
 // ---- delivery ----
 
-// deliver sends one message for a rule to all its enabled channels and records it.
+// deliver records one message, then sends it with its event ID to all enabled channels.
 func (sv *Service) deliver(ctx context.Context, r Rule, key, severity, title, body string) {
 	m := Message{Title: title, Body: body, Severity: severity, Kind: r.Kind, Host: sv.Host, Time: sv.now().Unix()}
+	m.EventID, _ = sv.Record(ctx, r.Kind, key, severity, title, body)
 	var results []string
 	for _, id := range r.Channels {
 		c, err := sv.channel(ctx, id)
@@ -382,9 +410,8 @@ func (sv *Service) deliver(ctx context.Context, r Rule, key, severity, title, bo
 			results = append(results, c.Name+": ok")
 		}
 	}
-	sv.st.DB.ExecContext(ctx, `INSERT INTO alert_events(rule_id, rule_name, kind, key, severity, title, body, result, created_at) VALUES(?,?,?,?,?,?,?,?,?)`,
-		r.ID, r.Name, r.Kind, key, severity, title, body, strings.Join(results, "; "), m.Time)
-	sv.st.DB.ExecContext(ctx, `DELETE FROM alert_events WHERE id <= (SELECT id FROM alert_events ORDER BY id DESC LIMIT 1 OFFSET ?)`, keepEvents)
+	sv.st.DB.ExecContext(ctx, `UPDATE alert_events SET rule_id = ?, rule_name = ?, result = ? WHERE id = ?`,
+		r.ID, r.Name, strings.Join(results, "; "), m.EventID)
 }
 
 func (sv *Service) send(ctx context.Context, kind string, config ChannelConfig, message Message) error {

@@ -1566,6 +1566,10 @@
     "tab_rules": "Rules",
     "tab_channels": "Channels",
     "tab_history": "History",
+    "detail": "Alert details",
+    "event_id": "Event ID",
+    "rule": "Rule",
+    "target": "Target",
     "need_channel": "Add a notification channel first.",
     "new_rule": "New rule",
     "name": "Name",
@@ -1618,7 +1622,8 @@
       "tamper": "Protected file changed",
       "malware": "Webshell scan found files",
       "security_scan": "Security scan: critical risks",
-      "app_update": "Software update available"
+      "app_update": "Software update available",
+      "panel_restart": "Panel startup / restart"
     },
     "rule_desc": {
       "cpu": "CPU ≥ {threshold}% averaged over {minutes} min",
@@ -3454,6 +3459,7 @@
     "title": "Messages",
     "running": "Running",
     "history": "Messages",
+    "alerts": "Alert history",
     "log": "Log",
     "none": "No task is running",
     "no_log": "Pick a task to see its log",

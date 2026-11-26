@@ -1,22 +1,27 @@
 <script setup lang="ts">
-import { computed, h, onMounted, ref } from 'vue'
+import { computed, h, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   NButton, NCard, NDataTable, NDynamicTags, NForm, NFormItem, NInput, NInputNumber, NModal, NPopconfirm, NSelect, NSpace,
   NSwitch, NTabPane, NTabs, NTag, useMessage, type DataTableColumns,
 } from 'naive-ui'
 import { get, post, put, ApiError } from '../api/client'
+import type { AlertEvent } from '../api/types'
 import { datetime } from '../format'
+import AlertDetail from '../components/AlertDetail.vue'
 import PushDevices from '../components/PushDevices.vue'
 
 interface ChannelConfig { host?: string; port?: number; security?: string; username?: string; password?: string; from?: string; to?: string[]; bot_token?: string; chat_id?: string; url?: string; secret?: string; device_ids?: number[] }
 interface Channel { id: number; name: string; kind: string; config: ChannelConfig; enabled: boolean }
 interface Params { threshold?: number; minutes?: number; days?: number; count?: number }
 interface Rule { id: number; name: string; kind: string; params: Params; channels: number[]; enabled: boolean; cooldown: number; active: number }
-interface Ev { id: number; rule_name: string; kind: string; severity: string; title: string; body: string; result: string; created_at: number }
+type Ev = AlertEvent
 
 const { t, locale } = useI18n()
 const msg = useMessage()
+const route = useRoute()
+const router = useRouter()
 const fail = (e: unknown) => msg.error(e instanceof ApiError ? e.text : String(e))
 const tab = ref('rules')
 const channels = ref<Channel[]>([])
@@ -24,6 +29,7 @@ const rules = ref<Rule[]>([])
 const events = ref<Ev[]>([])
 const total = ref(0)
 const page = ref(1)
+const detailEvent = ref<Ev | null>(null)
 
 const channelKinds = ['email', 'app_push', 'telegram', 'webhook', 'wecom', 'dingtalk', 'slack', 'discord']
 const ruleKinds = ['cpu', 'mem', 'load', 'disk', 'service_down', 'ssl_expiry', 'probe_down', 'cron_failed', 'login_failed', 'panel_login', 'ssh_login', 'tamper', 'malware', 'security_scan', 'app_update']
@@ -45,7 +51,30 @@ async function loadEvents() {
   events.value = r.items
   total.value = r.total
 }
-onMounted(load)
+async function openLinkedEvent() {
+  const id = Number(route.query.event)
+  if (!Number.isInteger(id) || id < 1 || detailEvent.value?.id === id) return
+  tab.value = 'history'
+  try {
+    detailEvent.value = await get<Ev>(`/alerts/events/${id}`)
+  } catch (e) {
+    fail(e)
+  }
+}
+function openEvent(e: Ev) {
+  detailEvent.value = e
+  router.replace({ name: 'alerts', query: { ...route.query, event: String(e.id) } })
+}
+function closeEvent() {
+  detailEvent.value = null
+  if (route.query.event !== undefined) {
+    const query = { ...route.query }
+    delete query.event
+    router.replace({ name: 'alerts', query })
+  }
+}
+watch(() => route.query.event, openLinkedEvent)
+onMounted(() => { load(); openLinkedEvent() })
 
 // ---- channels ----
 const cf = ref<Channel | null>(null)
@@ -152,6 +181,7 @@ const evCols = computed<DataTableColumns<Ev>>(() => [
   { title: () => t('alert.message'), key: 'title', render: (e) => h('div', [h('div', e.title), h('div', { style: 'font-size:12px;opacity:.65' }, e.body)]) },
   { title: () => t('alert.delivery'), key: 'result', width: 220, ellipsis: { tooltip: true } },
 ])
+const evRowProps = (e: Ev) => ({ style: 'cursor: pointer', onClick: () => openEvent(e) })
 </script>
 
 <template>
@@ -169,7 +199,7 @@ const evCols = computed<DataTableColumns<Ev>>(() => [
     </n-tab-pane>
     <n-tab-pane name="history" :tab="t('alert.tab_history')">
       <n-data-table
-        size="small" remote :columns="evCols" :data="events" :row-key="(e: Ev) => e.id" :scroll-x="900"
+        size="small" remote :columns="evCols" :data="events" :row-key="(e: Ev) => e.id" :scroll-x="900" :row-props="evRowProps"
         :pagination="{ page, pageSize: 20, itemCount: total, onUpdatePage: (p: number) => { page = p; loadEvents() } }"
       />
     </n-tab-pane>
@@ -232,6 +262,7 @@ const evCols = computed<DataTableColumns<Ev>>(() => [
       </template>
     </n-card>
   </n-modal>
+  <AlertDetail :show="!!detailEvent" :event="detailEvent" @update:show="(v: boolean) => { if (!v) closeEvent() }" />
 </template>
 
 <style scoped>

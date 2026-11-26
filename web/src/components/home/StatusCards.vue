@@ -352,4 +352,26 @@ const diskDetail = (mount: string) => detail.value?.disks?.find((d) => d.mount =
   color: #20a53a;
   cursor: pointer;
 }
+@media (max-width: 900px) {
+  .rings {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 20px 8px;
+  }
+  .pg {
+    width: 112px !important;
+  }
+  .mid {
+    top: 56px;
+    font-size: 24px;
+  }
+  .ring b {
+    font-size: 15px;
+  }
+  .ring span {
+    font-size: 14px;
+  }
+  .pop {
+    font-size: 15px;
+  }
+}
 </style>

@@ -125,6 +125,7 @@ type Message struct {
 	Kind     string `json:"kind"`
 	Host     string `json:"host"`
 	Time     int64  `json:"time"`
+	EventID  int64  `json:"-"` // recorded alert used by App Push deep links
 }
 
 func (m Message) text() string {

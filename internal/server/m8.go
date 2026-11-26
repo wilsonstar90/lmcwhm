@@ -35,6 +35,7 @@ func (s *Server) m8Routes(r chi.Router) {
 		r.Put("/alerts/rules/{id}", s.handleAlertRuleSave)
 		r.Post("/alerts/rules/{id}/delete", s.handleAlertRuleDelete)
 		r.Get("/alerts/events", s.handleAlertEvents)
+		r.Get("/alerts/events/{id}", s.handleAlertEvent)
 	}
 	if s.Probes != nil {
 		r.Get("/probes", s.handleProbes)
@@ -154,6 +155,15 @@ func (s *Server) handleAlertEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": list, "total": total})
+}
+
+func (s *Server) handleAlertEvent(w http.ResponseWriter, r *http.Request) {
+	e, err := s.Alerts.Event(r.Context(), idParam(r))
+	if err != nil {
+		writeCodedErr(w, err, alert.ErrNotFound)
+		return
+	}
+	writeJSON(w, http.StatusOK, e)
 }
 
 // AlertSources connects the alert center to the panel's services.

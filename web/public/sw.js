@@ -1,7 +1,7 @@
 // lmcwhm service worker: installable PWA with an offline-capable app shell.
 // The API is never cached; hashed /assets/* are cache-first; pages are
 // network-first with the cached shell as fallback.
-const CACHE = 'lmcwhm-shell-v1'
+const CACHE = 'lmcwhm-shell-v2'
 
 self.addEventListener('install', (e) => {
   self.skipWaiting()

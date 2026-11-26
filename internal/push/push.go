@@ -141,6 +141,13 @@ func (sv *Service) Revoke(ctx context.Context, id int64) error {
 	return nil
 }
 
+func alertDeepLink(eventID int64) string {
+	if eventID > 0 {
+		return fmt.Sprintf("/alerts?event=%d", eventID)
+	}
+	return "/alerts"
+}
+
 func (sv *Service) Send(ctx context.Context, deviceIDs []int64, message alert.Message) error {
 	if len(deviceIDs) == 0 {
 		return ErrSubscription
@@ -177,7 +184,7 @@ func (sv *Service) Send(ctx context.Context, deviceIDs []int64, message alert.Me
 		return ErrNotFound
 	}
 	payload, _ := json.Marshal(map[string]any{"title": message.Title, "body": message.Body, "severity": message.Severity,
-		"kind": message.Kind, "host": message.Host, "time": message.Time, "url": "/alerts"})
+		"kind": message.Kind, "host": message.Host, "time": message.Time, "event_id": message.EventID, "url": alertDeepLink(message.EventID)})
 	subscriber := "https://lmcwhm.lmc.ltd"
 	if sv.Contact != nil && strings.TrimSpace(sv.Contact()) != "" {
 		subscriber = strings.TrimSpace(sv.Contact())

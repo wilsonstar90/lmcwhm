@@ -121,3 +121,12 @@ func TestWebPushDelivery(t *testing.T) {
 		t.Fatal("push service did not receive an encrypted VAPID request")
 	}
 }
+
+func TestAlertDeepLink(t *testing.T) {
+	if got := alertDeepLink(42); got != "/alerts?event=42" {
+		t.Fatalf("deep link = %q", got)
+	}
+	if got := alertDeepLink(0); got != "/alerts" {
+		t.Fatalf("test notification link = %q", got)
+	}
+}

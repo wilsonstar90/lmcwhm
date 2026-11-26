@@ -109,4 +109,19 @@ const levelType = (l: string) => (l === 'critical' ? 'error' : l === 'warning' ?
   padding: 3px 0;
   flex-wrap: wrap;
 }
+@media (max-width: 900px) {
+  .tile {
+    min-height: 108px;
+  }
+  .label,
+  .sub {
+    font-size: 14px;
+  }
+  .value {
+    font-size: 26px;
+  }
+  .risk {
+    padding: 6px 0;
+  }
+}
 </style>
