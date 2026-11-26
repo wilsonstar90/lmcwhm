@@ -1,20 +1,14 @@
 <script setup lang="ts">
-import { zoneOptions } from '../tz'
-// 工具箱: swap, hostname, DNS, time, SSH, processes, connections, disks, cleanup.
+// 工具箱: processes, connections, disks, cleanup.
 import { computed, h, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
-  NAlert, NButton, NCard, NCheckbox, NDataTable, NDynamicTags, NForm, NFormItem, NGi, NGrid, NInput, NInputNumber, NPopconfirm, NProgress,
-  NSelect, NSpace, NSwitch, NTabPane, NTabs, NTag, useMessage, type DataTableColumns,
+  NButton, NCard, NCheckbox, NDataTable, NGi, NGrid, NInput, NPopconfirm, NProgress, NSpace, NTabPane, NTabs, useMessage, type DataTableColumns,
 } from 'naive-ui'
-import { get, post, put, ApiError } from '../api/client'
+import { get, post, ApiError } from '../api/client'
 import { bytes, datetime } from '../format'
-import TaskModal from '../components/TaskModal.vue'
 
-interface Sys { hostname: string; swap_total: number; swap_used: number; swap_file: number; mem_total: number; dns: string[]; timezone: string; ntp: boolean; ntp_synced: boolean; time: number; timezones?: string[]; resolved: boolean; swap_mounts: string[] }
-interface Key { type: string; comment: string; fingerprint: string; line: number }
-interface SSH { port: number; permit_root_login: string; password_auth: boolean; pubkey_auth: boolean; client_alive_interval: number; max_auth_tries: number; running: boolean; authorized_keys: Key[] }
 interface Proc { pid: number; ppid: number; name: string; user: string; cpu: number; mem: number; rss: number; status: string; started: number; cmd: string; threads: number }
 interface Conn { proto: string; local: string; remote: string; status: string; pid: number; name: string }
 interface Mount { device: string; mountpoint: string; fstype: string; total: number; used: number; free: number; percent: number; inodes_percent: number }
@@ -23,27 +17,7 @@ interface Junk { key: string; size: number; count: number }
 const { t, locale } = useI18n()
 const msg = useMessage()
 const fail = (e: unknown) => msg.error(e instanceof ApiError ? e.text : String(e))
-const tab = ref('system')
-const task = ref<{ id: string; title: string } | null>(null)
-
-// ---- system ----
-const sys = ref<Sys | null>(null)
-const swapMB = ref(0)
-const host = ref('')
-const dns = ref<string[]>([])
-const tz = ref('')
-const tzOpts = computed(() => (sys.value ? zoneOptions(sys.value.timezones ?? [], [sys.value.timezone]) : []))
-async function loadSys() {
-  try {
-    sys.value = await get<Sys>('/toolbox/system?zones=1')
-    swapMB.value = Math.round(sys.value.swap_file / 1048576)
-    host.value = sys.value.hostname
-    dns.value = [...sys.value.dns]
-    tz.value = sys.value.timezone
-  } catch (e) {
-    fail(e)
-  }
-}
+const tab = ref('processes')
 async function act(p: Promise<unknown>, reload: () => void) {
   try {
     await p
@@ -53,29 +27,6 @@ async function act(p: Promise<unknown>, reload: () => void) {
     fail(e)
   }
 }
-async function saveSwap() {
-  try {
-    task.value = { id: (await put<{ task_id: string }>('/toolbox/swap', { size_mb: swapMB.value })).task_id, title: 'Swap' }
-  } catch (e) {
-    fail(e)
-  }
-}
-const suggestSwap = computed(() => {
-  const gb = (sys.value?.mem_total ?? 0) / 1073741824
-  return gb <= 2 ? Math.round(gb * 2 * 1024) : gb <= 8 ? Math.round(gb * 1024) : 4096
-})
-
-// ---- ssh ----
-const ssh = ref<SSH | null>(null)
-const newKey = ref('')
-async function loadSSH() {
-  try {
-    ssh.value = await get<SSH>('/toolbox/ssh')
-  } catch (e) {
-    fail(e)
-  }
-}
-const sshLockout = computed(() => !!ssh.value && !ssh.value.password_auth && (!ssh.value.pubkey_auth || !ssh.value.authorized_keys.length))
 
 // ---- processes / connections ----
 const procs = ref<Proc[]>([])
@@ -184,7 +135,7 @@ async function clean() {
 }
 const junkTotal = computed(() => junk.value.filter((j) => junkSel.value.includes(j.key)).reduce((a, j) => a + j.size, 0))
 
-const loaders: Record<string, () => void> = { system: loadSys, ssh: loadSSH, processes: loadProcs, connections: loadConns, disks: () => (loadDisks(), loadDu('/')), cleanup: loadJunk }
+const loaders: Record<string, () => void> = { processes: loadProcs, connections: loadConns, disks: () => (loadDisks(), loadDu('/')), cleanup: loadJunk }
 const loaded = new Set<string>()
 function onTab(v: string) {
   tab.value = v
@@ -195,87 +146,19 @@ function onTab(v: string) {
 }
 // ?tab=cleanup comes from the dashboard's disk card (立即清理).
 const route = useRoute()
-onMounted(() => onTab(typeof route.query.tab === 'string' && route.query.tab in loaders ? route.query.tab : 'system'))
+const router = useRouter()
+onMounted(() => {
+  const q = route.query.tab
+  if (q === 'system' || q === 'ssh') {
+    router.replace({ name: 'settings', query: { tab: 'system' } })
+    return
+  }
+  onTab(typeof q === 'string' && q in loaders ? q : 'processes')
+})
 </script>
 
 <template>
   <n-tabs :value="tab" type="line" animated @update:value="onTab">
-    <n-tab-pane name="system" :tab="t('tb.system')">
-      <n-grid v-if="sys" cols="1 l:2" responsive="screen" :x-gap="16" :y-gap="16">
-        <n-gi>
-          <n-card size="small" title="Swap">
-            <p class="hint">{{ t('tb.swap_now', { used: bytes(sys.swap_used), total: bytes(sys.swap_total) }) }}{{ sys.swap_mounts.length ? ` · ${sys.swap_mounts.join(', ')}` : '' }}</p>
-            <n-space align="center">
-              <n-input-number v-model:value="swapMB" :min="0" :max="65536" :step="512" style="width: 160px"><template #suffix>MB</template></n-input-number>
-              <n-button type="primary" @click="saveSwap">{{ t('common.save') }}</n-button>
-              <n-button quaternary size="small" @click="swapMB = suggestSwap">{{ t('tb.swap_suggest', { n: suggestSwap }) }}</n-button>
-            </n-space>
-            <p class="hint">{{ t('tb.swap_hint') }}</p>
-          </n-card>
-          <n-card size="small" :title="t('tb.hostname')" style="margin-top: 16px">
-            <n-space><n-input v-model:value="host" style="width: 260px" /><n-button type="primary" :disabled="host === sys.hostname" @click="act(put('/toolbox/hostname', { hostname: host }), loadSys)">{{ t('common.save') }}</n-button></n-space>
-          </n-card>
-        </n-gi>
-        <n-gi>
-          <n-card size="small" :title="t('tb.dns')">
-            <n-dynamic-tags v-model:value="dns" />
-            <n-space style="margin-top: 12px">
-              <n-button type="primary" @click="act(put('/toolbox/dns', { servers: dns }), loadSys)">{{ t('common.save') }}</n-button>
-              <n-button quaternary size="small" @click="dns = ['1.1.1.1', '8.8.8.8', '2606:4700:4700::1111']">Cloudflare + Google</n-button>
-            </n-space>
-            <p class="hint">{{ sys.resolved ? t('tb.dns_resolved') : t('tb.dns_plain') }}</p>
-          </n-card>
-          <n-card size="small" :title="t('tb.time')" style="margin-top: 16px">
-            <p class="hint">{{ datetime(sys.time, locale) }} · NTP {{ sys.ntp_synced ? t('tb.synced') : t('tb.not_synced') }}</p>
-            <n-space align="center">
-              <n-select v-model:value="tz" filterable :options="tzOpts" style="width: min(340px, 100%)" />
-              <n-button type="primary" :disabled="tz === sys.timezone" @click="act(put('/toolbox/time', { timezone: tz }), loadSys)">{{ t('common.save') }}</n-button>
-            </n-space>
-            <n-space align="center" style="margin-top: 12px">
-              <n-switch :value="sys.ntp" @update:value="(v: boolean) => act(put('/toolbox/time', { ntp: v }), loadSys)" /> {{ t('tb.ntp') }}
-              <n-button size="small" @click="act(post('/toolbox/time/sync'), loadSys)">{{ t('tb.sync_now') }}</n-button>
-            </n-space>
-            <p class="hint">{{ t('tb.tz_hint') }}</p>
-          </n-card>
-        </n-gi>
-      </n-grid>
-    </n-tab-pane>
-
-    <n-tab-pane name="ssh" tab="SSH">
-      <template v-if="ssh">
-        <n-card size="small" :title="t('tb.ssh_settings')">
-          <template #header-extra><n-tag size="small" :type="ssh.running ? 'success' : 'error'">{{ ssh.running ? t('tb.running') : t('tb.stopped') }}</n-tag></template>
-          <n-form label-placement="left" label-width="200" style="max-width: 620px">
-            <n-form-item :label="t('tb.ssh_port')" :feedback="t('tb.ssh_port_hint')"><n-input-number v-model:value="ssh.port" :min="1" :max="65535" /></n-form-item>
-            <n-form-item :label="t('tb.root_login')">
-              <n-select v-model:value="ssh.permit_root_login" :options="['prohibit-password', 'yes', 'no'].map((v) => ({ label: t(`tb.root.${v}`), value: v }))" style="width: 260px" />
-            </n-form-item>
-            <n-form-item :label="t('tb.password_auth')"><n-switch v-model:value="ssh.password_auth" /></n-form-item>
-            <n-form-item :label="t('tb.pubkey_auth')"><n-switch v-model:value="ssh.pubkey_auth" /></n-form-item>
-            <n-form-item :label="t('tb.max_tries')"><n-input-number v-model:value="ssh.max_auth_tries" :min="0" :max="100" /></n-form-item>
-            <n-form-item :label="t('tb.keepalive')"><n-input-number v-model:value="ssh.client_alive_interval" :min="0" :max="3600"><template #suffix>s</template></n-input-number></n-form-item>
-          </n-form>
-          <n-alert v-if="sshLockout" type="error" :show-icon="false" style="margin-bottom: 12px">{{ t('tb.lockout') }}</n-alert>
-          <n-popconfirm @positive-click="act(put('/toolbox/ssh', ssh), loadSSH)">
-            <template #trigger><n-button type="primary" :disabled="sshLockout">{{ t('common.save') }}</n-button></template>
-            {{ t('tb.ssh_confirm') }}
-          </n-popconfirm>
-        </n-card>
-        <n-card size="small" :title="t('tb.keys')" style="margin-top: 16px">
-          <div v-for="k in ssh.authorized_keys" :key="k.line" class="key">
-            <span><b>{{ k.type }}</b> {{ k.comment }} <code class="hint">{{ k.fingerprint }}</code></span>
-            <n-popconfirm @positive-click="act(post('/toolbox/ssh/keys/delete', { line: k.line }), loadSSH)">
-              <template #trigger><n-button size="tiny" type="error" quaternary>{{ t('common.delete') }}</n-button></template>
-              {{ t('common.confirm_delete') }}
-            </n-popconfirm>
-          </div>
-          <p v-if="!ssh.authorized_keys.length" class="hint">{{ t('tb.no_keys') }}</p>
-          <n-input v-model:value="newKey" type="textarea" :rows="3" placeholder="ssh-ed25519 AAAA… user@laptop" style="margin-top: 8px" />
-          <n-button style="margin-top: 8px" :disabled="!newKey.trim()" @click="act(post('/toolbox/ssh/keys', { key: newKey }), () => ((newKey = ''), loadSSH()))">{{ t('tb.add_key') }}</n-button>
-        </n-card>
-      </template>
-    </n-tab-pane>
-
     <n-tab-pane name="processes" :tab="t('tb.processes')">
       <n-space style="margin-bottom: 12px"><n-input v-model:value="procQ" :placeholder="t('tb.search')" clearable style="width: 260px" /><n-button @click="loadProcs">{{ t('common.refresh') }}</n-button></n-space>
       <n-data-table size="small" :columns="procCols" :data="procRows" :row-key="(p: Proc) => p.pid" :max-height="600" virtual-scroll :scroll-x="1100" />
@@ -333,7 +216,6 @@ onMounted(() => onTab(typeof route.query.tab === 'string' && route.query.tab in 
       </n-card>
     </n-tab-pane>
   </n-tabs>
-  <TaskModal :task-id="task?.id ?? null" :title="task?.title ?? ''" @close="task = null; loadSys()" @done="loadSys" />
 </template>
 
 <style scoped>
@@ -341,7 +223,6 @@ onMounted(() => onTab(typeof route.query.tab === 'string' && route.query.tab in 
   font-size: 12px;
   opacity: 0.65;
 }
-.key,
 .junk {
   display: flex;
   justify-content: space-between;

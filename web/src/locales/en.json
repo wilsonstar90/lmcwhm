@@ -1565,6 +1565,7 @@
   "alert": {
     "tab_rules": "Rules",
     "tab_channels": "Channels",
+    "tab_settings": "Alerts & notifications",
     "tab_history": "History",
     "detail": "Alert details",
     "event_id": "Event ID",

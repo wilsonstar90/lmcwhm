@@ -1565,6 +1565,7 @@
   "alert": {
     "tab_rules": "告警規則",
     "tab_channels": "通知渠道",
+    "tab_settings": "告警及通知設定",
     "tab_history": "告警記錄",
     "detail": "告警詳情",
     "event_id": "記錄 ID",

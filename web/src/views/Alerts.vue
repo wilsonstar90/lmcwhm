@@ -20,6 +20,7 @@ type Ev = AlertEvent
 
 const { t, locale } = useI18n()
 const msg = useMessage()
+const props = defineProps<{ settingsOnly?: boolean }>()
 const route = useRoute()
 const router = useRouter()
 const fail = (e: unknown) => msg.error(e instanceof ApiError ? e.text : String(e))
@@ -41,7 +42,7 @@ async function load() {
   try {
     channels.value = (await get<{ items: Channel[] }>('/alerts/channels')).items
     rules.value = (await get<{ items: Rule[] }>('/alerts/rules')).items
-    loadEvents()
+    if (!props.settingsOnly) loadEvents()
   } catch (e) {
     fail(e)
   }
@@ -52,6 +53,7 @@ async function loadEvents() {
   total.value = r.total
 }
 async function openLinkedEvent() {
+  if (props.settingsOnly) return
   const id = Number(route.query.event)
   if (!Number.isInteger(id) || id < 1 || detailEvent.value?.id === id) return
   tab.value = 'history'
@@ -197,7 +199,7 @@ const evRowProps = (e: Ev) => ({ style: 'cursor: pointer', onClick: () => openEv
       </n-space>
       <n-data-table size="small" :columns="channelCols" :data="channels" :row-key="(c: Channel) => c.id" :scroll-x="700" />
     </n-tab-pane>
-    <n-tab-pane name="history" :tab="t('alert.tab_history')">
+    <n-tab-pane v-if="!settingsOnly" name="history" :tab="t('alert.tab_history')">
       <n-data-table
         size="small" remote :columns="evCols" :data="events" :row-key="(e: Ev) => e.id" :scroll-x="900" :row-props="evRowProps"
         :pagination="{ page, pageSize: 20, itemCount: total, onUpdatePage: (p: number) => { page = p; loadEvents() } }"

@@ -14,6 +14,8 @@ import SettingsUsers from '../components/SettingsUsers.vue'
 import SettingsApi from '../components/SettingsApi.vue'
 import SettingsMenu from '../components/SettingsMenu.vue'
 import SettingsLogo from '../components/SettingsLogo.vue'
+import SettingsSystem from '../components/SettingsSystem.vue'
+import AlertsView from './Alerts.vue'
 import MaintenanceBar from '../components/MaintenanceBar.vue'
 import PathInput from '../components/PathInput.vue'
 import { knownZones, zoneLabel, zoneOptions } from '../tz'
@@ -193,7 +195,7 @@ const unauthOptions = [404, 403, 401, 400, 408, 416, 444].map((c) => ({ label: t
               <span class="tz-hint">{{ t('settings.timezone_hint') }}</span>
               <span v-if="tzMismatch" class="tz-warn">
                 {{ t('settings.timezone_host', { zone: zoneLabel(hostZone) }) }}
-                <router-link to="/toolbox">{{ t('settings.timezone_fix') }}</router-link>
+                <router-link to="/settings?tab=system">{{ t('settings.timezone_fix') }}</router-link>
               </span>
             </div>
           </n-form-item>
@@ -314,6 +316,8 @@ const unauthOptions = [404, 403, 401, 400, 408, 416, 444].map((c) => ({ label: t
       </n-card>
     </n-tab-pane>
 
+    <n-tab-pane v-if="session.user?.is_admin" name="system" :tab="t('tb.system')" display-directive="show:lazy"><SettingsSystem /></n-tab-pane>
+    <n-tab-pane v-if="session.user?.is_admin" name="alerts" :tab="t('alert.tab_settings')" display-directive="show:lazy"><AlertsView settings-only /></n-tab-pane>
     <n-tab-pane v-if="session.user?.is_admin" name="api" :tab="t('apis.tab')" display-directive="show:lazy"><SettingsApi /></n-tab-pane>
     <n-tab-pane v-if="session.user?.is_admin" name="interface" :tab="t('menucfg.tab')" display-directive="show:lazy"><SettingsLogo /><SettingsMenu /></n-tab-pane>
     <n-tab-pane name="account" :tab="t('settings.tab_account')">

@@ -1565,6 +1565,7 @@
   "alert": {
     "tab_rules": "ルール",
     "tab_channels": "通知先",
+    "tab_settings": "アラート・通知設定",
     "tab_history": "履歴",
     "detail": "アラート詳細",
     "event_id": "イベント ID",
