@@ -123,10 +123,10 @@ const rate = (v: number) => bytes(v) + '/s'
 }
 @media (max-width: 900px) {
   .stats span {
-    font-size: 14px;
+    font-size: 16px;
   }
   .stats b {
-    font-size: 16px;
+    font-size: 18px;
   }
 }
 @media (max-width: 560px) {
@@ -136,5 +136,17 @@ const rate = (v: number) => bytes(v) + '/s'
   .sel {
     width: 100px;
   }
+}
+:global(.mobile-ui .stats) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+:global(.mobile-ui .stats span) {
+  font-size: 16px;
+}
+:global(.mobile-ui .stats b) {
+  font-size: 18px;
+}
+:global(.mobile-ui .sel) {
+  width: 100px;
 }
 </style>

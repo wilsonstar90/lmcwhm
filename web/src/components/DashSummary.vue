@@ -52,7 +52,7 @@ const levelType = (l: string) => (l === 'critical' ? 'error' : l === 'warning' ?
 
 <template>
   <template v-if="s">
-    <n-grid cols="2 s:3 m:5" responsive="screen" :x-gap="12" :y-gap="12" style="margin-bottom: 16px">
+    <n-grid cols="2 m:5" responsive="screen" :x-gap="12" :y-gap="12" style="margin-bottom: 16px">
       <n-gi v-for="x in tiles" :key="x.label">
         <n-card size="small" hoverable class="tile" @click="router.push({ name: x.to })">
           <div class="label">{{ x.label }}</div>
@@ -111,17 +111,30 @@ const levelType = (l: string) => (l === 'critical' ? 'error' : l === 'warning' ?
 }
 @media (max-width: 900px) {
   .tile {
-    min-height: 108px;
+    min-height: 118px;
   }
   .label,
   .sub {
-    font-size: 14px;
+    font-size: 16px;
   }
   .value {
-    font-size: 26px;
+    font-size: 30px;
   }
   .risk {
-    padding: 6px 0;
+    padding: 8px 0;
   }
+}
+:global(.mobile-ui .tile) {
+  min-height: 118px;
+}
+:global(.mobile-ui .label),
+:global(.mobile-ui .sub) {
+  font-size: 16px;
+}
+:global(.mobile-ui .value) {
+  font-size: 30px;
+}
+:global(.mobile-ui .risk) {
+  padding: 8px 0;
 }
 </style>

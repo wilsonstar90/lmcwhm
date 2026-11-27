@@ -354,24 +354,44 @@ const diskDetail = (mount: string) => detail.value?.disks?.find((d) => d.mount =
 }
 @media (max-width: 900px) {
   .rings {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 20px 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px 12px;
   }
   .pg {
-    width: 112px !important;
+    width: 128px !important;
   }
   .mid {
-    top: 56px;
-    font-size: 24px;
+    top: 64px;
+    font-size: 28px;
   }
   .ring b {
-    font-size: 15px;
+    font-size: 17px;
   }
   .ring span {
-    font-size: 14px;
+    font-size: 16px;
   }
   .pop {
-    font-size: 15px;
+    font-size: 16px;
   }
+}
+:global(.mobile-ui .rings) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px 12px;
+}
+:global(.mobile-ui .pg) {
+  width: 128px !important;
+}
+:global(.mobile-ui .mid) {
+  top: 64px;
+  font-size: 28px;
+}
+:global(.mobile-ui .ring b) {
+  font-size: 17px;
+}
+:global(.mobile-ui .ring span) {
+  font-size: 16px;
+}
+:global(.mobile-ui .pop) {
+  font-size: 16px;
 }
 </style>

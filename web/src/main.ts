@@ -6,6 +6,11 @@ import { router } from './router'
 import { setUnauthorizedHandler } from './api/client'
 import { useSession } from './stores/session'
 
+const standalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true
+if (standalone && window.innerWidth > window.screen.width) {
+  document.querySelector('meta[name="viewport"]')?.setAttribute('content', `width=${window.screen.width}, initial-scale=1.0, viewport-fit=cover`)
+}
+
 const app = createApp(App)
 const pinia = createPinia()
 app.use(pinia).use(i18n).use(router)
@@ -27,7 +32,13 @@ async function boot() {
     }
   }
   await setLang(lang)
+  await router.isReady()
   app.mount('#app')
+  const url = new URL(window.location.href)
+  if (url.searchParams.has('_pwa_refresh')) {
+    url.searchParams.delete('_pwa_refresh')
+    window.history.replaceState(null, '', url)
+  }
   const splash = document.getElementById('boot')
   if (splash) {
     splash.classList.add('is-ready')

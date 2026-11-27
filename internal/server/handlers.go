@@ -175,6 +175,8 @@ func (s *Server) spa(w http.ResponseWriter, r *http.Request) {
 			if st != nil && !st.IsDir() {
 				if strings.HasPrefix(p, "assets/") {
 					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+				} else if p == "sw.js" {
+					w.Header().Set("Cache-Control", "no-cache")
 				}
 				http.ServeFileFS(w, r, s.WebFS, p)
 				return

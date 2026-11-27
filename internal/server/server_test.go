@@ -70,7 +70,11 @@ func newEnv(t *testing.T, mut func(*settings.Settings)) *env {
 	}
 	srv, err := New(Deps{
 		Paths: config.Paths{CertDir: filepath.Join(dir, "ssl")}, Settings: sm, Auth: a, Audit: audit.New(st),
-		WebFS: fstest.MapFS{"index.html": {Data: []byte("<html>spa</html>")}},
+		WebFS: fstest.MapFS{
+			"index.html":    {Data: []byte("<html>spa</html>")},
+			"sw.js":         {Data: []byte("// service worker")},
+			"assets/app.js": {Data: []byte("console.log('app')")},
+		},
 		Log:   slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Store: st, Tasks: tasks.NewManager(),
 		Tokens: tokens,
@@ -290,6 +294,21 @@ func TestSPAFallback(t *testing.T) {
 	b, _ := io.ReadAll(r.Body)
 	if r.StatusCode != 200 || string(b) != "<html>spa</html>" {
 		t.Fatalf("spa fallback: %d %q", r.StatusCode, b)
+	}
+	r.Body.Close()
+
+	for path, want := range map[string]string{
+		"/sw.js":         "no-cache",
+		"/assets/app.js": "public, max-age=31536000, immutable",
+	} {
+		r, err = e.c.Get(e.ts.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := r.Header.Get("Cache-Control"); got != want {
+			t.Fatalf("%s Cache-Control: got %q want %q", path, got, want)
+		}
+		r.Body.Close()
 	}
 }
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   NConfigProvider, NMessageProvider, NDialogProvider, NGlobalStyle, darkTheme,
@@ -25,6 +25,15 @@ const naive = computed(() => {
 const overrides: GlobalThemeOverrides = {
   common: { primaryColor: '#20a53a', primaryColorHover: '#36b84d', primaryColorPressed: '#178a2e', primaryColorSuppl: '#36b84d' },
 }
+
+const mobileQuery = window.matchMedia('(max-width: 900px)')
+const syncMobileClass = () => document.documentElement.classList.toggle('mobile-ui', mobileQuery.matches)
+syncMobileClass()
+onMounted(() => mobileQuery.addEventListener('change', syncMobileClass))
+onBeforeUnmount(() => {
+  mobileQuery.removeEventListener('change', syncMobileClass)
+  document.documentElement.classList.remove('mobile-ui')
+})
 </script>
 
 <template>
@@ -53,58 +62,62 @@ body,
 *::after {
   box-sizing: border-box;
 }
-@media (max-width: 900px) {
-  html,
-  body {
-    font-size: 16px !important;
-  }
-  .n-card,
-  .n-alert,
-  .n-descriptions,
-  .n-form-item,
-  .n-modal .n-card {
-    font-size: 16px !important;
-  }
-  .n-button {
-    min-height: 44px !important;
-    font-size: 16px !important;
-  }
-  .n-data-table,
-  .n-pagination {
-    font-size: 15px !important;
-  }
-  .n-form-item-label,
-  .n-tabs .n-tab,
-  .n-menu .n-menu-item-content {
-    font-size: 16px !important;
-  }
-  .n-tag {
-    font-size: 14px !important;
-  }
-  .n-input,
-  .n-input-number,
-  .n-base-selection {
-    min-height: 44px !important;
-  }
-  input,
-  textarea,
-  .n-base-selection-label {
-    font-size: 16px !important;
-  }
-  .n-tabs {
-    max-width: 100%;
-  }
-  .n-tabs:not(.n-tabs--left) .n-tabs-nav {
-    min-width: 0;
-    overflow-x: auto;
-    scrollbar-width: thin;
-  }
-  .n-tabs:not(.n-tabs--left) .n-tab {
-    flex-shrink: 0;
-    white-space: nowrap;
-  }
-  .n-modal .n-card {
-    max-width: calc(100vw - 16px);
-  }
+html.mobile-ui,
+html.mobile-ui body {
+  font-size: 16px !important;
+}
+html.mobile-ui .n-card,
+html.mobile-ui .n-card .n-card__header,
+html.mobile-ui .n-alert,
+html.mobile-ui .n-descriptions,
+html.mobile-ui .n-descriptions-item,
+html.mobile-ui .n-descriptions-item-content,
+html.mobile-ui .n-descriptions-item-label,
+html.mobile-ui .n-form-item,
+html.mobile-ui .n-modal .n-card {
+  font-size: 16px !important;
+}
+html.mobile-ui .n-button {
+  min-height: 44px !important;
+  font-size: 16px !important;
+}
+html.mobile-ui .n-data-table,
+html.mobile-ui .n-data-table-th,
+html.mobile-ui .n-data-table-td,
+html.mobile-ui .n-pagination {
+  font-size: 16px !important;
+}
+html.mobile-ui .n-form-item-label,
+html.mobile-ui .n-tabs .n-tab,
+html.mobile-ui .n-menu .n-menu-item-content {
+  font-size: 16px !important;
+}
+html.mobile-ui .n-tag {
+  font-size: 14px !important;
+}
+html.mobile-ui .n-input,
+html.mobile-ui .n-input-number,
+html.mobile-ui .n-base-selection {
+  min-height: 44px !important;
+}
+html.mobile-ui input,
+html.mobile-ui textarea,
+html.mobile-ui .n-base-selection-label {
+  font-size: 16px !important;
+}
+html.mobile-ui .n-tabs {
+  max-width: 100%;
+}
+html.mobile-ui .n-tabs:not(.n-tabs--left) .n-tabs-nav {
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+html.mobile-ui .n-tabs:not(.n-tabs--left) .n-tab {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+html.mobile-ui .n-modal .n-card {
+  max-width: calc(100vw - 16px);
 }
 </style>

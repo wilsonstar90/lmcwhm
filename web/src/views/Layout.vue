@@ -67,10 +67,16 @@ async function refreshPWA() {
       const keys = await caches.keys()
       await Promise.all(keys.filter((key) => key.startsWith('lmcwhm-')).map((key) => caches.delete(key)))
     }
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations()
+      await Promise.all(registrations.map((registration) => registration.update()))
+    }
   } catch {
-    /* Reload even if this browser blocks Cache Storage. */
+    /* Reload even if this browser blocks Cache Storage or service workers. */
   }
-  window.setTimeout(() => window.location.reload(), 200)
+  const url = new URL(window.location.href)
+  url.searchParams.set('_pwa_refresh', Date.now().toString())
+  window.setTimeout(() => window.location.replace(url), 200)
 }
 async function logout() {
   await session.logout()
