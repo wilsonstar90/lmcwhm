@@ -3,6 +3,7 @@ package push
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -34,6 +35,7 @@ type Device struct {
 
 type SubscribeInput struct {
 	Name     string `json:"name"`
+	ClientID string `json:"client_id"`
 	Endpoint string `json:"endpoint"`
 	Keys     struct {
 		P256dh string `json:"p256dh"`
@@ -89,10 +91,25 @@ func (sv *Service) vapid(ctx context.Context) (string, string, error) {
 	return public, private, err
 }
 
+func validClientID(id string) bool {
+	if id == "" {
+		return true
+	}
+	if len(id) < 16 || len(id) > 64 {
+		return false
+	}
+	for _, c := range []byte(id) {
+		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') && c != '-' {
+			return false
+		}
+	}
+	return true
+}
+
 func (sv *Service) Subscribe(ctx context.Context, in SubscribeInput) (Device, error) {
 	in.Name = strings.TrimSpace(in.Name)
 	u, err := url.Parse(in.Endpoint)
-	if in.Name == "" || len(in.Name) > 64 || err != nil || u.Scheme != "https" || u.Host == "" || len(in.Endpoint) > 4096 || in.Keys.P256dh == "" || in.Keys.Auth == "" {
+	if in.Name == "" || len(in.Name) > 64 || !validClientID(in.ClientID) || err != nil || u.Scheme != "https" || u.Host == "" || len(in.Endpoint) > 4096 || in.Keys.P256dh == "" || in.Keys.Auth == "" {
 		return Device{}, ErrSubscription
 	}
 	stored := storedSubscription{Endpoint: in.Endpoint}
@@ -101,12 +118,25 @@ func (sv *Service) Subscribe(ctx context.Context, in SubscribeInput) (Device, er
 	hash := sha256.Sum256([]byte(in.Endpoint))
 	hashText := hex.EncodeToString(hash[:])
 	now := sv.now().Unix()
-	if _, err := sv.st.DB.ExecContext(ctx, `INSERT INTO push_subscriptions(name, endpoint_hash, subscription, enabled, created_at) VALUES(?,?,?,1,?)
-		ON CONFLICT(endpoint_hash) DO UPDATE SET name=excluded.name, subscription=excluded.subscription, enabled=1`,
-		in.Name, hashText, sv.box.Seal(string(body)), now); err != nil {
+	var id int64
+	if in.ClientID != "" {
+		err = sv.st.DB.QueryRowContext(ctx, `SELECT id FROM push_subscriptions WHERE client_id=?`, in.ClientID).Scan(&id)
+		switch {
+		case err == nil:
+			if _, err := sv.st.DB.ExecContext(ctx, `UPDATE push_subscriptions SET name=?, endpoint_hash=?, subscription=?, enabled=1 WHERE id=?`,
+				in.Name, hashText, sv.box.Seal(string(body)), id); err != nil {
+				return Device{}, err
+			}
+			return Device{ID: id, Name: in.Name, Enabled: true, CreatedAt: now}, nil
+		case !errors.Is(err, sql.ErrNoRows):
+			return Device{}, err
+		}
+	}
+	if _, err := sv.st.DB.ExecContext(ctx, `INSERT INTO push_subscriptions(name, client_id, endpoint_hash, subscription, enabled, created_at) VALUES(?,?,?,?,1,?)
+		ON CONFLICT(endpoint_hash) DO UPDATE SET name=excluded.name, client_id=excluded.client_id, subscription=excluded.subscription, enabled=1`,
+		in.Name, in.ClientID, hashText, sv.box.Seal(string(body)), now); err != nil {
 		return Device{}, err
 	}
-	var id int64
 	if err := sv.st.DB.QueryRowContext(ctx, `SELECT id FROM push_subscriptions WHERE endpoint_hash=?`, hashText).Scan(&id); err != nil {
 		return Device{}, err
 	}

@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -128,5 +129,51 @@ func TestAlertDeepLink(t *testing.T) {
 	}
 	if got := alertDeepLink(0); got != "/alerts" {
 		t.Fatalf("test notification link = %q", got)
+	}
+}
+
+func TestClientIdentityReplacesRotatedEndpoint(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "panel.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	box, err := secrets.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sv := New(st, box)
+	ctx := context.Background()
+	in := SubscribeInput{Name: "iPhone", ClientID: "4c6c1e0a-6d8e-4a4f-a26d-6ea90f7e72ab", Endpoint: "https://push.example.test/old"}
+	in.Keys.P256dh, in.Keys.Auth = "old-key", "old-auth"
+	first, err := sv.Subscribe(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.Endpoint = "https://push.example.test/new"
+	in.Keys.P256dh, in.Keys.Auth = "new-key", "new-auth"
+	second, err := sv.Subscribe(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.ID != first.ID {
+		t.Fatalf("rotated endpoint changed device ID: %d -> %d", first.ID, second.ID)
+	}
+	items, err := sv.List(ctx)
+	if err != nil || len(items) != 1 {
+		t.Fatalf("subscriptions after rotation: %+v %v", items, err)
+	}
+	var sealed string
+	if err := st.DB.QueryRow(`SELECT subscription FROM push_subscriptions WHERE id=?`, first.ID).Scan(&sealed); err != nil {
+		t.Fatal(err)
+	}
+	plain, err := box.Open(sealed)
+	if err != nil || !strings.Contains(plain, "/new") || strings.Contains(plain, "/old") {
+		t.Fatalf("endpoint was not replaced: %v", err)
+	}
+	in.ClientID = "invalid"
+	if _, err := sv.Subscribe(ctx, in); !errors.Is(err, ErrSubscription) {
+		t.Fatalf("invalid client ID: %v", err)
 	}
 }

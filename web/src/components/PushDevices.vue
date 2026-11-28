@@ -37,6 +37,20 @@ function decodeKey(value: string) {
   return Uint8Array.from(raw, (c) => c.charCodeAt(0))
 }
 
+function clientID() {
+  try {
+    const key = 'lmcwhm-push-client'
+    let id = localStorage.getItem(key)
+    if (!id) {
+      id = crypto.randomUUID()
+      localStorage.setItem(key, id)
+    }
+    return id
+  } catch {
+    return ''
+  }
+}
+
 async function subscribe() {
   if (!supported || needsInstall.value || busy.value) return
   busy.value = true
@@ -47,7 +61,7 @@ async function subscribe() {
     const registration = await navigator.serviceWorker.ready
     const subscription = await registration.pushManager.getSubscription() ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: decodeKey(vapid.value) })
     const json = subscription.toJSON()
-    const device = await post<Device>('/push/subscribe', { name: name.value.trim(), endpoint: json.endpoint, keys: json.keys })
+    const device = await post<Device>('/push/subscribe', { name: name.value.trim(), client_id: clientID(), endpoint: json.endpoint, keys: json.keys })
     emit('update:modelValue', [...new Set([...(props.modelValue ?? []), device.id])])
     msg.success(t('push.subscribed'))
     await load()

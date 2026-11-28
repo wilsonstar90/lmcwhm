@@ -2,6 +2,8 @@
 // The API is never cached; hashed /assets/* are cache-first; pages are
 // network-first with the cached shell as fallback.
 const CACHE = 'lmcwhm-shell-v3'
+const PUSH_DEDUPE = 'lmcwhm-push-dedupe-v1'
+const recentPushes = new Map()
 
 self.addEventListener('install', (e) => {
   self.skipWaiting()
@@ -10,7 +12,7 @@ self.addEventListener('install', (e) => {
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()),
+    caches.keys().then((keys) => Promise.all(keys.filter((k) => k.startsWith('lmcwhm-shell-') && k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()),
   )
 })
 
@@ -45,6 +47,26 @@ self.addEventListener('fetch', (e) => {
   }
 })
 
+async function duplicatePush(data) {
+  const identity = data.event_id ? `event-${data.event_id}` : data.time ? `${data.kind || 'alert'}-${data.time}` : ''
+  if (!identity) return false
+  const now = Date.now()
+  const recent = recentPushes.get(identity)
+  if (recent && now - recent < 10 * 60 * 1000) return true
+  recentPushes.set(identity, now)
+  try {
+    const cache = await caches.open(PUSH_DEDUPE)
+    const key = new Request(`/__push_dedupe__/${encodeURIComponent(identity)}`)
+    const previous = await cache.match(key)
+    if (previous && now - Number(await previous.text()) < 10 * 60 * 1000) return true
+    await cache.put(key, new Response(String(now)))
+    const keys = await cache.keys()
+    for (let i = 0; i < keys.length - 50; i++) await cache.delete(keys[i])
+  } catch {
+    // The in-memory map still deduplicates while this service worker is alive.
+  }
+  return false
+}
 
 self.addEventListener('push', (event) => {
   let data = {}
@@ -54,13 +76,17 @@ self.addEventListener('push', (event) => {
     data = { body: event.data ? event.data.text() : '' }
   }
   const title = data.title || 'lmcwhm'
-  event.waitUntil(self.registration.showNotification(title, {
-    body: data.body || '',
-    icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
-    tag: `lmcwhm-${data.kind || 'alert'}-${data.time || Date.now()}`,
-    data: { url: data.url || '/alerts' },
-  }))
+  event.waitUntil((async () => {
+    if (await duplicatePush(data)) return
+    const identity = data.event_id ? `event-${data.event_id}` : `${data.kind || 'alert'}-${data.time || Date.now()}`
+    await self.registration.showNotification(title, {
+      body: data.body || '',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      tag: `lmcwhm-${identity}`,
+      data: { url: data.url || '/alerts' },
+    })
+  })())
 })
 
 self.addEventListener('notificationclick', (event) => {

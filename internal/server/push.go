@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/wilsonstar90/lmcwhm/internal/alert"
@@ -64,7 +65,7 @@ func (s *Server) handlePushRevoke(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handlePushTest(w http.ResponseWriter, r *http.Request) {
 	id := idParam(r)
-	err := s.Push.Send(r.Context(), []int64{id}, alert.Message{Title: "lmcwhm test notification", Body: "App Push works for this device.", Severity: "info", Kind: "test", Host: "lmcwhm"})
+	err := s.Push.Send(r.Context(), []int64{id}, alert.Message{Title: "lmcwhm test notification", Body: "App Push works for this device.", Severity: "info", Kind: "test", Host: "lmcwhm", Time: time.Now().Unix()})
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return

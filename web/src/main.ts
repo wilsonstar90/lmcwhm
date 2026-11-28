@@ -15,10 +15,31 @@ const app = createApp(App)
 const pinia = createPinia()
 app.use(pinia).use(i18n).use(router)
 
-setUnauthorizedHandler(() => {
-  useSession(pinia).user = null
-  if (router.currentRoute.value.name !== 'login') router.push({ name: 'login' })
+let authRedirecting = false
+setUnauthorizedHandler((kind) => {
+  const session = useSession(pinia)
+  session.user = null
+  const current = router.currentRoute.value
+  if (current.name === 'login' && kind === 'panel') return
+  const redirect = current.name !== 'login' && current.fullPath.startsWith('/') ? current.fullPath : '/'
+  if (kind === 'access') {
+    if (!authRedirecting) {
+      authRedirecting = true
+      window.location.assign(`/login?redirect=${encodeURIComponent(redirect)}`)
+    }
+    return
+  }
+  router.push({ name: 'login', query: { redirect } }).catch(() => {})
 })
+
+function recoverSession() {
+  const session = useSession(pinia)
+  if (!document.hidden && session.user) session.restore().catch(() => {})
+}
+document.addEventListener('visibilitychange', recoverSession)
+window.addEventListener('pageshow', recoverSession)
+window.addEventListener('online', recoverSession)
+window.setInterval(recoverSession, 60_000)
 
 async function boot() {
   let lang: Lang = storedLang() ?? 'zh-HK'

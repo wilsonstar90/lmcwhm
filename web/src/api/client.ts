@@ -21,8 +21,9 @@ export function setCsrf(token: string) {
 }
 export const getCsrf = () => csrf
 
-let onUnauthorized: () => void = () => {}
-export function setUnauthorizedHandler(fn: () => void) {
+type AuthKind = 'panel' | 'access'
+let onUnauthorized: (kind: AuthKind) => void = () => {}
+export function setUnauthorizedHandler(fn: (kind: AuthKind) => void) {
   onUnauthorized = fn
 }
 
@@ -32,6 +33,7 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
     res = await fetch(`/api/v1${path}`, {
       method,
       credentials: 'same-origin',
+      redirect: 'manual',
       headers: {
         ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
         ...(method !== 'GET' ? { 'X-CSRF-Token': csrf } : {}),
@@ -41,9 +43,14 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
   } catch {
     throw new ApiError(0, 'common.network')
   }
-  const data = await res.json().catch(() => ({}))
+  const contentType = res.headers.get('Content-Type') ?? ''
+  const accessExpired = res.redirected || contentType.toLowerCase().includes('text/html')
+  const data = accessExpired ? {} : await res.json().catch(() => ({}))
+  if (path !== '/auth/login' && (res.status === 401 || accessExpired)) {
+    onUnauthorized(accessExpired ? 'access' : 'panel')
+  }
+  if (accessExpired) throw new ApiError(res.status, 'auth.no_session')
   if (!res.ok) {
-    if (res.status === 401 && path !== '/auth/login') onUnauthorized()
     throw new ApiError(res.status, data.code ?? 'common.internal', data.params)
   }
   return data as T

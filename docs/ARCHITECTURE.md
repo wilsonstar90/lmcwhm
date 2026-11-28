@@ -119,9 +119,9 @@ deploy/                 install、offline bundle、Linux E2E scripts
 ## 7. 認證、授權與高風險操作
 
 - Browser：HttpOnly + SameSite=Strict session、非 GET CSRF、bcrypt、TOTP、按 IP 登入鎖定。
-- PWA：iOS/iPadOS 16.4+ 加入主畫面後可用 Web Push。App Push 係 alert channel，裝置訂閱獨立於 login session，logout 唔會撤銷。VAPID private key、endpoint 同裝置 keys 加密保存，可逐部裝置撤銷及測試。VAPID subject 使用 ACME email 或 HTTPS 面板網域，避免 `.local` contact 被 push service 拒絕。通知包含已記錄 event ID，點擊後以 `/alerts?event=<ID>` 開啟詳情；需要登入時會保留 redirect，登入後返回原記錄。
+- PWA：iOS/iPadOS 16.4+ 加入主畫面後可用 Web Push。App Push 係 alert channel，裝置訂閱獨立於 login session，logout 唔會撤銷。每個 PWA installation 有穩定 client ID；browser 更換 push endpoint 時沿用原本 device ID，通知渠道唔使重新選擇。Service Worker 以 event ID／通知時間保留 10 分鐘去重記錄，避免同一訊息重複顯示。VAPID private key、endpoint 同裝置 keys 加密保存，可逐部裝置撤銷及測試。VAPID subject 使用 ACME email 或 HTTPS 面板網域，避免 `.local` contact 被 push service 拒絕。通知包含已記錄 event ID，點擊後以 `/alerts?event=<ID>` 開啟詳情；需要登入時會保留 redirect，登入後返回原記錄。
 - 告警記錄同時顯示喺告警中心及消息盒子，每筆可開詳情。面板 process 啟動／重啟及 listener rebuild 以 `panel_restart` 寫入歷史，唔會強制發送通知。
-- PWA 啟動畫面以 inline HTML/CSS 提供 lmcwhm 標誌、背景、loading 動畫及離線狀態，唔依賴外部圖片或字體；Vue mount 後自動淡出。手機介面採用 16px 正文、44px 觸控目標、兩欄 Dashboard 狀態及摘要，viewport 包含 `viewport-fit=cover`；維護三點選單同 IP 複製放喺頂欄。`⟳` 清除 lmcwhm Cache Storage、更新 Service Worker，再用一次性 query 繞過舊 HTML cache，重新取得 CSS、JS 及 offline shell；唔會清除 session 或使用者設定。`sw.js` 以 `no-cache` 提供，hashed assets 維持 immutable。
+- PWA 啟動畫面以 inline HTML/CSS 提供 lmcwhm 標誌、背景、loading 動畫及離線狀態，唔依賴外部圖片或字體；Vue mount 後自動淡出。手機介面採用 16px 正文、44px 觸控目標、兩欄 Dashboard 狀態及摘要，viewport 包含 `viewport-fit=cover`；維護三點選單同 IP 複製放喺頂欄。`⟳` 清除 lmcwhm Cache Storage、更新 Service Worker，再用一次性 query 繞過舊 HTML cache，重新取得 CSS、JS 及 offline shell；唔會清除 session 或使用者設定。`sw.js` 以 `no-cache` 提供，hashed assets 維持 immutable。PWA 每分鐘、由背景返回及網絡恢復時檢查 session；面板 `401` 會保留原頁 redirect 去登入，Cloudflare Access 嘅 redirect／HTML 回應則用頂層 navigation 重新認證，唔會再留喺冇反應嘅舊介面。
 - 面板設定集中系統、SSH、告警規則及通知渠道。`SettingsSystem`／`SettingsSSH` 共用原有 Toolbox API；告警中心與面板設定共用 `Alerts.vue`，設定分頁只隱藏歷史。工具箱保留進程、連線、磁碟及清理，舊 system／SSH 連結會轉到面板設定。
 - 時區警告按目前 UTC offset 比較，唔會將相同 offset 誤報為不一致；`Etc/GMT` 會額外提示 POSIX 符號係反向，例如 `Etc/GMT+8` 實際係 UTC−8。手機主題及語言由頂欄 `Aa` 彈窗提供，消息 badge 只喺有運行中工作時顯示。TaskModal 可縮小到消息盒子，背景工作唔會取消，並可由運行中列表重新開啟即時日誌；手機頂欄亦會顯示目前面板版本。
 - Gates：授權 IP → 綁定域名 → BasicAuth → 安全入口；可自訂未認證回應。安全入口 cookie 使用 HttpOnly + SameSite=Lax，讓 Cloudflare Access 等外部身份提供者完成頂層 GET 跳轉後仍能進入登入頁；呢個 cookie 只證明已通過入口，唔係登入 session。
